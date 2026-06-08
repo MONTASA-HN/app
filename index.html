@@ -109,6 +109,25 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .tecnico-check:active{transform:scale(0.97)}
 .tecnico-check input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
 .tecnico-check.selected{background:var(--accent-light,#e8edf5);border-color:var(--accent);font-weight:500}
+.foto-upload{border:2px dashed var(--border2);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;background:var(--surface2)}
+.foto-upload-label{font-size:13px;color:var(--text2);display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+.foto-upload-label svg{stroke:var(--text3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.foto-preview{width:100%;border-radius:var(--radius);margin-top:8px;display:none;position:relative}
+.foto-preview img{width:100%;border-radius:var(--radius);border:1px solid var(--border);display:block}
+.foto-preview-del{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:700;align-items:center;justify-content:center;padding:24px}
+.pin-overlay.open{display:flex}
+.pin-box{background:var(--surface);border-radius:var(--radius);padding:24px;width:100%;max-width:320px;text-align:center}
+.pin-title{font-weight:600;font-size:16px;margin-bottom:6px}
+.pin-sub{font-size:13px;color:var(--text2);margin-bottom:16px}
+.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);background:var(--surface);transition:background 0.15s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.pin-key{padding:14px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:18px;font-weight:500;cursor:pointer;background:var(--surface);transition:all 0.1s;font-family:'DM Mono',monospace}
+.pin-key:active{background:var(--surface2);transform:scale(0.95)}
+.pin-key.del{font-size:14px;color:var(--red)}
+.pin-error{font-size:12px;color:var(--red);min-height:18px;margin-top:4px}
 #toast{position:fixed;top:76px;left:50%;transform:translateX(-50%);background:#1a1a18;color:white;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none}
 #toast.show{opacity:1}
 #toast.err{background:var(--red)}
@@ -135,6 +154,41 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast"></div>
+
+<!-- PIN MODAL -->
+<div id="pin-overlay" class="pin-overlay">
+  <div class="pin-box">
+    <div class="pin-title" id="pin-title">Clave de seguridad</div>
+    <div class="pin-sub" id="pin-sub">Ingresa tu clave para eliminar esta orden</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinCancelar()">Cancelar</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinBorrar()">⌫</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- LIGHTBOX FOTO -->
+<div id="lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:600;align-items:center;justify-content:center;padding:20px" onclick="cerrarLightbox()">
+  <img id="lightbox-img" src="" style="max-width:100%;max-height:90vh;border-radius:var(--radius);object-fit:contain">
+  <button onclick="cerrarLightbox()" style="position:fixed;top:20px;right:20px;background:rgba(255,255,255,0.2);border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer">x</button>
+</div>
 
 <!-- MODAL DETALLE EQUIPO -->
 <div id="modal-overlay">
@@ -303,6 +357,21 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div class="form-group"><label>Trabajo realizado</label><textarea id="prev-notas" placeholder="Descripción del trabajo realizado..."></textarea></div>
       <div class="form-group"><label>Sugerencias para el próximo servicio</label><textarea id="prev-sugerencias" placeholder="Recomendaciones y sugerencias..."></textarea></div>
+      <div class="form-group">
+        <label>Foto del reporte firmado</label>
+        <div class="foto-upload" onclick="document.getElementById('prev-foto-input').click()">
+          <label class="foto-upload-label">
+            <svg width="32" height="32" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+            Toca para subir foto
+            <span style="font-size:11px;color:var(--text3)">JPG, PNG desde camara o galeria</span>
+          </label>
+          <input type="file" id="prev-foto-input" accept="image/*" capture="environment" onchange="previsualizarFoto('prev-foto-input','prev-foto-preview')">
+        </div>
+        <div class="foto-preview" id="prev-foto-preview">
+          <img id="prev-foto-img" src="" alt="Reporte firmado">
+          <button class="foto-preview-del" onclick="borrarFoto('prev-foto-input','prev-foto-preview')">x</button>
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-sm" onclick="toggleForm('form-prev')">Cancelar</button>
         <button class="btn btn-primary btn-sm" onclick="guardarPreventivo()">Guardar</button>
@@ -348,6 +417,21 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div class="form-group"><label>Diagnóstico / Trabajos</label><textarea id="corr-diag" placeholder="Diagnóstico..."></textarea></div>
       <div class="form-group"><label>Estado</label><select id="corr-estado"><option>En proceso</option><option>En espera de repuestos</option><option>Cerrado</option></select></div>
+      <div class="form-group">
+        <label>Foto del reporte firmado</label>
+        <div class="foto-upload" onclick="document.getElementById('corr-foto-input').click()">
+          <label class="foto-upload-label">
+            <svg width="32" height="32" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+            Toca para subir foto
+            <span style="font-size:11px;color:var(--text3)">JPG, PNG desde camara o galeria</span>
+          </label>
+          <input type="file" id="corr-foto-input" accept="image/*" capture="environment" onchange="previsualizarFoto('corr-foto-input','corr-foto-preview')">
+        </div>
+        <div class="foto-preview" id="corr-foto-preview">
+          <img id="corr-foto-img" src="" alt="Reporte firmado">
+          <button class="foto-preview-del" onclick="borrarFoto('corr-foto-input','corr-foto-preview')">x</button>
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-sm" onclick="toggleForm('form-corr')">Cancelar</button>
         <button class="btn btn-primary btn-sm" onclick="guardarCorrectivo()">Guardar</button>
@@ -690,15 +774,15 @@ function renderPreventivos(){
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
   el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card">
     <div class="card-header"><div><div class="card-title">${p.servicio}</div><div class="card-sub">${getEqLabelFull(p)}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bPrev(est)}<button class="btn btn-danger" onclick="event.stopPropagation();eliminarPreventivo('${p.id}')">✕</button></div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bPrev(est)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button></div></div>
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(p.fechaInicio||p.fecha)}</span></div>
     ${p.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(p.fechaFin)}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Horómetro</span><span>${p.horometro||'—'} hrs</span></div>
     <div class="detail-row"><span class="detail-lbl">Técnico</span><span>${p.tecnico||'—'}</span></div>
     ${p.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${p.notas}</span></div>`:''}
     ${p.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${p.sugerencias}</span></div>`:''}
-    ${est!=='Completado'?`<button class="btn btn-success" style="width:100%;margin-top:10px" onclick="completarPreventivo('${p.id}')">✓ Marcar completado</button>`:''}
-  </div>`; }).join('');
+    ${p.foto?`<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">📷 Reporte firmado</div><img src="${p.foto}" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:zoom-in" onclick="verFotoCompleta('${p.id}','prev')"></div>`:''}
+    ${est!=='Completado'?`<button class="btn btn-success" style="width:100%;margin-top:10px" onclick="completarPreventivo('${p.id}')">✓ Marcar completado</button>`:''}  </div>`; }).join('');
 }
 
 function renderCorrectivos(){
@@ -713,14 +797,14 @@ function renderCorrectivos(){
     const eqSub = c.equipoId==='__cliente__' ? 'Cliente: '+(c.clienteNombre||'—')+(c.clienteMarca?' · '+c.clienteMarca:'')+(c.clienteModelo?' '+c.clienteModelo:'') : getEqLabel(c.equipoId);
     return `<div class="card">
     <div class="card-header"><div><div class="card-title">${c.falla}</div><div class="card-sub">${eqSub}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bCorr(c.estado,c.prioridad)}<button class="btn btn-danger" onclick="event.stopPropagation();eliminarCorrectivo('${c.id}')">✕</button></div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bCorr(c.estado,c.prioridad)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('corr','${c.id}')">✕</button></div></div>
     ${c.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span class="detail-val">${c.sistema}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(c.fechaInicio||c.fecha)}</span></div>
     ${c.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(c.fechaFin)}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${c.tecnico||'—'}</span></div>
     ${c.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${c.diagnostico}</span></div>`:''}
-    ${c.estado!=='Cerrado'?`<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="cerrarCorrectivo('${c.id}')">✓ Cerrar orden</button>`:''}
-  </div>`;}).join('');
+    ${c.foto?`<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">📷 Reporte firmado</div><img src="${c.foto}" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:zoom-in" onclick="verFotoCompleta('${c.id}','corr')"></div>`:''}
+    ${c.estado!=='Cerrado'?`<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="cerrarCorrectivo('${c.id}')">✓ Cerrar orden</button>`:''}  </div>`;}).join('');
 }
 
 function renderHistorial(){
@@ -763,14 +847,18 @@ function guardarPreventivo(){
     entry.clienteModelo = document.getElementById('prev-cliente-modelo').value.trim();
     entry.clienteSerie = document.getElementById('prev-cliente-serie').value.trim();
   }
-  DB.preventivos.push(entry);
-  saveDB(); toggleForm('form-prev');
+  getFotoBase64('prev-foto-input').then(foto=>{
+    if(foto) entry.foto=foto;
+    DB.preventivos.push(entry);
+    saveDB(); toggleForm('form-prev');
+    borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
   ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
   renderPreventivos(); toast('Preventivo guardado');
+  });
 }
 function completarPreventivo(id){
   const p = DB.preventivos.find(x=>x.id===id);
@@ -805,8 +893,11 @@ function guardarCorrectivo(){
     entry.clienteModelo = document.getElementById('corr-cliente-modelo').value.trim();
     entry.clienteSerie = document.getElementById('corr-cliente-serie').value.trim();
   }
-  DB.correctivos.push(entry);
-  saveDB(); toggleForm('form-corr');
+  getFotoBase64('corr-foto-input').then(foto=>{
+    if(foto) entry.foto=foto;
+    DB.correctivos.push(entry);
+    saveDB(); toggleForm('form-corr');
+    borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
   ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
@@ -814,6 +905,7 @@ function guardarCorrectivo(){
   document.getElementById('corr-sistema').value='';
   document.getElementById('corr-cliente-fields').style.display='none';
   renderCorrectivos(); toast('Correctivo guardado');
+  });
 }
 function cerrarCorrectivo(id){
   const c = DB.correctivos.find(x=>x.id===id);
@@ -965,6 +1057,114 @@ function renderSolicitudes(){
       <div style="font-size:13px;color:var(--text2);margin-bottom:4px">${s.desc}</div>
       <div style="font-size:11px;color:var(--text3)">${s.fecha}</div>
     </div>`).join('');
+}
+
+// PIN DE SEGURIDAD
+const PIN_CORRECTO = '1624';
+let pinActual = '';
+let pinCallback = null;
+
+function solicitarPIN(tipo, id){
+  pinActual = '';
+  pinCallback = () => {
+    if(tipo==='prev') eliminarPreventivo(id);
+    else if(tipo==='corr') eliminarCorrectivo(id);
+  };
+  actualizarPinDots();
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('pin-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function pinKey(num){
+  if(pinActual.length >= 4) return;
+  pinActual += num;
+  actualizarPinDots();
+  if(pinActual.length === 4){
+    setTimeout(() => {
+      if(pinActual === PIN_CORRECTO){
+        pinCerrar();
+        if(pinCallback) pinCallback();
+        pinCallback = null;
+      } else {
+        document.getElementById('pin-error').textContent = 'Clave incorrecta';
+        pinActual = '';
+        actualizarPinDots();
+      }
+    }, 150);
+  }
+}
+
+function pinBorrar(){
+  pinActual = pinActual.slice(0,-1);
+  actualizarPinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function pinCancelar(){
+  pinActual = '';
+  pinCallback = null;
+  pinCerrar();
+}
+
+function pinCerrar(){
+  document.getElementById('pin-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  pinActual = '';
+  actualizarPinDots();
+}
+
+function actualizarPinDots(){
+  for(let i=0;i<4;i++){
+    const dot = document.getElementById('pd'+i);
+    dot.classList.toggle('filled', i < pinActual.length);
+  }
+}
+
+// ELIMINAR SOLICITUD
+function eliminarSolicitud(id){
+  if(!confirm('¿Eliminar esta solicitud?')) return;
+  DB.solicitudes = (DB.solicitudes||[]).filter(s=>s.id!==id);
+  saveDB(); renderSolicitudes(); toast('Solicitud eliminada');
+}
+
+// FOTOS
+function previsualizarFoto(inputId, previewId){
+  const input=document.getElementById(inputId);
+  const preview=document.getElementById(previewId);
+  const file=input.files[0];
+  if(!file) return;
+  if(file.size>5*1024*1024){ toast("La foto supera 5MB",true); input.value=""; return; }
+  const reader=new FileReader();
+  reader.onload=e=>{ preview.querySelector("img").src=e.target.result; preview.style.display="block"; };
+  reader.readAsDataURL(file);
+}
+function borrarFoto(inputId,previewId){
+  document.getElementById(inputId).value="";
+  const p=document.getElementById(previewId);
+  p.querySelector("img").src=""; p.style.display="none";
+}
+function getFotoBase64(inputId){
+  return new Promise(resolve=>{
+    const input=document.getElementById(inputId);
+    const file=input.files[0];
+    if(!file){ resolve(null); return; }
+    const reader=new FileReader();
+    reader.onload=e=>resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+function verFotoCompleta(id,tipo){
+  const list=tipo==="prev"?DB.preventivos:DB.correctivos;
+  const item=list.find(x=>x.id===id);
+  if(!item||!item.foto) return;
+  document.getElementById("lightbox-img").src=item.foto;
+  document.getElementById("lightbox").style.display="flex";
+  document.body.style.overflow="hidden";
+}
+function cerrarLightbox(){
+  document.getElementById("lightbox").style.display="none";
+  document.body.style.overflow="";
 }
 
 loadDB();
