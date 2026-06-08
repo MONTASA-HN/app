@@ -405,6 +405,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
 
       <div class="form-group">
+        <label>Tipo de orden</label>
+        <select id="sol-tipo">
+          <option value="preventivo">📅 Preventivo</option>
+          <option value="correctivo">🔧 Correctivo</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Prioridad</label>
         <select id="sol-prioridad">
           <option value="Normal">Normal</option>
@@ -903,28 +910,26 @@ function enviarSolicitudWA(){
   if(!desc){ toast('Escribe una descripción', true); return; }
   if(!tecnicoNum || tecnicoNum==='__pendiente__'){ toast('Selecciona un técnico con número registrado', true); return; }
 
+  const ordenId = uid();
+  const tipo = document.getElementById('sol-tipo').value;
+  const tipoLabel = tipo==='preventivo' ? 'Preventivo' : 'Correctivo';
+  const appUrl = 'https://montasa-hn.github.io/app/index.html#' + tipo + '-' + ordenId;
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : '🔧';
-  const msg = `${emoji} *SOLICITUD DE SERVICIO - MONTASA*
-
-`
-    + `📋 *Equipo:* ${equipoTxt}
-`
-    + `📝 *Descripción:* ${desc}
-`
-    + `⚡ *Prioridad:* ${prioridad}
-`
-    + `📅 *Fecha reporte:* ${fecha}
-`
-    + `👷 *Técnico asignado:* ${tecnicoNombre}
-
-`
-    + `_Por favor confirmar recepción._`;
+  const msg = emoji + ' *ASIGNACION DE TRABAJO - MONTASA*\n\n'
+    + '👷 *Tecnico:* ' + tecnicoNombre + '\n'
+    + '📋 *Equipo:* ' + equipoTxt + '\n'
+    + '🔧 *Tipo:* ' + tipoLabel + '\n'
+    + '📝 *Trabajo:* ' + desc + '\n'
+    + '⚡ *Prioridad:* ' + prioridad + '\n'
+    + '📅 *Fecha:* ' + fecha + '\n\n'
+    + '📲 *Ver orden en la app:*\n' + appUrl + '\n\n'
+    + '_Por favor confirmar recepcion._';
 
   // Save solicitud
   if(!DB.solicitudes) DB.solicitudes = [];
   DB.solicitudes.unshift({
-    id: uid(), equipoTxt, desc, fecha, tecnicoNombre, tecnicoNum, prioridad,
-    estado: 'Enviada'
+    id: ordenId, equipoTxt, desc, fecha, tecnicoNombre, tecnicoNum, prioridad,
+    tipo: tipo, estado: 'Enviada'
   });
   saveDB();
 
@@ -937,6 +942,7 @@ function enviarSolicitudWA(){
   document.getElementById('sol-equipo-txt').value = '';
   document.getElementById('sol-desc').value = '';
   document.getElementById('sol-tecnico').value = '';
+  document.getElementById('sol-tipo').value = 'preventivo';
   document.getElementById('sol-prioridad').value = 'Normal';
   document.getElementById('sol-equipo-manual').style.display = 'none';
   document.getElementById('sol-wa-hint').style.display = 'none';
@@ -963,6 +969,32 @@ function renderSolicitudes(){
 
 loadDB();
 renderDashboard();
+
+// Deep link handler — opens correct tab if URL has #preventivo-ID or #correctivo-ID
+(function(){
+  const hash = window.location.hash.slice(1);
+  if(!hash) return;
+  const [tipo, id] = hash.split('-').length > 1 ? [hash.split('-')[0], hash.split('-').slice(1).join('-')] : [null, null];
+  if(tipo === 'preventivo'){
+    const btn = document.querySelector('.nav-btn:nth-child(3)');
+    showTab('preventivo', btn);
+    setTimeout(()=>{
+      fillSel('prev-equipo');
+      renderPreventivos();
+      const card = document.querySelector('#preventivos-list .card');
+      if(card) card.scrollIntoView({behavior:'smooth'});
+    }, 300);
+  } else if(tipo === 'correctivo'){
+    const btn = document.querySelector('.nav-btn:nth-child(4)');
+    showTab('correctivo', btn);
+    setTimeout(()=>{
+      fillSel('corr-equipo');
+      renderCorrectivos();
+      const card = document.querySelector('#correctivos-list .card');
+      if(card) card.scrollIntoView({behavior:'smooth'});
+    }, 300);
+  }
+})();
 </script>
 </body>
 </html>
