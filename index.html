@@ -129,6 +129,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .pin-key:active{background:var(--surface2);transform:scale(0.95)}
 .pin-key.del{font-size:14px;color:var(--red)}
 .pin-error{font-size:12px;color:var(--red);min-height:18px;margin-top:4px}
+.btn-finalizar{width:100%;padding:16px;font-size:17px;font-weight:700;border-radius:var(--radius);border:none;cursor:pointer;letter-spacing:0.3px;margin-top:8px;transition:all 0.15s}
+.btn-finalizar:active{transform:scale(0.98)}
+.btn-finalizar-prev{background:#2d6a2d;color:white}
+.btn-finalizar-corr{background:#1f3864;color:white}
 #toast{position:fixed;top:76px;left:50%;transform:translateX(-50%);background:#1a1a18;color:white;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none}
 #toast.show{opacity:1}
 #toast.err{background:var(--red)}
@@ -450,17 +454,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <button class="foto-preview-del" onclick="borrarFoto('prev-foto-input','prev-foto-preview')">x</button>
         </div>
       </div>
+      <button class="btn-finalizar btn-finalizar-prev" onclick="finalizarOrdenPreventivo()">✅ FINALIZAR ORDEN</button>
       <div class="btn-row">
         <button class="btn btn-sm" onclick="toggleForm('form-prev')">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="guardarPreventivo()">Guardar</button>
+        <button class="btn btn-primary btn-sm" onclick="guardarPreventivo()">Guardar borrador</button>
       </div>
     </div>
-    <div class="filter-bar">
-      <select id="filt-prev-estado" onchange="renderPreventivos()">
-        <option value="">Todos</option><option value="Programado">Programado</option>
-        <option value="Completado">Completado</option><option value="Vencido">Vencido</option>
-      </select>
-    </div>
+
     <div id="preventivos-list"></div>
   </div>
 
@@ -494,7 +494,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
       </div>
       <div class="form-group"><label>Diagnóstico / Trabajos</label><textarea id="corr-diag" placeholder="Diagnóstico..."></textarea></div>
-      <div class="form-group"><label>Estado</label><select id="corr-estado"><option>En proceso</option><option>En espera de repuestos</option><option>Cerrado</option></select></div>
+      <div class="form-group"><label>Estado inicial</label><select id="corr-estado"><option>En proceso</option><option>En espera de repuestos</option></select></div>
       <div class="form-group">
         <label>Foto del reporte firmado</label>
         <div class="foto-upload" onclick="document.getElementById('corr-foto-input').click()">
@@ -510,15 +510,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <button class="foto-preview-del" onclick="borrarFoto('corr-foto-input','corr-foto-preview')">x</button>
         </div>
       </div>
-      <div class="btn-row">
+      <button class="btn-finalizar btn-finalizar-corr" onclick="finalizarOrdenCorrectivo()">✅ FINALIZAR ORDEN</button>
+      <div class="btn-row" style="margin-top:8px">
         <button class="btn btn-sm" onclick="toggleForm('form-corr')">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="guardarCorrectivo()">Guardar</button>
+        <button class="btn btn-sm" onclick="guardarCorrectivo()">Guardar borrador</button>
       </div>
     </div>
-    <div class="filter-bar">
-      <select id="filt-corr-estado" onchange="renderCorrectivos()"><option value="">Todos</option><option value="En proceso">En proceso</option><option value="Cerrado">Cerrado</option></select>
-      <select id="filt-corr-prior" onchange="renderCorrectivos()"><option value="">Todas prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select>
-    </div>
+
     <div id="correctivos-list"></div>
   </div>
 
@@ -651,12 +649,12 @@ function showTab(id, el){
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   if(el) el.classList.add('active');
-  if(id === 'dashboard') renderDashboard();
   if(id === 'equipos') renderEquipos();
   if(id === 'preventivo'){ fillSel('prev-equipo'); renderPreventivos(); }
   if(id === 'correctivo'){ fillSel('corr-equipo'); renderCorrectivos(); }
   if(id === 'solicitudes') initSolicitudes();
   if(id === 'historial'){ fillHistSel(); renderHistorial(); }
+  if(id === 'dashboard') renderDashboard();
   window.scrollTo(0, 0);
 }
 
@@ -1083,14 +1081,13 @@ function toggleSubgrupo(id){
 }
 
 function renderPreventivos(){
-  const filtE = document.getElementById('filt-prev-estado').value;
   let list = [...DB.preventivos].sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  if(filtE) list = list.filter(p=>estadoPrev(p)===filtE);
   const el = document.getElementById('preventivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
   el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card">
     <div class="card-header"><div><div style="display:flex;align-items:center;gap:6px"><div class="card-title">${p.servicio}</div>${p.correlativo?`<span style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 7px;border-radius:10px">${p.correlativo}</span>`:''}</div><div class="card-sub">${getEqLabelFull(p)}</div></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bPrev(est)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button></div></div>
+
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(p.fechaInicio||p.fecha)}</span></div>
     ${p.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(p.fechaFin)}</span></div>`:''}
     ${(p.fechaInicio&&p.fechaFin)?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="font-weight:600;color:var(--blue)">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
@@ -1099,19 +1096,17 @@ function renderPreventivos(){
     ${p.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${p.notas}</span></div>`:''}
     ${p.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${p.sugerencias}</span></div>`:''}
     ${p.foto?`<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">📷 Reporte firmado</div><img src="${p.foto}" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:zoom-in" onclick="verFotoCompleta('${p.id}','prev')"></div>`:''}
+    <div style="margin-top:10px">
     ${est==='Completado'
-      ? `<button class="btn btn-sm" style="width:100%;margin-top:10px;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
-      : `<button class="btn btn-success" style="width:100%;margin-top:10px" onclick="completarPreventivo('${p.id}')">✓ Marcar completado</button>`
+      ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
+      : `<button class="btn btn-success" style="width:100%;font-weight:600;font-size:15px;padding:12px" onclick="completarPreventivo('${p.id}')">✓ Cerrar orden</button>`
     }
+    </div>
   </div>`; }).join('');
 }
 
 function renderCorrectivos(){
-  const filtE = document.getElementById('filt-corr-estado').value;
-  const filtP = document.getElementById('filt-corr-prior').value;
   let list = [...DB.correctivos].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if(filtE) list = list.filter(c=>c.estado===filtE);
-  if(filtP) list = list.filter(c=>c.prioridad===filtP);
   const el = document.getElementById('correctivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
   el.innerHTML = list.map(c=>{
@@ -1119,6 +1114,7 @@ function renderCorrectivos(){
     return `<div class="card">
     <div class="card-header"><div><div style="display:flex;align-items:center;gap:6px"><div class="card-title">${c.falla}</div>${c.correlativo?`<span style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 7px;border-radius:10px">${c.correlativo}</span>`:''}</div><div class="card-sub">${eqSub}</div></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bCorr(c.estado,c.prioridad)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('corr','${c.id}')">✕</button></div></div>
+
     ${c.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span class="detail-val">${c.sistema}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(c.fechaInicio||c.fecha)}</span></div>
     ${c.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(c.fechaFin)}</span></div>`:''}
@@ -1126,26 +1122,82 @@ function renderCorrectivos(){
     <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${c.tecnico||'—'}</span></div>
     ${c.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${c.diagnostico}</span></div>`:''}
     ${c.foto?`<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">📷 Reporte firmado</div><img src="${c.foto}" style="width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:zoom-in" onclick="verFotoCompleta('${c.id}','corr')"></div>`:''}
+    <div style="margin-top:10px">
     ${c.estado==='Cerrado'
-      ? `<button class="btn btn-sm" style="width:100%;margin-top:10px;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
-      : `<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="cerrarCorrectivo('${c.id}')">✓ Cerrar orden</button>`
+      ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
+      : `<button class="btn btn-primary" style="width:100%;font-weight:600;font-size:15px;padding:12px" onclick="cerrarCorrectivo('${c.id}')">✓ Cerrar orden</button>`
     }
+    </div>
   </div>`;}).join('');
 }
 
 function renderHistorial(){
   const filtEq = document.getElementById('filt-hist-equipo').value;
-  let all = [...DB.preventivos.map(p=>({...p,_t:'P',_f:p.fecha})),...DB.correctivos.map(c=>({...c,_t:'C',_f:c.fecha}))].sort((a,b)=>b._f.localeCompare(a._f));
+
+  // Merge preventivos + correctivos, only show completed/closed
+  let all = [
+    ...DB.preventivos
+      .filter(p=>p.completado)
+      .map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||p.fecha})),
+    ...DB.correctivos
+      .filter(c=>c.estado==='Cerrado')
+      .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha}))
+  ].sort((a,b)=>b._f.localeCompare(a._f));
+
   if(filtEq) all = all.filter(x=>x.equipoId==filtEq);
+
   const el = document.getElementById('historial-list');
-  if(!all.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
-  el.innerHTML = all.map(x => x._t==='P'
-    ? `<div class="card" style="padding:12px 14px"><div class="card-header"><div><div style="display:flex;align-items:center;gap:6px"><div style="font-size:13px;font-weight:600">📅 ${x.servicio}</div>${x.correlativo?`<span style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 6px;border-radius:10px">${x.correlativo}</span>`:''}</div><div class="card-sub">${getEqLabel(x.equipoId)}</div></div>${bPrev(estadoPrev(x))}</div><div style="font-size:12px;color:var(--text2)">${fmt(x.fecha)} · ${x.tecnico||'—'}</div></div>`
-    : `<div class="card" style="padding:12px 14px"><div class="card-header"><div><div style="display:flex;align-items:center;gap:6px"><div style="font-size:13px;font-weight:600">🔧 ${x.falla}</div>${x.correlativo?`<span style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 6px;border-radius:10px">${x.correlativo}</span>`:''}</div><div class="card-sub">${getEqLabel(x.equipoId)}</div></div>${bCorr(x.estado,x.prioridad)}</div><div style="font-size:12px;color:var(--text2)">${fmt(x.fecha)} · ${x.tecnico||'—'}</div></div>`
-  ).join('');
+  if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes finalizadas</div>'; return; }
+
+  el.innerHTML = all.map(x => {
+    const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
+    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (x.clienteNombre ? 'Cliente: '+x.clienteNombre : '—');
+    const horas = calcHoras(x.fechaInicio, x.fechaFin);
+
+    if(x._t==='P'){
+      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:700">📅 ${x.servicio}</span>
+              ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
+          </div>
+          <span class="badge badge-ok" style="flex-shrink:0">Completado</span>
+        </div>
+        <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
+        <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
+        ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
+        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
+        ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
+        ${x.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${x.sugerencias}</span></div>`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
+      </div>`;
+    } else {
+      return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:700">🔧 ${x.falla}</span>
+              ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
+          </div>
+          <span class="badge badge-gray" style="flex-shrink:0">Cerrado</span>
+        </div>
+        ${x.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span>${x.sistema}</span></div>`:''}
+        <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
+        <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
+        ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
+        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
+        ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${x.diagnostico}</span></div>`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCierre||x._f)}</div>
+      </div>`;
+    }
+  }).join('');
 }
 
-// ── CRUD ──────────────────────────────────────────────────────────────────────
 function guardarEquipo(){
   const codigo = document.getElementById('eq-codigo').value.trim();
   const desc = document.getElementById('eq-desc').value.trim();
@@ -1155,10 +1207,63 @@ function guardarEquipo(){
   ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>document.getElementById(id).value='');
   renderEquipos(); toast('Equipo guardado');
 }
-function guardarPreventivo(){
+function finalizarOrdenPreventivo(){
+  // Validate all required fields first
+  const equipoId = document.getElementById('prev-equipo').value;
+  const prevFID = document.getElementById('prev-fecha-inicio-d').value;
+  const prevFIT = document.getElementById('prev-fecha-inicio-t').value;
+  const prevFFD = document.getElementById('prev-fecha-fin-d').value;
+  const prevFFT = document.getElementById('prev-fecha-fin-t').value;
+  const fechaInicio = prevFID ? (prevFIT ? prevFID+'T'+prevFIT : prevFID) : '';
+  const fechaFin    = prevFFD ? (prevFFT ? prevFFD+'T'+prevFFT : prevFFD) : '';
+  const tecnico     = getTecnicos('prev-tecnicos-grid');
+  const notas       = document.getElementById('prev-notas').value.trim();
+
+  const faltantes = [];
+  if(!equipoId)    faltantes.push('Equipo');
+  if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
+  if(!fechaFin)    faltantes.push('Fecha y hora de finalización');
+  if(!tecnico)     faltantes.push('Técnico responsable');
+  if(!notas)       faltantes.push('Trabajo realizado');
+  if(faltantes.length){
+    alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
+    return;
+  }
+  if(!confirm('¿Estás seguro de finalizar esta orden?\n\nSe guardará y cerrará. Solo podrá editarse con PIN.')) return;
+
+  // Save and immediately complete
+  guardarPreventivo(true);
+}
+
+function finalizarOrdenCorrectivo(){
+  const equipoId = document.getElementById('corr-equipo').value;
+  const corrFID  = document.getElementById('corr-fecha-inicio-d').value;
+  const corrFIT  = document.getElementById('corr-fecha-inicio-t').value;
+  const corrFFD  = document.getElementById('corr-fecha-fin-d').value;
+  const corrFFT  = document.getElementById('corr-fecha-fin-t').value;
+  const fechaInicio = corrFID ? (corrFIT ? corrFID+'T'+corrFIT : corrFID) : '';
+  const falla    = document.getElementById('corr-falla').value.trim();
+  const tecnico  = getTecnicos('corr-tecnicos-grid');
+  const diag     = document.getElementById('corr-diag').value.trim();
+
+  const faltantes = [];
+  if(!equipoId)    faltantes.push('Equipo');
+  if(!falla)       faltantes.push('Falla reportada');
+  if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
+  if(!tecnico)     faltantes.push('Técnico asignado');
+  if(!diag)        faltantes.push('Diagnóstico / Trabajos realizados');
+  if(faltantes.length){
+    alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
+    return;
+  }
+  if(!confirm('¿Estás seguro de finalizar esta orden?\n\nSe guardará y cerrará. Solo podrá editarse con PIN.')) return;
+
+  guardarCorrectivo(true);
+}
+
+function guardarPreventivo(finalizar=false){
   const equipoId = document.getElementById('prev-equipo').value;
   if(!equipoId){ toast('Selecciona un equipo',true); return; }
-  if(!fechaInicio){ toast('Ingresa la fecha y hora de inicio',true); return; }
   const prevFID = document.getElementById('prev-fecha-inicio-d').value;
   const prevFIT = document.getElementById('prev-fecha-inicio-t').value;
   const prevFFD = document.getElementById('prev-fecha-fin-d').value;
@@ -1204,6 +1309,7 @@ function guardarPreventivo(){
   }
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
+    if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
     DB.preventivos.push(entry);
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
@@ -1212,7 +1318,23 @@ function guardarPreventivo(){
   ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
-  renderPreventivos(); toast('Preventivo guardado');
+  if(finalizar){
+      try{
+        entry.completado = true;
+        entry.fechaCompletado = new Date().toISOString().slice(0,10);
+        registrarOrdenCerrada(entry,'Preventivo');
+        saveDB();
+        console.log('Preventivo guardado:', JSON.stringify(entry).slice(0,200));
+        console.log('DB.preventivos count:', DB.preventivos.length);
+        console.log('DB.ordenesCerradas count:', (DB.ordenesCerradas||[]).length);
+      }catch(err){ console.error('Error al guardar preventivo:', err); alert('Error: '+err.message); return; }
+      renderDashboard();
+      fillHistSel();
+      // Show success modal
+      mostrarExitoOrden(entry.correlativo||'');
+    } else {
+      renderPreventivos(); toast('Borrador guardado');
+    }
   });
 }
 function completarPreventivo(id){
@@ -1240,7 +1362,7 @@ function eliminarPreventivo(id){
   if(!confirm('¿Eliminar?')) return;
   DB.preventivos = DB.preventivos.filter(p=>p.id!==id); saveDB(); renderPreventivos();
 }
-function guardarCorrectivo(){
+function guardarCorrectivo(finalizar=false){
   const equipoId = document.getElementById('corr-equipo').value;
   const falla = document.getElementById('corr-falla').value.trim();
   const corrFID = document.getElementById('corr-fecha-inicio-d').value;
@@ -1248,11 +1370,8 @@ function guardarCorrectivo(){
   const corrFFD = document.getElementById('corr-fecha-fin-d').value;
   const corrFFT = document.getElementById('corr-fecha-fin-t').value;
   const fechaInicio = corrFID ? (corrFIT ? corrFID+'T'+corrFIT : corrFID) : '';
-  const faltCorr = [];
-  if(!equipoId)    faltCorr.push('Equipo');
-  if(!falla)       faltCorr.push('Falla reportada');
-  if(!fechaInicio) faltCorr.push('Fecha y hora de inicio');
-  if(faltCorr.length){ toast('Faltan: '+faltCorr.join(', '),true); return; }
+  if(!equipoId){ toast('Selecciona un equipo',true); return; }
+  if(!falla){ toast('Ingresa la falla reportada',true); return; }
   const correlativoCorr = nextCorrelativo();
   const entry = {
     id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema').value,
@@ -1299,6 +1418,7 @@ function guardarCorrectivo(){
   }
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
+    if(finalizar){ entry.estado='Cerrado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
     DB.correctivos.push(entry);
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
@@ -1308,7 +1428,22 @@ function guardarCorrectivo(){
   document.getElementById('corr-equipo').value='';
   document.getElementById('corr-sistema').value='';
   document.getElementById('corr-cliente-fields').style.display='none';
-  renderCorrectivos(); toast('Correctivo guardado');
+  if(finalizar){
+      try{
+        entry.estado = 'Cerrado';
+        entry.fechaCierre = new Date().toISOString().slice(0,10);
+        registrarOrdenCerrada(entry,'Correctivo');
+        saveDB();
+        console.log('Correctivo guardado:', JSON.stringify(entry).slice(0,200));
+        console.log('DB.correctivos count:', DB.correctivos.length);
+        console.log('DB.ordenesCerradas count:', (DB.ordenesCerradas||[]).length);
+      }catch(err){ console.error('Error al guardar correctivo:', err); alert('Error: '+err.message); return; }
+      renderDashboard();
+      fillHistSel();
+      mostrarExitoOrden(entry.correlativo||'');
+    } else {
+      renderCorrectivos(); toast('Borrador guardado');
+    }
   });
 }
 function cerrarCorrectivo(id){
@@ -1671,6 +1806,35 @@ function verFotoCompleta(id,tipo){
 function cerrarLightbox(){
   document.getElementById("lightbox").style.display="none";
   document.body.style.overflow="";
+}
+
+function mostrarExitoOrden(correlativo){
+  // Remove existing if any
+  const existing = document.getElementById('exito-modal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'exito-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;display:flex;align-items:center;justify-content:center;padding:24px';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:16px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
+      <div style="font-size:56px;margin-bottom:12px">✅</div>
+      <div style="font-size:20px;font-weight:700;color:#1a1a18;margin-bottom:6px">¡Orden finalizada!</div>
+      ${correlativo?`<div style="font-size:14px;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:6px 16px;border-radius:20px;display:inline-block;margin-bottom:12px;font-weight:700">${correlativo}</div>`:''}
+      <div style="font-size:13px;color:#6b6960;margin-bottom:24px">La orden fue guardada y registrada en el historial.</div>
+      <button onclick="cerrarExito()" style="width:100%;padding:14px;background:#1f3864;color:white;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">Ir al inicio</button>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarExito(){
+  const modal = document.getElementById('exito-modal');
+  if(modal) modal.remove();
+  document.body.style.overflow = '';
+  const btn = document.querySelector('.nav-btn:nth-child(1)');
+  showTab('dashboard', btn);
+  window.scrollTo(0,0);
 }
 
 loadDB();
