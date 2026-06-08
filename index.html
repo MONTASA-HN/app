@@ -1019,8 +1019,11 @@ function enviarSolicitudWA(){
 
   // Save solicitud
   if(!DB.solicitudes) DB.solicitudes = [];
+  const tecnicoSel2 = document.getElementById('sol-tecnico');
+  const tecnicoValGuard = tecnicoSel2.value;
   DB.solicitudes.unshift({
-    id: ordenId, equipoTxt, desc, fecha, tecnicoNombre, tecnicoNum, prioridad,
+    id: ordenId, equipoTxt, equipoId: document.getElementById('sol-equipo').value,
+    desc, fecha, tecnicoNombre, tecnicoNum: tecnicoValGuard, prioridad,
     tipo: tipo, estado: 'Enviada'
   });
   saveDB();
@@ -1170,31 +1173,103 @@ function cerrarLightbox(){
 loadDB();
 renderDashboard();
 
-// Deep link handler — opens correct tab if URL has #preventivo-ID or #correctivo-ID
+// Deep link handler — abre el tab correcto y prefill con datos de la solicitud
 (function(){
   const hash = window.location.hash.slice(1);
   if(!hash) return;
-  const [tipo, id] = hash.split('-').length > 1 ? [hash.split('-')[0], hash.split('-').slice(1).join('-')] : [null, null];
-  if(tipo === 'preventivo'){
-    const btn = document.querySelector('.nav-btn:nth-child(3)');
-    showTab('preventivo', btn);
-    setTimeout(()=>{
-      fillSel('prev-equipo');
-      renderPreventivos();
-      const card = document.querySelector('#preventivos-list .card');
-      if(card) card.scrollIntoView({behavior:'smooth'});
-    }, 300);
-  } else if(tipo === 'correctivo'){
-    const btn = document.querySelector('.nav-btn:nth-child(4)');
-    showTab('correctivo', btn);
-    setTimeout(()=>{
-      fillSel('corr-equipo');
-      renderCorrectivos();
-      const card = document.querySelector('#correctivos-list .card');
-      if(card) card.scrollIntoView({behavior:'smooth'});
-    }, 300);
-  }
+  const dashIdx = hash.indexOf('-');
+  if(dashIdx === -1) return;
+  const tipo = hash.slice(0, dashIdx);
+  const ordenId = hash.slice(dashIdx+1);
+  if(tipo !== 'preventivo' && tipo !== 'correctivo') return;
+
+  // Buscar la solicitud por ID
+  const sol = (DB.solicitudes||[]).find(s=>s.id===ordenId);
+
+  setTimeout(()=>{
+    if(tipo === 'preventivo'){
+      const btn = document.querySelector('.nav-btn:nth-child(3)');
+      showTab('preventivo', btn);
+      setTimeout(()=>{
+        // Abrir formulario
+        document.getElementById('form-prev').style.display = 'block';
+        fillSel('prev-equipo');
+        if(sol){
+          // Prellenar equipo
+          const sel = document.getElementById('prev-equipo');
+          // Buscar equipo por código
+          const eq = DB.equipos.find(e=>e.codigo===sol.equipoTxt);
+          if(eq){ sel.value = eq.id; }
+          else {
+            sel.value = '__cliente__';
+            document.getElementById('prev-cliente-fields').style.display = 'block';
+            document.getElementById('prev-cliente-nombre').value = sol.equipoTxt;
+          }
+          // Prellenar descripción en notas
+          document.getElementById('prev-notas').value = sol.desc || '';
+          // Prellenar técnico
+          if(sol.tecnicoNombre){
+            const checks = document.querySelectorAll('#prev-tecnicos-grid input[type=checkbox]');
+            checks.forEach(c=>{
+              if(c.value === sol.tecnicoNombre){
+                c.checked = true;
+                c.closest('.tecnico-check').classList.add('selected');
+              }
+            });
+          }
+          // Mostrar banner de solicitud
+          mostrarBannerSolicitud(sol, 'prev');
+        }
+        document.getElementById('form-prev').scrollIntoView({behavior:'smooth'});
+      }, 200);
+    } else if(tipo === 'correctivo'){
+      const btn = document.querySelector('.nav-btn:nth-child(4)');
+      showTab('correctivo', btn);
+      setTimeout(()=>{
+        document.getElementById('form-corr').style.display = 'block';
+        fillSel('corr-equipo');
+        if(sol){
+          const sel = document.getElementById('corr-equipo');
+          const eq = DB.equipos.find(e=>e.codigo===sol.equipoTxt);
+          if(eq){ sel.value = eq.id; }
+          else {
+            sel.value = '__cliente__';
+            document.getElementById('corr-cliente-fields').style.display = 'block';
+            document.getElementById('corr-cliente-nombre').value = sol.equipoTxt;
+          }
+          document.getElementById('corr-falla').value = sol.desc || '';
+          if(sol.prioridad) document.getElementById('corr-prioridad').value = sol.prioridad;
+          if(sol.tecnicoNombre){
+            const checks = document.querySelectorAll('#corr-tecnicos-grid input[type=checkbox]');
+            checks.forEach(c=>{
+              if(c.value === sol.tecnicoNombre){
+                c.checked = true;
+                c.closest('.tecnico-check').classList.add('selected');
+              }
+            });
+          }
+          mostrarBannerSolicitud(sol, 'corr');
+        }
+        document.getElementById('form-corr').scrollIntoView({behavior:'smooth'});
+      }, 200);
+    }
+  }, 300);
 })();
+
+function mostrarBannerSolicitud(sol, tipo){
+  const formId = tipo==='prev' ? 'form-prev' : 'form-corr';
+  const form = document.getElementById(formId);
+  const existing = document.getElementById('sol-banner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'sol-banner';
+  banner.style.cssText = 'background:#e8edf5;border:1px solid #b5d4f4;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1a4a8a';
+  banner.innerHTML = '<div style="font-weight:600;margin-bottom:3px">📋 Solicitud asignada</div>'
+    + '<div>Equipo: <b>' + sol.equipoTxt + '</b></div>'
+    + '<div>Técnico: <b>' + sol.tecnicoNombre + '</b></div>'
+    + '<div>Prioridad: <b>' + sol.prioridad + '</b></div>';
+  form.insertBefore(banner, form.firstChild.nextSibling);
+}
 </script>
 </body>
 </html>
