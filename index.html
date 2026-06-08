@@ -1157,7 +1157,8 @@ function guardarEquipo(){
 }
 function guardarPreventivo(){
   const equipoId = document.getElementById('prev-equipo').value;
-  if(!equipoId||!fechaInicio){ toast('Selecciona equipo y fecha de inicio',true); return; }
+  if(!equipoId){ toast('Selecciona un equipo',true); return; }
+  if(!fechaInicio){ toast('Ingresa la fecha y hora de inicio',true); return; }
   const prevFID = document.getElementById('prev-fecha-inicio-d').value;
   const prevFIT = document.getElementById('prev-fecha-inicio-t').value;
   const prevFFD = document.getElementById('prev-fecha-fin-d').value;
@@ -1216,7 +1217,24 @@ function guardarPreventivo(){
 }
 function completarPreventivo(id){
   const p = DB.preventivos.find(x=>x.id===id);
-  if(p){ p.completado=true; p.fechaCompletado=new Date().toISOString().slice(0,10); saveDB(); renderPreventivos(); renderDashboard(); toast('Marcado como completado'); }
+  if(!p) return;
+  // Validate required fields
+  const faltantes = [];
+  if(!p.fechaInicio) faltantes.push('Fecha y hora de inicio');
+  if(!p.fechaFin)    faltantes.push('Fecha y hora de finalización');
+  if(!p.tecnico)     faltantes.push('Técnico responsable');
+  if(!p.notas)       faltantes.push('Trabajo realizado');
+  if(faltantes.length){
+    alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
+    return;
+  }
+  if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  p.completado = true;
+  p.fechaCompletado = new Date().toISOString().slice(0,10);
+  saveDB();
+  registrarOrdenCerrada(p, 'Preventivo');
+  renderPreventivos(); renderDashboard();
+  toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
 }
 function eliminarPreventivo(id){
   if(!confirm('¿Eliminar?')) return;
@@ -1230,7 +1248,11 @@ function guardarCorrectivo(){
   const corrFFD = document.getElementById('corr-fecha-fin-d').value;
   const corrFFT = document.getElementById('corr-fecha-fin-t').value;
   const fechaInicio = corrFID ? (corrFIT ? corrFID+'T'+corrFIT : corrFID) : '';
-  if(!equipoId||!falla||!fechaInicio){ toast('Equipo, falla y fecha de inicio requeridos',true); return; }
+  const faltCorr = [];
+  if(!equipoId)    faltCorr.push('Equipo');
+  if(!falla)       faltCorr.push('Falla reportada');
+  if(!fechaInicio) faltCorr.push('Fecha y hora de inicio');
+  if(faltCorr.length){ toast('Faltan: '+faltCorr.join(', '),true); return; }
   const correlativoCorr = nextCorrelativo();
   const entry = {
     id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema').value,
@@ -1291,11 +1313,59 @@ function guardarCorrectivo(){
 }
 function cerrarCorrectivo(id){
   const c = DB.correctivos.find(x=>x.id===id);
-  if(c){ c.estado='Cerrado'; c.fechaCierre=new Date().toISOString().slice(0,10); saveDB(); renderCorrectivos(); renderDashboard(); toast('Orden cerrada'); }
+  if(!c) return;
+  const faltantes = [];
+  if(!c.fechaInicio)   faltantes.push('Fecha y hora de inicio');
+  if(!c.fechaFin)      faltantes.push('Fecha y hora de finalización');
+  if(!c.tecnico)       faltantes.push('Técnico asignado');
+  if(!c.falla)         faltantes.push('Falla reportada');
+  if(!c.diagnostico)   faltantes.push('Diagnóstico / Trabajos realizados');
+  if(faltantes.length){
+    alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
+    return;
+  }
+  if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  c.estado = 'Cerrado';
+  c.fechaCierre = new Date().toISOString().slice(0,10);
+  saveDB();
+  registrarOrdenCerrada(c, 'Correctivo');
+  renderCorrectivos(); renderDashboard();
+  toast('Orden ' + (c.correlativo||'') + ' cerrada y guardada en Excel');
 }
 function eliminarCorrectivo(id){
   if(!confirm('¿Eliminar?')) return;
   DB.correctivos = DB.correctivos.filter(c=>c.id!==id); saveDB(); renderCorrectivos();
+}
+
+function registrarOrdenCerrada(orden, tipo){
+  // Accumulate closed orders in DB
+  if(!DB.ordenesCerradas) DB.ordenesCerradas = [];
+  const eq = DB.equipos.find(e=>e.id===orden.equipoId)||{};
+  const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (orden.clienteNombre||'Equipo de cliente');
+  const hoy = new Date().toISOString().slice(0,10);
+  // Avoid duplicates
+  if(DB.ordenesCerradas.find(o=>o.correlativo===orden.correlativo)) return;
+  DB.ordenesCerradas.push({
+    correlativo:  orden.correlativo||'',
+    tipo,
+    equipo:       eqLabel,
+    serie:        eq.serie||orden.clienteSerie||'',
+    cliente:      eq.cliente||orden.clienteNombre||'',
+    servicio:     tipo==='Preventivo' ? (orden.servicio||'') : '',
+    sistema:      tipo==='Correctivo' ? (orden.sistema||'') : '',
+    falla:        tipo==='Correctivo' ? (orden.falla||'') : '',
+    prioridad:    tipo==='Correctivo' ? (orden.prioridad||'') : '',
+    horometro:    orden.horometro||'',
+    fechaInicio:  fmtDT(orden.fechaInicio||orden.fecha),
+    fechaFin:     fmtDT(orden.fechaFin||''),
+    horasTrab:    calcHoras(orden.fechaInicio, orden.fechaFin),
+    tecnico:      orden.tecnico||'',
+    trabajo:      orden.notas||orden.diagnostico||'',
+    sugerencias:  orden.sugerencias||'',
+    diagnostico:  tipo==='Correctivo' ? (orden.diagnostico||'') : '',
+    fechaCierre:  hoy
+  });
+  saveDB();
 }
 
 function exportarExcel(){
@@ -1305,11 +1375,54 @@ function exportarExcel(){
     const wb = XLSX.utils.book_new();
     const hoy = new Date().toISOString().slice(0,10);
     const getEq = id => { const e=DB.equipos.find(x=>x.id==id)||{}; return {codigo:e.codigo||'',marca:e.marca||''}; };
-    const mkSheet = data => { const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=data[0].map((_,i)=>({wch:Math.min(40,Math.max(12,...data.map(r=>String(r[i]||'').length)))})); return ws; };
-    XLSX.utils.book_append_sheet(wb,mkSheet([['Indicador','Valor'],['Fecha',hoy],['Equipos',DB.equipos.length],['Disponibles',DB.equipos.filter(e=>e.estado==='DISPONIBLE').length],['En renta',DB.equipos.filter(e=>e.estado==='EN RENTA').length],['Mal estado',DB.equipos.filter(e=>e.estado==='MAL ESTADO').length],['Preventivos',DB.preventivos.length],['Correctivos',DB.correctivos.length]]),'Resumen');
-    XLSX.utils.book_append_sheet(wb,mkSheet([['N° Equipo','Descripción','Tipo','Marca','Serie','Combustible','Estado','Ubicación','Cliente','Horómetro','Observaciones'],...DB.equipos.map(e=>[e.codigo,e.desc,e.tipo,e.marca||'',e.serie||'',e.combustible||'',e.estado||'',e.ubicacion||'',e.cliente||'',e.horometro||'',e.observaciones||''])]),'Equipos');
-    XLSX.utils.book_append_sheet(wb,mkSheet([['N° Equipo','Marca','Servicio','Fecha','Horómetro','Técnico','Estado','Notas','Fecha Completado'],...DB.preventivos.map(p=>{const eq=getEq(p.equipoId);return [eq.codigo,eq.marca,p.servicio,p.fecha,p.horometro||'',p.tecnico||'',estadoPrev(p),p.notas||'',p.fechaCompletado||''];})]),'Preventivos');
-    XLSX.utils.book_append_sheet(wb,mkSheet([['N° Equipo','Marca','Falla','Prioridad','Fecha','Técnico','Diagnóstico','Estado','Fecha Cierre'],...DB.correctivos.map(c=>{const eq=getEq(c.equipoId);return [eq.codigo,eq.marca,c.falla,c.prioridad,c.fecha,c.tecnico||'',c.diagnostico||'',c.estado,c.fechaCierre||''];})]),'Correctivos');
+    const mkSheet = data => {
+      const ws=XLSX.utils.aoa_to_sheet(data);
+      ws['!cols']=data[0].map((_,i)=>({wch:Math.min(45,Math.max(14,...data.map(r=>String(r[i]||'').length)))}));
+      return ws;
+    };
+
+    // Sheet 1: Resumen
+    XLSX.utils.book_append_sheet(wb,mkSheet([
+      ['Indicador','Valor'],
+      ['Fecha exportación',hoy],
+      ['Total equipos',DB.equipos.length],
+      ['Disponibles',DB.equipos.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length],
+      ['En renta',DB.equipos.filter(e=>e.estado==='EN RENTA').length],
+      ['Inactivos',DB.equipos.filter(e=>e.estado==='MAL ESTADO').length],
+      ['Total preventivos',DB.preventivos.length],
+      ['Total correctivos',DB.correctivos.length],
+      ['Órdenes cerradas',(DB.ordenesCerradas||[]).length],
+    ]),'Resumen');
+
+    // Sheet 2: Órdenes cerradas (main log)
+    const headers = ['Correlativo','Tipo','Equipo','Serie','Cliente','Servicio / Falla','Sistema','Prioridad','Horómetro','Fecha Inicio','Fecha Fin','Horas Trabajadas','Técnico','Trabajo Realizado','Diagnóstico','Sugerencias','Fecha Cierre'];
+    const rows = (DB.ordenesCerradas||[]).map(o=>[
+      o.correlativo, o.tipo, o.equipo, o.serie||'', o.cliente||'',
+      o.servicio||o.falla||'', o.sistema||'', o.prioridad||'',
+      o.horometro||'', o.fechaInicio||'', o.fechaFin||'',
+      o.horasTrab||'', o.tecnico||'', o.trabajo||'',
+      o.diagnostico||'', o.sugerencias||'', o.fechaCierre||''
+    ]);
+    XLSX.utils.book_append_sheet(wb, mkSheet([headers,...rows]), 'Órdenes Cerradas');
+
+    // Sheet 3: Equipos
+    XLSX.utils.book_append_sheet(wb,mkSheet([
+      ['N° Equipo','Descripción','Tipo','Marca','Serie','Combustible','Estado','Ubicación','Cliente','Horómetro','Observaciones'],
+      ...DB.equipos.map(e=>[e.codigo,e.desc,e.tipo,e.marca||'',e.serie||'',e.combustible||'',e.estado||'',e.ubicacion||'',e.cliente||'',e.horometro||'',e.observaciones||''])
+    ]),'Equipos');
+
+    // Sheet 4: Preventivos activos
+    XLSX.utils.book_append_sheet(wb,mkSheet([
+      ['Correlativo','N° Equipo','Marca','Servicio','Fecha Inicio','Fecha Fin','Horas','Horómetro','Técnico','Estado','Trabajo Realizado','Sugerencias'],
+      ...DB.preventivos.map(p=>{const eq=getEq(p.equipoId);return[p.correlativo||'',eq.codigo,eq.marca,p.servicio,fmtDT(p.fechaInicio||p.fecha),fmtDT(p.fechaFin||''),calcHoras(p.fechaInicio,p.fechaFin),p.horometro||'',p.tecnico||'',estadoPrev(p),p.notas||'',p.sugerencias||''];})
+    ]),'Preventivos');
+
+    // Sheet 5: Correctivos activos
+    XLSX.utils.book_append_sheet(wb,mkSheet([
+      ['Correlativo','N° Equipo','Marca','Sistema','Falla','Prioridad','Fecha Inicio','Fecha Fin','Horas','Técnico','Diagnóstico','Estado','Fecha Cierre'],
+      ...DB.correctivos.map(c=>{const eq=getEq(c.equipoId);return[c.correlativo||'',eq.codigo,eq.marca,c.sistema||'',c.falla,c.prioridad,fmtDT(c.fechaInicio||c.fecha),fmtDT(c.fechaFin||''),calcHoras(c.fechaInicio,c.fechaFin),c.tecnico||'',c.diagnostico||'',c.estado,c.fechaCierre||''];})
+    ]),'Correctivos');
+
     XLSX.writeFile(wb,'MONTASA_Mantenimiento_'+hoy+'.xlsx');
     toast('Excel descargado');
   }catch(e){ toast('Error al exportar',true); }
@@ -1377,9 +1490,11 @@ function enviarSolicitudWA(){
   const tecnicoNum = tecnicosData[0].num; // primary for single WA flow
   const prioridad = document.getElementById('sol-prioridad').value;
 
-  if(!equipoTxt){ toast('Selecciona o escribe el número de equipo', true); return; }
-  if(!desc){ toast('Escribe una descripción', true); return; }
-  // tecnicos already validated above
+  const faltSol = [];
+  if(!equipoTxt)          faltSol.push('Número de equipo');
+  if(!desc)               faltSol.push('Descripción del trabajo');
+  if(!checks.length)      faltSol.push('Técnico asignado');
+  if(faltSol.length){ toast('Faltan: '+faltSol.join(', '),true); return; }
 
   const ordenId = uid();
   const tipo = document.getElementById('sol-tipo').value;
