@@ -260,7 +260,7 @@ function showTab(id,el){
   document.getElementById('tab-'+id).classList.add('active');
   if(el) el.classList.add('active');
   if(id==='dashboard') renderDashboard();
-  if(id==='equipos') renderEquipos();
+  if(id==='equipos'){ renderEquipos(); }
   if(id==='solicitudes') initSolicitudes();
   window.scrollTo(0,0);
 }
@@ -445,10 +445,16 @@ function enviarWA(){
   };
 firebase.app(); // already initialized above
 
+// Initial render with local data while Firebase loads
+EQUIPOS = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+renderDashboard();
+
 fbDB.ref(FB_PATH).on('value', snap => {
   const data=snap.val();
   if(!data||!data.equipos) {
-    document.getElementById('sync-badge').textContent='✅ En línea';
+    // Firebase empty - use EQUIPOS_INICIALES directly
+    EQUIPOS = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    document.getElementById('sync-badge').textContent='📋 Datos locales';
     renderDashboard(); renderEquipos();
     return;
   }
@@ -475,7 +481,6 @@ fbDB.ref(FB_PATH).on('value', snap => {
   }
 });
 
-renderDashboard();
 </script>
 </body>
 </html>
