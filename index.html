@@ -312,41 +312,35 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
     </div>
 
-    <!-- Stats mantenimiento -->
+    <!-- Ordenes abiertas -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="card" style="padding:12px 14px">
-        <div style="font-size:14px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600">Preventivos</div>
-        <div style="font-size:42px;font-weight:600;font-family:'DM Mono',monospace;color:var(--accent)" id="st-prev">0</div>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
-          <div style="display:flex;justify-content:space-between;font-size:15px">
+      <div class="card" style="padding:16px 14px;border-left:4px solid #1a4a8a;cursor:pointer" onclick="document.querySelector('.nav-btn:nth-child(3)').click()">
+        <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Preventivos</div>
+        <div style="font-size:38px;font-weight:700;font-family:'DM Mono',monospace;color:#1a4a8a;line-height:1" id="st-prev-abiertos">0</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px">Órdenes abiertas</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--text2)">En proceso</span>
+            <span style="font-weight:500;color:#1a4a8a" id="st-prev-proc">0</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
             <span style="color:var(--text2)">Completados</span>
             <span style="font-weight:500;color:#2d6a2d" id="st-prev-comp">0</span>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:15px">
-            <span style="color:var(--text2)">Programados</span>
-            <span style="font-weight:500;color:#1a4a8a" id="st-prev-prog">0</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:15px">
-            <span style="color:var(--text2)">Vencidos</span>
-            <span style="font-weight:500;color:#8b2020" id="st-prev-venc">0</span>
-          </div>
         </div>
       </div>
-      <div class="card" style="padding:12px 14px">
-        <div style="font-size:14px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600">Correctivos</div>
-        <div style="font-size:42px;font-weight:600;font-family:'DM Mono',monospace;color:var(--accent)" id="st-corr">0</div>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
-          <div style="display:flex;justify-content:space-between;font-size:15px">
+      <div class="card" style="padding:16px 14px;border-left:4px solid #8b3a1a;cursor:pointer" onclick="document.querySelector('.nav-btn:nth-child(4)').click()">
+        <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Correctivos</div>
+        <div style="font-size:38px;font-weight:700;font-family:'DM Mono',monospace;color:#8b3a1a;line-height:1" id="st-corr-abiertos">0</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px">Órdenes abiertas</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;justify-content:space-between;font-size:13px">
             <span style="color:var(--text2)">En proceso</span>
             <span style="font-weight:500;color:#8b3a1a" id="st-corr-proc">0</span>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:15px">
+          <div style="display:flex;justify-content:space-between;font-size:13px">
             <span style="color:var(--text2)">En espera</span>
             <span style="font-weight:500;color:#5a1a8a" id="st-corr-esp">0</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:15px">
-            <span style="color:var(--text2)">Cerrados</span>
-            <span style="font-weight:500;color:#2d6a2d" id="st-corr-cerr">0</span>
           </div>
         </div>
       </div>
@@ -958,6 +952,18 @@ function splitDT(dt){
   return [dt, ''];
 }
 
+function diasAbierta(fecha){
+  if(!fecha) return '—';
+  try{
+    const inicio = new Date(fecha);
+    const hoy = new Date();
+    const diff = Math.floor((hoy - inicio) / (1000*60*60*24));
+    if(diff === 0) return 'Hoy';
+    if(diff === 1) return '1 día';
+    return diff + ' días';
+  }catch(e){ return '—'; }
+}
+
 function fmtDT(s){
   if(!s) return '—';
   try{
@@ -1182,6 +1188,7 @@ function renderPreventivos(){
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bPrev(est)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button></div></div>
 
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(p.fechaInicio||p.fecha)}</span></div>
+    <div class="detail-row" style="background:var(--amber-bg)"><span class="detail-lbl" style="color:var(--amber);font-weight:600">📆 Días abierta</span><span style="font-weight:700;color:var(--amber);font-family:'DM Mono',monospace">${diasAbierta(p.fechaInicio||p.fecha)}</span></div>
     ${p.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(p.fechaFin)}</span></div>`:''}
     ${(p.fechaInicio&&p.fechaFin)?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="font-weight:600;color:var(--blue)">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Horómetro</span><span>${p.horometro||'—'} hrs</span></div>
@@ -1210,6 +1217,7 @@ function renderCorrectivos(){
 
     ${c.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span class="detail-val">${c.sistema}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(c.fechaInicio||c.fecha)}</span></div>
+    <div class="detail-row" style="background:var(--amber-bg)"><span class="detail-lbl" style="color:var(--amber);font-weight:600">📆 Días abierta</span><span style="font-weight:700;color:var(--amber);font-family:'DM Mono',monospace">${diasAbierta(c.fechaInicio||c.fecha)}</span></div>
     ${c.fechaFin?`<div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(c.fechaFin)}</span></div>`:''}
     ${(c.fechaInicio&&c.fechaFin)?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="font-weight:600;color:var(--blue)">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(c.fechaInicio,c.fechaFin)}</span></div>`:''}
     <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${c.tecnico||'—'}</span></div>
@@ -1750,7 +1758,7 @@ function enviarSolicitudWA(){
     id: ordenId, equipoTxt, equipoId: document.getElementById('sol-equipo').value,
     desc, tecnicoNombre, prioridad, tipo
   })));
-  const appUrl = 'https://montasa-hn.github.io/app/index.html?sol=' + solData + '#' + tipo;
+  const appUrl = 'https://montasa-hn.github.io/app/index.html#' + tipo + '/' + solData;
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : '🔧';
   const correlativoWA = tipo==='preventivo' ? nextCorrelativo() : nextCorrelativo();
   const msg = emoji + ' *ASIGNACION DE TRABAJO - MONTASA*\n\n'
@@ -2059,16 +2067,29 @@ setInterval(renderDashboard, 60000);
 
 // Deep link handler — lee datos de la URL y prefill formulario
 (function(){
-  const params = new URLSearchParams(window.location.search);
-  const solParam = params.get('sol');
   const hash = window.location.hash.slice(1);
-  if(!solParam && !hash) return;
+  if(!hash) return;
 
   let sol = null;
-  if(solParam){
-    try{ sol = JSON.parse(decodeURIComponent(atob(solParam))); }catch(e){}
+  let tipo = 'preventivo';
+
+  if(hash.includes('/')){
+    const slashIdx = hash.indexOf('/');
+    tipo = hash.slice(0, slashIdx);
+    const b64 = hash.slice(slashIdx + 1);
+    try{ sol = JSON.parse(decodeURIComponent(atob(b64))); }catch(e){ console.error('deeplink parse error',e); }
+  } else if(hash.includes('-')){
+    tipo = hash.split('-')[0];
   }
-  const tipo = (sol && sol.tipo) || hash || 'preventivo';
+
+  if(tipo !== 'preventivo' && tipo !== 'correctivo') return;
+
+  // Show loading banner immediately
+  const banner = document.createElement('div');
+  banner.id = 'deeplink-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999;background:#1f3864;color:white;padding:14px 18px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px';
+  banner.innerHTML = (tipo==='preventivo' ? '📅' : '🔧') + ' Abriendo orden de ' + (tipo==='preventivo'?'preventivo':'correctivo') + '...';
+  document.body.appendChild(banner);
 
   setTimeout(()=>{
     if(tipo === 'preventivo'){
@@ -2078,27 +2099,24 @@ setInterval(renderDashboard, 60000);
         document.getElementById('form-prev').style.display = 'block';
         fillSel('prev-equipo');
         if(sol){
-          // Equipo
           const sel = document.getElementById('prev-equipo');
           const eq = DB.equipos.find(e => e.codigo.trim() === (sol.equipoTxt||'').trim());
-          if(eq){
-            sel.value = eq.id;
-          } else if(sol.equipoId && sol.equipoId !== '__cliente__'){
-            sel.value = sol.equipoId;
-          } else {
+          if(eq){ sel.value = eq.id; }
+          else if(sol.equipoId && sol.equipoId !== '__cliente__'){ sel.value = sol.equipoId; }
+          else {
             sel.value = '__cliente__';
             document.getElementById('prev-cliente-fields').style.display = 'block';
             document.getElementById('prev-cliente-nombre').value = sol.equipoTxt || '';
           }
-          // Trabajo realizado (notas)
           document.getElementById('prev-notas').value = sol.desc || '';
-          // Técnico
           preseleccionarTecnico('prev-tecnicos-grid', sol.tecnicoNombre);
-          // Banner
           mostrarBannerSolicitud(sol, 'prev');
         }
         document.getElementById('form-prev').scrollIntoView({behavior:'smooth'});
-      }, 300);
+        // Remove loading banner
+        const b = document.getElementById('deeplink-banner');
+        if(b) b.remove();
+      }, 400);
     } else if(tipo === 'correctivo'){
       const btn = document.querySelector('.nav-btn:nth-child(4)');
       showTab('correctivo', btn);
@@ -2106,31 +2124,26 @@ setInterval(renderDashboard, 60000);
         document.getElementById('form-corr').style.display = 'block';
         fillSel('corr-equipo');
         if(sol){
-          // Equipo
           const sel = document.getElementById('corr-equipo');
           const eq = DB.equipos.find(e => e.codigo.trim() === (sol.equipoTxt||'').trim());
-          if(eq){
-            sel.value = eq.id;
-          } else if(sol.equipoId && sol.equipoId !== '__cliente__'){
-            sel.value = sol.equipoId;
-          } else {
+          if(eq){ sel.value = eq.id; }
+          else if(sol.equipoId && sol.equipoId !== '__cliente__'){ sel.value = sol.equipoId; }
+          else {
             sel.value = '__cliente__';
             document.getElementById('corr-cliente-fields').style.display = 'block';
             document.getElementById('corr-cliente-nombre').value = sol.equipoTxt || '';
           }
-          // Falla
           document.getElementById('corr-falla').value = sol.desc || '';
-          // Prioridad
           if(sol.prioridad) document.getElementById('corr-prioridad').value = sol.prioridad;
-          // Técnico
           preseleccionarTecnico('corr-tecnicos-grid', sol.tecnicoNombre);
-          // Banner
           mostrarBannerSolicitud(sol, 'corr');
         }
         document.getElementById('form-corr').scrollIntoView({behavior:'smooth'});
-      }, 300);
+        const b = document.getElementById('deeplink-banner');
+        if(b) b.remove();
+      }, 400);
     }
-  }, 400);
+  }, 500);
 })();
 
 function preseleccionarTecnico(gridId, nombre){
@@ -2151,11 +2164,12 @@ function mostrarBannerSolicitud(sol, tipo){
   if(existing) existing.remove();
   const banner = document.createElement('div');
   banner.id = 'sol-banner';
-  banner.style.cssText = 'background:#e8edf5;border:1px solid #b5d4f4;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1a4a8a';
-  banner.innerHTML = '<div style="font-weight:600;margin-bottom:3px">📋 Solicitud asignada</div>'
-    + '<div>Equipo: <b>' + sol.equipoTxt + '</b></div>'
-    + '<div>Técnico: <b>' + sol.tecnicoNombre + '</b></div>'
-    + '<div>Prioridad: <b>' + sol.prioridad + '</b></div>';
+  banner.style.cssText = 'background:#1f3864;border-radius:10px;padding:14px 16px;margin-bottom:16px;color:white';
+  banner.innerHTML = '<div style="font-size:12px;opacity:0.7;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📋 Orden asignada</div>'
+    + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">' + sol.equipoTxt + '</div>'
+    + '<div style="font-size:13px;opacity:0.85">👷 ' + sol.tecnicoNombre + '</div>'
+    + '<div style="font-size:13px;opacity:0.85">⚡ Prioridad: ' + sol.prioridad + '</div>'
+    + '<div style="font-size:12px;opacity:0.6;margin-top:6px">Completa los campos y finaliza la orden</div>';
   form.insertBefore(banner, form.firstChild.nextSibling);
 }
 </script>
