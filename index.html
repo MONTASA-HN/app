@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -53,6 +55,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 @keyframes fadeIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
 
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.07)}
+.card-body{display:none}.card-body.open{display:block}
+.card-toggle{background:none;border:none;cursor:pointer;padding:4px;color:var(--text3);font-size:20px;transition:transform 0.2s;line-height:1}
+.card-toggle.open{transform:rotate(180deg)}
 .card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
 .card-title{font-weight:600;font-size:14px;line-height:1.3}
 .card-sub{font-size:12px;color:var(--text2);margin-top:2px}
@@ -983,6 +988,15 @@ function fmtDT(s){
     return dd+'/'+mm+'/'+yy+' '+hh+':'+min;
   }catch(e){ return s; }
 }
+function toggleCard(id){
+  const body = document.getElementById('cb-'+id);
+  const btn  = document.getElementById('ct-'+id);
+  if(!body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(btn) btn.classList.toggle('open', !isOpen);
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
@@ -1200,9 +1214,23 @@ function renderPreventivos(){
   }
   const el = document.getElementById('preventivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
-  el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card">
-    <div class="card-header"><div><div style="display:flex;align-items:center;gap:6px"><div class="card-title">${p.servicio}</div>${p.correlativo?`<span style="font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 7px;border-radius:10px">${p.correlativo}</span>`:''}</div><div class="card-sub">${getEqLabelFull(p)}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">${bPrev(est)}<button class="btn btn-danger" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button></div></div>
+  el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card" style="padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px" onclick="toggleCard('${p.id}')" style="cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div class="card-title">${p.servicio}</div>
+          ${p.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${p.correlativo}</span>`:''}
+        </div>
+        <div class="card-sub">${getEqLabelFull(p)}</div>
+        <div style="margin-top:4px;display:flex;gap:6px;align-items:center">${bPrev(est)}${diasAbierta(p.fechaInicio||p.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(p.fechaInicio||p.fecha)}</span>`:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button>
+        <button id="ct-${p.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
+      </div>
+    </div>
+    <div id="cb-${p.id}" class="card-body">
+      <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
 
     <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(p.fechaInicio||p.fecha)}</span></div>
     <div class="detail-row" style="background:var(--amber-bg)"><span class="detail-lbl" style="color:var(--amber);font-weight:600">📆 Días abierta</span><span style="font-weight:700;color:var(--amber);font-family:'DM Mono',monospace">${diasAbierta(p.fechaInicio||p.fecha)}</span></div>
@@ -1218,6 +1246,7 @@ function renderPreventivos(){
       ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
       : `<button class="btn btn-success" style="width:100%;font-weight:600;font-size:15px;padding:12px" onclick="completarPreventivo('${p.id}')">✓ Cerrar orden</button>`
     }
+    </div>
     </div>
   </div>`; }).join('');
 }
@@ -1255,6 +1284,7 @@ function renderCorrectivos(){
       ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
       : `<button class="btn btn-primary" style="width:100%;font-weight:600;font-size:15px;padding:12px" onclick="cerrarCorrectivo('${c.id}')">✓ Cerrar orden</button>`
     }
+    </div>
     </div>
   </div>`;}).join('');
 }
@@ -2173,8 +2203,89 @@ function mostrarBannerSolicitud(sol, tipo){
   form.insertBefore(banner, form.firstChild.nextSibling);
 }
 
-loadDB();
-renderDashboard();
+// ── FIREBASE ──────────────────────────────────────────────────────────────
+(function(){
+  const firebaseConfig = {
+    apiKey: "AIzaSyCDXVpqQw62z0OI9fqDrdZQhCv7V0RvhiE",
+    authDomain: "montasa-app.firebaseapp.com",
+    databaseURL: "https://montasa-app-default-rtdb.firebaseio.com",
+    projectId: "montasa-app",
+    storageBucket: "montasa-app.firebasestorage.app",
+    messagingSenderId: "607446513526",
+    appId: "1:607446513526:web:45512e46850440e7d52c57"
+  };
+  firebase.initializeApp(firebaseConfig);
+  window._fbDB = firebase.database();
+  const FB_REF = window._fbDB.ref('montasa');
+
+  // Load from Firebase first, fallback to localStorage
+  FB_REF.once('value').then(snap => {
+    const remote = snap.val();
+    if(remote && remote._ts){
+      const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+      const localTs = local._ts || 0;
+      if(remote._ts >= localTs){
+        // Remote is newer — merge state into DB
+        loadDB(); // load local first (for specs)
+        if(remote.equipos){
+          DB.equipos = DB.equipos.map(eq => {
+            const r = remote.equipos.find(x=>x.codigo===eq.codigo||x.id===eq.id);
+            if(r) return {...eq, estado:r.estado, ubicacion:r.ubicacion,
+              cliente:r.cliente, horometro:r.horometro, observaciones:r.observaciones};
+            return eq;
+          });
+        }
+        if(remote.preventivos)    DB.preventivos    = remote.preventivos;
+        if(remote.correctivos)    DB.correctivos    = remote.correctivos;
+        if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
+        if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
+        localStorage.setItem(LS_KEY, JSON.stringify(DB));
+      } else {
+        loadDB();
+        saveDB(); // push local to Firebase
+      }
+    } else {
+      loadDB();
+      saveDB(); // first time — push to Firebase
+    }
+    renderDashboard();
+
+    // Real-time listener for changes from other devices
+    FB_REF.on('value', snap => {
+      const d = snap.val();
+      if(!d || !d._ts) return;
+      const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
+      if(d._ts <= localTs) return; // we are newer, ignore
+      if(d.equipos){
+        DB.equipos = DB.equipos.map(eq => {
+          const r = d.equipos.find(x=>x.codigo===eq.codigo||x.id===eq.id);
+          if(r) return {...eq, estado:r.estado, ubicacion:r.ubicacion,
+            cliente:r.cliente, horometro:r.horometro, observaciones:r.observaciones};
+          return eq;
+        });
+      }
+      if(d.preventivos)    DB.preventivos    = d.preventivos;
+      if(d.correctivos)    DB.correctivos    = d.correctivos;
+      if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
+      if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
+      localStorage.setItem(LS_KEY, JSON.stringify(DB));
+      // Re-render active tab
+      const act = document.querySelector('.section.active');
+      if(act){
+        const id = act.id.replace('tab-','');
+        if(id==='dashboard')   renderDashboard();
+        if(id==='preventivo')  renderPreventivos();
+        if(id==='correctivo')  renderCorrectivos();
+        if(id==='equipos')     renderEquipos();
+        if(id==='historial')   renderHistorial();
+      }
+    });
+  }).catch(()=>{
+    // No internet - use localStorage
+    loadDB();
+    renderDashboard();
+  });
+})();
 </script>
 </body>
 </html>
