@@ -474,6 +474,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
     </div>
 
+    <div style="margin-bottom:10px">
+      <input id="prev-buscar" placeholder="🔍 Buscar por correlativo, equipo o técnico..." oninput="renderPreventivos()" style="width:100%;padding:11px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px;font-family:'DM Sans',sans-serif;outline:none">
+    </div>
     <div id="preventivos-list"></div>
   </div>
 
@@ -530,6 +533,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
     </div>
 
+    <div style="margin-bottom:10px">
+      <input id="corr-buscar" placeholder="🔍 Buscar por correlativo, equipo o técnico..." oninput="renderCorrectivos()" style="width:100%;padding:11px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px;font-family:'DM Sans',sans-serif;outline:none">
+    </div>
     <div id="correctivos-list"></div>
   </div>
 
@@ -1181,7 +1187,17 @@ function toggleSubgrupo(id){
 }
 
 function renderPreventivos(){
+  const prevBuscar = (document.getElementById('prev-buscar')?.value||'').toLowerCase();
   let list = [...DB.preventivos].filter(p=>!p.completado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(prevBuscar){
+    list = list.filter(p=>{
+      const eq = DB.equipos.find(e=>e.id===p.equipoId)||{};
+      return (p.correlativo||'').toLowerCase().includes(prevBuscar)
+        || (eq.codigo||'').toLowerCase().includes(prevBuscar)
+        || (p.tecnico||'').toLowerCase().includes(prevBuscar)
+        || (p.servicio||'').toLowerCase().includes(prevBuscar);
+    });
+  }
   const el = document.getElementById('preventivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
   el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card">
@@ -1207,7 +1223,17 @@ function renderPreventivos(){
 }
 
 function renderCorrectivos(){
+  const corrBuscar = (document.getElementById('corr-buscar')?.value||'').toLowerCase();
   let list = [...DB.correctivos].filter(c=>c.estado!=='Cerrado').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(corrBuscar){
+    list = list.filter(c=>{
+      const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
+      return (c.correlativo||'').toLowerCase().includes(corrBuscar)
+        || (eq.codigo||'').toLowerCase().includes(corrBuscar)
+        || (c.tecnico||'').toLowerCase().includes(corrBuscar)
+        || (c.falla||'').toLowerCase().includes(corrBuscar);
+    });
+  }
   const el = document.getElementById('correctivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
   el.innerHTML = list.map(c=>{
@@ -1737,66 +1763,96 @@ function actualizarBtnWA(){
 function enviarSolicitudWA(){
   const equipoSel = document.getElementById('sol-equipo').value;
   const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
-  const desc = document.getElementById('sol-desc').value.trim();
-  const fecha = document.getElementById('sol-fecha').value;
+  const desc      = document.getElementById('sol-desc').value.trim();
+  const tipo      = document.getElementById('sol-tipo').value;
+  const prioridad = document.getElementById('sol-prioridad').value;
+  const fecha     = document.getElementById('sol-fecha').value;
+
   const checks = document.querySelectorAll('#sol-tecnicos-grid input[type=checkbox]:checked');
   if(!checks.length){ toast('Selecciona al menos un técnico', true); return; }
   const tecnicosData = Array.from(checks).map(c=>({nombre: c.dataset.nombre, num: c.value}));
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
-  const tecnicoNum = tecnicosData[0].num; // primary for single WA flow
-  const prioridad = document.getElementById('sol-prioridad').value;
 
   const faltSol = [];
-  if(!equipoTxt)          faltSol.push('Número de equipo');
-  if(!desc)               faltSol.push('Descripción del trabajo');
-  if(!checks.length)      faltSol.push('Técnico asignado');
-  if(faltSol.length){ toast('Faltan: '+faltSol.join(', '),true); return; }
+  if(!equipoTxt) faltSol.push('Número de equipo');
+  if(!desc)      faltSol.push('Descripción del trabajo');
+  if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
 
-  const ordenId = uid();
-  const tipo = document.getElementById('sol-tipo').value;
-  const tipoLabel = tipo==='preventivo' ? 'Preventivo' : 'Correctivo';
-  const appUrl = 'https://montasa-hn.github.io/app/index.html#' + tipo + '-' + ordenId;
+  // --- Crear orden directamente en el sistema ---
+  const correlativo = nextCorrelativo();
+  const ordenId     = uid();
+  const fechaISO    = new Date().toISOString().slice(0,10);
+
+  // Buscar equipoId
+  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  const equipoId = eq ? eq.id : '__cliente__';
+
+  if(tipo === 'preventivo'){
+    const entry = {
+      id: ordenId, correlativo, equipoId,
+      servicio: desc, fecha: fechaISO, fechaInicio: fechaISO, fechaFin: '',
+      horometro: '', tecnico: tecnicoNombre,
+      notas: desc, sugerencias: '', foto: '',
+      prioridad, completado: false,
+      clienteNombre: eq ? '' : equipoTxt
+    };
+    DB.preventivos.push(entry);
+  } else {
+    const entry = {
+      id: ordenId, correlativo, equipoId,
+      sistema: '', falla: desc, prioridad,
+      fecha: fechaISO, fechaInicio: fechaISO, fechaFin: '',
+      tecnico: tecnicoNombre, diagnostico: '',
+      foto: '', estado: 'En proceso',
+      clienteNombre: eq ? '' : equipoTxt
+    };
+    DB.correctivos.push(entry);
+  }
+
+  saveDB();
+
+  // --- Mensaje WhatsApp sin link ---
+  const tipoLabel = tipo === 'preventivo' ? 'Preventivo' : 'Correctivo';
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : '🔧';
-  const correlativoWA = tipo==='preventivo' ? nextCorrelativo() : nextCorrelativo();
   const msg = emoji + ' *ASIGNACION DE TRABAJO - MONTASA*\n\n'
-    + '🔢 *Orden:* ' + correlativoWA + '\n'
+    + '🔢 *Orden:* ' + correlativo + '\n'
     + '👷 *Tecnico:* ' + tecnicoNombre + '\n'
     + '📋 *Equipo:* ' + equipoTxt + '\n'
     + '🔧 *Tipo:* ' + tipoLabel + '\n'
     + '📝 *Trabajo:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha + '\n\n'
-    + '📲 *Ver orden en la app:*\n' + appUrl + '\n\n'
-    + '_Por favor confirmar recepcion._';
+    + '_Busca la orden ' + correlativo + ' en la app para registrar el trabajo._';
 
-  // Save solicitud
-  if(!DB.solicitudes) DB.solicitudes = [];
-  DB.solicitudes.unshift({
-    id: ordenId, equipoTxt, equipoId: document.getElementById('sol-equipo').value,
-    desc, fecha, tecnicoNombre, tecnicoNum: tecnicosData[0].num, prioridad,
-    tipo: tipo, estado: 'Enviada'
-  });
-  saveDB();
-
-  // Open WhatsApp for each selected tecnico
   tecnicosData.forEach((t, i) => {
-    const msgPersonal = msg.replace(tecnicoNombre, t.nombre);
-    const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msgPersonal);
+    const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
     setTimeout(() => window.open(url, '_blank'), i * 800);
   });
 
-  // Reset form
-  document.getElementById('sol-equipo').value = '';
-  document.getElementById('sol-equipo-txt').value = '';
-  document.getElementById('sol-desc').value = '';
-  clearTecnicos('sol-tecnicos-grid');
-  document.getElementById('sol-tipo').value = 'preventivo';
-  document.getElementById('sol-prioridad').value = 'Normal';
-  document.getElementById('sol-equipo-manual').style.display = 'none';
-  document.getElementById('sol-wa-hint').style.display = 'none';
-  initSolicitudes();
-  toast('Solicitud enviada por WhatsApp');
+  // Guardar en solicitudes para historial
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({
+    id: ordenId, correlativo, equipoTxt, equipoId,
+    desc, fecha, tecnicoNombre, prioridad, tipo, estado: 'Enviada'
+  });
+  saveDB();
+
+  // Limpiar formulario
+  clearSolicitudForm();
+  toast('Orden ' + correlativo + ' creada y enviada por WhatsApp ✓');
+  renderDashboard();
 }
+
+function clearSolicitudForm(){
+  document.getElementById('sol-equipo').value = '';
+  document.getElementById('sol-desc').value = '';
+  document.getElementById('sol-prioridad').value = 'Normal';
+  document.getElementById('sol-tipo').value = 'correctivo';
+  clearTecnicos('sol-tecnicos-grid');
+  const txt = document.getElementById('sol-equipo-txt');
+  if(txt) txt.value = '';
+}
+
 
 function renderSolicitudes(){
   if(!DB.solicitudes || !DB.solicitudes.length){
@@ -2117,41 +2173,8 @@ function mostrarBannerSolicitud(sol, tipo){
   form.insertBefore(banner, form.firstChild.nextSibling);
 }
 
-// Capture hash IMMEDIATELY before anything can change it
-const _initialHash = window.location.hash;
-
 loadDB();
-
-// Process deep link right after loadDB, before any renders
-if(_initialHash && _initialHash.length > 2){
-  const _h = _initialHash.slice(1);
-  const _dash = _h.indexOf('-');
-  if(_dash > -1){
-    const _tipo = _h.slice(0, _dash);
-    if(_tipo === 'preventivo' || _tipo === 'correctivo'){
-      // Skip dashboard render, go directly to correct tab
-      if(_tipo === 'preventivo'){
-        const _btn = document.querySelector('.nav-btn:nth-child(3)');
-        showTab('preventivo', _btn);
-        setTimeout(()=>{
-          document.getElementById('form-prev').style.display = 'block';
-          fillSel('prev-equipo');
-          document.getElementById('form-prev').scrollIntoView({behavior:'smooth'});
-        }, 200);
-      } else {
-        const _btn = document.querySelector('.nav-btn:nth-child(4)');
-        showTab('correctivo', _btn);
-        setTimeout(()=>{
-          document.getElementById('form-corr').style.display = 'block';
-          fillSel('corr-equipo');
-          document.getElementById('form-corr').scrollIntoView({behavior:'smooth'});
-        }, 200);
-      }
-    } else { renderDashboard(); }
-  } else { renderDashboard(); }
-} else {
-  renderDashboard();
-}
+renderDashboard();
 </script>
 </body>
 </html>
