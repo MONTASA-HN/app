@@ -43,12 +43,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .app-header h1{font-size:18px;font-weight:600;letter-spacing:-0.3px}
 .app-header p{font-size:11px;opacity:0.6;margin-top:2px;font-family:'DM Mono',monospace}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:10px;font-family:'DM Sans',sans-serif;gap:3px;transition:color 0.15s}
-.nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,0.08)}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 4px 12px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:13px;font-family:'DM Sans',sans-serif;gap:5px;transition:color 0.15s}
+.nav-btn svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav-btn.active{color:var(--accent)}.nav-btn.active svg{stroke-width:2.3}
 
-.content{padding:16px 16px 90px;max-width:480px;margin:0 auto}
+.content{padding:16px 16px 110px;max-width:480px;margin:0 auto}
 .section{display:none;animation:fadeIn 0.18s ease}.section.active{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
 
@@ -1977,54 +1977,77 @@ function cerrarExito(){
 
 // ── SWIPE NAVIGATION ─────────────────────────────────────────────────────────
 (function(){
-  const tabs = ['dashboard','equipos','preventivo','correctivo','solicitudes','historial'];
+  const tabs = ['dashboard','equipos','preventivo','correctivo','historial'];
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartTime = 0;
+  let swipeLocked = false;
 
   function currentTabIndex(){
     const active = document.querySelector('.section.active');
     if(!active) return 0;
     const id = active.id.replace('tab-','');
-    return tabs.indexOf(id);
+    const idx = tabs.indexOf(id);
+    return idx >= 0 ? idx : 0;
   }
 
   function goToTab(index){
     if(index < 0 || index >= tabs.length) return;
     const tabId = tabs[index];
-    // Solicitudes requires PIN - skip on swipe
-    if(tabId === 'solicitudes') return;
-    const btn = document.querySelector(`.nav-btn:nth-child(${index+1})`);
+    const navBtns = document.querySelectorAll('.nav-btn');
+    // Find the button that matches this tab
+    let btn = null;
+    navBtns.forEach(b => {
+      if(b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + tabId + "'")) btn = b;
+    });
     showTab(tabId, btn);
   }
 
-  const content = document.querySelector('.content');
-  if(!content) return;
+  // Only attach to the content area, but ignore touches on inputs, selects, textareas, buttons
+  document.addEventListener('touchstart', e => {
+    // Ignore if touch starts on interactive element
+    const tag = e.target.tagName;
+    if(['INPUT','SELECT','TEXTAREA','BUTTON','LABEL'].includes(tag)) return;
+    // Ignore if a form panel is open
+    const openForm = document.querySelector('.form-panel[style*="block"]');
+    if(openForm) return;
+    // Ignore if modal is open
+    if(document.getElementById('modal-overlay').classList.contains('open')) return;
+    if(document.getElementById('pin-overlay').classList.contains('open')) return;
 
-  content.addEventListener('touchstart', e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
+    swipeLocked = false;
   }, {passive: true});
 
-  content.addEventListener('touchend', e => {
+  document.addEventListener('touchend', e => {
+    if(swipeLocked) return;
+    if(!touchStartX) return;
+
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     const dt = Date.now() - touchStartTime;
 
-    // Must be fast (<400ms), horizontal (dx > dy*2), and long enough (>60px)
-    if(dt > 400) return;
-    if(Math.abs(dx) < 60) return;
-    if(Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    touchStartX = 0;
 
+    // Strict conditions: fast, clearly horizontal, long enough
+    if(dt > 350) return;
+    if(Math.abs(dx) < 70) return;
+    if(Math.abs(dy) > Math.abs(dx) * 0.5) return;
+
+    // Ignore if a form panel is open
+    const openForm = document.querySelector('.form-panel[style*="block"]');
+    if(openForm) return;
+
+    swipeLocked = true;
     const cur = currentTabIndex();
     if(dx < 0){
-      // Swipe left → next tab
       goToTab(cur + 1);
     } else {
-      // Swipe right → previous tab
       goToTab(cur - 1);
     }
+    setTimeout(() => { swipeLocked = false; }, 400);
   }, {passive: true});
 })();
 
