@@ -2059,6 +2059,7 @@ function cerrarExito(){
 
 
 function procesarDeepLink(){
+  if(window._deepLinkDone) return; // prevent double execution
   const hash = window.location.hash.slice(1);
   if(!hash) return;
 
@@ -2085,6 +2086,7 @@ function procesarDeepLink(){
 
   setTimeout(()=>{
     if(tipo === 'preventivo'){
+      window._deepLinkDone = true;
       const btn = document.querySelector('.nav-btn:nth-child(3)');
       showTab('preventivo', btn);
       setTimeout(()=>{
@@ -2110,6 +2112,7 @@ function procesarDeepLink(){
         if(b) b.remove();
       }, 400);
     } else if(tipo === 'correctivo'){
+      window._deepLinkDone = true;
       const btn = document.querySelector('.nav-btn:nth-child(4)');
       showTab('correctivo', btn);
       setTimeout(()=>{
@@ -2143,7 +2146,8 @@ renderDashboard();
 // Start listening after initial load
 setTimeout(startFirebaseListener, 1000);
 // Process deep link after data is loaded
-setTimeout(procesarDeepLink, 800);
+setTimeout(procesarDeepLink, 1000);
+setTimeout(procesarDeepLink, 2500); // retry in case first attempt was too early
 // Update header date every minute
 setInterval(renderDashboard, 60000);
 
