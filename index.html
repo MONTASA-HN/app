@@ -2117,9 +2117,41 @@ function mostrarBannerSolicitud(sol, tipo){
   form.insertBefore(banner, form.firstChild.nextSibling);
 }
 
+// Capture hash IMMEDIATELY before anything can change it
+const _initialHash = window.location.hash;
+
 loadDB();
-renderDashboard();
-setTimeout(procesarDeepLink, 800);
+
+// Process deep link right after loadDB, before any renders
+if(_initialHash && _initialHash.length > 2){
+  const _h = _initialHash.slice(1);
+  const _dash = _h.indexOf('-');
+  if(_dash > -1){
+    const _tipo = _h.slice(0, _dash);
+    if(_tipo === 'preventivo' || _tipo === 'correctivo'){
+      // Skip dashboard render, go directly to correct tab
+      if(_tipo === 'preventivo'){
+        const _btn = document.querySelector('.nav-btn:nth-child(3)');
+        showTab('preventivo', _btn);
+        setTimeout(()=>{
+          document.getElementById('form-prev').style.display = 'block';
+          fillSel('prev-equipo');
+          document.getElementById('form-prev').scrollIntoView({behavior:'smooth'});
+        }, 200);
+      } else {
+        const _btn = document.querySelector('.nav-btn:nth-child(4)');
+        showTab('correctivo', _btn);
+        setTimeout(()=>{
+          document.getElementById('form-corr').style.display = 'block';
+          fillSel('corr-equipo');
+          document.getElementById('form-corr').scrollIntoView({behavior:'smooth'});
+        }, 200);
+      }
+    } else { renderDashboard(); }
+  } else { renderDashboard(); }
+} else {
+  renderDashboard();
+}
 </script>
 </body>
 </html>
