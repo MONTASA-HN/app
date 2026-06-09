@@ -2,8 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2051,89 +2049,6 @@ function cerrarExito(){
   }, {passive: true});
 })();
 
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCDXVpqQw62z0OI9fqDrdZQhCv7V0RvhiE",
-  authDomain: "montasa-app.firebaseapp.com",
-  databaseURL: "https://montasa-app-default-rtdb.firebaseio.com",
-  projectId: "montasa-app",
-  storageBucket: "montasa-app.firebasestorage.app",
-  messagingSenderId: "607446513526",
-  appId: "1:607446513526:web:45512e46850440e7d52c57"
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const fbDB = firebase.database();
-const FB_PATH = 'montasa';
-
-// Sync DB to Firebase
-function syncToFirebase(){
-  try{
-    fbDB.ref(FB_PATH).set({
-      equipos: DB.equipos,
-      preventivos: DB.preventivos,
-      correctivos: DB.correctivos,
-      ordenesCerradas: DB.ordenesCerradas || [],
-      solicitudes: DB.solicitudes || [],
-      lastUpdated: new Date().toISOString()
-    });
-  }catch(e){ console.error('Firebase sync error:', e); }
-}
-
-// Override saveDB to also sync to Firebase
-const _origSaveDB = saveDB;
-function saveDB(){
-  _origSaveDB();
-  syncToFirebase();
-}
-
-// Listen for Firebase changes (real-time sync from other devices)
-let fbListening = false;
-function startFirebaseListener(){
-  if(fbListening) return;
-  fbListening = true;
-  fbDB.ref(FB_PATH).on('value', snap => {
-    const data = snap.val();
-    if(!data) return;
-    // Only update if data is newer than local
-    const remoteTime = data.lastUpdated || '';
-    const localTime = localStorage.getItem('montasa_lastSync') || '';
-    if(remoteTime <= localTime) return;
-    localStorage.setItem('montasa_lastSync', remoteTime);
-    // Update equipos state/horometro/ubicacion from remote (preserve specs)
-    if(data.equipos){
-      DB.equipos = DB.equipos.map(eq => {
-        const remote = data.equipos.find(r => r.codigo === eq.codigo || r.id === eq.id);
-        if(remote){
-          return {...eq,
-            estado: remote.estado || eq.estado,
-            ubicacion: remote.ubicacion || eq.ubicacion,
-            cliente: remote.cliente || eq.cliente,
-            horometro: remote.horometro || eq.horometro,
-            observaciones: remote.observaciones || eq.observaciones,
-          };
-        }
-        return eq;
-      });
-    }
-    if(data.preventivos) DB.preventivos = data.preventivos;
-    if(data.correctivos) DB.correctivos = data.correctivos;
-    if(data.ordenesCerradas) DB.ordenesCerradas = data.ordenesCerradas;
-    if(data.solicitudes) DB.solicitudes = data.solicitudes;
-    _origSaveDB();
-    // Re-render current tab
-    const active = document.querySelector('.section.active');
-    if(active){
-      const id = active.id.replace('tab-','');
-      if(id==='dashboard') renderDashboard();
-      if(id==='equipos') renderEquipos();
-      if(id==='preventivo') renderPreventivos();
-      if(id==='correctivo') renderCorrectivos();
-      if(id==='historial') renderHistorial();
-    }
-  });
-}
 
 loadDB();
 renderDashboard();
