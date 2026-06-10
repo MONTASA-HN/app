@@ -661,7 +661,10 @@ function saveDB(){
       const ts = Date.now();
       window._fbDB.ref('montasa').set({
         equipos: DB.equipos.map(e=>({
-          id:e.id, codigo:e.codigo, estado:e.estado||'DISPONIBLE',
+          id:e.id, codigo:e.codigo, serie:e.serie||'',
+          tipo:e.tipo||'', marca:e.marca||'', desc:e.desc||'',
+          combustible:e.combustible||'',
+          estado:e.estado||'DISPONIBLE',
           ubicacion:e.ubicacion||'', cliente:e.cliente||'',
           horometro:e.horometro||'', observaciones:e.observaciones||''
         })),
@@ -2372,12 +2375,12 @@ function mostrarBannerSolicitud(sol, tipo){
       if(remote._ts >= localTs){
         // Remote is newer — merge state into DB
         loadDB(); // load local first (for specs)
-        if(remote.equipos){
-          DB.equipos = DB.equipos.map(eq => {
-            const r = remote.equipos.find(x=>x.codigo===eq.codigo||x.id===eq.id);
-            if(r) return {...eq, estado:r.estado, ubicacion:r.ubicacion,
-              cliente:r.cliente, horometro:r.horometro, observaciones:r.observaciones};
-            return eq;
+        if(remote.equipos && remote.equipos.length){
+          // Use Firebase list as authoritative (respects deletions)
+          // Enrich each remote equipo with specs from EQUIPOS_INICIALES
+          DB.equipos = remote.equipos.map(req => {
+            const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
+            return {...spec, ...req};
           });
         }
         if(remote.preventivos)    DB.preventivos    = remote.preventivos;
@@ -2402,12 +2405,11 @@ function mostrarBannerSolicitud(sol, tipo){
       const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
       // Only ignore if local is strictly newer (within 2s tolerance)
       if(d._ts < localTs - 2000) return;
-      if(d.equipos){
-        DB.equipos = DB.equipos.map(eq => {
-          const r = d.equipos.find(x=>x.codigo===eq.codigo||x.id===eq.id);
-          if(r) return {...eq, estado:r.estado, ubicacion:r.ubicacion,
-            cliente:r.cliente, horometro:r.horometro, observaciones:r.observaciones};
-          return eq;
+      if(d.equipos && d.equipos.length){
+        // Use Firebase list as authoritative (respects deletions)
+        DB.equipos = d.equipos.map(req => {
+          const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
+          return {...spec, ...req};
         });
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
