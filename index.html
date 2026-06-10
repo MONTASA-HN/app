@@ -1032,17 +1032,68 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   }
 }
 
+function irACorrectivosConBuscar(buscar){
+  const btn = document.querySelector('.nav-btn:nth-child(4)');
+  showTab('correctivo', btn);
+  setTimeout(()=>{
+    const input = document.getElementById('corr-buscar');
+    if(input){ input.value = buscar; renderCorrectivos(); }
+  }, 100);
+}
+
+function irAPreventivosConBuscar(buscar){
+  const btn = document.querySelector('.nav-btn:nth-child(3)');
+  showTab('preventivo', btn);
+  setTimeout(()=>{
+    const input = document.getElementById('prev-buscar');
+    if(input){ input.value = buscar; renderPreventivos(); }
+  }, 100);
+}
+
+function toggleTecnicoOrden(tipo, id, nombre, checked){
+  const list = tipo==='prev' ? DB.preventivos : DB.correctivos;
+  const orden = list.find(x=>x.id===id);
+  if(!orden) return;
+  let tecnicos = (orden.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+  if(checked){
+    if(!tecnicos.includes(nombre)) tecnicos.push(nombre);
+  } else {
+    tecnicos = tecnicos.filter(t=>t!==nombre);
+  }
+  orden.tecnico = tecnicos.join(', ');
+  saveDB();
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
   let max = 0;
+  // Active orders
   [...DB.preventivos, ...DB.correctivos].forEach(o=>{
     if(o.correlativo){
       const num = parseInt(o.correlativo.replace(/[^0-9]/g,''));
       if(!isNaN(num) && num>max) max=num;
     }
   });
-  return 'MH-' + String(max+1).padStart(4,'0');
+  // Closed orders — so deleted orders never reuse a number
+  (DB.ordenesCerradas||[]).forEach(o=>{
+    if(o.correlativo){
+      const num = parseInt(o.correlativo.replace(/[^0-9]/g,''));
+      if(!isNaN(num) && num>max) max=num;
+    }
+  });
+  // Solicitudes history
+  (DB.solicitudes||[]).forEach(o=>{
+    if(o.correlativo){
+      const num = parseInt(o.correlativo.replace(/[^0-9]/g,''));
+      if(!isNaN(num) && num>max) max=num;
+    }
+  });
+  // Persist the last used number so deletions never allow reuse
+  if(!DB.lastCorrelativo) DB.lastCorrelativo = 0;
+  const next = Math.max(max, DB.lastCorrelativo) + 1;
+  DB.lastCorrelativo = next;
+  return 'MH-' + String(next).padStart(4,'0');
 }
 
 // ── RENDER FUNCTIONS ─────────────────────────────────────────────────────────
@@ -1244,8 +1295,30 @@ function renderPreventivos(){
       return (p.correlativo||'').toLowerCase().includes(prevBuscar)
         || (eq.codigo||'').toLowerCase().includes(prevBuscar)
         || (p.tecnico||'').toLowerCase().includes(prevBuscar)
-        || (p.servicio||'').toLowerCase().includes(prevBuscar);
+        || (p.servicio||'').toLowerCase().includes(prevBuscar)
+        || (p.notas||'').toLowerCase().includes(prevBuscar);
     });
+    // Also search in correctivos — if found there, show redirect banner
+    if(!list.length){
+      const enCorr = DB.correctivos.filter(c=>c.estado!=='Cerrado').filter(c=>{
+        const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
+        return (c.correlativo||'').toLowerCase().includes(prevBuscar)
+          || (eq.codigo||'').toLowerCase().includes(prevBuscar)
+          || (c.tecnico||'').toLowerCase().includes(prevBuscar)
+          || (c.falla||'').toLowerCase().includes(prevBuscar);
+      });
+      const el = document.getElementById('preventivos-list');
+      if(enCorr.length){
+        el.innerHTML = `<div style="background:var(--amber-bg);border:1px solid var(--orange-border);border-radius:var(--radius);padding:16px;text-align:center">
+          <div style="font-size:15px;font-weight:600;color:var(--orange);margin-bottom:6px">🔀 Orden encontrada en Correctivos</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px">${enCorr.length} orden(es) con "${prevBuscar}" están en el apartado de Correctivos</div>
+          <button class="btn btn-primary" style="width:100%" onclick="irACorrectivosConBuscar('${prevBuscar}')">Ver en Correctivos →</button>
+        </div>`;
+        return;
+      }
+      el.innerHTML = '<div class="empty">Sin resultados en preventivos ni correctivos</div>';
+      return;
+    }
   }
   const el = document.getElementById('preventivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
@@ -1270,7 +1343,7 @@ function renderPreventivos(){
       <div class="form-group"><label>Fecha fin</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.previousElementSibling.value+'T'+this.value)"></div></div>
       ${(p.fechaInicio&&p.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
       <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
-      <div class="form-group"><label>Técnico(s)</label><input type="text" value="${p.tecnico||''}" placeholder="Nombre del técnico" onchange="actualizarCampoOrden('prev','${p.id}','tecnico',this.value)"></div>
+      <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Jonathan Martinez" ${(p.tecnico||'').includes('Jonathan Martinez')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Jonathan Martinez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Jonathan Martinez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Marvin Torres" ${(p.tecnico||'').includes('Marvin Torres')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Marvin Torres',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Marvin Torres</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Elkin Perez" ${(p.tecnico||'').includes('Elkin Perez')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Elkin Perez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Elkin Perez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Kevin Deras" ${(p.tecnico||'').includes('Kevin Deras')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Kevin Deras',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Kevin Deras</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Fernando Benavides" ${(p.tecnico||'').includes('Fernando Benavides')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Fernando Benavides',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Fernando Benavides</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Dalton Garcia" ${(p.tecnico||'').includes('Dalton Garcia')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Dalton Garcia',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Dalton Garcia</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Eliberto Peña" ${(p.tecnico||'').includes('Eliberto Peña')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Eliberto Peña',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Eliberto Peña</label></div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
       <div style="margin-top:12px">
@@ -1292,8 +1365,30 @@ function renderCorrectivos(){
       return (c.correlativo||'').toLowerCase().includes(corrBuscar)
         || (eq.codigo||'').toLowerCase().includes(corrBuscar)
         || (c.tecnico||'').toLowerCase().includes(corrBuscar)
-        || (c.falla||'').toLowerCase().includes(corrBuscar);
+        || (c.falla||'').toLowerCase().includes(corrBuscar)
+        || (c.diagnostico||'').toLowerCase().includes(corrBuscar);
     });
+    if(!list.length){
+      const enPrev = DB.preventivos.filter(p=>!p.completado).filter(p=>{
+        const eq = DB.equipos.find(e=>e.id===p.equipoId)||{};
+        return (p.correlativo||'').toLowerCase().includes(corrBuscar)
+          || (eq.codigo||'').toLowerCase().includes(corrBuscar)
+          || (p.tecnico||'').toLowerCase().includes(corrBuscar)
+          || (p.servicio||'').toLowerCase().includes(corrBuscar)
+          || (p.notas||'').toLowerCase().includes(corrBuscar);
+      });
+      const el2 = document.getElementById('correctivos-list');
+      if(enPrev.length){
+        el2.innerHTML = `<div style="background:var(--amber-bg);border:1px solid var(--orange-border);border-radius:var(--radius);padding:16px;text-align:center">
+          <div style="font-size:15px;font-weight:600;color:var(--orange);margin-bottom:6px">🔀 Orden encontrada en Preventivos</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px">${enPrev.length} orden(es) con "${corrBuscar}" están en el apartado de Preventivos</div>
+          <button class="btn btn-primary" style="width:100%" onclick="irAPreventivosConBuscar('${corrBuscar}')">Ver en Preventivos →</button>
+        </div>`;
+        return;
+      }
+      el2.innerHTML = '<div class="empty">Sin resultados en correctivos ni preventivos</div>';
+      return;
+    }
   }
   const el = document.getElementById('correctivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin correctivos abiertos</div>'; return; }
@@ -1320,12 +1415,12 @@ function renderCorrectivos(){
     </div>
     <div id="cb-${c.id}" class="card-body">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
-      <div class="form-group"><label>Sistema afectado</label><input type="text" value="${c.sistema||''}" placeholder="Ej: Motor, Hidráulico, Eléctrico..." onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"></div>
+      <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
       <div class="form-group"><label>Fecha inicio</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.previousElementSibling.value+'T'+this.value)"></div></div>
       <div class="form-group"><label>Fecha fin</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaFin',this.previousElementSibling.value+'T'+this.value)"></div></div>
       ${(c.fechaInicio&&c.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(c.fechaInicio,c.fechaFin)}</span></div>`:''}
-      <div class="form-group"><label>Técnico(s)</label><input type="text" value="${c.tecnico||''}" placeholder="Nombre del técnico" onchange="actualizarCampoOrden('corr','${c.id}','tecnico',this.value)"></div>
+      <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Jonathan Martinez" ${(c.tecnico||'').includes('Jonathan Martinez')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Jonathan Martinez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Jonathan Martinez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Marvin Torres" ${(c.tecnico||'').includes('Marvin Torres')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Marvin Torres',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Marvin Torres</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Elkin Perez" ${(c.tecnico||'').includes('Elkin Perez')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Elkin Perez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Elkin Perez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Kevin Deras" ${(c.tecnico||'').includes('Kevin Deras')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Kevin Deras',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Kevin Deras</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Fernando Benavides" ${(c.tecnico||'').includes('Fernando Benavides')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Fernando Benavides',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Fernando Benavides</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Dalton Garcia" ${(c.tecnico||'').includes('Dalton Garcia')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Dalton Garcia',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Dalton Garcia</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Eliberto Peña" ${(c.tecnico||'').includes('Eliberto Peña')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Eliberto Peña',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Eliberto Peña</label></div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div style="margin-top:12px">
