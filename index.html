@@ -902,26 +902,13 @@ function getEqLabelFull(p){
 }
 function estadoPrev(p){
   if(p.completado) return 'Completado';
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const f = p.fechaInicio || p.fecha;
-  return new Date(f) < hoy ? 'Vencido' : 'Programado';
+  return p.estado || 'Pendiente';
 }
-function bPrev(e){ return e==='Completado'?'<span class="badge b-ok">Completado</span>':e==='Vencido'?'<span class="badge b-danger">Vencido</span>':'<span class="badge b-info">Programado</span>'; }
-function bCorr(e,p){ let b=e==='Cerrado'?'<span class="badge b-gray">Cerrado</span>':e==='En espera de repuestos'?'<span class="badge" style="background:#f0e6ff;color:#5a1a8a">⏳ Repuestos</span>':'<span class="badge b-corr">En proceso</span>'; if(p==='Alta') b+=' <span class="badge b-danger">Alta</span>'; if(p==='Media') b+=' <span class="badge b-warn">Media</span>'; return b; }
-function bComb(c){ if(c==='ELECTRICO') return '<span class="badge b-elec">⚡ Eléctrico</span>'; if(c==='GAS') return '<span class="badge b-gas">Gas</span>'; if(c==='DIESEL') return '<span class="badge b-diesel">Diesel</span>'; if(c==='HIBRIDO') return '<span class="badge b-hibrido">Híbrido</span>'; return ''; }
-function bEstado(e){ if(e==='DISPONIBLE') return '<span class="badge b-disp" style="font-size:13px;padding:5px 11px">Disponible</span>'; if(e==='EN RENTA') return '<span class="badge b-renta" style="font-size:13px;padding:5px 11px">En renta</span>'; return '<span class="badge b-mal" style="font-size:13px;padding:5px 11px">Mal estado</span>'; }
-function cardClass(e){ if(e==='DISPONIBLE') return 'card eq-card card-disp'; if(e==='EN RENTA') return 'card eq-card card-renta'; return 'card eq-card card-mal'; }
-function fmt(s){ if(!s) return '—'; const[y,m,d]=s.split('-'); return d+'/'+m+'/'+y; }
-function calcHoras(inicio, fin){
-  if(!inicio||!fin) return '—';
-  try{
-    const diff = new Date(fin) - new Date(inicio);
-    if(diff<=0) return '—';
-    const totalMin = Math.floor(diff/60000);
-    const h = Math.floor(totalMin/60);
-    const m = totalMin%60;
-    return h>0 ? h+'h '+(m>0?m+'min':'') : m+'min';
-  }catch(e){ return '—'; }
+function bPrev(e){
+  if(e==='Completado')             return '<span class="badge" style="background:#c8edcc;color:#1a5c1a">Completado</span>';
+  if(e==='En proceso')             return '<span class="badge" style="background:#d1ecf1;color:#0c5460">En proceso</span>';
+  if(e==='En espera de repuestos') return '<span class="badge" style="background:#e2d9f3;color:#4a1c7c">En espera</span>';
+  return '<span class="badge" style="background:#f0efe9;color:#6b6960">Pendiente</span>';
 }
 
 function solicitarPINAccion(callback, titulo, subtitulo){
@@ -1025,14 +1012,15 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   const orden = list.find(x=>x.id===id);
   if(!orden) return;
   orden[campo] = valor;
-  saveDB();
-  // Recalculate hours if dates changed
-  if(campo==='fechaInicio'||campo==='fechaFin'){
-    const hEl = document.querySelector('#cb-'+id+' .horas-label');
-    if(hEl && orden.fechaInicio && orden.fechaFin){
-      hEl.textContent = calcHoras(orden.fechaInicio, orden.fechaFin);
-    }
+  // Auto-set fechaInicio when estado changes to "En proceso"
+  if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
+    orden.fechaInicio = new Date().toISOString().slice(0,16);
+    setTimeout(()=>{ tipo==='prev'?renderPreventivos():renderCorrectivos(); }, 300);
   }
+  saveDB();
+  // Update solicitudes list if visible
+  const solTab = document.getElementById('tab-solicitudes');
+  if(solTab && solTab.classList.contains('active')) renderSolicitudes();
 }
 
 function irACorrectivosConBuscar(buscar){
@@ -1127,8 +1115,7 @@ function renderDashboard(){
 
   // Preventivos
   const prevComp = DB.preventivos.filter(p=>p.completado).length;
-  const prevProg = DB.preventivos.filter(p=>estadoPrev(p)==='Programado').length;
-  const prevVenc = DB.preventivos.filter(p=>estadoPrev(p)==='Vencido').length;
+
   document.getElementById('st-prev').textContent      = DB.preventivos.length;
   document.getElementById('st-prev-comp').textContent = prevComp;
   document.getElementById('st-prev-prog').textContent = prevProg;
@@ -1347,6 +1334,7 @@ function renderPreventivos(){
       ${(p.fechaInicio&&p.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
       <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
       <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Jonathan Martinez" ${(p.tecnico||'').includes('Jonathan Martinez')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Jonathan Martinez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Jonathan Martinez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Marvin Torres" ${(p.tecnico||'').includes('Marvin Torres')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Marvin Torres',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Marvin Torres</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Elkin Perez" ${(p.tecnico||'').includes('Elkin Perez')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Elkin Perez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Elkin Perez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Kevin Deras" ${(p.tecnico||'').includes('Kevin Deras')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Kevin Deras',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Kevin Deras</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Fernando Benavides" ${(p.tecnico||'').includes('Fernando Benavides')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Fernando Benavides',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Fernando Benavides</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Dalton Garcia" ${(p.tecnico||'').includes('Dalton Garcia')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Dalton Garcia',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Dalton Garcia</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Eliberto Peña" ${(p.tecnico||'').includes('Eliberto Peña')?'checked':''} onchange="toggleTecnicoOrden('prev','${p.id}','Eliberto Peña',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Eliberto Peña</label></div></div>
+      <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
       <div style="margin-top:12px">
@@ -1425,7 +1413,7 @@ function renderCorrectivos(){
       ${(c.fechaInicio&&c.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(c.fechaInicio,c.fechaFin)}</span></div>`:''}
       <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Jonathan Martinez" ${(c.tecnico||'').includes('Jonathan Martinez')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Jonathan Martinez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Jonathan Martinez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Marvin Torres" ${(c.tecnico||'').includes('Marvin Torres')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Marvin Torres',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Marvin Torres</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Elkin Perez" ${(c.tecnico||'').includes('Elkin Perez')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Elkin Perez',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Elkin Perez</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Kevin Deras" ${(c.tecnico||'').includes('Kevin Deras')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Kevin Deras',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Kevin Deras</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Fernando Benavides" ${(c.tecnico||'').includes('Fernando Benavides')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Fernando Benavides',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Fernando Benavides</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Dalton Garcia" ${(c.tecnico||'').includes('Dalton Garcia')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Dalton Garcia',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Dalton Garcia</label><label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)"><input type="checkbox" value="Eliberto Peña" ${(c.tecnico||'').includes('Eliberto Peña')?'checked':''} onchange="toggleTecnicoOrden('corr','${c.id}','Eliberto Peña',this.checked)" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer"> Eliberto Peña</label></div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
-      <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
+      <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div style="margin-top:12px">
       ${c.estado==='Cerrado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
@@ -1648,14 +1636,15 @@ function guardarPreventivo(finalizar=false){
 function completarPreventivo(id){
   const p = DB.preventivos.find(x=>x.id===id);
   if(!p) return;
-  // Validate required fields
   const faltantes = [];
-  if(!p.fechaInicio) faltantes.push('Fecha y hora de inicio');
-  if(!p.fechaFin)    faltantes.push('Fecha y hora de finalización');
-  if(!p.tecnico)     faltantes.push('Técnico responsable');
-  if(!p.notas)       faltantes.push('Trabajo realizado');
+  if(!p.fechaInicio)   faltantes.push('Fecha y hora de inicio');
+  if(!p.fechaFin)      faltantes.push('Fecha y hora de finalización');
+  if(!p.tecnico)       faltantes.push('Técnico(s) asignado(s)');
+  if(!p.notas)         faltantes.push('Trabajo realizado');
+  if(!p.horometro)     faltantes.push('Horómetro');
+  if(p.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
   if(faltantes.length){
-    alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
+    alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
@@ -1775,11 +1764,13 @@ function cerrarCorrectivo(id){
   const c = DB.correctivos.find(x=>x.id===id);
   if(!c) return;
   const faltantes = [];
+  if(!c.sistema)       faltantes.push('Sistema afectado');
   if(!c.fechaInicio)   faltantes.push('Fecha y hora de inicio');
   if(!c.fechaFin)      faltantes.push('Fecha y hora de finalización');
-  if(!c.tecnico)       faltantes.push('Técnico asignado');
+  if(!c.tecnico)       faltantes.push('Técnico(s) asignado(s)');
   if(!c.falla)         faltantes.push('Falla reportada');
   if(!c.diagnostico)   faltantes.push('Diagnóstico / Trabajos realizados');
+  if(c.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -1968,9 +1959,10 @@ function enviarSolicitudWA(){
   if(tipo === 'preventivo'){
     const entry = {
       id: ordenId, correlativo, equipoId,
-      servicio: desc, fecha: fechaISO, fechaInicio: fechaISO, fechaFin: '',
+      servicio: desc, fecha: fechaISO, fechaInicio: '', fechaFin: '',
       horometro: '', tecnico: tecnicoNombre,
       notas: desc, sugerencias: '', foto: '',
+      estado: 'Pendiente',
       prioridad, completado: false,
       clienteNombre: eq ? '' : equipoTxt
     };
@@ -2033,26 +2025,77 @@ function clearSolicitudForm(){
 
 
 function renderSolicitudes(){
+  const buscar = (document.getElementById('sol-buscar')?.value||'').toLowerCase();
+  const el = document.getElementById('solicitudes-list');
   if(!DB.solicitudes || !DB.solicitudes.length){
-    document.getElementById('solicitudes-list').innerHTML='<div class="empty">Sin solicitudes enviadas</div>';
+    el.innerHTML='<div class="empty">Sin órdenes creadas</div>';
     return;
   }
-  const prior_badge = p => p==='Urgente'?'<span class="badge b-danger">🚨 Urgente</span>':p==='Alta'?'<span class="badge b-warn">🔴 Alta</span>':'<span class="badge b-gray">Normal</span>';
-  document.getElementById('solicitudes-list').innerHTML = DB.solicitudes.slice(0,20).map(s=>`
-    <div class="card" style="padding:10px 14px">
-      <div class="card-header" style="margin-bottom:6px">
-        <div><div class="card-title">${s.equipoTxt}</div><div class="card-sub">${s.tecnicoNombre}</div></div>
-        ${prior_badge(s.prioridad)}
+
+  // Get live estado from preventivos/correctivos for each solicitud
+  function getEstadoLive(sol){
+    const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===sol.id||o.correlativo===sol.correlativo);
+    if(!orden) return 'Finalizada';
+    if(orden.completado || orden.estado==='Cerrado') return 'Finalizada';
+    return orden.estado || 'Pendiente';
+  }
+
+  // Sort by correlativo desc
+  let list = [...DB.solicitudes].sort((a,b)=>{
+    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb - na;
+  });
+
+  if(buscar){
+    list = list.filter(s=>
+      (s.correlativo||'').toLowerCase().includes(buscar)
+      || (s.equipoTxt||'').toLowerCase().includes(buscar)
+      || (s.tecnicoNombre||'').toLowerCase().includes(buscar)
+      || (s.desc||'').toLowerCase().includes(buscar)
+    );
+  }
+
+  // Only show non-finalized (finalized go to historial only)
+  const activas = list.filter(s => getEstadoLive(s) !== 'Finalizada');
+  const finalizadas = list.filter(s => getEstadoLive(s) === 'Finalizada');
+
+  if(!list.length){ el.innerHTML='<div class="empty">Sin resultados</div>'; return; }
+
+  const estadoBadge = (e) => {
+    if(e==='En proceso')             return '<span class="badge" style="background:#d1ecf1;color:#0c5460">En proceso</span>';
+    if(e==='En espera de repuestos') return '<span class="badge" style="background:#e2d9f3;color:#4a1c7c">En espera</span>';
+    if(e==='Finalizada')             return '<span class="badge" style="background:#c8edcc;color:#1a5c1a">Finalizada</span>';
+    return '<span class="badge" style="background:#f0efe9;color:#6b6960">Pendiente</span>';
+  };
+
+  const renderItem = (s) => {
+    const estado = getEstadoLive(s);
+    return `<div class="card" style="padding:12px 14px;margin-bottom:8px;border-left:3px solid ${estado==='En proceso'?'#0c5460':estado==='En espera de repuestos'?'#4a1c7c':estado==='Finalizada'?'#1a5c1a':'#9c9a90'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+            ${s.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${s.correlativo}</span>`:''}
+            ${estadoBadge(estado)}
+            <span class="badge" style="background:${s.prioridad==='Urgente'?'#f8c0c0':s.prioridad==='Alta'?'#fde5c0':'#f0efe9'};color:${s.prioridad==='Urgente'?'#7a1515':s.prioridad==='Alta'?'#8a4800':'#6b6960'}">${s.prioridad||'Normal'}</span>
+          </div>
+          <div style="font-size:14px;font-weight:600">${s.equipoTxt||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px">${s.desc||''}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px">👷 ${s.tecnicoNombre||'—'} · ${s.fecha||''}</div>
+        </div>
+        <button class="btn btn-danger" style="padding:4px 8px;font-size:12px;flex-shrink:0" onclick="eliminarSolicitud('${s.id}')">✕</button>
       </div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:4px">${s.desc}</div>
-      <div style="font-size:11px;color:var(--text3)">${s.fecha}</div>
-    </div>`).join('');
+    </div>`;
+  };
+
+  let out = '';
+  if(activas.length){
+    out += activas.map(renderItem).join('');
+  }
+  if(!out) out = '<div class="empty">Sin órdenes activas</div>';
+  el.innerHTML = out;
 }
 
-// PIN DE SEGURIDAD
-const PIN_CORRECTO = '1624';
-let pinActual = '';
-let pinCallback = null;
 
 function solicitarPIN(tipo, id){
   pinActual = '';
