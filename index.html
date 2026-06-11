@@ -323,14 +323,18 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Preventivos</div>
         <div style="font-size:38px;font-weight:700;font-family:'DM Mono',monospace;color:#1a4a8a;line-height:1" id="st-prev-abiertos">0</div>
         <div style="font-size:13px;color:var(--text2);margin-top:4px">Órdenes abiertas</div>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text2)">En proceso</span>
-            <span style="font-weight:500;color:#1a4a8a" id="st-prev-proc">0</span>
+            <span style="color:#6b6960">● Pendientes</span>
+            <span style="font-weight:600;color:#6b6960" id="st-prev-pend">0</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text2)">Completados</span>
-            <span style="font-weight:500;color:#2d6a2d" id="st-prev-comp">0</span>
+            <span style="color:#0c5460">● En proceso</span>
+            <span style="font-weight:600;color:#0c5460" id="st-prev-proc">0</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#4a1c7c">● En espera</span>
+            <span style="font-weight:600;color:#4a1c7c" id="st-prev-esp">0</span>
           </div>
         </div>
       </div>
@@ -338,14 +342,18 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Correctivos</div>
         <div style="font-size:38px;font-weight:700;font-family:'DM Mono',monospace;color:#8b3a1a;line-height:1" id="st-corr-abiertos">0</div>
         <div style="font-size:13px;color:var(--text2);margin-top:4px">Órdenes abiertas</div>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text2)">En proceso</span>
-            <span style="font-weight:500;color:#8b3a1a" id="st-corr-proc">0</span>
+            <span style="color:#6b6960">● Pendientes</span>
+            <span style="font-weight:600;color:#6b6960" id="st-corr-pend">0</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:var(--text2)">En espera</span>
-            <span style="font-weight:500;color:#5a1a8a" id="st-corr-esp">0</span>
+            <span style="color:#0c5460">● En proceso</span>
+            <span style="font-weight:600;color:#0c5460" id="st-corr-proc">0</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#4a1c7c">● En espera</span>
+            <span style="font-weight:600;color:#4a1c7c" id="st-corr-esp">0</span>
           </div>
         </div>
       </div>
@@ -787,11 +795,18 @@ function abrirModal(id){
   const specsSection = document.getElementById('det-specs-section');
   const specsGrid = document.getElementById('det-specs-grid');
   if(specsFields.length){
-    specsGrid.innerHTML = specsFields.map(([label, val])=>`
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
+    const specKeys = ['mastil','pesoBruto','anchoEq','largoEq','alturaEq','torre','horquillas','llantas','alturaExtendida','alturaReplegada','cargaCanasta','alcanceHorizontal'];
+    const specLabels = {'mastil':'🏗 Mástil elevado','pesoBruto':'⚖️ Peso bruto','anchoEq':'↔️ Ancho','largoEq':'↕️ Largo','alturaEq':'📏 Altura','torre':'🔧 Torre','horquillas':'🍴 Horquillas','llantas':'🔵 Llantas/Rodos','alturaExtendida':'⬆️ Altura extendida','alturaReplegada':'🔽 Altura replegada','cargaCanasta':'👷 Carga en canasta','alcanceHorizontal':'↗️ Alcance horizontal'};
+    specsGrid.innerHTML = specsFields.map(([label, val])=>{
+      const key = Object.keys(specLabels).find(k=>specLabels[k]===label)||'';
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
         <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div>
-        <div style="font-size:13px;font-weight:500;color:var(--text)">${val}</div>
-      </div>`).join('');
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+          <div id="spec-val-${key}-${e.id}" style="font-size:13px;font-weight:500;color:var(--text);flex:1">${val}</div>
+          <button onclick="editarSpec('${e.id}','${key}','${val.replace(/'/g,'\\'')}','${label}')" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:2px 4px" title="Editar">✏️</button>
+        </div>
+      </div>`;
+    }).join('');
     specsSection.style.display = 'block';
   } else {
     specsSection.style.display = 'none';
@@ -1087,6 +1102,21 @@ function fmt(s){
   } catch(e){ return s; }
 }
 
+function editarSpec(equipoId, key, valorActual, label){
+  solicitarPINAccion(()=>{
+    const nuevoValor = prompt('Editar ' + label + ':', valorActual);
+    if(nuevoValor === null) return;
+    const eq = DB.equipos.find(e=>e.id===equipoId);
+    if(!eq) return;
+    eq[key] = nuevoValor.trim();
+    saveDB();
+    // Update display
+    const el = document.getElementById('spec-val-'+key+'-'+equipoId);
+    if(el) el.textContent = nuevoValor.trim();
+    toast('Especificación actualizada');
+  }, '✏️ Editar especificación', 'Solo supervisores pueden editar specs técnicas');
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
@@ -1145,22 +1175,26 @@ function renderDashboard(){
     document.getElementById('pct-mal').textContent   = pMal+'%';
   }
 
-  // Preventivos
-  const prevComp = DB.preventivos.filter(p=>p.completado).length;
+  // Preventivos - 3 estados
+  const prevComp     = DB.preventivos.filter(p=>p.completado).length;
+  const prevAbiertos = DB.preventivos.filter(p=>!p.completado).length;
+  const prevPend     = DB.preventivos.filter(p=>!p.completado && (p.estado||'Pendiente')==='Pendiente').length;
+  const prevProc     = DB.preventivos.filter(p=>!p.completado && p.estado==='En proceso').length;
+  const prevEsp      = DB.preventivos.filter(p=>!p.completado && p.estado==='En espera de repuestos').length;
+  if(document.getElementById('st-prev-abiertos')) document.getElementById('st-prev-abiertos').textContent = prevAbiertos;
+  if(document.getElementById('st-prev-pend'))     document.getElementById('st-prev-pend').textContent     = prevPend;
+  if(document.getElementById('st-prev-proc'))     document.getElementById('st-prev-proc').textContent     = prevProc;
+  if(document.getElementById('st-prev-esp'))      document.getElementById('st-prev-esp').textContent      = prevEsp;
 
-  document.getElementById('st-prev').textContent      = DB.preventivos.length;
-  document.getElementById('st-prev-comp').textContent = prevComp;
-  document.getElementById('st-prev-prog').textContent = prevProg;
-  document.getElementById('st-prev-venc').textContent = prevVenc;
-
-  // Correctivos
-  const corrProc = DB.correctivos.filter(c=>c.estado==='En proceso').length;
-  const corrEsp  = DB.correctivos.filter(c=>c.estado==='En espera de repuestos').length;
-  const corrCerr = DB.correctivos.filter(c=>c.estado==='Cerrado').length;
-  document.getElementById('st-corr').textContent      = DB.correctivos.length;
-  document.getElementById('st-corr-proc').textContent = corrProc;
-  document.getElementById('st-corr-esp').textContent  = corrEsp;
-  document.getElementById('st-corr-cerr').textContent = corrCerr;
+  // Correctivos - 3 estados
+  const corrAbiertos = DB.correctivos.filter(c=>c.estado!=='Cerrado').length;
+  const corrPend     = DB.correctivos.filter(c=>(c.estado||'Pendiente')==='Pendiente').length;
+  const corrProc     = DB.correctivos.filter(c=>c.estado==='En proceso').length;
+  const corrEsp      = DB.correctivos.filter(c=>c.estado==='En espera de repuestos').length;
+  if(document.getElementById('st-corr-abiertos')) document.getElementById('st-corr-abiertos').textContent = corrAbiertos;
+  if(document.getElementById('st-corr-pend'))     document.getElementById('st-corr-pend').textContent     = corrPend;
+  if(document.getElementById('st-corr-proc'))     document.getElementById('st-corr-proc').textContent     = corrProc;
+  if(document.getElementById('st-corr-esp'))      document.getElementById('st-corr-esp').textContent      = corrEsp;
 
   // Alertas
   const alertas = [];
@@ -1200,7 +1234,18 @@ function renderEquipos(){
   const buscar  = (document.getElementById('filt-eq-buscar').value||'').toLowerCase();
   const filtEst = document.getElementById('filt-eq-estado').value;
   let list = [...DB.equipos].sort((a,b)=>a.codigo.localeCompare(b.codigo));
-  if(buscar)   list = list.filter(e=>(e.codigo+e.serie+e.cliente+e.marca+e.ubicacion).toLowerCase().includes(buscar));
+  if(buscar){
+    list = list.filter(e=>{
+      const fields = [
+        e.codigo||'', e.serie||'', e.cliente||'', e.marca||'',
+        e.ubicacion||'', e.desc||'', e.tipo||'', e.combustible||'',
+        e.observaciones||''
+      ].join(' ').toLowerCase();
+      // Also support partial serie search
+      const serie = (e.serie||'').toLowerCase();
+      return fields.includes(buscar) || serie.startsWith(buscar);
+    });
+  }
   if(filtEst)  list = list.filter(e=>(e.estado||'DISPONIBLE')===filtEst);
 
   document.getElementById('eq-count').textContent = list.length + ' equipos';
@@ -2068,7 +2113,11 @@ function renderSolicitudes(){
   // Get live estado from preventivos/correctivos for each solicitud
   function getEstadoLive(sol){
     const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===sol.id||o.correlativo===sol.correlativo);
-    if(!orden) return 'Finalizada';
+    if(!orden){
+      // Order might be finalized (in historial) or not found yet
+      const enHistorial = (DB.ordenesCerradas||[]).find(o=>o.correlativo===sol.correlativo);
+      return enHistorial ? 'Finalizada' : (sol.estado||'Pendiente');
+    }
     if(orden.completado || orden.estado==='Cerrado') return 'Finalizada';
     return orden.estado || 'Pendiente';
   }
@@ -2093,7 +2142,8 @@ function renderSolicitudes(){
   const activas = list.filter(s => getEstadoLive(s) !== 'Finalizada');
   const finalizadas = list.filter(s => getEstadoLive(s) === 'Finalizada');
 
-  if(!list.length){ el.innerHTML='<div class="empty">Sin resultados</div>'; return; }
+  if(!activas.length && !list.length){ el.innerHTML='<div class="empty">Sin resultados</div>'; return; }
+  if(!activas.length){ el.innerHTML='<div class="empty">Sin órdenes activas — todas en historial</div>'; return; }
 
   const estadoBadge = (e) => {
     if(e==='En proceso')             return '<span class="badge" style="background:#d1ecf1;color:#0c5460">En proceso</span>';
