@@ -807,7 +807,7 @@ function abrirModal(id){
         <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
           <div id="spec-val-${key}-${e.id}" style="font-size:13px;font-weight:500;color:var(--text);flex:1">${val}</div>
-          <button onclick="editarSpec('${e.id}','${key}','${val.replace(/'/g,'\\'')}','${label}')" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:2px 4px" title="Editar">✏️</button>
+          <button onclick="editarSpec('${e.id}','${key}')" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:2px 4px" title="Editar">✏️</button>
         </div>
       </div>`;
     }).join('');
@@ -1106,15 +1106,17 @@ function fmt(s){
   } catch(e){ return s; }
 }
 
-function editarSpec(equipoId, key, valorActual, label){
+function editarSpec(equipoId, key){
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq) return;
+  const specLabels = {'mastil':'Mástil elevado','pesoBruto':'Peso bruto','anchoEq':'Ancho','largoEq':'Largo','alturaEq':'Altura','torre':'Torre','horquillas':'Horquillas','llantas':'Llantas/Rodos','alturaExtendida':'Altura extendida','alturaReplegada':'Altura replegada','cargaCanasta':'Carga en canasta','alcanceHorizontal':'Alcance horizontal'};
+  const label = specLabels[key] || key;
+  const valorActual = eq[key] || '';
   solicitarPINAccion(()=>{
     const nuevoValor = prompt('Editar ' + label + ':', valorActual);
     if(nuevoValor === null) return;
-    const eq = DB.equipos.find(e=>e.id===equipoId);
-    if(!eq) return;
     eq[key] = nuevoValor.trim();
     saveDB();
-    // Update display
     const el = document.getElementById('spec-val-'+key+'-'+equipoId);
     if(el) el.textContent = nuevoValor.trim();
     toast('Especificación actualizada');
