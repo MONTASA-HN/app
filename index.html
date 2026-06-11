@@ -717,7 +717,11 @@ function loadDB(){
     } else {
       DB.equipos = EQUIPOS_INICIALES; DB.preventivos = []; DB.correctivos = []; saveDB();
     }
-  } catch(e){ DB.equipos = EQUIPOS_INICIALES; DB.preventivos = []; DB.correctivos = []; saveDB(); }
+  } catch(e){ DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES)); DB.preventivos = []; DB.correctivos = []; }
+  // Safety net: never allow empty equipos
+  if(!DB.equipos || DB.equipos.length === 0){
+    DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+  }
 }
 
 function toast(msg, err=false){
@@ -2521,6 +2525,10 @@ function mostrarBannerSolicitud(sol, tipo){
     } else {
       loadDB();
       saveDB(); // first time — push to Firebase
+    }
+    // Safety: ensure equipos never empty
+    if(!DB.equipos || DB.equipos.length === 0){
+      DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     }
     renderDashboard();
 
