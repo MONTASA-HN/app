@@ -1240,7 +1240,6 @@ function renderDashboard(){
 
   // Alertas
   const alertas = [];
-  if(prevVenc > 0)  alertas.push({tipo:'danger', msg: prevVenc+' mantenimiento'+(prevVenc>1?'s':'')+' vencido'+(prevVenc>1?'s':'')});
   const urg = DB.correctivos.filter(c=>c.estado==='En proceso'&&c.prioridad==='Alta').length;
   if(urg > 0)       alertas.push({tipo:'danger', msg: urg+' correctivo'+(urg>1?'s':'')+' urgente'+(urg>1?'s':'')});
   if(corrEsp > 0)   alertas.push({tipo:'warn',   msg: corrEsp+' equipo'+(corrEsp>1?'s':'')+' en espera de repuestos'});
@@ -1450,6 +1449,20 @@ function renderPreventivos(){
     <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
+      <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
+        <option value="">-- Seleccionar --</option>
+        <option value="Mantenimiento 250 horas" ${p.servicio==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
+        <option value="Mantenimiento 500 horas" ${p.servicio==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option>
+        <option value="Mantenimiento 1000 horas" ${p.servicio==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option>
+        <option value="Mantenimiento 2000 horas" ${p.servicio==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option>
+        <option value="Mantenimiento 3000 horas" ${p.servicio==='Mantenimiento 3000 horas'?'selected':''}>⏱ 3,000 horas</option>
+        <option value="Mantenimiento 4000 horas" ${p.servicio==='Mantenimiento 4000 horas'?'selected':''}>⏱ 4,000 horas</option>
+        <option value="Mantenimiento 6000 horas" ${p.servicio==='Mantenimiento 6000 horas'?'selected':''}>⏱ 6,000 horas</option>
+        <option value="Inspección general" ${p.servicio==='Inspección general'?'selected':''}>🔍 Inspección general</option>
+        <option value="Mantenimiento anual" ${p.servicio==='Mantenimiento anual'?'selected':''}>📅 Mantenimiento anual</option>
+        <option value="Cambio de aceite y filtros" ${p.servicio==='Cambio de aceite y filtros'?'selected':''}>🛢 Aceite y filtros</option>
+        <option value="Otro mantenimiento preventivo" ${p.servicio==='Otro mantenimiento preventivo'?'selected':''}>Otro preventivo</option>
+      </select></div>
       <div class="form-group"><label>Fecha inicio</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaInicio',this.previousElementSibling.value+'T'+this.value)"></div></div>
       <div class="form-group"><label>Fecha fin</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.previousElementSibling.value+'T'+this.value)"></div></div>
       ${(p.fechaInicio&&p.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
@@ -2543,6 +2556,13 @@ function mostrarBannerSolicitud(sol, tipo){
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────
 (function(){
+  // Guard: if Firebase SDK didn't load (e.g. no internet), run without sync
+  if(typeof firebase === 'undefined'){
+    console.warn('Firebase SDK no disponible — modo offline');
+    loadDB();
+    renderDashboard();
+    return;
+  }
   const firebaseConfig = {
     apiKey: "AIzaSyCDXVpqQw62z0OI9fqDrdZQhCv7V0RvhiE",
     authDomain: "montasa-app.firebaseapp.com",
