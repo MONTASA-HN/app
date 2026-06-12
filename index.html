@@ -1051,15 +1051,19 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   const orden = list.find(x=>x.id===id);
   if(!orden) return;
   orden[campo] = valor;
-  // Auto-set fechaInicio when estado changes to "En proceso"
+  // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
     orden.fechaInicio = new Date().toISOString().slice(0,16);
-    setTimeout(()=>{ tipo==='prev'?renderPreventivos():renderCorrectivos(); }, 300);
+    // Update only the date input in this card directly — no list re-render
+    const cb = document.getElementById('cb-'+id);
+    if(cb){
+      const dateInputs = cb.querySelectorAll('input[type="date"]');
+      if(dateInputs[0]) dateInputs[0].value = orden.fechaInicio.slice(0,10);
+      const timeInputs = cb.querySelectorAll('input[type="time"]');
+      if(timeInputs[0]) timeInputs[0].value = orden.fechaInicio.slice(11,16);
+    }
   }
   saveDB();
-  // Update solicitudes list if visible
-  const solTab = document.getElementById('tab-solicitudes');
-  if(solTab && solTab.classList.contains('active')) renderSolicitudes();
 }
 
 function irACorrectivosConBuscar(buscar){
@@ -1167,6 +1171,81 @@ document.addEventListener('keydown', function(e){
     // This prevents accidental resets
   }
 });
+
+function editarOrdenHistorial(tipo, id){
+  solicitarPINAccion(()=>{
+    const list = tipo==='prev' ? DB.ordenesCerradas.filter(o=>o._tipo==='prev'||o.horometro!==undefined)
+                                : DB.ordenesCerradas.filter(o=>o._tipo==='corr'||o.falla!==undefined);
+    // Search in all closed orders
+    const orden = DB.ordenesCerradas.find(o=>o.id===id);
+    if(!orden) return toast('Orden no encontrada',true);
+
+    const isPrev = orden.horometro!==undefined || orden._tipo==='prev';
+
+    // Build modal content
+    const tecs = ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña'];
+    const sistemas = ['Motor / Transmisión', 'Sistema hidráulico', 'Sistema eléctrico', 'Sistema de frenos', 'Sistema de dirección', 'Mástil / Elevación', 'Chasis / Estructura', 'Llantas / Rodos', 'Sistema de enfriamiento', 'Cabina / Tablero', 'Batería / Cargador', 'Sistema de gas / Combustible', 'Otro'];
+    const mantTipos = ['Mantenimiento 250 horas', 'Mantenimiento 500 horas', 'Mantenimiento 1000 horas', 'Mantenimiento 2000 horas', 'Mantenimiento 3000 horas', 'Mantenimiento 4000 horas', 'Mantenimiento 6000 horas', 'Inspección general', 'Mantenimiento anual', 'Cambio de aceite y filtros', 'Otro mantenimiento preventivo'];
+
+    const tecChecks = tecs.map(t =>
+      `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px">
+        <input type="checkbox" value="${t}" ${(orden.tecnico||'').includes(t)?'checked':''} 
+          onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(!o)return;let ts=(o.tecnico||'').split(',').map(s=>s.trim()).filter(Boolean);this.checked?(!ts.includes('${t}')&&ts.push('${t}')):ts=ts.filter(s=>s!=='${t}');o.tecnico=ts.join(', ');"
+          style="width:16px;height:16px;accent-color:var(--accent)"> ${t}
+      </label>`
+    ).join('');
+
+    const sistOptions = sistemas.map(s=>
+      `<option value="${s}" ${orden.sistema===s?'selected':''}>${s}</option>`
+    ).join('');
+
+    const mantOptions = mantTipos.map(m=>
+      `<option value="${m}" ${orden.servicio===m?'selected':''}>${m}</option>`
+    ).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'edit-hist-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border-radius:var(--radius);padding:20px;width:100%;max-width:500px;margin:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-weight:700;font-size:16px">✏️ Editar orden ${orden.correlativo||''}</div>
+          <button onclick="document.getElementById('edit-hist-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2)">×</button>
+        </div>
+        ${isPrev ? `
+        <div class="form-group"><label>Tipo de mantenimiento</label>
+          <select onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.servicio=this.value">
+            <option value="">-- Seleccionar --</option>${mantOptions}
+          </select></div>` : `
+        <div class="form-group"><label>Sistema afectado</label>
+          <select onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.sistema=this.value">
+            <option value="">-- Seleccionar --</option>${sistOptions}
+          </select></div>
+        <div class="form-group"><label>Falla reportada</label>
+          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.falla=this.value">${orden.falla||''}</textarea></div>`}
+        <div class="form-group"><label>Fecha inicio</label>
+          <input type="date" value="${(orden.fechaInicio||orden.fecha||'').slice(0,10)}"
+            onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.fechaInicio=this.value"></div>
+        <div class="form-group"><label>Fecha fin</label>
+          <input type="date" value="${(orden.fechaFin||'').slice(0,10)}"
+            onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.fechaFin=this.value"></div>
+        ${isPrev ? `<div class="form-group"><label>Horómetro (hrs)</label>
+          <input type="number" value="${orden.horometro||''}"
+            onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.horometro=this.value"></div>` : ''}
+        <div class="form-group"><label>Técnico(s)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${tecChecks}</div></div>
+        <div class="form-group"><label>${isPrev?'Trabajo realizado':'Diagnóstico / Trabajo realizado'}</label>
+          <textarea rows="3" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.${isPrev?'notas':'diagnostico'}=this.value">${isPrev?(orden.notas||''):(orden.diagnostico||'')}</textarea></div>
+        ${isPrev ? `<div class="form-group"><label>Sugerencias</label>
+          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.sugerencias=this.value">${orden.sugerencias||''}</textarea></div>` : ''}
+        <button onclick="saveDB();renderHistorial();document.getElementById('edit-hist-modal').remove();toast('Orden actualizada ✓')" 
+          style="width:100%;padding:13px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px">
+          💾 Guardar cambios
+        </button>
+      </div>`;
+    document.body.appendChild(modal);
+  }, '✏️ Editar orden historial', 'Solo supervisores pueden editar órdenes cerradas');
+}
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
@@ -1455,7 +1534,7 @@ function renderPreventivos(){
         <button id="ct-${p.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()">
+    <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
@@ -1546,7 +1625,7 @@ function renderCorrectivos(){
         <button id="ct-${c.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${c.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()">
+    <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
@@ -1566,6 +1645,7 @@ function renderCorrectivos(){
   </div>`;
   }).join('');
 }
+
 
 function renderHistorial(){
   const filtEq = document.getElementById('filt-hist-equipo').value;
@@ -1609,7 +1689,7 @@ function renderHistorial(){
         ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
         ${x.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${x.sugerencias}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
-        <button class="btn btn-danger" style="width:100%;margin-top:10px;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar orden</button>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('prev','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar orden</button></div>
       </div>`;
     } else {
       return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
@@ -2375,10 +2455,8 @@ function cerrarLightbox(){
 }
 
 function mostrarExitoOrden(correlativo){
-  // Remove existing if any
   const existing = document.getElementById('exito-modal');
   if(existing) existing.remove();
-
   const modal = document.createElement('div');
   modal.id = 'exito-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;display:flex;align-items:center;justify-content:center;padding:24px';
@@ -2388,7 +2466,7 @@ function mostrarExitoOrden(correlativo){
       <div style="font-size:20px;font-weight:700;color:#1a1a18;margin-bottom:6px">¡Orden finalizada!</div>
       ${correlativo?`<div style="font-size:14px;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:6px 16px;border-radius:20px;display:inline-block;margin-bottom:12px;font-weight:700">${correlativo}</div>`:''}
       <div style="font-size:13px;color:#6b6960;margin-bottom:24px">La orden fue guardada y registrada en el historial.</div>
-      <button onclick="cerrarExito()" style="width:100%;padding:14px;background:#1f3864;color:white;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">Ir al inicio</button>
+      <button onclick="cerrarExito()" style="padding:12px 32px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;width:100%">✓ Cerrar</button>
     </div>`;
   document.body.appendChild(modal);
   document.body.style.overflow = 'hidden';
@@ -2398,180 +2476,15 @@ function cerrarExito(){
   const modal = document.getElementById('exito-modal');
   if(modal) modal.remove();
   document.body.style.overflow = '';
-  const btn = document.querySelector('.nav-btn:nth-child(1)');
-  showTab('dashboard', btn);
-  window.scrollTo(0,0);
 }
 
-// PWA Manifest
-(function(){
-  const manifest = {
-    name: "MONTASA Gestión de Mantenimiento",
-    short_name: "MONTASA",
-    description: "Gestión de mantenimiento de equipos MONTASA Handling Co.",
-    start_url: "./",
-    display: "standalone",
-    background_color: "#1f3864",
-    theme_color: "#1f3864",
-    orientation: "portrait",
-    icons: [
-      { src: "data:image/png;base64,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", sizes: "192x192", type: "image/png" },
-      { src: "data:image/png;base64,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", sizes: "512x512", type: "image/png" }
-    ]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('link');
-  link.rel = 'manifest';
-  link.href = url;
-  document.head.appendChild(link);
-})();
-
-// ── SWIPE NAVIGATION ─────────────────────────────────────────────────────────
-(function(){
-  const tabs = ['dashboard','equipos','preventivo','correctivo','historial'];
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-  let swipeLocked = false;
-
-  function currentTabIndex(){
-    const active = document.querySelector('.section.active');
-    if(!active) return 0;
-    const id = active.id.replace('tab-','');
-    const idx = tabs.indexOf(id);
-    return idx >= 0 ? idx : 0;
-  }
-
-  function goToTab(index){
-    if(index < 0 || index >= tabs.length) return;
-    const tabId = tabs[index];
-    const navBtns = document.querySelectorAll('.nav-btn');
-    // Find the button that matches this tab
-    let btn = null;
-    navBtns.forEach(b => {
-      if(b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + tabId + "'")) btn = b;
-    });
-    showTab(tabId, btn);
-  }
-
-  // Only attach to the content area, but ignore touches on inputs, selects, textareas, buttons
-  document.addEventListener('touchstart', e => {
-    // Ignore if touch starts on interactive element
-    const tag = e.target.tagName;
-    if(['INPUT','SELECT','TEXTAREA','BUTTON','LABEL'].includes(tag)) return;
-    // Ignore if a form panel is open
-    const openForm = document.querySelector('.form-panel[style*="block"]');
-    if(openForm) return;
-    // Ignore if modal is open
-    if(document.getElementById('modal-overlay').classList.contains('open')) return;
-    if(document.getElementById('pin-overlay').classList.contains('open')) return;
-
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    touchStartTime = Date.now();
-    swipeLocked = false;
-  }, {passive: true});
-
-  document.addEventListener('touchend', e => {
-    if(swipeLocked) return;
-    if(!touchStartX) return;
-
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    const dt = Date.now() - touchStartTime;
-
-    touchStartX = 0;
-
-    // Strict conditions: fast, clearly horizontal, long enough
-    if(dt > 350) return;
-    if(Math.abs(dx) < 70) return;
-    if(Math.abs(dy) > Math.abs(dx) * 0.5) return;
-
-    // Ignore if a form panel is open
-    const openForm = document.querySelector('.form-panel[style*="block"]');
-    if(openForm) return;
-
-    swipeLocked = true;
-    const cur = currentTabIndex();
-    if(dx < 0){
-      goToTab(cur + 1);
-    } else {
-      goToTab(cur - 1);
-    }
-    setTimeout(() => { swipeLocked = false; }, 400);
-  }, {passive: true});
-})();
-
-
-function procesarDeepLink(){
-  if(window._deepLinkDone) return;
-  const hash = window.location.hash.slice(1);
-  if(!hash) return;
-
-  const dashIdx = hash.indexOf('-');
-  if(dashIdx === -1) return;
-  const tipo = hash.slice(0, dashIdx);
-  const ordenId = hash.slice(dashIdx + 1);
-  if(tipo !== 'preventivo' && tipo !== 'correctivo') return;
-
-  window._deepLinkDone = true;
-
-  setTimeout(()=>{
-    if(tipo === 'preventivo'){
-      const btn = document.querySelector('.nav-btn:nth-child(3)');
-      showTab('preventivo', btn);
-      setTimeout(()=>{
-        document.getElementById('form-prev').style.display = 'block';
-        fillSel('prev-equipo');
-        document.getElementById('form-prev').scrollIntoView({behavior:'smooth'});
-      }, 300);
-    } else if(tipo === 'correctivo'){
-      const btn = document.querySelector('.nav-btn:nth-child(4)');
-      showTab('correctivo', btn);
-      setTimeout(()=>{
-        document.getElementById('form-corr').style.display = 'block';
-        fillSel('corr-equipo');
-        document.getElementById('form-corr').scrollIntoView({behavior:'smooth'});
-      }, 300);
-    }
-  }, 500);
-}
-
-
-function preseleccionarTecnico(gridId, nombre){
-  if(!nombre) return;
-  const checks = document.querySelectorAll('#' + gridId + ' input[type=checkbox]');
-  checks.forEach(c => {
-    if(c.value.trim() === nombre.trim()){
-      c.checked = true;
-      c.closest('.tecnico-check').classList.add('selected');
-    }
-  });
-}
-
-function mostrarBannerSolicitud(sol, tipo){
-  const formId = tipo==='prev' ? 'form-prev' : 'form-corr';
-  const form = document.getElementById(formId);
-  const existing = document.getElementById('sol-banner');
-  if(existing) existing.remove();
-  const banner = document.createElement('div');
-  banner.id = 'sol-banner';
-  banner.style.cssText = 'background:#1f3864;border-radius:10px;padding:14px 16px;margin-bottom:16px;color:white';
-  banner.innerHTML = '<div style="font-size:12px;opacity:0.7;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📋 Orden asignada</div>'
-    + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">' + sol.equipoTxt + '</div>'
-    + '<div style="font-size:13px;opacity:0.85">👷 ' + sol.tecnicoNombre + '</div>'
-    + '<div style="font-size:13px;opacity:0.85">⚡ Prioridad: ' + sol.prioridad + '</div>'
-    + '<div style="font-size:12px;opacity:0.6;margin-top:6px">Completa los campos y finaliza la orden</div>';
-  form.insertBefore(banner, form.firstChild.nextSibling);
-}
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────
 (function(){
-  // Guard: if Firebase SDK didn't load (e.g. no internet), run without sync
   if(typeof firebase === 'undefined'){
     console.warn('Firebase SDK no disponible — modo offline');
     loadDB();
+    if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     renderDashboard();
     return;
   }
@@ -2588,18 +2501,14 @@ function mostrarBannerSolicitud(sol, tipo){
   window._fbDB = firebase.database();
   const FB_REF = window._fbDB.ref('montasa');
 
-  // Load from Firebase first, fallback to localStorage
   FB_REF.once('value').then(snap => {
     const remote = snap.val();
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       const localTs = local._ts || 0;
       if(remote._ts >= localTs){
-        // Remote is newer — merge state into DB
-        loadDB(); // load local first (for specs)
+        loadDB();
         if(remote.equipos && remote.equipos.length){
-          // Use Firebase list as authoritative (respects deletions)
-          // Enrich each remote equipo with specs from EQUIPOS_INICIALES
           DB.equipos = remote.equipos.map(req => {
             const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
             return {...spec, ...req};
@@ -2609,30 +2518,25 @@ function mostrarBannerSolicitud(sol, tipo){
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
+        if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else {
         loadDB();
-        saveDB(); // push local to Firebase
+        saveDB();
       }
     } else {
       loadDB();
-      saveDB(); // first time — push to Firebase
+      saveDB();
     }
-    // Safety: ensure equipos never empty
-    if(!DB.equipos || DB.equipos.length === 0){
-      DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-    }
+    if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     renderDashboard();
 
-    // Real-time listener for changes from other devices
     FB_REF.on('value', snap => {
       const d = snap.val();
       if(!d || !d._ts) return;
       const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
-      // Only ignore if local is strictly newer (within 2s tolerance)
       if(d._ts < localTs - 2000) return;
       if(d.equipos && d.equipos.length){
-        // Use Firebase list as authoritative (respects deletions)
         DB.equipos = d.equipos.map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
@@ -2642,11 +2546,10 @@ function mostrarBannerSolicitud(sol, tipo){
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
-      localStorage.setItem(LS_KEY, JSON.stringify(DB));
-      // Re-render active tab
-      const act = document.querySelector('.section.active');
-      if(act){
-        const id = act.id.replace('tab-','');
+      if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      const active=document.querySelector('.section.active');
+      if(active){
+        const id=active.id.replace('tab-','');
         if(id==='dashboard')   renderDashboard();
         if(id==='preventivo')  renderPreventivos();
         if(id==='correctivo')  renderCorrectivos();
@@ -2655,8 +2558,8 @@ function mostrarBannerSolicitud(sol, tipo){
       }
     });
   }).catch(()=>{
-    // No internet - use localStorage
     loadDB();
+    if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     renderDashboard();
   });
 })();
