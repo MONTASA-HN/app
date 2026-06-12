@@ -698,6 +698,7 @@ function saveDB(){
   try{
     if(window._fbDB){
       const ts = Date.now();
+      window._localWriteTs = ts; // Mark this as OUR write to skip listener re-render
       window._fbDB.ref('montasa').set({
         equipos: DB.equipos.map(e=>({
           id:e.id, codigo:e.codigo, serie:e.serie||'',
@@ -1174,13 +1175,11 @@ document.addEventListener('keydown', function(e){
 
 function editarOrdenHistorial(tipo, id){
   solicitarPINAccion(()=>{
-    const list = tipo==='prev' ? DB.ordenesCerradas.filter(o=>o._tipo==='prev'||o.horometro!==undefined)
-                                : DB.ordenesCerradas.filter(o=>o._tipo==='corr'||o.falla!==undefined);
-    // Search in all closed orders
-    const orden = DB.ordenesCerradas.find(o=>o.id===id);
+    // Search in preventivos (completado) and correctivos (cerrado) — same source as historial
+    const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===id);
     if(!orden) return toast('Orden no encontrada',true);
 
-    const isPrev = orden.horometro!==undefined || orden._tipo==='prev';
+    const isPrev = orden.completado===true || tipo==='prev';
 
     // Build modal content
     const tecs = ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña'];
@@ -2537,6 +2536,11 @@ function cerrarExito(){
       if(!d || !d._ts) return;
       const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
       if(d._ts < localTs - 2000) return;
+      // Skip re-render if this is our own write (within 3 seconds)
+      if(window._localWriteTs && d._ts <= window._localWriteTs + 3000){
+        window._localWriteTs = null;
+        return; // Our own write — no need to re-render
+      }
       if(d.equipos && d.equipos.length){
         DB.equipos = d.equipos.map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
