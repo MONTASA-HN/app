@@ -1059,6 +1059,30 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   const list = tipo==='prev' ? DB.preventivos : DB.correctivos;
   const orden = list.find(x=>x.id===id);
   if(!orden) return;
+  // ── VALIDACIÓN 3: si se cambia fechaFin, verificar que no sea antes de fechaInicio ──
+  if(campo === 'fechaFin' && valor && orden.fechaInicio){
+    const err = validarFechasOrden(orden.fechaInicio, valor);
+    if(err){
+      alert('⚠️ ' + err);
+      // Reset the input to empty
+      const cb = document.getElementById('cb-'+id);
+      if(cb){
+        const dateIn = cb.querySelectorAll('input[type="date"]');
+        const timeIn = cb.querySelectorAll('input[type="time"]');
+        // fechaFin inputs are the second pair
+        if(dateIn[1]) dateIn[1].value = '';
+        if(timeIn[1]) timeIn[1].value = '';
+      }
+      return;
+    }
+  }
+  if(campo === 'fechaInicio' && valor && orden.fechaFin){
+    const err = validarFechasOrden(valor, orden.fechaFin);
+    if(err){
+      alert('⚠️ ' + err);
+      return;
+    }
+  }
   orden[campo] = valor;
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
@@ -1100,6 +1124,12 @@ function toggleTecnicoOrden(tipo, id, nombre, btn){
   let tecnicos = (orden.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
   const i = tecnicos.indexOf(nombre);
   if(i === -1){
+    // ── VALIDACIÓN 1: técnico ya asignado a otra orden abierta ──
+    const ordenAbierta = ordenAbiertaDeTecnico(nombre, id);
+    if(ordenAbierta){
+      alert('⚠️ ' + nombre + ' ya está asignado a la orden ' + (ordenAbierta.correlativo||'sin correlativo') + ' que aún está abierta.\n\nNo puede estar en dos órdenes al mismo tiempo.');
+      return;
+    }
     tecnicos.push(nombre);
     if(btn) btn.classList.add('on');
   } else {
@@ -1274,6 +1304,56 @@ function editarOrdenHistorial(tipo, id){
       </div>`;
     document.body.appendChild(modal);
   }, '✏️ Editar orden historial', 'Solo supervisores pueden editar órdenes cerradas');
+}
+
+// ── VALIDACIONES DE NEGOCIO ──────────────────────────────────────────────
+
+// Retorna la orden abierta del técnico (si existe), o null
+function ordenAbiertaDeTecnico(nombre, excluirId){
+  const activos = [
+    ...DB.preventivos.filter(p => !p.completado),
+    ...DB.correctivos.filter(c => c.estado !== 'Cerrado')
+  ];
+  return activos.find(o => {
+    if(o.id === excluirId) return false; // No contar la misma orden
+    const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+    return tecs.includes(nombre);
+  }) || null;
+}
+
+// Verifica si un técnico tiene solapamiento de horario con alguna orden cerrada
+function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId){
+  if(!fechaInicioNueva || !fechaFinNueva) return null;
+  const inicio = new Date(fechaInicioNueva).getTime();
+  const fin    = new Date(fechaFinNueva).getTime();
+  if(isNaN(inicio) || isNaN(fin)) return null;
+
+  const cerradas = [
+    ...DB.preventivos.filter(p => p.completado),
+    ...DB.correctivos.filter(c => c.estado === 'Cerrado'),
+    ...(DB.ordenesCerradas||[])
+  ];
+
+  return cerradas.find(o => {
+    if(o.id === excluirId) return false;
+    const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+    if(!tecs.includes(nombre)) return false;
+    const oInicio = new Date(o.fechaInicio||o.fecha).getTime();
+    const oFin    = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre).getTime();
+    if(isNaN(oInicio) || isNaN(oFin)) return false;
+    // Solapamiento: inicio < oFin && fin > oInicio
+    return inicio < oFin && fin > oInicio;
+  }) || null;
+}
+
+// Valida fechas: fin no puede ser antes que inicio
+function validarFechasOrden(fechaInicio, fechaFin){
+  if(!fechaInicio || !fechaFin) return null; // OK — campos vacíos permitidos
+  const ini = new Date(fechaInicio).getTime();
+  const fin = new Date(fechaFin).getTime();
+  if(isNaN(ini) || isNaN(fin)) return null;
+  if(fin < ini) return 'La fecha/hora de finalización no puede ser anterior a la de inicio';
+  return null;
 }
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
@@ -1914,6 +1994,18 @@ function completarPreventivo(id){
     alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
   }
+  // ── VALIDACIÓN 3: fechas lógicas ──
+  const errFecha = validarFechasOrden(p.fechaInicio, p.fechaFin);
+  if(errFecha){ alert('⚠️ ' + errFecha); return; }
+  // ── VALIDACIÓN 2: solapamiento de horario ──
+  const tecs = (p.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+  for(const nombre of tecs){
+    const conflicto = hayConflictoHorario(nombre, p.fechaInicio, p.fechaFin, p.id);
+    if(conflicto){
+      alert('⚠️ Conflicto de horario para ' + nombre + ':\n\nYa tiene registrada la orden ' + (conflicto.correlativo||'') + ' en ese mismo horario.\n\nVerifica las fechas antes de cerrar.');
+      return;
+    }
+  }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
@@ -2041,6 +2133,18 @@ function cerrarCorrectivo(id){
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
+  }
+  // ── VALIDACIÓN 3: fechas lógicas ──
+  const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin);
+  if(errFechaC){ alert('⚠️ ' + errFechaC); return; }
+  // ── VALIDACIÓN 2: solapamiento de horario ──
+  const tecsC = (c.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+  for(const nombre of tecsC){
+    const conflictoC = hayConflictoHorario(nombre, c.fechaInicio, c.fechaFin, c.id);
+    if(conflictoC){
+      alert('⚠️ Conflicto de horario para ' + nombre + ':\n\nYa tiene registrada la orden ' + (conflictoC.correlativo||'') + ' en ese mismo horario.\n\nVerifica las fechas antes de cerrar.');
+      return;
+    }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   c.estado = 'Cerrado';
@@ -2233,6 +2337,17 @@ function enviarSolicitudWA(){
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
+
+  // ── VALIDACIÓN 1: técnicos con órdenes abiertas ──
+  const tecConflictos = tecnicosData.filter(t => ordenAbiertaDeTecnico(t.nombre, null));
+  if(tecConflictos.length){
+    const msgs = tecConflictos.map(t => {
+      const o = ordenAbiertaDeTecnico(t.nombre, null);
+      return t.nombre + ' → orden ' + (o.correlativo||'abierta');
+    });
+    alert('⚠️ Los siguientes técnicos ya tienen una orden abierta:\n\n' + msgs.join('\n') + '\n\nCierra esas órdenes antes de asignarlos.');
+    return;
+  }
 
   // --- Crear orden directamente en el sistema ---
   const correlativo = nextCorrelativo();
