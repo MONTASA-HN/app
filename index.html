@@ -657,8 +657,14 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
   <!-- PERSONAL TÉCNICO -->
   <div id="tab-personal" class="section">
-    <div style="padding:4px 0 12px">
-      <div style="font-size:13px;color:var(--text2)" id="personal-mes-label">Cargando...</div>
+    <div style="padding:4px 0 14px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <select id="personal-mes-sel" onchange="renderPersonal()" style="flex:1;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px;outline:none">
+          <!-- populated by renderPersonal -->
+        </select>
+        <div style="font-size:12px;color:var(--text2);white-space:nowrap">Meta: 189 hrs</div>
+      </div>
+      <div style="font-size:12px;color:var(--text3)" id="personal-mes-label"></div>
     </div>
     <div id="personal-list"></div>
   </div>
@@ -1375,15 +1381,43 @@ function validarFechasOrden(fechaInicio, fechaFin){
 }
 
 function renderPersonal(){
-  const now   = new Date();
-  const mes   = now.getMonth();
-  const anio  = now.getFullYear();
-  const mesNombre = now.toLocaleString('es-HN',{month:'long',year:'numeric'});
+  const META_MINS = 189 * 60; // 189 horas en minutos
 
+  // ── Poblar selector de meses ──────────────────────────────────────────
+  const sel = document.getElementById('personal-mes-sel');
+  if(sel && sel.options.length <= 1){
+    const now = new Date();
+    sel.innerHTML = '';
+    for(let i = 0; i < 12; i++){
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val  = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0'); // mes 0-based
+      const lbl  = d.toLocaleString('es-HN',{month:'long',year:'numeric'});
+      const opt  = document.createElement('option');
+      opt.value  = val;
+      opt.textContent = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+      if(i===0) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  // ── Leer mes/año seleccionado ─────────────────────────────────────────
+  const selVal = sel ? sel.value : '';
+  let mes, anio;
+  if(selVal){
+    const parts = selVal.split('-');
+    anio = parseInt(parts[0]);
+    mes  = parseInt(parts[1]); // 0-based
+  } else {
+    const now = new Date();
+    mes  = now.getMonth();
+    anio = now.getFullYear();
+  }
+
+  const mesNombre = new Date(anio, mes, 1).toLocaleString('es-HN',{month:'long',year:'numeric'});
   const label = document.getElementById('personal-mes-label');
-  if(label) label.textContent = 'Rendimiento del mes de ' + mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1);
+  if(label) label.textContent = 'Mostrando: ' + mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1);
 
-  // Get all closed orders this month
+  // ── Órdenes del mes seleccionado ──────────────────────────────────────
   const ordenesDelMes = [
     ...DB.preventivos.filter(p => {
       if(!p.completado) return false;
@@ -1397,19 +1431,16 @@ function renderPersonal(){
     })
   ];
 
-  // Calculate stats per technician
+  // ── Calcular stats por técnico ────────────────────────────────────────
   const stats = {};
   for(const t of ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña', 'Miguel Orellana']){
     stats[t] = { ordenes:0, minutos:0 };
   }
-
   for(const o of ordenesDelMes){
     const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
-    const mins = (() => {
-      if(!o.fechaInicio || !o.fechaFin) return 0;
-      const diff = new Date(o.fechaFin) - new Date(o.fechaInicio);
-      return diff > 0 ? Math.floor(diff/60000) : 0;
-    })();
+    const ini  = new Date(o.fechaInicio||o.fecha);
+    const fin  = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre);
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
     for(const t of tecs){
       if(!stats[t]) stats[t] = {ordenes:0, minutos:0};
       stats[t].ordenes++;
@@ -1417,13 +1448,17 @@ function renderPersonal(){
     }
   }
 
-  // Sort by ordenes desc, then by minutos desc
+  // ── Ordenar por productividad desc ────────────────────────────────────
   const sorted = Object.entries(stats)
     .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
-    .sort((a,b) => b[1].ordenes - a[1].ordenes || b[1].minutos - a[1].minutos);
+    .sort((a,b) => b[1].minutos - a[1].minutos);
 
-  const maxOrdenes = sorted.length ? Math.max(...sorted.map(([,s])=>s.ordenes)) : 1;
-  const maxMins    = sorted.length ? Math.max(...sorted.map(([,s])=>s.minutos)) : 1;
+  const el = document.getElementById('personal-list');
+  if(!el) return;
+  if(!sorted.length){
+    el.innerHTML = '<div class="empty">Sin órdenes cerradas en este mes</div>';
+    return;
+  }
 
   function fmtMins(m){
     if(!m) return '0 min';
@@ -1431,102 +1466,88 @@ function renderPersonal(){
     return h ? h+'h '+(mm?mm+'min':'') : mm+'min';
   }
 
-  const colores = ['#1f3864','#2d6a9f','#3a8fd1','#4db8e8','#5fcfe8','#6ddbb0','#7de87a','#b3e85f'];
+  const colores = ['#1f3864','#2d6a9f','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#f39c12'];
 
-  const el = document.getElementById('personal-list');
-  if(!el) return;
-
-  if(!sorted.length){
-    el.innerHTML = '<div class="empty">Sin órdenes cerradas este mes</div>';
-    return;
-  }
-
-  // ── Cards con mini-barras ──────────────────────────────────────────────
-  const cards = sorted.map(([nombre, s], i) => {
-    const pctOrd = maxOrdenes ? Math.round(s.ordenes/maxOrdenes*100) : 0;
-    const pctMins= maxMins    ? Math.round(s.minutos/maxMins*100)    : 0;
-    const color  = colores[i % colores.length];
-    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;border-left:4px solid ${color}">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-weight:600;font-size:15px">${nombre}</div>
-        <div style="font-size:11px;color:white;background:${color};padding:3px 10px;border-radius:20px;font-weight:700">#${i+1}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:10px">
-          <div style="font-size:28px;font-weight:700;color:${color};font-family:'DM Mono',monospace">${s.ordenes}</div>
-          <div style="font-size:11px;color:var(--text2)">Órdenes</div>
+  // ── Gráfica de productividad (barras horizontales) ───────────────────
+  const barCards = sorted.map(([nombre, s], i) => {
+    const pct     = Math.min(Math.round(s.minutos / META_MINS * 100), 100);
+    const pctReal = Math.round(s.minutos / META_MINS * 100); // puede pasar 100%
+    const color   = colores[i % colores.length];
+    const horas   = (s.minutos/60).toFixed(1);
+    // Color semáforo según productividad
+    const barColor = pctReal >= 80 ? '#27ae60' : pctReal >= 50 ? '#f39c12' : '#e74c3c';
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:${color}"></div>
+          <div style="font-weight:600;font-size:14px">${nombre}</div>
         </div>
-        <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:10px">
-          <div style="font-size:20px;font-weight:700;color:${color};font-family:'DM Mono',monospace">${fmtMins(s.minutos)}</div>
-          <div style="font-size:11px;color:var(--text2)">Tiempo trabajado</div>
+        <div style="font-size:20px;font-weight:700;color:${barColor};font-family:'DM Mono',monospace">${pctReal}%</div>
+      </div>
+      <!-- Barra de productividad -->
+      <div style="position:relative;height:22px;background:var(--surface2);border-radius:11px;overflow:hidden;margin-bottom:8px">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${barColor};border-radius:11px;transition:width 0.6s ease"></div>
+        <div style="position:absolute;left:0;top:0;height:100%;width:100%;display:flex;align-items:center;padding:0 10px;justify-content:space-between">
+          <span style="font-size:11px;font-weight:600;color:${pct>30?'white':'var(--text)'}">${fmtMins(s.minutos)}</span>
+          <span style="font-size:11px;color:var(--text3)">meta: ${189}h</span>
         </div>
       </div>
-      <div style="margin-bottom:4px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
-          <span>Órdenes</span><span>${s.ordenes}/${maxOrdenes}</span>
-        </div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${pctOrd}%;background:${color};border-radius:4px;transition:width 0.5s"></div>
-        </div>
-      </div>
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
-          <span>Horas</span><span>${fmtMins(s.minutos)}</span>
-        </div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${pctMins}%;background:${color};opacity:0.6;border-radius:4px;transition:width 0.5s"></div>
-        </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
+        <span>📋 ${s.ordenes} orden${s.ordenes!==1?'es':''} cerrada${s.ordenes!==1?'s':''}</span>
+        <span>⏱ ${horas}h / ${189}h</span>
       </div>
     </div>`;
   }).join('');
 
-  // ── Gráfica de barras SVG: Órdenes ────────────────────────────────────
-  const svgW = 340, svgH = 180, padL = 36, padB = 50, padT = 16, padR = 10;
-  const barW  = Math.min(32, Math.floor((svgW-padL-padR)/sorted.length - 6));
+  // ── Gráfica de barras verticales SVG ─────────────────────────────────
+  const svgW = 360, svgH = 200, padL = 42, padB = 45, padT = 16, padR = 10;
+  const barW  = Math.min(30, Math.floor((svgW-padL-padR)/sorted.length - 8));
   const chartH = svgH - padT - padB;
   const step   = (svgW-padL-padR) / sorted.length;
 
-  const barsOrd = sorted.map(([nombre,s],i) => {
-    const bh  = maxOrdenes ? Math.round(s.ordenes/maxOrdenes * chartH) : 0;
-    const bx  = padL + i*step + (step-barW)/2;
-    const by  = padT + chartH - bh;
-    const col = colores[i % colores.length];
-    const lbl = nombre.split(' ')[0];
-    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh || 2}" rx="3" fill="${col}"/>
-      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="10" fill="#1f3864" font-weight="600">${s.ordenes}</text>
-      <text x="${bx+barW/2}" y="${svgH-padB+16}" text-anchor="middle" font-size="9" fill="#666">${lbl}</text>`;
+  // Y-axis lines at 25, 50, 75, 100%
+  const yLines = [25,50,75,100].map(pct => {
+    const y = padT + chartH - Math.round(pct/100 * chartH);
+    return `<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="${padL-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#999">${pct}%</text>`;
   }).join('');
 
-  const barsHrs = sorted.map(([nombre,s],i) => {
-    const bh  = maxMins ? Math.round(s.minutos/maxMins * chartH) : 0;
-    const bx  = padL + i*step + (step-barW)/2;
-    const by  = padT + chartH - bh;
-    const col = colores[i % colores.length];
-    const lbl = nombre.split(' ')[0];
-    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh || 2}" rx="3" fill="${col}"/>
-      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="9" fill="#1f3864" font-weight="600">${Math.floor(s.minutos/60)}h</text>
-      <text x="${bx+barW/2}" y="${svgH-padB+16}" text-anchor="middle" font-size="9" fill="#666">${lbl}</text>`;
+  // Meta line at 100%
+  const metaY = padT;
+
+  const bars = sorted.map(([nombre,s],i) => {
+    const pct    = Math.min(s.minutos / META_MINS, 1);
+    const bh     = Math.max(Math.round(pct * chartH), 2);
+    const bx     = padL + i*step + (step-barW)/2;
+    const by     = padT + chartH - bh;
+    const pctVal = Math.round(s.minutos/META_MINS*100);
+    const barColor = pctVal >= 80 ? '#27ae60' : pctVal >= 50 ? '#f39c12' : '#e74c3c';
+    const lbl    = nombre.split(' ')[0];
+    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" rx="4" fill="${barColor}"/>
+      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="9" fill="#333" font-weight="600">${pctVal}%</text>
+      <text x="${bx+barW/2}" y="${svgH-padB+14}" text-anchor="middle" font-size="9" fill="#555">${lbl}</text>`;
   }).join('');
 
-  const chartCard = (titulo, bars) => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">
-      <div style="font-weight:600;font-size:14px;margin-bottom:10px">${titulo}</div>
+  const svgChart = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">📊 Productividad del mes</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">🟢 ≥80% · 🟡 50-79% · 🔴 &lt;50% · Meta: ${189}h = 100%</div>
       <div style="overflow-x:auto">
         <svg width="${svgW}" height="${svgH}" style="display:block;margin:0 auto">
-          <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ddd" stroke-width="1"/>
-          <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ddd" stroke-width="1"/>
+          ${yLines}
+          <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
+          <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
           ${bars}
         </svg>
       </div>
     </div>`;
 
   el.innerHTML =
-    '<div style="font-weight:700;font-size:15px;margin-bottom:12px;color:var(--accent)">📊 Gráficas del mes</div>' +
-    chartCard('Órdenes trabajadas por técnico', barsOrd) +
-    chartCard('Horas trabajadas por técnico', barsHrs) +
-    '<div style="font-weight:700;font-size:15px;margin:16px 0 10px;color:var(--accent)">🏆 Ranking de técnicos</div>' +
-    cards;
+    svgChart +
+    '<div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--accent)">Detalle por técnico</div>' +
+    barCards;
 }
+
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
