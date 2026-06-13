@@ -1207,13 +1207,22 @@ function editarOrdenHistorial(tipo, id){
     const sistemas = ['Motor / Transmisión', 'Sistema hidráulico', 'Sistema eléctrico', 'Sistema de frenos', 'Sistema de dirección', 'Mástil / Elevación', 'Chasis / Estructura', 'Llantas / Rodos', 'Sistema de enfriamiento', 'Cabina / Tablero', 'Batería / Cargador', 'Sistema de gas / Combustible', 'Otro'];
     const mantTipos = ['Mantenimiento 250 horas', 'Mantenimiento 500 horas', 'Mantenimiento 1000 horas', 'Mantenimiento 2000 horas', 'Mantenimiento 3000 horas', 'Mantenimiento 4000 horas', 'Mantenimiento 6000 horas', 'Inspección general', 'Mantenimiento anual', 'Cambio de aceite y filtros', 'Otro mantenimiento preventivo'];
 
-    const tecChecks = tecs.map(t =>
-      `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px">
-        <input type="checkbox" value="${t}" ${(orden.tecnico||'').includes(t)?'checked':''} 
-          onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(!o)return;let ts=(o.tecnico||'').split(',').map(s=>s.trim()).filter(Boolean);this.checked?(!ts.includes('${t}')&&ts.push('${t}')):ts=ts.filter(s=>s!=='${t}');o.tecnico=ts.join(', ');"
-          style="width:16px;height:16px;accent-color:var(--accent)"> ${t}
-      </label>`
-    ).join('');
+    const tecChecks = tecs.map(t => {
+      const isOn = (orden.tecnico||'').split(',').map(s=>s.trim()).includes(t);
+      return `<div class="tec-btn ${isOn?'on':''}" data-n="${t}"
+        onclick="event.stopPropagation();
+          const el=this;
+          const o=[...DB.preventivos,...DB.correctivos].find(x=>x.id==='${id}');
+          const oc=DB.ordenesCerradas?DB.ordenesCerradas.find(x=>x.id==='${id}'):null;
+          const target=o||oc;
+          if(!target)return;
+          let ts=(target.tecnico||'').split(',').map(s=>s.trim()).filter(Boolean);
+          const i=ts.indexOf('${t}');
+          if(i===-1){ts.push('${t}');el.classList.add('on');}
+          else{ts.splice(i,1);el.classList.remove('on');}
+          target.tecnico=ts.join(', ');
+          saveDB();">${t}</div>`;
+    }).join('');
 
     const sistOptions = sistemas.map(s=>
       `<option value="${s}" ${orden.sistema===s?'selected':''}>${s}</option>`
