@@ -630,7 +630,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group">
         <label>Técnico(s) asignado(s)</label>
         <div class="tecnicos-grid" id="sol-tecnicos-grid">
-          <label class="tecnico-check"><input type="checkbox" value="+50433863362" data-nombre="Miguel (Pruebas)" onchange="toggleTecnico(this)"> Miguel (Pruebas)</label>
+          <label class="tecnico-check"><input type="checkbox" value="+50433863362" data-nombre="Miguel Orellana" onchange="toggleTecnico(this)"> Miguel Orellana</label>
           <label class="tecnico-check"><input type="checkbox" value="+50431964107" data-nombre="Jonathan Martinez" onchange="toggleTecnico(this)"> Jonathan Martinez</label>
           <label class="tecnico-check"><input type="checkbox" value="+50433743974" data-nombre="Marvin Torres" onchange="toggleTecnico(this)"> Marvin Torres</label>
           <label class="tecnico-check"><input type="checkbox" value="+50489683617" data-nombre="Elkin Perez" onchange="toggleTecnico(this)"> Elkin Perez</label>
@@ -1125,10 +1125,13 @@ function toggleTecnicoOrden(tipo, id, nombre, btn){
   const i = tecnicos.indexOf(nombre);
   if(i === -1){
     // ── VALIDACIÓN 1: técnico ya asignado a otra orden abierta ──
-    const ordenAbierta = ordenAbiertaDeTecnico(nombre, id);
-    if(ordenAbierta){
-      alert('⚠️ ' + nombre + ' ya está asignado a la orden ' + (ordenAbierta.correlativo||'sin correlativo') + ' que aún está abierta.\n\nNo puede estar en dos órdenes al mismo tiempo.');
-      return;
+    // Miguel Orellana puede asignar libremente (es el supervisor)
+    if(nombre !== 'Miguel Orellana'){
+      const ordenAbierta = ordenAbiertaDeTecnico(nombre, id);
+      if(ordenAbierta){
+        alert('⚠️ ' + nombre + ' ya está asignado a la orden ' + (ordenAbierta.correlativo||'sin correlativo') + ' que aún está abierta.\n\nNo puede estar en dos órdenes al mismo tiempo.');
+        return;
+      }
     }
     tecnicos.push(nombre);
     if(btn) btn.classList.add('on');
@@ -2338,8 +2341,8 @@ function enviarSolicitudWA(){
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
 
-  // ── VALIDACIÓN 1: técnicos con órdenes abiertas ──
-  const tecConflictos = tecnicosData.filter(t => ordenAbiertaDeTecnico(t.nombre, null));
+  // ── VALIDACIÓN 1: técnicos con órdenes abiertas (excluye al supervisor) ──
+  const tecConflictos = tecnicosData.filter(t => t.nombre !== 'Miguel Orellana' && ordenAbiertaDeTecnico(t.nombre, null));
   if(tecConflictos.length){
     const msgs = tecConflictos.map(t => {
       const o = ordenAbiertaDeTecnico(t.nombre, null);
