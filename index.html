@@ -655,10 +655,21 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div id="solicitudes-list"></div>
   </div>
 
+  <!-- PERSONAL TÉCNICO -->
+  <div id="tab-personal" class="section">
+    <div style="padding:4px 0 12px">
+      <div style="font-size:13px;color:var(--text2)" id="personal-mes-label">Cargando...</div>
+    </div>
+    <div id="personal-list"></div>
+  </div>
+
   <!-- HISTORIAL -->
   <div id="tab-historial" class="section">
-    <div class="filter-bar">
-      <select id="filt-hist-equipo" onchange="renderHistorial()"><option value="">Todos los equipos</option></select>
+    <div class="filter-bar" style="display:flex;gap:8px">
+      <input id="hist-buscar" placeholder="🔍 Buscar por correlativo..." oninput="renderHistorial()" style="flex:1;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px;outline:none">
+      <select id="filt-hist-equipo" onchange="renderHistorial()" style="padding:10px 8px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:13px">
+        <option value="">Todos</option>
+      </select>
     </div>
     <div id="historial-list"></div>
   </div>
@@ -683,6 +694,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   </button>
   <button class="nav-btn" onclick="showTab('historial',this)">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>Historial
+  </button>
+  <button class="nav-btn" onclick="showTab('personal',this)">
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Personal
   </button>
 </nav>
 
@@ -778,6 +792,7 @@ function showTab(id, el){
     renderSolicitudes();
   }
   if(id === 'historial'){ fillHistSel(); renderHistorial(); }
+  if(id === 'personal')  renderPersonal();
   if(id === 'dashboard') renderDashboard();
   window.scrollTo(0, 0);
 }
@@ -1359,6 +1374,160 @@ function validarFechasOrden(fechaInicio, fechaFin){
   return null;
 }
 
+function renderPersonal(){
+  const now   = new Date();
+  const mes   = now.getMonth();
+  const anio  = now.getFullYear();
+  const mesNombre = now.toLocaleString('es-HN',{month:'long',year:'numeric'});
+
+  const label = document.getElementById('personal-mes-label');
+  if(label) label.textContent = 'Rendimiento del mes de ' + mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1);
+
+  // Get all closed orders this month
+  const ordenesDelMes = [
+    ...DB.preventivos.filter(p => {
+      if(!p.completado) return false;
+      const f = new Date(p.fechaCompletado||p.fechaFin||p.fecha);
+      return f.getMonth()===mes && f.getFullYear()===anio;
+    }),
+    ...DB.correctivos.filter(c => {
+      if(c.estado!=='Cerrado') return false;
+      const f = new Date(c.fechaCierre||c.fechaFin||c.fecha);
+      return f.getMonth()===mes && f.getFullYear()===anio;
+    })
+  ];
+
+  // Calculate stats per technician
+  const stats = {};
+  for(const t of ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña', 'Miguel Orellana']){
+    stats[t] = { ordenes:0, minutos:0 };
+  }
+
+  for(const o of ordenesDelMes){
+    const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+    const mins = (() => {
+      if(!o.fechaInicio || !o.fechaFin) return 0;
+      const diff = new Date(o.fechaFin) - new Date(o.fechaInicio);
+      return diff > 0 ? Math.floor(diff/60000) : 0;
+    })();
+    for(const t of tecs){
+      if(!stats[t]) stats[t] = {ordenes:0, minutos:0};
+      stats[t].ordenes++;
+      stats[t].minutos += mins;
+    }
+  }
+
+  // Sort by ordenes desc, then by minutos desc
+  const sorted = Object.entries(stats)
+    .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
+    .sort((a,b) => b[1].ordenes - a[1].ordenes || b[1].minutos - a[1].minutos);
+
+  const maxOrdenes = sorted.length ? Math.max(...sorted.map(([,s])=>s.ordenes)) : 1;
+  const maxMins    = sorted.length ? Math.max(...sorted.map(([,s])=>s.minutos)) : 1;
+
+  function fmtMins(m){
+    if(!m) return '0 min';
+    const h = Math.floor(m/60), mm = m%60;
+    return h ? h+'h '+(mm?mm+'min':'') : mm+'min';
+  }
+
+  const colores = ['#1f3864','#2d6a9f','#3a8fd1','#4db8e8','#5fcfe8','#6ddbb0','#7de87a','#b3e85f'];
+
+  const el = document.getElementById('personal-list');
+  if(!el) return;
+
+  if(!sorted.length){
+    el.innerHTML = '<div class="empty">Sin órdenes cerradas este mes</div>';
+    return;
+  }
+
+  // ── Cards con mini-barras ──────────────────────────────────────────────
+  const cards = sorted.map(([nombre, s], i) => {
+    const pctOrd = maxOrdenes ? Math.round(s.ordenes/maxOrdenes*100) : 0;
+    const pctMins= maxMins    ? Math.round(s.minutos/maxMins*100)    : 0;
+    const color  = colores[i % colores.length];
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;border-left:4px solid ${color}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:600;font-size:15px">${nombre}</div>
+        <div style="font-size:11px;color:white;background:${color};padding:3px 10px;border-radius:20px;font-weight:700">#${i+1}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:10px">
+          <div style="font-size:28px;font-weight:700;color:${color};font-family:'DM Mono',monospace">${s.ordenes}</div>
+          <div style="font-size:11px;color:var(--text2)">Órdenes</div>
+        </div>
+        <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:10px">
+          <div style="font-size:20px;font-weight:700;color:${color};font-family:'DM Mono',monospace">${fmtMins(s.minutos)}</div>
+          <div style="font-size:11px;color:var(--text2)">Tiempo trabajado</div>
+        </div>
+      </div>
+      <div style="margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
+          <span>Órdenes</span><span>${s.ordenes}/${maxOrdenes}</span>
+        </div>
+        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pctOrd}%;background:${color};border-radius:4px;transition:width 0.5s"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
+          <span>Horas</span><span>${fmtMins(s.minutos)}</span>
+        </div>
+        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pctMins}%;background:${color};opacity:0.6;border-radius:4px;transition:width 0.5s"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Gráfica de barras SVG: Órdenes ────────────────────────────────────
+  const svgW = 340, svgH = 180, padL = 36, padB = 50, padT = 16, padR = 10;
+  const barW  = Math.min(32, Math.floor((svgW-padL-padR)/sorted.length - 6));
+  const chartH = svgH - padT - padB;
+  const step   = (svgW-padL-padR) / sorted.length;
+
+  const barsOrd = sorted.map(([nombre,s],i) => {
+    const bh  = maxOrdenes ? Math.round(s.ordenes/maxOrdenes * chartH) : 0;
+    const bx  = padL + i*step + (step-barW)/2;
+    const by  = padT + chartH - bh;
+    const col = colores[i % colores.length];
+    const lbl = nombre.split(' ')[0];
+    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh || 2}" rx="3" fill="${col}"/>
+      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="10" fill="#1f3864" font-weight="600">${s.ordenes}</text>
+      <text x="${bx+barW/2}" y="${svgH-padB+16}" text-anchor="middle" font-size="9" fill="#666">${lbl}</text>`;
+  }).join('');
+
+  const barsHrs = sorted.map(([nombre,s],i) => {
+    const bh  = maxMins ? Math.round(s.minutos/maxMins * chartH) : 0;
+    const bx  = padL + i*step + (step-barW)/2;
+    const by  = padT + chartH - bh;
+    const col = colores[i % colores.length];
+    const lbl = nombre.split(' ')[0];
+    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh || 2}" rx="3" fill="${col}"/>
+      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="9" fill="#1f3864" font-weight="600">${Math.floor(s.minutos/60)}h</text>
+      <text x="${bx+barW/2}" y="${svgH-padB+16}" text-anchor="middle" font-size="9" fill="#666">${lbl}</text>`;
+  }).join('');
+
+  const chartCard = (titulo, bars) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">
+      <div style="font-weight:600;font-size:14px;margin-bottom:10px">${titulo}</div>
+      <div style="overflow-x:auto">
+        <svg width="${svgW}" height="${svgH}" style="display:block;margin:0 auto">
+          <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ddd" stroke-width="1"/>
+          <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ddd" stroke-width="1"/>
+          ${bars}
+        </svg>
+      </div>
+    </div>`;
+
+  el.innerHTML =
+    '<div style="font-weight:700;font-size:15px;margin-bottom:12px;color:var(--accent)">📊 Gráficas del mes</div>' +
+    chartCard('Órdenes trabajadas por técnico', barsOrd) +
+    chartCard('Horas trabajadas por técnico', barsHrs) +
+    '<div style="font-weight:700;font-size:15px;margin:16px 0 10px;color:var(--accent)">🏆 Ranking de técnicos</div>' +
+    cards;
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
@@ -1776,7 +1945,8 @@ function renderCorrectivos(){
 
 
 function renderHistorial(){
-  const filtEq = document.getElementById('filt-hist-equipo').value;
+  const filtEq  = document.getElementById('filt-hist-equipo').value;
+  const buscar  = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
 
   // Merge preventivos + correctivos, only show completed/closed
   let all = [
@@ -1786,9 +1956,19 @@ function renderHistorial(){
     ...DB.correctivos
       .filter(c=>c.estado==='Cerrado')
       .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha}))
-  ].sort((a,b)=>b._f.localeCompare(a._f));
+  ].sort((a,b)=>{
+    // Orden descendente por correlativo numérico
+    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb - na;
+  });
 
   if(filtEq) all = all.filter(x=>x.equipoId==filtEq);
+  if(buscar)  all = all.filter(x=>
+    (x.correlativo||'').toLowerCase().includes(buscar) ||
+    (x.falla||x.servicio||'').toLowerCase().includes(buscar) ||
+    (x.tecnico||'').toLowerCase().includes(buscar)
+  );
 
   const el = document.getElementById('historial-list');
   if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes finalizadas</div>'; return; }
@@ -2740,7 +2920,7 @@ function cerrarExito(){
 
 // ── KEYBOARD NAVIGATION (arrow keys between tabs) ────────────────────────
 (function(){
-  const TABS = ['dashboard','equipos','preventivo','correctivo','solicitudes','historial'];
+  const TABS = ['dashboard','equipos','preventivo','correctivo','solicitudes','historial','personal'];
   document.addEventListener('keydown', function(e){
     if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
