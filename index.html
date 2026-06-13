@@ -2904,13 +2904,11 @@ function cerrarExito(){
       const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
       if(d._ts < localTs - 2000) return;
       // Skip re-render if this is our own write (within 5 seconds)
-      if(window._localWriteTs && d._ts <= window._localWriteTs + 5000){
-        // Don't reset flag — keep blocking for full window
-        return; // Our own write — no need to re-render
+      if(window._localWriteTs && d._ts <= window._localWriteTs + 2000){
+        // Skip re-render for our own writes (2s window)
+        return;
       }
-      if(window._localWriteTs && Date.now() > window._localWriteTs + 5000){
-        window._localWriteTs = null; // Reset after 5s
-      }
+      window._localWriteTs = null; // Reset flag
       if(d.equipos && d.equipos.length){
         DB.equipos = d.equipos.map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
@@ -2930,6 +2928,7 @@ function cerrarExito(){
         if(id==='correctivo')  renderCorrectivos();
         if(id==='equipos')     renderEquipos();
         if(id==='historial')   renderHistorial();
+        if(id==='personal')    renderPersonal();
       }
     });
   }).catch(()=>{
@@ -2937,6 +2936,39 @@ function cerrarExito(){
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     renderDashboard();
   });
+})();
+
+// ── SWIPE NAVIGATION ─────────────────────────────────────────────────────
+(function(){
+  const TABS = ['dashboard','equipos','preventivo','correctivo','solicitudes','historial','personal'];
+  let touchStartX = 0, touchStartY = 0, swipeLocked = false;
+
+  document.addEventListener('touchstart', function(e){
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, {passive: true});
+
+  document.addEventListener('touchend', function(e){
+    if(swipeLocked) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    // Only horizontal swipes (dx > 50px, dy < 80px)
+    if(Math.abs(dx) < 50 || Math.abs(dy) > 80) return;
+    // Don't swipe if touching an input, select, textarea, or card-body
+    const target = e.target;
+    if(target.closest('input,select,textarea,.card-body,.modal,.pin-overlay,.pin-box')) return;
+    const active = document.querySelector('.section.active');
+    if(!active) return;
+    const current = active.id.replace('tab-','');
+    const idx = TABS.indexOf(current);
+    if(idx === -1) return;
+    const next = dx < 0 ? idx + 1 : idx - 1;
+    if(next < 0 || next >= TABS.length) return;
+    swipeLocked = true;
+    const btn = document.querySelector('.nav-btn:nth-child(' + (next+1) + ')');
+    showTab(TABS[next], btn);
+    setTimeout(() => { swipeLocked = false; }, 400);
+  }, {passive: true});
 })();
 
 // ── KEYBOARD NAVIGATION (arrow keys between tabs) ────────────────────────
