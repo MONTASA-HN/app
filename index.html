@@ -58,6 +58,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .card-body{display:none!important}.card-body.open{display:block!important}
 .card-toggle{background:none;border:none;cursor:pointer;padding:4px;color:var(--text3);font-size:20px;transition:transform 0.2s;line-height:1}
 .card-toggle.open{transform:rotate(180deg)}
+.firma-canvas{width:100%;height:160px;border:2px dashed var(--border2);border-radius:var(--radius-sm);background:#fff;touch-action:none;display:block;cursor:crosshair}
+.firma-canvas.firmado{border-color:#27ae60;border-style:solid}
 
 .tec-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:2px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:500;transition:all 0.15s;background:var(--surface);user-select:none}
 .tec-btn.on{background:#1f3864;border-color:#1f3864;color:white}
@@ -1741,6 +1743,65 @@ function filtrarSubgrupo(subId, estado){
   renderEquipos();
 }
 
+// ── FIRMA DIGITAL ────────────────────────────────────────────────────────
+let _firmaDrawing = false;
+
+function _firmaGetPos(e, canvas){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const src = e.touches ? e.touches[0] : e;
+  return {
+    x: (src.clientX - rect.left) * scaleX,
+    y: (src.clientY - rect.top)  * scaleY
+  };
+}
+
+function firmaStart(e, canvas){
+  e.preventDefault();
+  _firmaDrawing = true;
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#1f3864';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const pos = _firmaGetPos(e, canvas);
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+  canvas._ctx = ctx;
+}
+
+function firmaMove(e, canvas){
+  if(!_firmaDrawing || !canvas._ctx) return;
+  e.preventDefault();
+  const pos = _firmaGetPos(e, canvas);
+  canvas._ctx.lineTo(pos.x, pos.y);
+  canvas._ctx.stroke();
+  canvas.classList.add('firmado');
+}
+
+function firmaStop(canvas){
+  _firmaDrawing = false;
+}
+
+function limpiarFirma(canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.classList.remove('firmado');
+}
+
+function getFirmaData(ordenId){
+  const canvas = document.getElementById('firma-' + ordenId);
+  if(!canvas) return '';
+  // Check if canvas has any drawing (not blank)
+  const ctx = canvas.getContext('2d');
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const hasDrawing = pixels.some((v, i) => i % 4 === 3 && v > 0);
+  return hasDrawing ? canvas.toDataURL('image/png') : '';
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
@@ -2126,7 +2187,18 @@ function renderPreventivos(){
       <div style="margin-top:12px">
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
-        : `<button class="btn-finalizar btn-finalizar-prev" onclick="completarPreventivo('${p.id}')">✅ FINALIZAR ORDEN</button>`
+        : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+          <canvas id="firma-${p.id}" class="firma-canvas" width="600" height="160"
+            ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+            onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <span style="font-size:11px;color:var(--text3)">Firme con el dedo en la pantalla</span>
+            <button onclick="event.stopPropagation();limpiarFirma('firma-${p.id}')" style="font-size:12px;color:var(--text2);background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+          </div>
+          ${p.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
+        </div>
+        <button class="btn-finalizar btn-finalizar-prev" onclick="completarPreventivo(\'${p.id}\')">✅ FINALIZAR ORDEN</button>`
       }
       </div>
     </div>
@@ -2211,7 +2283,18 @@ function renderCorrectivos(){
       <div style="margin-top:12px">
       ${c.estado==='Cerrado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
-        : `<button class="btn-finalizar btn-finalizar-corr" onclick="cerrarCorrectivo('${c.id}')">✅ FINALIZAR ORDEN</button>`
+        : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+          <canvas id="firma-${c.id}" class="firma-canvas" width="600" height="160"
+            ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+            onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <span style="font-size:11px;color:var(--text3)">Firme con el dedo en la pantalla</span>
+            <button onclick="event.stopPropagation();limpiarFirma('firma-${c.id}')" style="font-size:12px;color:var(--text2);background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+          </div>
+          ${c.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
+        </div>
+        <button class="btn-finalizar btn-finalizar-corr" onclick="cerrarCorrectivo(\'${c.id}\')">✅ FINALIZAR ORDEN</button>`
       }
       </div>
     </div>
@@ -2467,6 +2550,7 @@ function completarPreventivo(id){
     }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  p.firma = getFirmaData(id);
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
   saveDB();
@@ -2608,6 +2692,7 @@ function cerrarCorrectivo(id){
     }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  c.firma = getFirmaData(id);
   c.estado = 'Cerrado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   saveDB();
