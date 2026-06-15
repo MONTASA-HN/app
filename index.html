@@ -139,7 +139,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .foto-preview{width:100%;border-radius:var(--radius);margin-top:8px;display:none;position:relative}
 .foto-preview img{width:100%;border-radius:var(--radius);border:1px solid var(--border);display:block}
 .foto-preview-del{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.pin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:700;align-items:center;justify-content:center;padding:24px}
+.pin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center;padding:24px}
 .pin-overlay.open{display:flex}
 .pin-box{background:var(--surface);border-radius:var(--radius);padding:24px;width:100%;max-width:320px;text-align:center}
 .pin-title{font-weight:600;font-size:16px;margin-bottom:6px}
@@ -1845,9 +1845,16 @@ function renderEquipos(){
   }
   if(filtEst)  list = list.filter(e=>(e.estado||'DISPONIBLE')===filtEst);
 
-  document.getElementById('eq-count').textContent = list.length + ' equipos';
+  const vBuscarCount = buscar ? (DB.vendidos||[]).filter(v=>
+    (v.codigo||'').toLowerCase().includes(buscar)||
+    (v.serie||'').toLowerCase().includes(buscar)||
+    (v.clienteVenta||'').toLowerCase().includes(buscar)||
+    (v.marca||'').toLowerCase().includes(buscar)||
+    (v.modelo||'').toLowerCase().includes(buscar)
+  ).length : (DB.vendidos||[]).length;
+  document.getElementById('eq-count').textContent = list.length + ' equipos' + (vBuscarCount?' · '+vBuscarCount+' vendidos':'');
   const el = document.getElementById('equipos-list');
-  if(!list.length){ el.innerHTML='<div class="empty">Sin equipos que coincidan</div>'; return; }
+  // Don't return early — vendidos section still needs to render
 
   // Clasificar
   function getTipoGrupo(e){
@@ -1941,47 +1948,55 @@ function renderEquipos(){
     out += `</div>`;
   });
 
-  // ── VENDIDOS section ──────────────────────────────────────────────────
-  if(DB.vendidos && DB.vendidos.length > 0){
-    const vBuscar = (document.getElementById('filt-eq-buscar')?.value||'').toLowerCase();
-    let vList = [...DB.vendidos].sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
+  // ── VENDIDOS section (collapsible, same as other groups) ─────────────
+  {
+    const vBuscar = buscar; // use same search from main filter
+    let vList = [...(DB.vendidos||[])].sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
     if(vBuscar) vList = vList.filter(v=>
       (v.codigo||'').toLowerCase().includes(vBuscar)||
       (v.serie||'').toLowerCase().includes(vBuscar)||
       (v.clienteVenta||'').toLowerCase().includes(vBuscar)||
-      (v.marca||'').toLowerCase().includes(vBuscar)
+      (v.marca||'').toLowerCase().includes(vBuscar)||
+      (v.modelo||'').toLowerCase().includes(vBuscar)
     );
-
-    let vOut = `<div style="margin-top:16px">
-      <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
-        <span style="font-size:20px">🏷️</span>
-        <span style="font-weight:700;font-size:18px;color:#f39c12">Vendidos</span>
-        <span style="font-size:13px;color:var(--text3);margin-left:auto">${vList.length} equipo${vList.length!==1?'s':''}</span>
-      </div>
-      <div>`;
-
-    if(vList.length === 0){
-      vOut += `<div class="empty" style="padding:16px">Sin equipos vendidos${vBuscar?' encontrados':''}</div>`;
-    } else {
-      vList.forEach(v => {
-        vOut += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${v.id}')">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <div>
-              <div style="font-weight:600;font-size:18px;line-height:1.2">${v.codigo}</div>
-              <div style="font-size:13px;color:var(--text2);margin-top:2px">${v.marca||''} ${v.modelo||''}</div>
-              <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
-              ${v.clienteVenta?`<div style="font-size:12px;color:#f39c12;margin-top:2px">👤 ${v.clienteVenta}</div>`:''}
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <span style="font-size:11px;background:#fef3e2;color:#f39c12;padding:3px 8px;border-radius:10px;font-weight:600">VENDIDO</span>
-              <span style="color:var(--text3);font-size:22px">›</span>
-            </div>
+    if(vList.length > 0 || !vBuscar){
+      const subId = 'vnd-sub-vendidos';
+      const isOpen = document.getElementById(subId) ? document.getElementById(subId).style.display !== 'none' : false;
+      out += `<div style="margin-top:16px">
+        <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
+          <span style="font-size:20px">🏷️</span>
+          <span style="font-weight:700;font-size:18px;color:#f39c12">Vendidos</span>
+          <span style="font-size:13px;color:var(--text3);margin-left:8px">${vList.length} equipo${vList.length!==1?'s':''}</span>
+        </div>
+        <div>
+          <div onclick="toggleSubgrupo('${subId}')" style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--surface2);border-radius:var(--radius-sm);cursor:pointer;border:0.5px solid var(--border);margin-top:8px">
+            <span style="font-size:16px;font-weight:600;color:var(--text)">Vendidos</span>
+            <span style="font-size:13px;color:var(--text3);margin-left:4px">${vList.length} eq.</span>
+            <span id="${subId}-arrow" style="margin-left:auto;font-size:18px;color:var(--text3);transition:transform 0.2s">${isOpen?'▲':'▼'}</span>
           </div>
-        </div>`;
-      });
+          <div id="${subId}" style="display:${isOpen?'block':'none'}">`;
+      if(vList.length === 0){
+        out += `<div class="empty" style="padding:16px">Sin equipos vendidos${vBuscar?' encontrados':''}</div>`;
+      } else {
+        vList.forEach(v => {
+          out += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${v.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div>
+                <div style="font-weight:600;font-size:18px;line-height:1.2">${v.codigo}</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:2px">${v.marca||''} ${v.modelo||''}</div>
+                <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
+                ${v.clienteVenta?`<div style="font-size:12px;color:#f39c12;margin-top:2px">👤 ${v.clienteVenta}</div>`:''}
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                <span style="font-size:11px;background:#fef3e2;color:#f39c12;padding:3px 8px;border-radius:10px;font-weight:600">VENDIDO</span>
+                <span style="color:var(--text3);font-size:22px">›</span>
+              </div>
+            </div>
+          </div>`;
+        });
+      }
+      out += `</div></div></div>`;
     }
-    vOut += `</div></div>`;
-    out += vOut;
   }
 
   el.innerHTML = out;
@@ -2919,47 +2934,55 @@ function renderSolicitudes(){
     out += activas.map(renderItem).join('');
   }
   if(!out) out = '<div class="empty">Sin órdenes activas</div>';
-  // ── VENDIDOS section ──────────────────────────────────────────────────
-  if(DB.vendidos && DB.vendidos.length > 0){
-    const vBuscar = (document.getElementById('filt-eq-buscar')?.value||'').toLowerCase();
-    let vList = [...DB.vendidos].sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
+  // ── VENDIDOS section (collapsible, same as other groups) ─────────────
+  {
+    const vBuscar = buscar; // use same search from main filter
+    let vList = [...(DB.vendidos||[])].sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
     if(vBuscar) vList = vList.filter(v=>
       (v.codigo||'').toLowerCase().includes(vBuscar)||
       (v.serie||'').toLowerCase().includes(vBuscar)||
       (v.clienteVenta||'').toLowerCase().includes(vBuscar)||
-      (v.marca||'').toLowerCase().includes(vBuscar)
+      (v.marca||'').toLowerCase().includes(vBuscar)||
+      (v.modelo||'').toLowerCase().includes(vBuscar)
     );
-
-    let vOut = `<div style="margin-top:16px">
-      <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
-        <span style="font-size:20px">🏷️</span>
-        <span style="font-weight:700;font-size:18px;color:#f39c12">Vendidos</span>
-        <span style="font-size:13px;color:var(--text3);margin-left:auto">${vList.length} equipo${vList.length!==1?'s':''}</span>
-      </div>
-      <div>`;
-
-    if(vList.length === 0){
-      vOut += `<div class="empty" style="padding:16px">Sin equipos vendidos${vBuscar?' encontrados':''}</div>`;
-    } else {
-      vList.forEach(v => {
-        vOut += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${v.id}')">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <div>
-              <div style="font-weight:600;font-size:18px;line-height:1.2">${v.codigo}</div>
-              <div style="font-size:13px;color:var(--text2);margin-top:2px">${v.marca||''} ${v.modelo||''}</div>
-              <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
-              ${v.clienteVenta?`<div style="font-size:12px;color:#f39c12;margin-top:2px">👤 ${v.clienteVenta}</div>`:''}
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <span style="font-size:11px;background:#fef3e2;color:#f39c12;padding:3px 8px;border-radius:10px;font-weight:600">VENDIDO</span>
-              <span style="color:var(--text3);font-size:22px">›</span>
-            </div>
+    if(vList.length > 0 || !vBuscar){
+      const subId = 'vnd-sub-vendidos';
+      const isOpen = document.getElementById(subId) ? document.getElementById(subId).style.display !== 'none' : false;
+      out += `<div style="margin-top:16px">
+        <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
+          <span style="font-size:20px">🏷️</span>
+          <span style="font-weight:700;font-size:18px;color:#f39c12">Vendidos</span>
+          <span style="font-size:13px;color:var(--text3);margin-left:8px">${vList.length} equipo${vList.length!==1?'s':''}</span>
+        </div>
+        <div>
+          <div onclick="toggleSubgrupo('${subId}')" style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--surface2);border-radius:var(--radius-sm);cursor:pointer;border:0.5px solid var(--border);margin-top:8px">
+            <span style="font-size:16px;font-weight:600;color:var(--text)">Vendidos</span>
+            <span style="font-size:13px;color:var(--text3);margin-left:4px">${vList.length} eq.</span>
+            <span id="${subId}-arrow" style="margin-left:auto;font-size:18px;color:var(--text3);transition:transform 0.2s">${isOpen?'▲':'▼'}</span>
           </div>
-        </div>`;
-      });
+          <div id="${subId}" style="display:${isOpen?'block':'none'}">`;
+      if(vList.length === 0){
+        out += `<div class="empty" style="padding:16px">Sin equipos vendidos${vBuscar?' encontrados':''}</div>`;
+      } else {
+        vList.forEach(v => {
+          out += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${v.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div>
+                <div style="font-weight:600;font-size:18px;line-height:1.2">${v.codigo}</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:2px">${v.marca||''} ${v.modelo||''}</div>
+                <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
+                ${v.clienteVenta?`<div style="font-size:12px;color:#f39c12;margin-top:2px">👤 ${v.clienteVenta}</div>`:''}
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                <span style="font-size:11px;background:#fef3e2;color:#f39c12;padding:3px 8px;border-radius:10px;font-weight:600">VENDIDO</span>
+                <span style="color:var(--text3);font-size:22px">›</span>
+              </div>
+            </div>
+          </div>`;
+        });
+      }
+      out += `</div></div></div>`;
     }
-    vOut += `</div></div>`;
-    out += vOut;
   }
 
   el.innerHTML = out;
@@ -3105,6 +3128,7 @@ function cerrarExito(){
     console.warn('Firebase SDK no disponible — modo offline');
     loadDB();
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     renderDashboard();
     return;
   }
@@ -3135,7 +3159,8 @@ function cerrarExito(){
           });
         }
         if(remote.preventivos)    DB.preventivos    = remote.preventivos;
-        if(remote.vendidos)       DB.vendidos       = remote.vendidos||[];
+        if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
+        else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
@@ -3150,6 +3175,7 @@ function cerrarExito(){
       saveDB();
     }
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     renderDashboard();
 
     FB_REF.on('value', snap => {
@@ -3170,11 +3196,12 @@ function cerrarExito(){
         });
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
-      if(d.vendidos)       DB.vendidos       = d.vendidos||[];
+      if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
       if(active){
         const id=active.id.replace('tab-','');
@@ -3189,6 +3216,7 @@ function cerrarExito(){
   }).catch(()=>{
     loadDB();
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     renderDashboard();
   });
 })();
