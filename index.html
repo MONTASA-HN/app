@@ -1653,7 +1653,8 @@ function abrirModalVendido(id){
 
   const modal = document.createElement('div');
   modal.id = 'modal-vendido';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:700;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
+  // z-index:850 — por encima del modal base (700) pero debajo del PIN (900)
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:850;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
   modal.innerHTML = `
     <div style="background:var(--surface);border-radius:var(--radius);padding:20px;width:100%;max-width:480px;margin:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -1670,28 +1671,23 @@ function abrirModalVendido(id){
       <div style="border-top:1px solid var(--border);padding-top:14px">
         <div class="form-group">
           <label>Fecha de venta</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="date" id="vnd-fecha" value="${v.fechaVenta||''}" 
-              style="flex:1;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
-            <button class="btn btn-sm" style="white-space:nowrap" onclick="guardarCampoVendido('${v.id}','fechaVenta',document.getElementById('vnd-fecha').value)">🔒 Guardar</button>
-          </div>
+          <input type="date" id="vnd-fecha" value="${v.fechaVenta||''}"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
         </div>
         <div class="form-group">
           <label>Lugar de venta</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="vnd-lugar" value="${v.lugarVenta||''}" placeholder="Ciudad / Lugar"
-              style="flex:1;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
-            <button class="btn btn-sm" style="white-space:nowrap" onclick="guardarCampoVendido('${v.id}','lugarVenta',document.getElementById('vnd-lugar').value)">🔒 Guardar</button>
-          </div>
+          <input type="text" id="vnd-lugar" value="${v.lugarVenta||''}" placeholder="Ciudad / Lugar"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
         </div>
         <div class="form-group">
           <label>Nombre del cliente</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="vnd-cliente" value="${v.clienteVenta||''}" placeholder="Nombre del cliente"
-              style="flex:1;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
-            <button class="btn btn-sm" style="white-space:nowrap" onclick="guardarCampoVendido('${v.id}','clienteVenta',document.getElementById('vnd-cliente').value)">🔒 Guardar</button>
-          </div>
+          <input type="text" id="vnd-cliente" value="${v.clienteVenta||''}" placeholder="Nombre del cliente"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
         </div>
+        <button onclick="guardarTodoVendido('${v.id}')"
+          style="width:100%;margin-top:8px;padding:14px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:600;cursor:pointer">
+          🔒 Guardar cambios
+        </button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -1701,6 +1697,20 @@ function abrirModalVendido(id){
 function cerrarModalVendido(){
   const m = document.getElementById('modal-vendido');
   if(m) m.remove();
+}
+
+function guardarTodoVendido(id){
+  solicitarPINAccion(()=>{
+    const v = (DB.vendidos||[]).find(x=>x.id===id);
+    if(!v) return;
+    v.fechaVenta   = (document.getElementById('vnd-fecha')?.value||'').trim();
+    v.lugarVenta   = (document.getElementById('vnd-lugar')?.value||'').trim();
+    v.clienteVenta = (document.getElementById('vnd-cliente')?.value||'').trim();
+    saveDB();
+    cerrarModalVendido();
+    renderEquipos();
+    toast('Equipo ' + v.codigo + ' actualizado ✓');
+  }, '🔒 Guardar datos de venta', 'Ingresa tu PIN para guardar los cambios');
 }
 
 function guardarCampoVendido(id, campo, valor){
