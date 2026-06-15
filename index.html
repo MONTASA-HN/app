@@ -716,6 +716,7 @@ const PIN_CORRECTO = '1624';
 let pinActual = '';
 let pinCallback = null;
 let DB = {equipos:[], preventivos:[], correctivos:[], vendidos:[]};
+let filtroSubgrupo = {}; // subId -> estado filter ('DISPONIBLE'|'EN RENTA'|'MAL ESTADO'|null)
 let modalEquipoId = null;
 
 function saveDB(){
@@ -1725,6 +1726,21 @@ function guardarCampoVendido(id, campo, valor){
   }, '🔒 Editar equipo vendido', 'Solo supervisores pueden editar estos datos');
 }
 
+function filtrarSubgrupo(subId, estado){
+  // Toggle: si ya está activo ese filtro, quitarlo; si no, activarlo
+  if(filtroSubgrupo[subId] === estado){
+    delete filtroSubgrupo[subId]; // quitar filtro → mostrar todos
+  } else {
+    filtroSubgrupo[subId] = estado;
+    // Asegurar que el subgrupo esté abierto
+    const el = document.getElementById(subId);
+    const arr = document.getElementById('arr-'+subId);
+    if(el) el.style.display = 'block';
+    if(arr) arr.style.transform = 'rotate(180deg)';
+  }
+  renderEquipos();
+}
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(){
@@ -1929,15 +1945,17 @@ function renderEquipos(){
           <span style="font-size:16px;font-weight:600;color:var(--text)">${sub}</span>
           <span style="font-size:13px;color:var(--text3)">${items.length} eq.</span>
           <div style="margin-left:auto;display:flex;gap:5px;align-items:center">
-            ${dispS>0?`<span style="background:#c8edcc;color:#1a5c1a;padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500">${dispS} disp.</span>`:''}
-            ${rentaS>0?`<span style="background:#fde5c0;color:#8a4800;padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500">${rentaS} renta</span>`:''}
-            ${malS>0?`<span style="background:#f8c0c0;color:#7a1515;padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500">${malS} inact.</span>`:''}
+            ${dispS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','DISPONIBLE')" style="background:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'#1a5c1a':'#c8edcc'};color:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'white':'#1a5c1a'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${dispS} disp.</button>`:''}
+            ${rentaS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN RENTA')" style="background:${filtroSubgrupo['${subId}']==='EN RENTA'?'#8a4800':'#fde5c0'};color:${filtroSubgrupo['${subId}']==='EN RENTA'?'white':'#8a4800'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${rentaS} renta</button>`:''}
+            ${malS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','MAL ESTADO')" style="background:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'#7a1515':'#f8c0c0'};color:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'white':'#7a1515'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${malS} inact.</button>`:''}
             <span id="arr-${subId}" style="color:var(--text3);font-size:14px;transition:transform 0.2s">▼</span>
           </div>
         </div>
         <div id="${subId}" style="display:none">`;
 
-      items.forEach(e=>{
+      const filtroActivo = filtroSubgrupo[subId] || null;
+      const itemsFiltrados = filtroActivo ? items.filter(e=>(e.estado||'DISPONIBLE')===filtroActivo) : items;
+      itemsFiltrados.forEach(e=>{
         const est = e.estado||'DISPONIBLE';
         out += `<div class="${cardClass(est)}" onclick="abrirModal('${e.id}')" style="padding:14px 16px;margin-top:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
