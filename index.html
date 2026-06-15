@@ -716,7 +716,8 @@ const PIN_CORRECTO = '1624';
 let pinActual = '';
 let pinCallback = null;
 let DB = {equipos:[], preventivos:[], correctivos:[], vendidos:[]};
-let filtroSubgrupo = {}; // subId -> estado filter ('DISPONIBLE'|'EN RENTA'|'MAL ESTADO'|null)
+let filtroSubgrupo = {}; // subId -> estado filter
+let openSubgrupos = new Set(); // track which subgroups are open
 let modalEquipoId = null;
 
 function saveDB(){
@@ -1733,10 +1734,7 @@ function filtrarSubgrupo(subId, estado){
   } else {
     filtroSubgrupo[subId] = estado;
     // Asegurar que el subgrupo esté abierto
-    const el = document.getElementById(subId);
-    const arr = document.getElementById('arr-'+subId);
-    if(el) el.style.display = 'block';
-    if(arr) arr.style.transform = 'rotate(180deg)';
+    openSubgrupos.add(subId);
   }
   renderEquipos();
 }
@@ -1989,7 +1987,7 @@ function renderEquipos(){
     );
     if(vList.length > 0 || !vBuscar){
       const subId = 'vnd-sub-vendidos';
-      const isOpen = document.getElementById(subId) ? document.getElementById(subId).style.display !== 'none' : false;
+      const isOpen = openSubgrupos.has(subId);
       out += `<div style="margin-top:16px">
         <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
           <span style="font-size:20px">🏷️</span>
@@ -2036,6 +2034,7 @@ function toggleSubgrupo(id){
   const open = el.style.display === 'block';
   el.style.display = open ? 'none' : 'block';
   if(arr) arr.style.transform = open ? '' : 'rotate(180deg)';
+  if(open) openSubgrupos.delete(id); else openSubgrupos.add(id);
 }
 
 function renderPreventivos(){
@@ -2975,7 +2974,7 @@ function renderSolicitudes(){
     );
     if(vList.length > 0 || !vBuscar){
       const subId = 'vnd-sub-vendidos';
-      const isOpen = document.getElementById(subId) ? document.getElementById(subId).style.display !== 'none' : false;
+      const isOpen = openSubgrupos.has(subId);
       out += `<div style="margin-top:16px">
         <div style="display:flex;align-items:center;gap:8px;padding:14px 4px 8px;border-bottom:2px solid #f39c12">
           <span style="font-size:20px">🏷️</span>
