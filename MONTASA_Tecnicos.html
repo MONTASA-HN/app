@@ -387,6 +387,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <script>
 const LS_KEY = 'montasa_tec_v1';
 const PIN_CORRECTO = '1624';
+const _SESSION_ID = Math.random().toString(36).slice(2);
 let pinActual = '';
 let pinCallback = null;
 let DB = {preventivos:[], correctivos:[], ordenesCerradas:[], solicitudes:[], equipos:[]};
@@ -420,7 +421,8 @@ function saveDB(){
         preventivos:     DB.preventivos,
         correctivos:     DB.correctivos,
         ordenesCerradas: DB.ordenesCerradas||[],
-        _ts: ts
+        _ts: ts,
+        _sid: _SESSION_ID
       });
     }
   }catch(e){}
@@ -1773,15 +1775,14 @@ function getTecnicos(gridId){
     FB_REF.on('value', snap=>{
       const d = snap.val();
       if(!d||!d._ts) return;
-      // Only skip if this exact write came from THIS device (within 500ms)
-      if(window._localWriteTs && Math.abs(d._ts - window._localWriteTs) < 500) return;
-      window._localWriteTs = null;
+      const ownWrite = d._sid && d._sid === _SESSION_ID;
       if(d.preventivos)     DB.preventivos     = d.preventivos;
       if(d.correctivos)     DB.correctivos     = d.correctivos;
       if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
       if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      if(ownWrite) return; // Our own write — DB updated, skip re-render
       const active=document.querySelector('.section.active');
       if(!active) return;
       const id=active.id.replace('tab-','');
