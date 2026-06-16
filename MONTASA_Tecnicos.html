@@ -1096,9 +1096,9 @@ function completarPreventivo(id){
   p.firma = getFirmaData(id);
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
-  saveDB();
   registrarOrdenCerrada(p, 'Preventivo');
-  renderPreventivos(); renderDashboard();
+  saveDB();
+  renderPreventivos();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
 }
 
@@ -1401,8 +1401,8 @@ function cerrarCorrectivo(id){
   c.firma = getFirmaData(id);
   c.estado = 'Cerrado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
-  saveDB();
   registrarOrdenCerrada(c, 'Correctivo');
+  saveDB();
   renderCorrectivos(); renderDashboard();
   toast('Orden ' + (c.correlativo||'') + ' cerrada y guardada en Excel');
 }
@@ -1773,7 +1773,8 @@ function getTecnicos(gridId){
     FB_REF.on('value', snap=>{
       const d = snap.val();
       if(!d||!d._ts) return;
-      if(window._localWriteTs && d._ts<=window._localWriteTs+2000) return;
+      // Only skip if this exact write came from THIS device (within 500ms)
+      if(window._localWriteTs && Math.abs(d._ts - window._localWriteTs) < 500) return;
       window._localWriteTs = null;
       if(d.preventivos)     DB.preventivos     = d.preventivos;
       if(d.correctivos)     DB.correctivos     = d.correctivos;
