@@ -707,26 +707,31 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   if(!orden) return;
   // ── VALIDACIÓN 3: si se cambia fechaFin, verificar que no sea antes de fechaInicio ──
   if(campo === 'fechaFin' && valor && orden.fechaInicio){
-    const err = validarFechasOrden(orden.fechaInicio, valor);
-    if(err){
-      alert('⚠️ ' + err);
-      // Reset the input to empty
-      const cb = document.getElementById('cb-'+id);
-      if(cb){
-        const dateIn = cb.querySelectorAll('input[type="date"]');
-        const timeIn = cb.querySelectorAll('input[type="time"]');
-        // fechaFin inputs are the second pair
-        if(dateIn[1]) dateIn[1].value = '';
-        if(timeIn[1]) timeIn[1].value = '';
+    // Solo validar si ambas fechas tienen hora (no solo la parte date)
+    const finTieneHora = valor.includes('T') && valor.split('T')[1] && valor.split('T')[1] !== '00:00';
+    const iniTieneHora = orden.fechaInicio.includes('T') && orden.fechaInicio.split('T')[1] && orden.fechaInicio.split('T')[1] !== '00:00';
+    if(finTieneHora || iniTieneHora){
+      const err = validarFechasOrden(orden.fechaInicio, valor);
+      if(err){
+        alert('⚠️ ' + err);
+        const cb = document.getElementById('cb-'+id);
+        if(cb){
+          const timeIn = cb.querySelectorAll('input[type="time"]');
+          if(timeIn[1]) timeIn[1].value = '';
+        }
+        return;
       }
-      return;
     }
   }
   if(campo === 'fechaInicio' && valor && orden.fechaFin){
-    const err = validarFechasOrden(valor, orden.fechaFin);
-    if(err){
-      alert('⚠️ ' + err);
-      return;
+    const finTieneHora2 = orden.fechaFin.includes('T') && orden.fechaFin.split('T')[1] && orden.fechaFin.split('T')[1] !== '00:00';
+    const iniTieneHora2 = valor.includes('T') && valor.split('T')[1] && valor.split('T')[1] !== '00:00';
+    if(finTieneHora2 || iniTieneHora2){
+      const err = validarFechasOrden(valor, orden.fechaFin);
+      if(err){
+        alert('⚠️ ' + err);
+        return;
+      }
     }
   }
   orden[campo] = valor;
@@ -885,11 +890,22 @@ function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId)
 
 
 function validarFechasOrden(fechaInicio, fechaFin){
-  if(!fechaInicio || !fechaFin) return null; // OK — campos vacíos permitidos
-  const ini = new Date(fechaInicio).getTime();
-  const fin = new Date(fechaFin).getTime();
-  if(isNaN(ini) || isNaN(fin)) return null;
-  if(fin < ini) return 'La fecha/hora de finalización no puede ser anterior a la de inicio';
+  if(!fechaInicio || !fechaFin) return null; // campos vacíos: no validar
+  // Separar fecha y hora
+  const [fechaIniStr, horaIniStr] = fechaInicio.split('T');
+  const [fechaFinStr, horaFinStr] = fechaFin.split('T');
+  if(!fechaIniStr || !fechaFinStr) return null;
+  const dIni = new Date(fechaIniStr).getTime();
+  const dFin = new Date(fechaFinStr).getTime();
+  if(isNaN(dIni) || isNaN(dFin)) return null;
+  // Regla 1: fecha fin no puede ser anterior a fecha inicio
+  if(dFin < dIni) return 'La fecha de finalización no puede ser anterior a la fecha de inicio';
+  // Regla 2: mismo día → hora fin debe ser ESTRICTAMENTE mayor que hora inicio
+  if(dFin === dIni){
+    const hIni = horaIniStr || '00:00';
+    const hFin = horaFinStr || '00:00';
+    if(hFin <= hIni) return 'En el mismo día, la hora de finalización debe ser mayor que la hora de inicio';
+  }
   return null;
 }
 
