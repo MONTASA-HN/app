@@ -47,7 +47,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 .bottom-nav{display:none}
 /* FAB Navigation */
-.fab-wrap{position:fixed;top:44px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.fab-wrap{position:fixed;top:98px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 .fab-main{width:64px;height:64px;border-radius:50%;background:var(--accent);color:white;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 16px rgba(31,56,100,0.35);display:flex;align-items:center;justify-content:center;transition:transform 0.2s,box-shadow 0.2s;-webkit-tap-highlight-color:transparent}
 .fab-main:active{transform:scale(0.93)}
 .fab-main.open{transform:rotate(45deg)}
@@ -596,13 +596,16 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group">
         <label>Tipo de orden</label>
         <select id="sol-tipo" onchange="solTipoChange()">
-          <option value="correctivo">🔧 Correctivo</option>
-          <option value="preventivo">📅 Preventivo</option>
+          <option value="correctivo" data-depto="mantenimiento">🔧 Correctivo</option>
+          <option value="preventivo" data-depto="mantenimiento">📅 Preventivo</option>
+          <option value="renta" data-depto="logistica" style="display:none">🚛 Renta</option>
+          <option value="entrega_retiro" data-depto="logistica" style="display:none">🔄 Entrega / Retiro de equipo</option>
+          <option value="apoyo_mantenimiento" data-depto="logistica" style="display:none">🔩 Apoyo a mantenimiento</option>
         </select>
       </div>
 
-      <!-- 2. Prioridad -->
-      <div class="form-group">
+      <!-- 2. Prioridad (solo mantenimiento) -->
+      <div class="form-group" id="sol-prioridad-group">
         <label>Prioridad</label>
         <select id="sol-prioridad">
           <option value="Normal">Normal</option>
@@ -1950,7 +1953,7 @@ function renderLogistica(){
     el.innerHTML = '<div class="empty">Sin órdenes logísticas</div>';
     return;
   }
-  const tipoLabels = {renta:'🚛 Renta', retiro_entrega:'🔄 Retiro/Entrega', apoyo_mantenimiento:'🔩 Apoyo Mantenimiento'};
+  const tipoLabels = {renta:'🚛 Renta', entrega_retiro:'🔄 Entrega/Retiro', apoyo_mantenimiento:'🔩 Apoyo Mantenimiento'};
   el.innerHTML = list.map(o => {
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (o.clienteNombre||'—');
@@ -3051,10 +3054,19 @@ function solDeptoChange(){
   if(mntGrid) mntGrid.style.display  = depto === 'mantenimiento' ? '' : 'none';
   if(logGrid) logGrid.style.display  = depto === 'logistica'     ? '' : 'none';
 
+  // Resetear prioridad a Normal cuando logística
+  if(depto==='logistica'){
+    const prioSel = document.getElementById('sol-prioridad');
+    if(prioSel) prioSel.value = 'Normal';
+  }
   // Desmarcar todos los checkboxes al cambiar departamento
   document.querySelectorAll('#sol-tecnicos-grid input, #sol-logistica-grid input').forEach(cb => cb.checked = false);
   const btn = document.getElementById('sol-wa-btn');
   if(btn){ btn.textContent = '📱 Enviar por WhatsApp'; btn.disabled = false; }
+
+  // Ocultar prioridad en logística
+  const prioGroup = document.getElementById('sol-prioridad-group');
+  if(prioGroup) prioGroup.style.display = depto==='logistica' ? 'none' : '';
 
   solTipoChange(); // actualizar campos condicionales
 }
@@ -3164,7 +3176,7 @@ function enviarSolicitudWA(){
   // --- Mensaje WhatsApp sin link ---
   const tipoLabels = {
     correctivo: 'Correctivo', preventivo: 'Preventivo',
-    renta: 'Renta', retiro_entrega: 'Retiro/Entrega', apoyo_mantenimiento: 'Apoyo a Mantenimiento'
+    renta: 'Renta', entrega_retiro: 'Entrega/Retiro', apoyo_mantenimiento: 'Apoyo a Mantenimiento'
   };
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
