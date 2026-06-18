@@ -873,7 +873,12 @@ function loadDB(){
   }
   // Initialize vendidos if not present
   if(!DB.vendidos) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
-  if(!DB.logistica) DB.logistica = [];
+  // logistica se guarda en clave separada para evitar conflictos de timestamp
+  try{
+    const logCache = localStorage.getItem('montasa_log_cache');
+    if(logCache) DB.logistica = JSON.parse(logCache);
+    else DB.logistica = [];
+  }catch(e){ DB.logistica = []; }
 }
 
 function toast(msg, err=false){
@@ -3552,7 +3557,10 @@ function cerrarExito(){
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
-        if(remote.logistica)      DB.logistica      = remote.logistica||[];
+        if(remote.logistica){
+          DB.logistica = remote.logistica||[];
+          try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+        }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else {
@@ -3566,7 +3574,10 @@ function cerrarExito(){
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     // logística siempre desde Firebase — su _ts puede diferir del main app
-    if(snap.val() && snap.val().logistica) DB.logistica = snap.val().logistica||[];
+    if(snap.val() && snap.val().logistica){
+      DB.logistica = snap.val().logistica||[];
+      try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+    }
     renderDashboard();
     updateFabActive('dashboard');
 
@@ -3590,7 +3601,10 @@ function cerrarExito(){
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
-      if(d.logistica)      DB.logistica      = d.logistica||[];
+      if(d.logistica){
+        DB.logistica = d.logistica||[];
+        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+      }
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
