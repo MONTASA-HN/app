@@ -1945,36 +1945,31 @@ function renderLogistica(){
   const el = document.getElementById('logistica-list');
   if(!el) return;
   const list = [...(DB.logistica||[])].sort((a,b)=>{
-    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const na = parseInt((a.correlativo||''). replace(/[^0-9]/g,''))||0;
+    const nb = parseInt((b.correlativo||''). replace(/[^0-9]/g,''))||0;
     return nb - na;
   });
-  if(!list.length){
-    el.innerHTML = '<div class="empty">Sin órdenes logísticas</div>';
-    return;
-  }
-  const tipoLabels = {renta:'🚛 Renta', entrega_retiro:'🔄 Entrega/Retiro', apoyo_mantenimiento:'🔩 Apoyo Mantenimiento'};
+  if(!list.length){ el.innerHTML = '<div class="empty">Sin órdenes logísticas</div>'; return; }
+  const tipoLabels = {renta:'🚛 Renta', entrega_retiro:'🔄 Entrega/Retiro', apoyo_mantenimiento:'🔩 Apoyo Mant.'};
   el.innerHTML = list.map(o => {
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
-    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (o.clienteNombre||'—');
+    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||''): (o.clienteNombre||'—');
     const tipoLbl = tipoLabels[o.tipoLogistica] || o.tipoLogistica || 'Logística';
-    const estadoColor = o.cerrado ? '#27ae60' : o.estado==='En proceso' ? '#f39c12' : '#e74c3c';
-    const estadoLbl   = o.cerrado ? 'Cerrado' : (o.estado||'Pendiente');
-    return `<div class="card" style="padding:14px 16px;margin-bottom:10px;border-left:4px solid #2d6a9f">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${o.correlativo||'—'}</span>
-            <span style="font-size:11px;background:#f0f0f0;color:#555;padding:2px 8px;border-radius:10px">${tipoLbl}</span>
-          </div>
-          <div style="font-size:15px;font-weight:600">${o.descripcion||'Sin descripción'}</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:2px">${eqLabel}</div>
-          ${o.operador?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 Operador: ${o.operador}</div>`:''}
-          <div style="font-size:12px;color:var(--text3)">👷 ${o.tecnico||'Sin asignar'}</div>
-        </div>
-        <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:4px 10px;border-radius:10px;font-weight:600;white-space:nowrap">${estadoLbl}</span>
-      </div>
-    </div>`;
+    const ec = o.cerrado?'#27ae60':o.estado==='Cancelado'?'#888':o.estado==='En proceso'?'#f39c12':'#e74c3c';
+    const el2 = o.cerrado?'Cerrado':(o.estado||'Pendiente');
+    const hi  = o.fechaInicio ? o.fechaInicio.slice(11,16) : '—';
+    const op  = o.operador ? '<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+o.operador+'</span>' : '';
+    return '<div class="card" style="padding:12px 14px;margin-bottom:8px;border-left:4px solid #2d6a9f">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+      +'<span style="font-size:12px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">'+(o.correlativo||'—')+'</span>'
+      +'<span style="font-size:11px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:10px;font-weight:700">'+el2+'</span>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6">'
+      +'<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>'
+      +'<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>'
+      +op
+      +'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>'
+      +'</div></div>';
   }).join('');
 }
 
