@@ -3581,6 +3581,22 @@ function cerrarExito(){
     renderDashboard();
     updateFabActive('dashboard');
 
+    // Listener dedicado para logística — siempre actualizado independientemente del _ts
+    window._fbDB.ref('montasa/logistica').on('value', snapLog => {
+      const logData = snapLog.val();
+      if(Array.isArray(logData)){
+        DB.logistica = logData;
+        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(logData)); }catch(e){}
+        const active = document.querySelector('.section.active');
+        if(active){
+          const tabId = active.id.replace('tab-','');
+          if(tabId==='historial'){ fillHistSel(); renderHistorial(); }
+          if(tabId==='logistica') renderLogistica();
+          if(tabId==='dashboard') renderDashboard();
+        }
+      }
+    });
+
     FB_REF.on('value', snap => {
       const d = snap.val();
       if(!d || !d._ts) return;

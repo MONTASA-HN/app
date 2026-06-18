@@ -335,14 +335,16 @@ function renderDashboardLog(){
   const diaAnio = Math.floor((now - new Date(now.getFullYear(),0,0))/86400000);
   const fraseDia = frases[diaAnio % frases.length];
 
-  const abiertas  = (DB.logistica||[]).filter(o=>!o.cerrado);
+  const abiertas  = (DB.logistica||[]).filter(o=>!o.cerrado && o.estado!=='Cancelado');
   const pend      = abiertas.filter(o=>o.estado==='Pendiente').length;
   const proc      = abiertas.filter(o=>o.estado==='En proceso').length;
   const esp       = abiertas.filter(o=>o.estado==='Cancelado').length;
 
   const cerradasMes = (DB.logistica||[]).filter(o=>{
-    if(!o.cerrado) return false;
-    const f = new Date(o.fechaFin||o.fecha);
+    if(!o.cerrado && o.estado!=='Cancelado') return false;
+    const fechaRef = o.fechaCierre||o.fechaCancelado||o.fechaFin||o.fecha;
+    if(!fechaRef) return false;
+    const f = new Date(fechaRef);
     return f.getMonth()===mes && f.getFullYear()===anio;
   }).length;
 
