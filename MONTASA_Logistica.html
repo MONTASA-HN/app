@@ -436,6 +436,7 @@ function renderOrdenesLog(){
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
+        ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
         <!-- Estado -->
         <div class="form-group"><label>Estado</label>
@@ -444,6 +445,7 @@ function renderOrdenesLog(){
             <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
             <option ${o.estado==='Cancelado'?'selected':''}>Cancelado</option>
           </select>
+          ${o.estado==='Cancelado'?'<div style="font-size:12px;color:#e74c3c;margin-top:4px">⚠️ Orden cancelada — campos bloqueados</div>':''}
         </div>
         <!-- Fechas -->
         <div class="form-group"><label>Fecha inicio</label>
@@ -477,6 +479,12 @@ function renderOrdenesLog(){
           <input type="number" value="${o.horometro||''}" placeholder="0"
             onchange="event.stopPropagation();actualizarLog('${o.id}','horometro',this.value)" oninput="event.stopPropagation()">
         </div>`}
+        <!-- Operador -->
+        <div class="form-group"><label>Operador asignado</label>
+          <input type="text" value="${o.operador||''}" placeholder="Nombre del operador..."
+            onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)"
+            oninput="event.stopPropagation()">
+        </div>
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
@@ -502,12 +510,10 @@ function renderOrdenesLog(){
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>
         <!-- Botones acción -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
-          <button style="padding:12px;background:#e74c3c;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer"
-            onclick="cancelarOrdenLog('${o.id}')">❌ CANCELAR</button>
-          <button class="btn-finalizar" style="background:#2d6a9f;margin-top:0"
-            onclick="cerrarOrdenLog('${o.id}')">✅ CERRAR</button>
-        </div>
+        <button class="btn-finalizar" style="margin-top:14px;background:${o.estado==='Cancelado'?'#888':'#2d6a9f'}"
+          onclick="cerrarOrdenLog('${o.id}')">
+          ${o.estado==='Cancelado'?'✅ CERRAR ORDEN (Cancelada)':'✅ CERRAR ORDEN'}
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -584,26 +590,33 @@ function cerrarOrdenLog(id){
   const o = (DB.logistica||[]).find(x=>x.id===id);
   if(!o) return;
   const faltantes = [];
-  if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
-  if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
-  if(!o.descripcion)  faltantes.push('Descripción / Trabajo realizado');
-  if(o.tipoLogistica==='renta'){
-    if(!o.horometroSalida) faltantes.push('Horómetro de salida');
-    if(!o.horometroRetorno) faltantes.push('Horómetro de retorno');
-    if(o.horometroSalida && o.horometroRetorno &&
-       parseFloat(o.horometroRetorno) < parseFloat(o.horometroSalida)){
-      faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
-    }
-  } else {
-    if(!o.horometro) {} // no es obligatorio para otros tipos
+  const esCancelado = o.estado === 'Cancelado';
+  if(!esCancelado){
+    if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
+    if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
+    if(!o.descripcion)  faltantes.push('Descripción / Trabajo realizado');
   }
-  const firma = getFirmaData('firma-log-'+id);
-  if(!firma) faltantes.push('Firma digital del cliente');
+  if(!esCancelado){
+    if(o.tipoLogistica==='renta'){
+      if(!o.horometroSalida) faltantes.push('Horómetro de salida');
+      if(!o.horometroRetorno) faltantes.push('Horómetro de retorno');
+      if(o.horometroSalida && o.horometroRetorno &&
+         parseFloat(o.horometroRetorno) < parseFloat(o.horometroSalida)){
+        faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
+      }
+    }
+  }
+  // Try canvas first, then use saved firma
+  const firmaCanvas = getFirmaData('firma-log-'+id);
+  const firma = firmaCanvas || o.firma || '';
+  if(!esCancelado && !firma) faltantes.push('Firma digital del cliente');
   if(faltantes.length){ alert('No se puede cerrar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
-  const errFecha = validarFechasOrden(o.fechaInicio, o.fechaFin);
-  if(errFecha){ alert('⚠️ '+errFecha); return; }
+  if(!esCancelado){
+    const errFecha = validarFechasOrden(o.fechaInicio, o.fechaFin);
+    if(errFecha){ alert('⚠️ '+errFecha); return; }
+  }
   if(!confirm('¿Cerrar la orden '+o.correlativo+'?')) return;
-  o.firma = firma;
+  o.firma = firmaCanvas || o.firma;
   o.cerrado = true;
   o.estado = 'Cerrado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
@@ -898,6 +911,15 @@ function firmaMove(e, canvas){
 
 function firmaStop(canvas){
   _firmaDrawing = false;
+  // Auto-save firma if it's a logística order canvas
+  if(canvas && canvas.id && canvas.id.startsWith('firma-log-')){
+    const ordenId = canvas.id.replace('firma-log-','');
+    const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+    if(o && canvas.classList.contains('firmado')){
+      o.firma = canvas.toDataURL('image/png');
+      saveDB();
+    }
+  }
 }
 
 
