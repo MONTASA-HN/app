@@ -338,7 +338,7 @@ function renderDashboardLog(){
   const abiertas  = (DB.logistica||[]).filter(o=>!o.cerrado);
   const pend      = abiertas.filter(o=>o.estado==='Pendiente').length;
   const proc      = abiertas.filter(o=>o.estado==='En proceso').length;
-  const esp       = abiertas.filter(o=>o.estado==='En espera').length;
+  const esp       = abiertas.filter(o=>o.estado==='Cancelado').length;
 
   const cerradasMes = (DB.logistica||[]).filter(o=>{
     if(!o.cerrado) return false;
@@ -379,7 +379,7 @@ function renderDashboardLog(){
       <div style="font-weight:700;font-size:16px;color:#2d6a9f;margin-bottom:12px">🚛 Órdenes activas — ${abiertas.length}</div>
       ${statusRow('🔴','Pendientes',pend,'#e74c3c','#fdeaea')}
       ${statusRow('🟡','En proceso',proc,'#f39c12','#fef9e7')}
-      ${statusRow('🔵','En espera',esp,'#3498db','#eaf4fb')}
+      ${statusRow('⚫','Canceladas',esp,'#888','#f0f0f0')}
       ${!abiertas.length?'<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">✅ Sin órdenes activas</div>':''}
       ${Object.keys(porTipo).length?'<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">'+Object.entries(porTipo).map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span style="color:var(--text2)">${k}</span><span style="font-weight:700">${v}</span></div>`).join('')+'</div>':''}
       <button onclick="document.querySelector('.nav-btn:nth-child(2)').click()"
@@ -398,7 +398,7 @@ function renderOrdenesLog(){
   const tipoLabels = {renta:'🚛 Renta',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.'};
 
   let list = (DB.logistica||[])
-    .filter(o=>!o.cerrado)
+    .filter(o=>o.estado==='Pendiente'||o.estado==='En proceso')
     .sort((a,b)=>{
       const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
       const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -442,7 +442,7 @@ function renderOrdenesLog(){
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','estado',this.value)">
             <option ${o.estado==='Pendiente'?'selected':''}>Pendiente</option>
             <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
-            <option ${o.estado==='En espera'?'selected':''}>En espera</option>
+            <option ${o.estado==='Cancelado'?'selected':''}>Cancelado</option>
           </select>
         </div>
         <!-- Fechas -->
@@ -462,11 +462,21 @@ function renderOrdenesLog(){
               onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
           </div>
         </div>
-        <!-- Horómetro -->
+        <!-- Horómetro — dos campos solo para renta, uno para los demás -->
+        ${o.tipoLogistica==='renta' ? `
+        <div class="form-group"><label>Horómetro de salida (hrs)</label>
+          <input type="number" value="${o.horometroSalida||''}" placeholder="0"
+            onchange="event.stopPropagation();actualizarLog('${o.id}','horometroSalida',this.value)" oninput="event.stopPropagation()">
+        </div>
+        <div class="form-group"><label>Horómetro de retorno (hrs)</label>
+          <input type="number" value="${o.horometroRetorno||''}" placeholder="0"
+            onchange="event.stopPropagation();actualizarLogHorometroRetorno('${o.id}',this.value)" oninput="event.stopPropagation()">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Este valor se guardará en la ficha del equipo</div>
+        </div>` : `
         <div class="form-group"><label>Horómetro (hrs)</label>
           <input type="number" value="${o.horometro||''}" placeholder="0"
             onchange="event.stopPropagation();actualizarLog('${o.id}','horometro',this.value)" oninput="event.stopPropagation()">
-        </div>
+        </div>`}
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
@@ -491,10 +501,13 @@ function renderOrdenesLog(){
           </div>
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>
-        <!-- Botón cerrar -->
-        <button class="btn-finalizar" style="margin-top:14px;background:#2d6a9f" onclick="cerrarOrdenLog('${o.id}')">
-          ✅ CERRAR ORDEN
-        </button>
+        <!-- Botones acción -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+          <button style="padding:12px;background:#e74c3c;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer"
+            onclick="cancelarOrdenLog('${o.id}')">❌ CANCELAR</button>
+          <button class="btn-finalizar" style="background:#2d6a9f;margin-top:0"
+            onclick="cerrarOrdenLog('${o.id}')">✅ CERRAR</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -525,6 +538,33 @@ function actualizarLog(id, campo, valor){
   saveDB();
 }
 
+function actualizarLogHorometroRetorno(id, valor){
+  const o = (DB.logistica||[]).find(x=>x.id===id);
+  if(!o) return;
+  const salida = parseFloat(o.horometroSalida||0);
+  const retorno = parseFloat(valor||0);
+  if(retorno && salida && retorno < salida){
+    alert('⚠️ El horómetro de retorno ('+retorno+') no puede ser menor al de salida ('+salida+')');
+    return;
+  }
+  o.horometroRetorno = valor;
+  saveDB();
+}
+
+function cancelarOrdenLog(id){
+  const o = (DB.logistica||[]).find(x=>x.id===id);
+  if(!o) return;
+  if(!confirm('¿Cancelar la orden '+o.correlativo+'?\n\nEsta acción moverá la orden al historial.')) return;
+  o.estado = 'Cancelado';
+  o.cerrado = false;
+  o.fechaCancelado = new Date().toISOString().slice(0,10);
+  saveDB();
+  openSubgrupos.delete('cb-log-'+id);
+  renderOrdenesLog();
+  renderDashboardLog();
+  toast('Orden '+o.correlativo+' cancelada');
+}
+
 function subirFotoLog(id, input){
   const file = input.files[0];
   if(!file) return;
@@ -547,6 +587,16 @@ function cerrarOrdenLog(id){
   if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
   if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
   if(!o.descripcion)  faltantes.push('Descripción / Trabajo realizado');
+  if(o.tipoLogistica==='renta'){
+    if(!o.horometroSalida) faltantes.push('Horómetro de salida');
+    if(!o.horometroRetorno) faltantes.push('Horómetro de retorno');
+    if(o.horometroSalida && o.horometroRetorno &&
+       parseFloat(o.horometroRetorno) < parseFloat(o.horometroSalida)){
+      faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
+    }
+  } else {
+    if(!o.horometro) {} // no es obligatorio para otros tipos
+  }
   const firma = getFirmaData('firma-log-'+id);
   if(!firma) faltantes.push('Firma digital del cliente');
   if(faltantes.length){ alert('No se puede cerrar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
@@ -557,10 +607,11 @@ function cerrarOrdenLog(id){
   o.cerrado = true;
   o.estado = 'Cerrado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
-  // Update horometro in equipos
-  if(o.horometro && o.equipoId){
+  // Update horometro in equipos — use retorno for renta, horometro for others
+  const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno : o.horometro;
+  if(horoFinal && o.equipoId){
     const eq = DB.equipos.find(e=>e.id===o.equipoId);
-    if(eq) eq.horometro = o.horometro;
+    if(eq) eq.horometro = horoFinal;
   }
   saveDB();
   openSubgrupos.delete('cb-log-'+id);
@@ -577,7 +628,7 @@ function renderHistorialLog(){
   const tipoLabels = {renta:'🚛 Renta',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.'};
 
   let list = (DB.logistica||[])
-    .filter(o=>o.cerrado)
+    .filter(o=>o.cerrado||o.estado==='Cancelado')
     .sort((a,b)=>{
       const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
       const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -600,7 +651,7 @@ function renderHistorialLog(){
     return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
         ${o.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${o.correlativo}</span>`:''}
-        <span class="badge" style="background:#c8edcc;color:#1a5c1a">Cerrado</span>
+        <span class="badge" style="background:${o.estado==='Cancelado'?'#fdeaea':'#c8edcc'};color:${o.estado==='Cancelado'?'#8b2020':'#1a5c1a'}">${o.estado==='Cancelado'?'Cancelado':'Cerrado'}</span>
         <span class="badge">${tipoLbl}</span>
       </div>
       <div style="font-weight:600;font-size:15px">${o.descripcion||'Sin descripción'}</div>
