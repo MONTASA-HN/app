@@ -1977,6 +1977,28 @@ function renderLogistica(){
   }).join('');
 }
 
+// ── Estado automático de equipos por órdenes ─────────────────────────────
+function equipoAInactivo(equipoId){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(eq && eq.estado==='DISPONIBLE'){
+    eq.estado = 'MAL ESTADO';
+    saveDB();
+    renderEquipos();
+  }
+}
+
+function equipoADisponible(equipoId){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(eq && eq.estado==='MAL ESTADO'){
+    eq.estado = 'DISPONIBLE';
+    saveDB();
+    renderEquipos();
+  }
+}
+
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 function nextCorrelativo(prefijo='MH'){
@@ -2707,6 +2729,7 @@ function guardarPreventivo(finalizar=false){
     if(foto) entry.foto=foto;
     if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
     DB.preventivos.push(entry);
+    equipoAInactivo(equipoId);
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
@@ -2768,6 +2791,7 @@ function completarPreventivo(id){
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
   registrarOrdenCerrada(p, 'Preventivo');
+  equipoADisponible(p.equipoId);
   saveDB();
   renderPreventivos(); renderDashboard();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
@@ -2852,6 +2876,7 @@ function guardarCorrectivo(finalizar=false){
     if(foto) entry.foto=foto;
     if(finalizar){ entry.estado='Cerrado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
     DB.correctivos.push(entry);
+    equipoAInactivo(equipoId);
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
@@ -2914,6 +2939,7 @@ function cerrarCorrectivo(id){
   c.estado = 'Cerrado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   registrarOrdenCerrada(c, 'Correctivo');
+  equipoADisponible(c.equipoId);
   saveDB();
   renderCorrectivos(); renderDashboard();
   toast('Orden ' + (c.correlativo||'') + ' cerrada y guardada en Excel');
