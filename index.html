@@ -827,7 +827,6 @@ function saveDB(){
         correctivos:    DB.correctivos,
         ordenesCerradas:DB.ordenesCerradas||[],
         vendidos:       (DB.vendidos && DB.vendidos.length) ? DB.vendidos : VENDIDOS_INICIALES,
-        logistica:      DB.logistica||[],
         solicitudes:    DB.solicitudes||[],
         _ts: ts,
         _sid: _SESSION_ID
@@ -2487,8 +2486,8 @@ function renderHistorial(){
       .filter(c=>c.estado==='Cerrado')
       .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha})),
     ...(DB.logistica||[])
-      .filter(o=>o.cerrado)
-      .map(o=>({...o, _t:'L', _f:o.fechaFin||o.fechaInicio||o.fecha}))
+      .filter(o=>o.cerrado||o.estado==='Cancelado')
+      .map(o=>({...o, _t:'L', _f:o.fechaCierre||o.fechaFin||o.fechaInicio||o.fecha}))
   ].sort((a,b)=>{
     // Orden descendente por correlativo numérico
     const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -3554,6 +3553,7 @@ function cerrarExito(){
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
         if(remote.logistica)      DB.logistica      = remote.logistica||[];
+        if(remote.logistica)      DB.logistica      = remote.logistica||[];
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else {
@@ -3589,6 +3589,7 @@ function cerrarExito(){
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
+      if(d.logistica)      DB.logistica      = d.logistica||[];
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
