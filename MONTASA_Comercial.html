@@ -696,66 +696,76 @@ function getEstadoLive(){/* not found */}
 function abrirModal(id){
   const e = DB.equipos.find(x => x.id === id);
   if(!e) return;
-  // Always load specs fresh from EQUIPOS_INICIALES — never from localStorage
-  const fresh = EQUIPOS_INICIALES.find(f => f.codigo === e.codigo || f.serie === e.serie || f.id === e.id);
+  const fresh = EQUIPOS_INICIALES.find(f => f.codigo===e.codigo||f.serie===e.serie||f.id===e.id);
   const specs_keys = ['mastil','pesoBruto','anchoEq','largoEq','alturaEq','torre','horquillas',
                       'llantas','alturaExtendida','alturaReplegada','cargaCanasta','alcanceHorizontal'];
-  if(fresh){
-    specs_keys.forEach(k => { if(fresh[k]) e[k] = fresh[k]; });
-  }
+  if(fresh) specs_keys.forEach(k => { if(fresh[k]) e[k] = fresh[k]; });
   modalEquipoId = id;
 
-  document.getElementById('det-codigo').textContent = e.codigo;
-  document.getElementById('det-marca').textContent = e.desc || (e.marca + ' · ' + e.tipo);
-  document.getElementById('det-serie').textContent = 'Serie: ' + (e.serie || '—');
-  document.getElementById('det-estado').value = e.estado || 'DISPONIBLE';
-  document.getElementById('det-ubicacion').value = e.ubicacion || '';
-  document.getElementById('det-cliente').value = e.cliente || '';
-  document.getElementById('det-horometro').value = e.horometro || '';
-  document.getElementById('det-obs').value = e.observaciones || '';
-
-  // Specs section - different fields for elevadoras vs montacargas
   const esElevadora = e.codigo && e.codigo.startsWith('E-');
   const specsFields = esElevadora ? [
-    ['⬆️ Altura extendida',     e.alturaExtendida],
-    ['↗️ Alcance horizontal',   e.alcanceHorizontal],
-    ['⚖️ Peso bruto',           e.pesoBruto],
-    ['↔️ Ancho',                e.anchoEq],
-    ['↕️ Largo',                e.largoEq],
-    ['🔽 Altura replegada',     e.alturaReplegada],
-    ['👷 Carga en canasta',     e.cargaCanasta],
-    ['🔵 Llantas/Rodos',        e.llantas],
+    ['⬆️ Altura extendida',   e.alturaExtendida],
+    ['↗️ Alcance horizontal', e.alcanceHorizontal],
+    ['⚖️ Peso bruto',         e.pesoBruto],
+    ['↔️ Ancho',              e.anchoEq],
+    ['↕️ Largo',              e.largoEq],
+    ['🔽 Altura replegada',   e.alturaReplegada],
+    ['👷 Carga en canasta',   e.cargaCanasta],
+    ['🔵 Llantas/Rodos',      e.llantas],
   ].filter(([,v])=>v) : [
-    ['🏗 Mástil elevado',   e.mastil],
-    ['⚖️ Peso bruto',       e.pesoBruto],
-    ['↔️ Ancho',            e.anchoEq],
-    ['↕️ Largo',            e.largoEq],
-    ['📏 Altura',           e.alturaEq],
-    ['🔧 Torre',            e.torre],
-    ['🍴 Horquillas',       e.horquillas],
-    ['🔵 Llantas/Rodos',    e.llantas],
+    ['🏗 Mástil elevado', e.mastil],
+    ['⚖️ Peso bruto',     e.pesoBruto],
+    ['↔️ Ancho',          e.anchoEq],
+    ['↕️ Largo',          e.largoEq],
+    ['📏 Altura',         e.alturaEq],
+    ['🔧 Torre',          e.torre],
+    ['🍴 Horquillas',     e.horquillas],
+    ['🔵 Llantas/Rodos',  e.llantas],
   ].filter(([,v])=>v);
-  const specsSection = document.getElementById('det-specs-section');
-  const specsGrid = document.getElementById('det-specs-grid');
-  if(specsFields.length){
-    const specKeys = ['mastil','pesoBruto','anchoEq','largoEq','alturaEq','torre','horquillas','llantas','alturaExtendida','alturaReplegada','cargaCanasta','alcanceHorizontal'];
-    const specLabels = {'mastil':'🏗 Mástil elevado','pesoBruto':'⚖️ Peso bruto','anchoEq':'↔️ Ancho','largoEq':'↕️ Largo','alturaEq':'📏 Altura','torre':'🔧 Torre','horquillas':'🍴 Horquillas','llantas':'🔵 Llantas/Rodos','alturaExtendida':'⬆️ Altura extendida','alturaReplegada':'🔽 Altura replegada','cargaCanasta':'👷 Carga en canasta','alcanceHorizontal':'↗️ Alcance horizontal'};
-    specsGrid.innerHTML = specsFields.map(([label, val])=>{
-      const key = Object.keys(specLabels).find(k=>specLabels[k]===label)||'';
-      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px">
-        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-          <div id="spec-val-${key}-${e.id}" style="font-size:13px;font-weight:500;color:var(--text);flex:1">${val}</div>
-          <button onclick="editarSpec('${e.id}','${key}')" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:2px 4px" title="Editar">✏️</button>
-        </div>
-      </div>`;
-    }).join('');
-    specsSection.style.display = 'block';
-  } else {
-    specsSection.style.display = 'none';
-  }
 
-  aplicarColorHeader(e.estado || 'DISPONIBLE');
+  const estadoColor = {
+    'DISPONIBLE':'var(--green)', 'EN RENTA':'var(--amber)', 'MAL ESTADO':'var(--red)'
+  }[e.estado||'DISPONIBLE'] || 'var(--accent)';
+  const estadoBg = {
+    'DISPONIBLE':'var(--green-bg)', 'EN RENTA':'var(--amber-bg)', 'MAL ESTADO':'var(--red-bg)'
+  }[e.estado||'DISPONIBLE'] || 'var(--blue-bg)';
+  const estadoLbl = {
+    'DISPONIBLE':'Disponible', 'EN RENTA':'En renta', 'MAL ESTADO':'Inactivo'
+  }[e.estado||'DISPONIBLE'] || e.estado;
+
+  // Build read-only modal content
+  const box = document.getElementById('modal-box');
+  box.innerHTML = `
+    <div style="background:${estadoBg};padding:16px 16px 12px;border-radius:var(--radius) var(--radius) 0 0">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:26px;font-weight:800;color:${estadoColor}">${e.codigo}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${e.desc||(e.marca+' · '+e.tipo)}</div>
+          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${e.serie||'Sin serie'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <button onclick="cerrarModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text2);line-height:1">×</button>
+          <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:4px 10px;border-radius:10px;font-weight:700;white-space:nowrap">${estadoLbl}</span>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 16px;overflow-y:auto;max-height:60vh">
+      <!-- Info operativa -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        ${e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
+        ${e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
+        ${e.horometro?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⏱ Horómetro</div><div style="font-size:13px;font-weight:600">${e.horometro} hrs</div></div>`:''}
+        ${e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
+      </div>
+      ${e.observaciones?`<div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📝 Observaciones</div><div style="font-size:13px;color:var(--text)">${e.observaciones}</div></div>`:''}
+      ${e.foto?`<div style="margin-bottom:14px"><img src="${e.foto}" onclick="verFotoCompleta('${e.foto}')" style="width:100%;border-radius:var(--radius-sm);object-fit:cover;max-height:180px;cursor:zoom-in"></div>`:''}
+      <!-- Especificaciones técnicas -->
+      ${specsFields.length?`
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);margin-bottom:8px">Especificaciones técnicas</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${specsFields.map(([label,val])=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px"><div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div><div style="font-size:13px;font-weight:500;color:var(--text)">${val}</div></div>`).join('')}
+      </div>`:''}
+    </div>`;
 
   document.getElementById('modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
