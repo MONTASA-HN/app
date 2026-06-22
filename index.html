@@ -3577,24 +3577,23 @@ function cerrarExito(){
 
   FB_REF.once('value').then(snap => {
     const remote = snap.val();
-    if(remote && remote._ts){
-      const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
-      const localTs = local._ts || 0;
-      if(remote._ts >= localTs){
-        loadDB();
-        if(remote.equipos && remote.equipos.length){
-          DB.equipos = remote.equipos.map(req => {
-            const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
-            return {...spec, ...req};
-          });
-          // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
-          // Skip if already sold (in DB.vendidos)
-          EQUIPOS_INICIALES.forEach(spec => {
-            const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id);
-            if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
-              DB.equipos.push(JSON.parse(JSON.stringify(spec)));
-          });
-        }
+    if(remote){
+      loadDB();
+      // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
+      if(remote.equipos && remote.equipos.length){
+        DB.equipos = remote.equipos.map(req => {
+          const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
+          return {...spec, ...req};
+        });
+        // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
+        // Skip if already sold (in DB.vendidos)
+        EQUIPOS_INICIALES.forEach(spec => {
+          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id);
+          if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
+            DB.equipos.push(JSON.parse(JSON.stringify(spec)));
+        });
+      }
+      if(true){ // always sync other data from Firebase too
         if(remote.preventivos)    DB.preventivos    = remote.preventivos;
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
