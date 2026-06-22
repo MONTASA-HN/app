@@ -308,13 +308,16 @@ function _writeToFirebase(){
     if(window._fbDB){
       const ts = Date.now();
       window._localWriteTs = ts;
-      window._fbDB.ref('montasa').update({
+      const payload = {
         logistica: DB.logistica||[],
         _ts: ts,
         _sid: _SESSION_ID
-      }).catch(e=>console.warn('FB write error:',e));
+      };
+      // Persist correlativo counter so other devices stay in sync
+      if(DB['lastCorrelativo_LG']) payload['lastCorrelativo_LG'] = DB['lastCorrelativo_LG'];
+      window._fbDB.ref('montasa').update(payload)
+        .catch(e=>console.warn('FB write error:',e));
     } else {
-      // Firebase not ready yet — retry in 2 seconds
       setTimeout(_writeToFirebase, 2000);
     }
   }catch(e){ setTimeout(_writeToFirebase, 2000); }
@@ -1027,6 +1030,11 @@ renderDashboardLog();
         if(remote.preventivos) DB.preventivos = remote.preventivos;
         if(remote.correctivos) DB.correctivos = remote.correctivos;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
+        // Sync correlativo counter — always take the highest
+        if(remote.lastCorrelativo_LG){
+          const localCorr = DB['lastCorrelativo_LG']||0;
+          DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
+        }
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else { loadDB(); }
     } else { loadDB(); }
