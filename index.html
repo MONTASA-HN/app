@@ -3221,6 +3221,15 @@ function enviarSolicitudWA(){
     };
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
+    // Write logistica to Firebase immediately (saveDB doesn't include it)
+    if(window._fbDB){
+      window._fbDB.ref('montasa').update({
+        logistica: DB.logistica,
+        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
+        _ts: Date.now(),
+        _sid: _SESSION_ID
+      });
+    }
   } else {
     const entry = {
       id: ordenId, correlativo, equipoId,
@@ -3643,8 +3652,7 @@ function cerrarExito(){
     FB_REF.on('value', snap => {
       const d = snap.val();
       if(!d || !d._ts) return;
-      const localTs = JSON.parse(localStorage.getItem(LS_KEY)||'{}')._ts || 0;
-      if(d._ts < localTs - 2000) return;
+      // Always accept Firebase data — removed stale timestamp check that caused fluctuation
       // Skip re-render if this is our own write (within 5 seconds)
       // Only skip if this write came from THIS device session
       const ownWrite = d._sid && d._sid === _SESSION_ID;
