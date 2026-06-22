@@ -1139,10 +1139,72 @@ let _viaticosData = null;
 function abrirViaticos(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
-  _viaticosOrdenId = ordenId;
-  _viaticosData = orden.viaticos || null;
-  _viaticosMode = 'solicitud';
-  renderModalViaticos(orden);
+  const v = orden.viaticos;
+  if(!v){ toast('Esta orden no tiene viáticos solicitados'); return; }
+
+  const ov = document.getElementById('viaticos-overlay');
+  if(!ov) return;
+
+  // Calculate totals
+  const personas = v.personas||[];
+  const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
+  const cpU = v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj = d.peajes * cpU;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tComb = v.combustible||0;
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const tOtros = v.otros_gastos||0;
+  const tTotal = tAlim + tPeaj + tComb + tHosp + tOtros;
+
+  function row(label, value, highlight){
+    if(!value) return '';
+    const bg = highlight ? 'background:#1f3864;color:white' : 'background:var(--surface2)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:6px;${bg}">
+      <span style="font-size:14px;font-weight:${highlight?'700':'500'}">${label}</span>
+      <span style="font-size:${highlight?'18':'14'}px;font-weight:700;font-family:'DM Mono',monospace">L. ${value.toFixed(2)}</span>
+    </div>`;
+  }
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:flex-end">
+  <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:85vh;overflow-y:auto">
+    <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:white">📋 Resumen de Viáticos</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo} · ${v.destino||'—'}</div>
+      </div>
+      <button onclick="cerrarViaticos()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px">
+      <!-- Info básica -->
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+          <div><span style="color:var(--text3)">Gestor</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${v.vehiculo||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Destino</span><br><strong>${v.destino||'—'}</strong></div>
+          <div><span style="color:var(--text3)">KM total</span><br><strong>${d.km} km</strong></div>
+        </div>
+      </div>
+      <!-- Totales -->
+      ${row('🍽 Total alimentación', tAlim)}
+      ${row('🛣 Total peajes', tPeaj)}
+      ${row('⛽ Combustible', tComb)}
+      ${tHosp ? row('🏨 Hospedaje', tHosp) : ''}
+      ${tOtros ? row('📎 Otros gastos', tOtros) : ''}
+      ${row('💰 TOTAL DEL VIAJE', tTotal, true)}
+      <!-- Personal -->
+      ${personas.length ? `
+      <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Personal viajando</div>
+      ${personas.map(p=>`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:13px">
+        <span>${p.nombre||'—'}</span>
+        <span style="color:var(--text2)">L. ${((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)).toFixed(0)}</span>
+      </div>`).join('')}` : ''}
+    </div>
+  </div>
+  </div>`;
+
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 
 function cerrarViaticos(){

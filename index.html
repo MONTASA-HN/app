@@ -1972,7 +1972,7 @@ function renderLogistica(){
       +'<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>'
       +op
       +(o.viaticos ? ('<span style="color:var(--text3)">💰 Costo viaje</span><span style="font-weight:700;color:#1f3864">L. '+_calcTotalSol(o.viaticos).toFixed(0)+'</span>') : '')
-      +(o.viaticos ? '<span style="color:var(--text3)">💰 Costo viaje</span><span style="font-weight:700;color:#1f3864">L. '+_calcTotalSol(o.viaticos).toFixed(0)+'</span>' : '')
+
       +'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>'
       +'</div>'
       +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
@@ -4292,7 +4292,9 @@ function guardarViaticos(){
   const formData = _leerFormSolicitud();
   const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
   if(!orden) return;
-  orden.viaticos = {...(_viaticosData||{}), ...formData};
+  // formData wins — preserve only facturas from existing viaticos
+  const existingFacturas = (_viaticosData||{}).facturas || [];
+  orden.viaticos = {...formData, facturas: existingFacturas};
   _viaticosData = orden.viaticos;
   saveDB();
   // Write logistica to Firebase directly (saveDB excludes it)
