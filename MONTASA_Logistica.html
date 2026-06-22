@@ -18,6 +18,8 @@
   @media (display-mode: standalone){
     .app-header{ padding-top: 48px; }
   }
+
+#viaticos-overlay.open{display:block!important}
 </style>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -521,10 +523,14 @@ function renderOrdenesLog(){
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>
         <!-- Botones acción -->
-        <button class="btn-finalizar" style="margin-top:14px;background:${o.estado==='Cancelado'?'#888':'#2d6a9f'}"
-          onclick="cerrarOrdenLog('${o.id}')">
-          ${o.estado==='Cancelado'?'✅ CERRAR ORDEN (Cancelada)':'✅ CERRAR ORDEN'}
-        </button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+          <button style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer"
+            onclick="abrirViaticos('${o.id}')">📋 Viáticos</button>
+          <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
+            onclick="cerrarOrdenLog('${o.id}')">
+            ${o.estado==='Cancelado'?'✅ CERRAR (Cancelada)':'✅ CERRAR'}
+          </button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -689,6 +695,10 @@ function renderHistorialLog(){
         <img src="${o.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
       </div>`:''}
       <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(o.fechaCierre)}</div>
+      ${o.viaticos?`<div style="margin-top:8px;display:flex;gap:6px">
+        <span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos adjuntos</span>
+        <button onclick="abrirViaticos('${o.id}')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button>
+      </div>`:''}
     </div>`;
   }).join('');
 }
@@ -1080,6 +1090,786 @@ renderDashboardLog();
     if(e.key==='ArrowLeft') {const n=idx-1;if(n>=0) showTab(TABS[n],document.querySelector('.nav-btn:nth-child('+(n+1)+')'));}
   });
 })();
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// MÓDULO DE VIÁTICOS
+// ══════════════════════════════════════════════════════════════════════════
+const GESTORES_VIATICOS = [
+  {nombre:"FRANCISCO NOE NARVAES FONSECA",  id:"0501-1981-08196", cuenta:"2020575644", depto:"Logística"},
+  {nombre:"MIGUEL ANGEL ORELLANA LOPEZ",    id:"0501-1990-12530", cuenta:"2025575655", depto:"Logística"},
+  {nombre:"JONATHAN JOSUE MARTINEZ LOPEZ",  id:"0501-1997-07479", cuenta:"2020575530", depto:"Taller"},
+  {nombre:"ANGEL GABRIEL CARDONA PAZ",      id:"0501-1997-03637", cuenta:"2020575527", depto:"Taller"},
+  {nombre:"DENIS RIGOBERTO LINARES REYES",  id:"0509-1994-00146", cuenta:"2020575543", depto:"Taller"},
+  {nombre:"KEVIN EDGARDO DERAS RAPALO",     id:"0512-1994-00350", cuenta:"2020575547", depto:"Taller"},
+  {nombre:"ELIBERTO PENA",                  id:"",                cuenta:"",            depto:"Taller"},
+  {nombre:"MARVIN JESUS TORRES",            id:"0502-1980-00830", cuenta:"757373211",   depto:"Taller"},
+];
+const DESTINOS_VIATICOS = [
+  {nombre:"TRUJILLO",            km:767, peajes:8},
+  {nombre:"CHOLUTECA",           km:756, peajes:6},
+  {nombre:"DANLI",               km:735, peajes:6},
+  {nombre:"COYOLITO",            km:693, peajes:4},
+  {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
+  {nombre:"TOCOA",               km:630, peajes:6},
+  {nombre:"OLANCHO",             km:609, peajes:6},
+  {nombre:"TEGUCIGALPA",         km:525, peajes:6},
+  {nombre:"GRACIAS LEMPIRA",     km:420, peajes:4},
+  {nombre:"COPAN",               km:416, peajes:4},
+  {nombre:"LA CEIBA",            km:410, peajes:4},
+  {nombre:"COMAYAGUA",           km:347, peajes:4},
+  {nombre:"SANTA ROSA DE COPAN", km:336, peajes:4},
+  {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
+  {nombre:"SANTA BARBARA",       km:221, peajes:2},
+  {nombre:"TELA",                km:200, peajes:2},
+  {nombre:"CORTES",              km:116, peajes:0},
+];
+
+let _viaticosOrdenId = null;
+let _viaticosMode = 'solicitud'; // 'solicitud' | 'liquidacion'
+let _viaticosData = null;
+
+function abrirViaticos(ordenId){
+  const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+  if(!orden) return;
+  _viaticosOrdenId = ordenId;
+  _viaticosData = orden.viaticos || null;
+  _viaticosMode = 'solicitud';
+  renderModalViaticos(orden);
+}
+
+function cerrarViaticos(){
+  const ov = document.getElementById('viaticos-overlay');
+  if(ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderModalViaticos(orden){
+  const ov = document.getElementById('viaticos-overlay');
+  if(!ov) return;
+  const v = _viaticosData || {};
+  const esFutura = !v.gestor_nombre; // No hay solicitud previa
+
+  // Calcular automáticamente alimentación según horarios
+  function calcAlim(personas){
+    return (personas||[]).map(p=>{
+      const hIni = p.hora_ini||'';
+      const hFin = p.hora_fin||'';
+      let des=0,alm=0,cen=0,mn=0;
+      if(hIni){
+        const [h,m] = hIni.split(':').map(Number);
+        const minIni = h*60+m;
+        if(minIni < 7*60+30) des=120;
+      }
+      if(hFin){
+        const [h,m] = hFin.split(':').map(Number);
+        const minFin = h*60+m;
+        const [hi,mi] = (hIni||'00:00').split(':').map(Number);
+        const minI = hi*60+mi;
+        if(minI<=12*60 && minFin>=13*60) alm=120;
+        if(minFin>=19*60) cen=150;
+        if(minFin>=23*60+30 || (minFin>=0 && minFin<6*60)) mn=150;
+      }
+      const total = des+alm+cen+mn+(p.transporte||0)+(p.hospedaje||0);
+      return {...p, desayuno:des, almuerzo:alm, cena:cen, media_noche:mn, total};
+    });
+  }
+
+  const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
+  const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
+  const gestorInfo = GESTORES_VIATICOS.find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const cpU = v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj = destInfo.peajes * cpU;
+  const comb = v.combustible||0;
+  const otros = v.otros_gastos||0;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const tGen  = tAlim + tTr + tPeaj + comb + tHosp + otros;
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch">
+  <div style="background:var(--surface);margin:10px auto;max-width:600px;border-radius:var(--radius);overflow:hidden">
+    <!-- Header -->
+    <div style="background:#1f3864;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:white">📋 Viáticos</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo||'Nueva OT'}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="cerrarViaticos()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
+      </div>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:2px solid var(--border)">
+      <button onclick="switchTabViaticos('solicitud')" id="vtab-sol"
+        style="flex:1;padding:12px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:${_viaticosMode==='solicitud'?'var(--surface)':'var(--surface2)'};color:${_viaticosMode==='solicitud'?'#1f3864':'var(--text2)'}">
+        📝 Solicitud
+      </button>
+      <button onclick="switchTabViaticos('liquidacion')" id="vtab-liq"
+        style="flex:1;padding:12px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:${_viaticosMode==='liquidacion'?'var(--surface)':'var(--surface2)'};color:${_viaticosMode==='liquidacion'?'#1f3864':'var(--text2)'}">
+        🧾 Liquidación
+      </button>
+    </div>
+    <div style="padding:16px" id="viaticos-content">
+      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen)}
+    </div>
+  </div>
+  </div>`;
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function switchTabViaticos(mode){
+  _viaticosMode = mode;
+  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(orden) renderModalViaticos(orden);
+}
+
+function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
+  const hoy = new Date().toISOString().slice(0,10);
+  const gestorOpts = GESTORES_VIATICOS.map(g=>
+    `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
+  ).join('');
+  const destOpts = DESTINOS_VIATICOS.map(d=>
+    `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
+  ).join('');
+  const cpU = v.vehiculo==='CAMION GRANDE'?134:22;
+  const numPeaj = destInfo.peajes||0;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+
+  return `
+  <div class="form-group"><label>Fecha del documento</label>
+    <input type="date" id="v-fecha" value="${v.fecha_doc||hoy}">
+  </div>
+  <div class="form-group"><label>Cliente</label>
+    <input type="text" id="v-cliente" value="${v.cliente||''}" placeholder="Nombre del cliente">
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-group"><label>Destino</label>
+      <select id="v-destino" onchange="actualizarDestino()">
+        <option value="">Seleccionar...</option>${destOpts}
+      </select>
+    </div>
+    <div class="form-group"><label>Tipo de vehículo</label>
+      <select id="v-vehiculo" onchange="actualizarVehiculo()">
+        <option value="PICK-UP" ${v.vehiculo==='PICK-UP'?'selected':''}>PICK-UP (PATRULLA) — L.22/peaje</option>
+        <option value="CAMION GRANDE" ${v.vehiculo==='CAMION GRANDE'?'selected':''}>CAMIÓN GRANDE (CM-35) — L.134/peaje</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-group"><label>Motivo del viaje</label>
+    <input type="text" id="v-motivo" value="${v.motivo||''}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
+  </div>
+  <!-- GESTOR -->
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">👤 Gestor a depositar</div>
+    <div class="form-group"><label>Nombre del gestor</label>
+      <select id="v-gestor" onchange="actualizarGestor()">
+        <option value="">Seleccionar gestor...</option>${gestorOpts}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id||'—'}</div></div>
+      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta||'—'}</div></div>
+      <div><div style="color:var(--text3)">Departamento</div><div id="v-gestor-depto" style="font-weight:600">${gestorInfo.depto||'—'}</div></div>
+    </div>
+  </div>
+  <!-- PERSONAS -->
+  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">👥 Personal viajando</div>
+  <div id="v-personas-list">
+    ${personas.map((p,i)=>renderPersonaRow(p,i)).join('')}
+  </div>
+  <button onclick="agregarPersonaViaticos()" style="width:100%;padding:8px;background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;margin-bottom:12px">
+    + Agregar persona
+  </button>
+  <!-- TRANSPORTE -->
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🚛 Transporte</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
+      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600">${destInfo.km||0} km</div></div>
+      <div><div style="color:var(--text3)">Cant. peajes</div><div id="v-npeaj" style="font-weight:600">${numPeaj}</div></div>
+      <div><div style="color:var(--text3)">Costo peaje unit.</div><div id="v-cpunit" style="font-weight:600">L. ${cpU}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label>🔴 Total peaje (auto)</label>
+        <input type="number" id="v-tpeaj" value="${tPeaj}" readonly style="background:var(--surface);opacity:0.7">
+      </div>
+      <div class="form-group"><label>⛽ Combustible (manual)</label>
+        <input type="number" id="v-comb" value="${comb||0}" placeholder="0" oninput="recalcViaticos()">
+      </div>
+    </div>
+    <div class="form-group"><label>🏨 Hospedaje (por persona, si aplica)</label>
+      <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+    </div>
+    <div class="form-group"><label>📎 Otros gastos</label>
+      <input type="number" id="v-otros" value="${otros||0}" placeholder="0" oninput="recalcViaticos()">
+    </div>
+  </div>
+  <!-- PRESUPUESTO -->
+  <div style="background:#1f3864;border-radius:var(--radius-sm);padding:12px;color:white;margin-bottom:12px">
+    <div style="font-size:12px;opacity:0.8;margin-bottom:6px">PRESUPUESTO CONSOLIDADO</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px;margin-bottom:8px">
+      <span>Alimentación:</span> <span id="vp-alim">L. ${tAlim}</span>
+      <span>Transporte:</span>   <span id="vp-tr">L. ${tTr}</span>
+      <span>Peaje:</span>        <span id="vp-peaj">L. ${tPeaj}</span>
+      <span>Combustible:</span>  <span id="vp-comb">L. ${comb}</span>
+      <span>Hospedaje:</span>    <span id="vp-hosp">L. ${tHosp}</span>
+      <span>Otros:</span>        <span id="vp-otros">L. ${otros}</span>
+    </div>
+    <div style="border-top:1px solid rgba(255,255,255,0.3);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700">TOTAL GENERAL:</span>
+      <span id="vp-total" style="font-size:20px;font-weight:800;font-family:'DM Mono',monospace">L. ${tGen}</span>
+    </div>
+  </div>
+  <div class="form-group"><label>Observaciones</label>
+    <textarea id="v-obs" rows="2" placeholder="Observaciones del viaje...">${v.observaciones||''}</textarea>
+  </div>
+  <!-- BOTONES -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+    <button onclick="guardarViaticos()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      💾 Guardar solicitud
+    </button>
+    <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>`;
+}
+
+function renderPersonaRow(p, i){
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px" id="vp-row-${i}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:#1f3864">Persona ${i+1}</div>
+      ${i>0?`<button onclick="quitarPersonaViaticos(${i})" style="background:none;border:none;color:#e74c3c;font-size:16px;cursor:pointer">✕</button>`:''}
+    </div>
+    <div class="form-group"><label>Nombre</label>
+      <input type="text" id="vp-nombre-${i}" value="${p.nombre||''}" placeholder="Nombre completo">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group"><label>Fecha</label>
+        <input type="date" id="vp-fecha-${i}" value="${p.fecha||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Hora salida</label>
+        <input type="time" id="vp-hini-${i}" value="${p.hora_ini||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Hora regreso</label>
+        <input type="time" id="vp-hfin-${i}" value="${p.hora_fin||''}" onchange="recalcPersona(${i})">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
+      <div style="background:${p.desayuno?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🍳 Desayuno</div><div id="vp-des-${i}" style="font-weight:700">L.${p.desayuno||0}</div></div>
+      <div style="background:${p.almuerzo?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🍽 Almuerzo</div><div id="vp-alm-${i}" style="font-weight:700">L.${p.almuerzo||0}</div></div>
+      <div style="background:${p.cena?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🌙 Cena</div><div id="vp-cen-${i}" style="font-weight:700">L.${p.cena||0}</div></div>
+      <div style="background:${p.media_noche?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🌃 M.Noche</div><div id="vp-mn-${i}" style="font-weight:700">L.${p.media_noche||0}</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">Total alimentación: <strong id="vp-talim-${i}">L.${(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)}</strong></div>
+  </div>`;
+}
+
+function renderLiquidacionForm(v, montoSol){
+  const facturas = v.facturas || [];
+  const totalFact = facturas.reduce((s,f)=>s+(f.monto||0),0);
+  const diff = montoSol - totalFact;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  return `
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+      <div><span style="color:var(--text3)">Monto solicitado:</span><br><strong>L. ${montoSol.toFixed(2)}</strong></div>
+      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
+    </div>
+  </div>
+  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🧾 Facturas del viaje (máx. 14)</div>
+  <div id="vliq-facturas">
+    ${Array.from({length:14},(_,i)=>{
+      const f = facturas[i]||{};
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
+        <div class="form-group"><label>Descripción</label>
+          <input type="text" id="vlf-desc-${i}" value="${f.descripcion||''}" placeholder="Ej: Gasolinera UNO" oninput="recalcFacturas()">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div class="form-group"><label>Fecha</label>
+            <input type="date" id="vlf-fecha-${i}" value="${f.fecha||hoy}">
+          </div>
+          <div class="form-group"><label>N° Documento</label>
+            <input type="text" id="vlf-ndoc-${i}" value="${f.ndocumento||''}" placeholder="001-001-0001">
+          </div>
+          <div class="form-group"><label>Monto (L.)</label>
+            <input type="number" id="vlf-monto-${i}" value="${f.monto||''}" placeholder="0" oninput="recalcFacturas()">
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+  <!-- RESUMEN -->
+  <div style="background:#1f3864;border-radius:var(--radius-sm);padding:12px;color:white;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:13px">Total documentación:</span>
+      <span id="vliq-total" style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace">L. ${totalFact.toFixed(2)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid rgba(255,255,255,0.3)">
+      <span style="font-size:13px">Diferencia (solicitado - liquidado):</span>
+      <span id="vliq-diff" style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${diff>0?'#ff9999':'#99ffaa'}">L. ${diff.toFixed(2)}</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <button onclick="guardarLiquidacion()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      💾 Guardar liquidación
+    </button>
+    <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>`;
+}
+
+// ── FUNCIONES DE CÁLCULO ──────────────────────────────────────────────────
+function actualizarGestor(){
+  const sel = document.getElementById('v-gestor');
+  if(!sel) return;
+  const g = GESTORES_VIATICOS.find(x=>x.nombre===sel.value)||{};
+  document.getElementById('v-gestor-id') && (document.getElementById('v-gestor-id').textContent = g.id||'—');
+  document.getElementById('v-gestor-cuenta') && (document.getElementById('v-gestor-cuenta').textContent = g.cuenta||'—');
+  document.getElementById('v-gestor-depto') && (document.getElementById('v-gestor-depto').textContent = g.depto||'—');
+}
+
+function actualizarDestino(){
+  const sel = document.getElementById('v-destino');
+  if(!sel) return;
+  const d = DESTINOS_VIATICOS.find(x=>x.nombre===sel.value)||{km:0,peajes:0};
+  document.getElementById('v-km') && (document.getElementById('v-km').textContent = d.km+' km');
+  document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').textContent = d.peajes);
+  recalcViaticos();
+}
+
+function actualizarVehiculo(){
+  const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
+  const cpU = veh==='CAMION GRANDE'?134:22;
+  document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').textContent = 'L. '+cpU);
+  recalcViaticos();
+}
+
+function recalcPersona(i){
+  const hIni = document.getElementById('vp-hini-'+i)?.value||'';
+  const hFin = document.getElementById('vp-hfin-'+i)?.value||'';
+  let des=0,alm=0,cen=0,mn=0;
+  if(hIni){
+    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=120;
+  }
+  if(hFin){
+    const [h,m]=hFin.split(':').map(Number);
+    const [hi,mi]=(hIni||'00:00').split(':').map(Number);
+    const minFin=h*60+m, minI=hi*60+mi;
+    if(minI<=12*60 && minFin>=13*60) alm=120;
+    if(minFin>=19*60) cen=150;
+    if(minFin>=23*60+30||(minFin>=0&&minFin<6*60)) mn=150;
+  }
+  document.getElementById('vp-des-'+i) && (document.getElementById('vp-des-'+i).textContent='L.'+des);
+  document.getElementById('vp-alm-'+i) && (document.getElementById('vp-alm-'+i).textContent='L.'+alm);
+  document.getElementById('vp-cen-'+i) && (document.getElementById('vp-cen-'+i).textContent='L.'+cen);
+  document.getElementById('vp-mn-'+i)  && (document.getElementById('vp-mn-'+i).textContent='L.'+mn);
+  const talim=des+alm+cen+mn;
+  document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim);
+  recalcViaticos();
+}
+
+function recalcViaticos(){
+  const destNombre = document.getElementById('v-destino')?.value||'';
+  const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
+  const d = DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
+  const cpU = veh==='CAMION GRANDE'?134:22;
+  const tPeaj = d.peajes * cpU;
+  document.getElementById('v-tpeaj') && (document.getElementById('v-tpeaj').value=tPeaj);
+  // Alimentación de todas las personas
+  let tAlim=0, tTr=0, tHosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
+  const nPersonas = document.querySelectorAll('[id^="vp-row-"]').length;
+  for(let i=0;i<nPersonas;i++){
+    const hIni=document.getElementById('vp-hini-'+i)?.value||'';
+    const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
+    let des=0,alm=0,cen=0,mn=0;
+    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
+    if(hFin){
+      const[h,m]=hFin.split(':').map(Number);
+      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
+      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=120;
+      if(h*60+m>=19*60)cen=150;
+      if(h*60+m>=23*60+30)mn=150;
+    }
+    tAlim+=des+alm+cen+mn;
+  }
+  const comb=parseFloat(document.getElementById('v-comb')?.value||0)||0;
+  const otros=parseFloat(document.getElementById('v-otros')?.value||0)||0;
+  const tGen=tAlim+tTr+tPeaj+comb+tHosp+otros;
+  document.getElementById('vp-alim')&&(document.getElementById('vp-alim').textContent='L. '+tAlim);
+  document.getElementById('vp-tr')&&(document.getElementById('vp-tr').textContent='L. '+tTr);
+  document.getElementById('vp-peaj')&&(document.getElementById('vp-peaj').textContent='L. '+tPeaj);
+  document.getElementById('vp-comb')&&(document.getElementById('vp-comb').textContent='L. '+comb);
+  document.getElementById('vp-hosp')&&(document.getElementById('vp-hosp').textContent='L. '+tHosp);
+  document.getElementById('vp-otros')&&(document.getElementById('vp-otros').textContent='L. '+otros);
+  document.getElementById('vp-total')&&(document.getElementById('vp-total').textContent='L. '+tGen);
+}
+
+function recalcFacturas(){
+  let total=0;
+  for(let i=0;i<14;i++){
+    total+=parseFloat(document.getElementById('vlf-monto-'+i)?.value||0)||0;
+  }
+  document.getElementById('vliq-total')&&(document.getElementById('vliq-total').textContent='L. '+total.toFixed(2));
+  // diff
+  const montoSol = _viaticosData ? _calcTotalSol(_viaticosData) : 0;
+  const diff = montoSol - total;
+  const el = document.getElementById('vliq-diff');
+  if(el){ el.textContent='L. '+diff.toFixed(2); el.style.color=diff>0?'#ff9999':'#99ffaa'; }
+}
+
+function _calcTotalSol(v){
+  const personas=v.personas||[];
+  const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
+  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj=d.peajes*cpU;
+  const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  return tAlim+tTr+tPeaj+(v.combustible||0)+(v.otros_gastos||0)+tHosp;
+}
+
+function agregarPersonaViaticos(){
+  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden) return;
+  const v=_viaticosData||{};
+  const personas=v.personas||[];
+  personas.push({nombre:'',fecha:'',hora_ini:'',hora_fin:'',desayuno:0,almuerzo:0,cena:0,media_noche:0,transporte:0,hospedaje:0,total:0});
+  _viaticosData={...v,personas};
+  renderModalViaticos(orden);
+}
+
+function quitarPersonaViaticos(i){
+  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden) return;
+  const v=_viaticosData||{};
+  const personas=(v.personas||[]).filter((_,idx)=>idx!==i);
+  _viaticosData={...v,personas};
+  renderModalViaticos(orden);
+}
+
+function _leerFormSolicitud(){
+  const nPersonas=document.querySelectorAll('[id^="vp-row-"]').length;
+  const personas=[];
+  for(let i=0;i<nPersonas;i++){
+    const hIni=document.getElementById('vp-hini-'+i)?.value||'';
+    const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
+    let des=0,alm=0,cen=0,mn=0;
+    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
+    if(hFin){
+      const[h,m]=hFin.split(':').map(Number);
+      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
+      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=120;
+      if(h*60+m>=19*60)cen=150;
+      if(h*60+m>=23*60+30)mn=150;
+    }
+    const hosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
+    personas.push({
+      nombre:document.getElementById('vp-nombre-'+i)?.value||'',
+      fecha:document.getElementById('vp-fecha-'+i)?.value||'',
+      hora_ini:hIni, hora_fin:hFin,
+      desayuno:des, almuerzo:alm, cena:cen, media_noche:mn,
+      transporte:0, hospedaje:hosp,
+      total:des+alm+cen+mn+hosp
+    });
+  }
+  const destNombre=document.getElementById('v-destino')?.value||'';
+  const d=DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
+  const gestorNombre=document.getElementById('v-gestor')?.value||'';
+  const g=GESTORES_VIATICOS.find(x=>x.nombre===gestorNombre)||{};
+  return {
+    fecha_doc: document.getElementById('v-fecha')?.value||'',
+    cliente:   document.getElementById('v-cliente')?.value||'',
+    destino:   destNombre,
+    motivo:    document.getElementById('v-motivo')?.value||'',
+    gestor_nombre: gestorNombre,
+    gestor_id:     g.id||'',
+    gestor_cuenta: g.cuenta||'',
+    gestor_depto:  g.depto||'',
+    vehiculo:  document.getElementById('v-vehiculo')?.value||'PICK-UP',
+    km_total:  d.km,
+    num_peajes:d.peajes,
+    combustible:   parseFloat(document.getElementById('v-comb')?.value||0)||0,
+    hospedaje:     parseFloat(document.getElementById('v-hosp')?.value||0)||0,
+    otros_gastos:  parseFloat(document.getElementById('v-otros')?.value||0)||0,
+    observaciones: document.getElementById('v-obs')?.value||'',
+    personas,
+  };
+}
+
+function _leerFormLiquidacion(){
+  const facturas=[];
+  for(let i=0;i<14;i++){
+    const desc=document.getElementById('vlf-desc-'+i)?.value||'';
+    const monto=parseFloat(document.getElementById('vlf-monto-'+i)?.value||0)||0;
+    if(desc||monto){
+      facturas.push({
+        descripcion:desc,
+        fecha:document.getElementById('vlf-fecha-'+i)?.value||'',
+        ndocumento:document.getElementById('vlf-ndoc-'+i)?.value||'',
+        monto
+      });
+    } else {
+      facturas.push(null);
+    }
+  }
+  return {facturas};
+}
+
+function guardarViaticos(){
+  const formData = _leerFormSolicitud();
+  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden) return;
+  orden.viaticos = {...(_viaticosData||{}), ...formData};
+  _viaticosData = orden.viaticos;
+  saveDB();
+  toast('Solicitud de viáticos guardada ✓');
+}
+
+function guardarLiquidacion(){
+  const liqData = _leerFormLiquidacion();
+  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden) return;
+  orden.viaticos = {...(_viaticosData||{}), ...liqData};
+  _viaticosData = orden.viaticos;
+  saveDB();
+  toast('Liquidación guardada ✓');
+}
+
+// ── GENERADOR DE PDF (client-side con API Anthropic) ─────────────────────
+async function generarPDFViaticos(tipo){
+  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden) return;
+
+  // Guardar primero si hay cambios
+  if(_viaticosMode==='solicitud'){
+    const formData=_leerFormSolicitud();
+    orden.viaticos={...(_viaticosData||{}),...formData};
+    _viaticosData=orden.viaticos;
+    saveDB();
+  } else {
+    const liqData=_leerFormLiquidacion();
+    orden.viaticos={...(_viaticosData||{}),...liqData};
+    _viaticosData=orden.viaticos;
+    saveDB();
+  }
+
+  const v = _viaticosData||{};
+  toast('Generando PDF...');
+
+  try{
+    // Use Anthropic API to generate PDF via Python server-side logic
+    // We'll generate HTML and use print dialog as PDF
+    const htmlContent = tipo==='solicitud' ? _buildSolicitudHTML(v, orden) : _buildLiquidacionHTML(v, orden);
+    const blob = new Blob([htmlContent],{type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Viaticos_${tipo==='solicitud'?'Solicitud':'Liquidacion'}_${orden.correlativo||'OT'}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('PDF descargado — abre el archivo y usa Ctrl+P para imprimir como PDF ✓');
+  }catch(e){
+    toast('Error al generar PDF: '+e.message, true);
+  }
+}
+
+function _buildSolicitudHTML(v, orden){
+  const personas=v.personas||[];
+  const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{km:0,peajes:0};
+  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj=d.peajes*cpU;
+  const comb=v.combustible||0; const otros=v.otros_gastos||0;
+  const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const tGen=tAlim+tTr+tPeaj+comb+tHosp+otros;
+  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':'PATRULLA';
+
+  const personaRows=personas.map(p=>`
+    <tr>
+      <td>${p.nombre||''}</td><td>${p.fecha||''}</td>
+      <td>${p.hora_ini||''}</td><td>${p.hora_fin||''}</td>
+      <td class="num">${p.desayuno?'L.'+p.desayuno:''}</td>
+      <td class="num">${p.almuerzo?'L.'+p.almuerzo:''}</td>
+      <td class="num">${p.cena?'L.'+p.cena:''}</td>
+      <td class="num">${p.media_noche?'L.'+p.media_noche:''}</td>
+      <td class="num">${p.transporte?'L.'+p.transporte:''}</td>
+      <td class="num">${p.hospedaje?'L.'+p.hospedaje:''}</td>
+      <td class="num tot">L.${p.total||0}</td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Solicitud Viáticos ${orden.correlativo||''}</title>
+  <style>
+    @media print { @page { margin: 10mm; size: letter; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
+    body { font-family: Arial, sans-serif; font-size: 9pt; margin: 0; padding: 10mm; color: #222; }
+    .header { background: #1f3864; color: white; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-radius: 4px; }
+    .header h1 { margin:0; font-size:13pt; }
+    .header .sub { font-size:8pt; opacity:0.85; text-align:right; }
+    .ot-bar { background:#dce6f1; border:1px solid #1f3864; padding:6px 10px; margin-bottom:8px; border-radius:3px; font-size:10pt; }
+    .ot-bar span { font-weight:700; color:#2E83C3; }
+    table { width:100%; border-collapse:collapse; margin-bottom:8px; font-size:8pt; }
+    th { background:#1f3864; color:white; padding:4px 5px; text-align:left; }
+    th.mid { background:#2E83C3; }
+    td { padding:3px 5px; border:0.5px solid #ccc; }
+    tr:nth-child(even) td { background:#f8f8f8; }
+    .tot { background:#dce6f1!important; font-weight:bold; }
+    .num { text-align:right; }
+    .presup { display:flex; gap:10px; margin-bottom:8px; }
+    .presup-left { flex:1; border:1px solid #1f3864; padding:8px; border-radius:3px; font-size:8pt; }
+    .presup-right { width:180px; background:#1f3864; color:white; padding:8px; border-radius:3px; }
+    .presup-right .row { display:flex; justify-content:space-between; padding:2px 0; font-size:8pt; }
+    .presup-right .total-row { border-top:1px solid rgba(255,255,255,0.4); margin-top:4px; padding-top:4px; font-weight:700; font-size:10pt; }
+    .firmas { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px; }
+    .firma { border:0.5px solid #1f3864; text-align:center; padding:20px 8px 6px; font-size:7pt; }
+    .btn-print { background:#1f3864; color:white; border:none; padding:10px 20px; font-size:11pt; cursor:pointer; border-radius:4px; margin-bottom:10px; }
+  </style></head><body>
+  <button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+  <div class="header">
+    <div><h1>MONTASA HANDLING CO.</h1><div style="font-size:10pt">SOLICITUD DE VIÁTICOS</div></div>
+    <div class="sub">REGISTRO N°: ${v.registro||''}<br>CÓDIGO: GL-FO-10 | VER: 6<br>FECHA: ${v.fecha_doc||''}</div>
+  </div>
+  <div class="ot-bar">N° ORDEN DE TRABAJO: <span>${orden.correlativo||''}</span> &nbsp;|&nbsp; ${orden.descripcion||''}</div>
+  <table><tr>
+    <th>NOMBRE DEL CLIENTE</th><th>LUGAR DE DESTINO</th><th>MOTIVO DEL VIAJE</th>
+  </tr><tr>
+    <td>${v.cliente||''}</td><td>${v.destino||''}</td><td>${v.motivo||''}</td>
+  </tr></table>
+  <table><tr>
+    <th>NOMBRE DEL GESTOR</th><th>N° DE IDENTIDAD</th><th>N° DE CUENTA</th><th>ÁREA/DEPTO</th>
+  </tr><tr>
+    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||''}</td><td>${v.gestor_cuenta||''}</td><td>${v.gestor_depto||''}</td>
+  </tr></table>
+  <table>
+    <tr>
+      <th>NOMBRE</th><th>FECHA</th><th>H.INICIO</th><th>H.FIN</th>
+      <th class="mid">DESAY.<br>L.120</th><th class="mid">ALMUER.<br>L.120</th>
+      <th class="mid">CENA<br>L.150</th><th class="mid">M.NOCHE<br>L.150</th>
+      <th class="mid">TRANSP.</th><th class="mid">HOSPEDAJE</th><th class="mid">TOTAL</th>
+    </tr>
+    ${personaRows}
+    <tr class="tot">
+      <td colspan="4"><strong>TOTALES</strong></td>
+      <td class="num">L.${personas.reduce((s,p)=>s+(p.desayuno||0),0)}</td>
+      <td class="num">L.${personas.reduce((s,p)=>s+(p.almuerzo||0),0)}</td>
+      <td class="num">L.${personas.reduce((s,p)=>s+(p.cena||0),0)}</td>
+      <td class="num">L.${personas.reduce((s,p)=>s+(p.media_noche||0),0)}</td>
+      <td class="num">L.${tTr}</td>
+      <td class="num">L.${tHosp}</td>
+      <td class="num"><strong>L.${tAlim+tTr+tHosp}</strong></td>
+    </tr>
+  </table>
+  <table>
+    <tr>
+      <th>TIPO VEHÍCULO</th><th>N° VEH.</th><th>TOTAL KM</th><th>CANT. PEAJES</th>
+      <th class="mid">COSTO PEAJE U.</th><th class="mid">TOTAL PEAJE</th>
+      <th class="mid">COMBUSTIBLE</th><th class="mid">OTROS</th><th class="mid">TOTAL FLETE</th>
+    </tr>
+    <tr>
+      <td>${v.vehiculo||''}</td><td>${vehCod}</td><td class="num">${d.km} km</td>
+      <td class="num">${d.peajes}</td><td class="num">L.${cpU}</td>
+      <td class="num">L.${tPeaj}</td><td class="num">L.${comb}</td>
+      <td class="num">L.${otros}</td><td class="num tot"><strong>L.${tPeaj+comb+otros}</strong></td>
+    </tr>
+  </table>
+  <div class="presup">
+    <div class="presup-left"><strong>OBSERVACIONES:</strong><br>${v.observaciones||''}</div>
+    <div class="presup-right">
+      <div style="font-size:9pt;font-weight:700;margin-bottom:6px;text-align:center">PRESUPUESTO CONSOLIDADO</div>
+      <div class="row"><span>Alimentación:</span><span>L. ${tAlim}</span></div>
+      <div class="row"><span>Transporte:</span><span>L. ${tTr}</span></div>
+      <div class="row"><span>Peaje:</span><span>L. ${tPeaj}</span></div>
+      <div class="row"><span>Combustible:</span><span>L. ${comb}</span></div>
+      <div class="row"><span>Hospedaje:</span><span>L. ${tHosp}</span></div>
+      <div class="row"><span>Otros:</span><span>L. ${otros}</span></div>
+      <div class="row total-row"><span>TOTAL GENERAL:</span><span>L. ${tGen}</span></div>
+    </div>
+  </div>
+  <div class="firmas">
+    <div class="firma">MIGUEL A. ORELLANA<br>___________<br>COORDINADOR LOGÍSTICA</div>
+    <div class="firma"><br>___________<br>APROBADO POR GERENCIA</div>
+    <div class="firma"><br>___________<br>RECIBIDO FINANZAS</div>
+  </div>
+  </body></html>`;
+}
+
+function _buildLiquidacionHTML(v, orden){
+  const personas=v.personas||[];
+  const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
+  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj=d.peajes*cpU;
+  const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const montoSol=tAlim+tTr+tPeaj+(v.combustible||0)+tHosp+(v.otros_gastos||0);
+  const facturas=v.facturas||[];
+  const totalFact=facturas.reduce((s,f)=>s+(f&&f.monto||0),0);
+  const diff=montoSol-totalFact;
+
+  const factRows=Array.from({length:14},(_,i)=>{
+    const f=facturas[i];
+    if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${f.descripcion}</td><td>${f.fecha||''}</td><td>${f.ndocumento||''}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
+    return `<tr><td class="num">${i+1}</td><td></td><td></td><td></td><td></td></tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Liquidación Viáticos ${orden.correlativo||''}</title>
+  <style>
+    @media print { @page { margin: 10mm; size: letter; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
+    body { font-family: Arial, sans-serif; font-size: 9pt; margin: 0; padding: 10mm; color: #222; }
+    .header { background: #1f3864; color: white; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-radius: 4px; }
+    .header h1 { margin:0; font-size:13pt; }
+    table { width:100%; border-collapse:collapse; margin-bottom:8px; font-size:8pt; }
+    th { background:#1f3864; color:white; padding:4px 5px; text-align:left; }
+    td { padding:3px 5px; border:0.5px solid #ccc; }
+    tr:nth-child(even) td { background:#f8f8f8; }
+    .num { text-align:right; }
+    .tot { background:#dce6f1!important; font-weight:bold; }
+    .diff-row td { background:#1f3864!important; color:${diff>0?'#ff9999':'#99ffaa'}!important; font-weight:bold; }
+    .info-bar { background:#dce6f1; border:1px solid #1f3864; padding:6px 10px; margin-bottom:8px; border-radius:3px; display:flex; gap:20px; }
+    .firmas { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px; }
+    .firma { border:0.5px solid #1f3864; text-align:center; padding:20px 8px 6px; font-size:7pt; }
+    .btn-print { background:#1f3864; color:white; border:none; padding:10px 20px; font-size:11pt; cursor:pointer; border-radius:4px; margin-bottom:10px; }
+  </style></head><body>
+  <button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
+  <div class="header">
+    <div><h1>MONTASA HANDLING CO.</h1><div style="font-size:10pt">LIQUIDACIÓN DE VIÁTICOS</div></div>
+    <div style="font-size:8pt;opacity:0.85;text-align:right">N° OT: ${orden.correlativo||''}<br>FECHA: ${v.fecha_doc||''}</div>
+  </div>
+  <div class="info-bar">
+    <div><strong>Monto solicitado:</strong> L. ${montoSol.toFixed(2)}</div>
+    <div><strong>Destinatario:</strong> ${v.gestor_nombre||'—'}</div>
+    <div><strong>Destino:</strong> ${v.destino||'—'}</div>
+  </div>
+  <table>
+    <tr><th style="width:30px">N°</th><th>DESCRIPCIÓN</th><th style="width:70px">FECHA</th><th style="width:80px">N° DOCUMENTO</th><th style="width:70px" class="num">MONTO</th></tr>
+    ${factRows}
+    <tr class="tot"><td></td><td colspan="3"><strong>TOTAL DOCUMENTACIÓN</strong></td><td class="num"><strong>L. ${totalFact.toFixed(2)}</strong></td></tr>
+    <tr class="diff-row"><td></td><td colspan="3">DIFERENCIA (SOLICITADO - LIQUIDADO)</td><td class="num">L. ${diff.toFixed(2)}</td></tr>
+  </table>
+  <div style="font-size:7pt;margin-bottom:10px">NOTA: Reporte de documentación física entregada a Finanzas</div>
+  <div class="firmas">
+    <div class="firma">MIGUEL ORELLANA<br>___________<br>LOGÍSTICA</div>
+    <div class="firma">${v.gestor_nombre||''}<br>___________<br>GESTOR</div>
+    <div class="firma"><br>___________<br>ACUSE DE RECIBIDO FINANZAS</div>
+  </div>
+  </body></html>`;
+}
+// ══════════════════════════════════════════════════════════════════════════
+
 </script>
+
+<div id="viaticos-overlay" style="display:none"></div>
 </body>
 </html>
