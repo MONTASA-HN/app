@@ -3143,6 +3143,31 @@ function solTipoChange(){
   const mantWrap = document.getElementById('sol-mant-wrap');
   if(descWrap) descWrap.style.display = tipo==='preventivo' ? 'none'  : 'block';
   if(mantWrap) mantWrap.style.display = tipo==='preventivo' ? 'block' : 'none';
+
+  // Mostrar/ocultar segundo equipo (solo entrega/retiro)
+  const wrap2 = document.getElementById('sol-equipo2-wrap');
+  const isEntregaRetiro = tipo==='entrega'||tipo==='retiro';
+  if(wrap2) wrap2.style.display = isEntregaRetiro ? 'block' : 'none';
+
+  // Poblar segundo equipo si aplica
+  if(isEntregaRetiro){
+    const sel1 = document.getElementById('sol-equipo');
+    const sel2 = document.getElementById('sol-equipo2');
+    if(sel2){
+      const current2 = sel2.value;
+      sel2.innerHTML = '<option value="">— Sin segundo equipo —</option>';
+      const equiposDisp = DB.equipos
+        .filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE'||e.estado==='EN RENTA')
+        .sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
+      equiposDisp.forEach(e=>{
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = e.codigo + ' – ' + (e.marca||'');
+        if(e.id===current2) opt.selected = true;
+        sel2.appendChild(opt);
+      });
+    }
+  }
 }
 
 function solEquipoChange(){
