@@ -3797,6 +3797,7 @@ const DESTINOS_VIATICOS = [
 
 let _viaticosOrdenId = null;
 let _viaticosMode = 'solicitud'; // 'solicitud' | 'liquidacion'
+let _viaticosReadOnly = false;
 let _viaticosData = null;
 
 function abrirViaticos(ordenId){
@@ -3805,7 +3806,16 @@ function abrirViaticos(ordenId){
   _viaticosOrdenId = ordenId;
   _viaticosData = orden.viaticos || null;
   _viaticosMode = 'solicitud';
+  _viaticosReadOnly = !!(orden.viaticos); // read-only if viaticos already saved
   renderModalViaticos(orden);
+}
+
+function editarViaticosConPin(){
+  solicitarPINAccion(()=>{
+    _viaticosReadOnly = false;
+    const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+    if(orden) renderModalViaticos(orden);
+  });
 }
 
 function cerrarViaticos(){
@@ -3998,6 +4008,18 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
     <textarea id="v-obs" rows="2" placeholder="Observaciones del viaje...">${v.observaciones||''}</textarea>
   </div>
   <!-- BOTONES -->
+  ${_viaticosReadOnly ? `
+  <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:8px;font-size:13px;color:#856404">
+    🔒 Solo lectura — esta solicitud ya fue guardada
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+    <button onclick="editarViaticosConPin()" style="padding:13px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🔑 Editar (PIN)
+    </button>
+    <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>` : `
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
     <button onclick="guardarViaticos()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       💾 Guardar solicitud
@@ -4005,7 +4027,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
     <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
     </button>
-  </div>`;
+  </div>`}`;
 }
 
 function renderPersonaRow(p, i){
@@ -4300,12 +4322,13 @@ function guardarViaticos(){
   const formData = _leerFormSolicitud();
   const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
   if(!orden) return;
-  // formData wins — preserve only facturas from existing viaticos
   const existingFacturas = (_viaticosData||{}).facturas || [];
   orden.viaticos = {...formData, facturas: existingFacturas};
   _viaticosData = orden.viaticos;
-  saveDB();
-  // Write logistica to Firebase directly (saveDB excludes it)
+  // Save to localStorage immediately
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+  // Write to Firebase and ONLY THEN render + toast
   if(window._fbDB){
     const writeTs = Date.now();
     _lastLogisticaWriteTs = writeTs;
@@ -4314,10 +4337,29 @@ function guardarViaticos(){
       lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
       _ts: writeTs,
       _sid: _SESSION_ID
-    });
+    }).then(()=>{
+      // Verify data survived the write
+      const check = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+      if(check && check.viaticos && check.viaticos.cliente){
+        cerrarViaticos();
+        renderLogistica();
+        toast('Solicitud de viáticos guardada ✓');
+      } else {
+        // Data was wiped by on() listener — restore and retry
+        orden.viaticos = {...formData, facturas: existingFacturas};
+        _viaticosData = orden.viaticos;
+        window._fbDB.ref('montasa/logistica').set(DB.logistica).then(()=>{
+          cerrarViaticos();
+          renderLogistica();
+          toast('Solicitud de viáticos guardada ✓');
+        });
+      }
+    }).catch(e=>toast('Error al guardar: '+e.message, true));
+  } else {
+    cerrarViaticos();
+    renderLogistica();
+    toast('Solicitud de viáticos guardada ✓');
   }
-  toast('Solicitud de viáticos guardada ✓');
-  renderLogistica();
 }
 
 function guardarLiquidacion(){
@@ -4326,8 +4368,8 @@ function guardarLiquidacion(){
   if(!orden) return;
   orden.viaticos = {...(_viaticosData||{}), ...liqData};
   _viaticosData = orden.viaticos;
-  saveDB();
-  // Write logistica to Firebase directly (saveDB excludes it)
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
   if(window._fbDB){
     const writeTs = Date.now();
     _lastLogisticaWriteTs = writeTs;
@@ -4336,9 +4378,12 @@ function guardarLiquidacion(){
       lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
       _ts: writeTs,
       _sid: _SESSION_ID
-    });
+    }).then(()=>{
+      toast('Liquidación guardada ✓');
+    }).catch(e=>toast('Error al guardar: '+e.message, true));
+  } else {
+    toast('Liquidación guardada ✓');
   }
-  toast('Liquidación guardada ✓');
 }
 
 // ── GENERADOR DE PDF (client-side con API Anthropic) ─────────────────────
