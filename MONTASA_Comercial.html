@@ -1010,6 +1010,12 @@ function toggleEquipoCliente(){
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec,...req};
         });
+        // Safety: don't show sold equipos in active fleet
+        EQUIPOS_INICIALES.forEach(spec=>{
+          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id);
+          if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
+            DB.equipos.push(JSON.parse(JSON.stringify(spec)));
+        });
       }
       if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
       else if(!DB.vendidos||!DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
