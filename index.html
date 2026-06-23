@@ -3403,6 +3403,82 @@ function enviarSolicitudWA(){
   renderDashboard();
 }
 
+function copiarMensajeWA(){
+  // Build same data as enviarSolicitudWA but just copy to clipboard
+  const equipoSel = document.getElementById('sol-equipo').value;
+  const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
+  const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
+  const tipo      = document.getElementById('sol-tipo').value;
+  const descRaw   = document.getElementById('sol-desc')?.value?.trim() || '';
+  const desc      = descRaw || document.getElementById('sol-mant-tipo')?.value || '';
+  const prioridad = document.getElementById('sol-prioridad')?.value || 'Normal';
+  const operador  = document.getElementById('sol-operador')?.value?.trim() || '';
+  const esLogistica = depto === 'logistica';
+
+  // Get selected personnel names
+  const checkboxes = document.querySelectorAll(esLogistica
+    ? '#sol-logistica-grid input:checked'
+    : '#sol-tecnicos-grid input:checked');
+  const nombres = Array.from(checkboxes).map(cb => cb.dataset.nombre || '').filter(Boolean);
+  const tecnicoNombre = nombres.join(', ') || '—';
+
+  const tipoLabels = {
+    correctivo:'Correctivo', preventivo:'Preventivo',
+    renta:'Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
+    apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
+  };
+  const tipoLabel = tipoLabels[tipo] || tipo;
+  const fecha = new Date().toLocaleDateString('es-HN');
+  const emoji = esLogistica ? '🚛' : '🔧';
+  const appLink = esLogistica
+    ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html'
+    : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
+
+  if(!nombres.length){
+    alert('⚠️ Selecciona al menos un técnico u operador antes de copiar.');
+    return;
+  }
+  if(!equipoTxt){
+    alert('⚠️ Selecciona un equipo antes de copiar.');
+    return;
+  }
+
+  const correlativo = nextCorrelativo(esLogistica?'LG':'MH');
+  const msg = emoji + ' *' + (esLogistica?'ASIGNACION LOGISTICA':'ASIGNACION DE TRABAJO') + ' - MONTASA*\n'
+    + '🔗 ' + appLink + '\n\n'
+    + '🔢 *Orden:* ' + correlativo + '\n'
+    + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
+    + (operador ? '🧑\u200d💼 *Operador:* ' + operador + '\n' : '')
+    + '📋 *Equipo:* ' + equipoTxt + '\n'
+    + '🚛 *Tipo:* ' + tipoLabel + '\n'
+    + '📝 *Detalle:* ' + desc + '\n'
+    + '⚡ *Prioridad:* ' + prioridad + '\n'
+    + '📅 *Fecha:* ' + fecha;
+
+  navigator.clipboard.writeText(msg).then(()=>{
+    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
+    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
+    setTimeout(()=>{
+      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
+    }, 3000);
+  }).catch(()=>{
+    // Fallback para navegadores sin clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = msg;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
+    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
+    setTimeout(()=>{
+      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
+    }, 3000);
+  });
+}
+
 function clearSolicitudForm(){
   document.getElementById('sol-equipo').value = '';
   document.getElementById('sol-desc').value = '';
