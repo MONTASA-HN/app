@@ -3149,6 +3149,20 @@ function solEquipoChange(){
   const val = document.getElementById('sol-equipo')?.value || '';
   const manual = document.getElementById('sol-equipo-manual');
   if(manual) manual.style.display = val === '__otro__' ? 'block' : 'none';
+  // Populate segundo equipo excluding the selected one
+  const sel2 = document.getElementById('sol-equipo2');
+  if(sel2){
+    const current2 = sel2.value;
+    sel2.innerHTML = '<option value="">-- Sin segundo equipo --</option>';
+    DB.equipos.filter(e=>e.id!==val&&(e.estado||'DISPONIBLE')==='DISPONIBLE'||e.estado==='EN RENTA')
+      .forEach(e=>{
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = e.codigo + ' – ' + (e.marca||'');
+        if(e.id===current2) opt.selected = true;
+        sel2.appendChild(opt);
+      });
+  }
 }
 
 function actualizarBtnWA(){
@@ -3215,8 +3229,10 @@ function enviarSolicitudWA(){
     };
     DB.preventivos.push(entry);
   } else if(depto === 'logistica') {
+    const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const entry = {
       id: ordenId, correlativo, equipoId,
+      equipoId2: equipoId2Val || null,
       tipoLogistica: tipo, descripcion: desc, operador,
       prioridad, fecha: fechaISO, fechaInicio: '', fechaFin: '',
       tecnico: '', horometro: '', foto: '', firma: '',
