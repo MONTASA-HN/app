@@ -3093,9 +3093,11 @@ function initSolicitudes(){
   const tipoActual = document.getElementById('sol-tipo')?.value||'';
   [...DB.equipos].sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
     const est = e.estado||'DISPONIBLE';
-    // Para renta: solo mostrar DISPONIBLES
-    if(tipoActual==='renta' && est!=='DISPONIBLE') return;
-    // Para cualquier tipo: ocultar INACTIVOS
+    // Renta y Entrega: solo DISPONIBLES
+    if((tipoActual==='renta'||tipoActual==='entrega') && est!=='DISPONIBLE') return;
+    // Retiro: solo EN RENTA y DISPONIBLES (no INACTIVOS)
+    if(tipoActual==='retiro' && est==='MAL ESTADO') return;
+    // Resto de tipos: ocultar INACTIVOS
     if(est==='MAL ESTADO') return;
     const o = document.createElement('option');
     o.value = e.codigo;
@@ -3160,7 +3162,11 @@ function solTipoChange(){
     selEq.innerHTML = '<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
     DB.equipos.sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
       const est = e.estado||'DISPONIBLE';
-      if(tipo==='renta' && est!=='DISPONIBLE') return;
+      // Renta y Entrega: solo DISPONIBLES
+      if((tipo==='renta'||tipo==='entrega') && est!=='DISPONIBLE') return;
+      // Retiro: solo EN RENTA y DISPONIBLES
+      if(tipo==='retiro' && est==='MAL ESTADO') return;
+      // Resto: ocultar INACTIVOS
       if(est==='MAL ESTADO') return;
       const o = document.createElement('option');
       o.value = e.codigo;
