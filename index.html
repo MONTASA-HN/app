@@ -1319,6 +1319,22 @@ function cardClass(e){
   return 'card card-mal';
 }
 
+function getEq2Label(eq2Id){
+  if(!eq2Id) return '';
+  const eq2 = DB.equipos.find(e=>e.id===eq2Id);
+  if(!eq2) return '';
+  return '<span style="color:var(--text3)">🚜 2° Equipo</span><span>'+eq2.codigo+' – '+(eq2.marca||'')+'</span>';
+}
+
+function calcDuracion(ini, fin){
+  if(!ini||!fin) return '—';
+  const diff = (new Date(fin)-new Date(ini))/60000; // minutes
+  if(diff < 0) return '—';
+  const h = Math.floor(diff/60);
+  const m = Math.round(diff%60);
+  return h>0 ? h+'h '+(m>0?m+'min':'') : m+'min';
+}
+
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
   try{
@@ -1985,11 +2001,12 @@ function renderLogistica(){
       +'<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6">'
       +'<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>'
       +'<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>'
-      +op
+      +(o.equipoId2 ? getEq2Label(o.equipoId2) : '')
       +mot
+      +op
       +(o.viaticos ? ('<span style="color:var(--text3)">💰 Costo viaje</span><span style="font-weight:700;color:#1f3864">L. '+_calcTotalSol(o.viaticos).toFixed(0)+'</span>') : '')
 
-      +'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>'
+      +(o.fechaInicio&&o.fechaFin ? '<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>' : '<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>')
       +'</div>'
       +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
       +((!o.cerrado && o.estado!=='Cancelado') ? '<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>' : (o.viaticos?'<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer">📋 Ver Viáticos (solo lectura)</button>':''))
