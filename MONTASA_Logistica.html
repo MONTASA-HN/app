@@ -346,6 +346,22 @@ function showTab(id, el){
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────
+function getEq2LabelLog(eq2Id){
+  if(!eq2Id) return '';
+  const eq2 = DB.equipos.find(function(e){return e.id===eq2Id;});
+  if(!eq2) return '';
+  return '<div style="font-size:12px;color:var(--text3)">🚜 2° Equipo: <strong>'+eq2.codigo+' – '+(eq2.marca||'')+'</strong></div>';
+}
+
+function calcDuracionLog(ini, fin){
+  if(!ini||!fin) return '—';
+  const diff = (new Date(fin)-new Date(ini))/60000;
+  if(diff<0) return '—';
+  const h = Math.floor(diff/60);
+  const m = Math.round(diff%60);
+  return h>0 ? h+'h '+(m>0?m+'min':'') : m+'min';
+}
+
 function renderDashboardLog(){
   const el = document.getElementById('dashboard-log-content');
   if(!el) return;
@@ -458,10 +474,13 @@ function renderOrdenesLog(){
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           <div style="font-size:13px;color:var(--text2)">${eqLabel}</div>
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
+          ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
+          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
+      ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
