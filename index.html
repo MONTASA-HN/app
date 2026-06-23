@@ -3093,7 +3093,10 @@ function initSolicitudes(){
   [...DB.equipos].sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
     const o = document.createElement('option');
     o.value = e.codigo;
-    o.textContent = e.codigo + ' – ' + e.marca;
+    const est = e.estado||'DISPONIBLE';
+    const estLabel = est==='EN RENTA'?' [EN RENTA]':est==='MAL ESTADO'?' [INACTIVO]':'';
+    o.textContent = e.codigo + ' – ' + e.marca + estLabel;
+    if(est==='MAL ESTADO') o.disabled = true;
     sel.appendChild(o);
   });
   sel.onchange = solEquipoChange;
@@ -3154,6 +3157,20 @@ function solTipoChange(){
   const wrap2 = document.getElementById('sol-equipo2-wrap');
   const isEntregaRetiro = tipo==='entrega'||tipo==='retiro';
   if(wrap2) wrap2.style.display = isEntregaRetiro ? 'block' : 'none';
+
+  // Disable/enable options based on tipo
+  const selEq = document.getElementById('sol-equipo');
+  if(selEq){
+    Array.from(selEq.options).forEach(opt=>{
+      if(!opt.value || opt.value==='__otro__') return;
+      const eq = DB.equipos.find(e=>e.codigo===opt.value);
+      if(!eq) return;
+      const est = eq.estado||'DISPONIBLE';
+      if(isEntregaRetiro || tipo==='renta'){
+        opt.disabled = est==='MAL ESTADO';
+      }
+    });
+  }
 
   // Poblar segundo equipo si aplica
   if(isEntregaRetiro){
@@ -3314,16 +3331,44 @@ function enviarSolicitudWA(){
     };
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
-    // Write logistica to Firebase immediately (saveDB doesn't include it)
+    // Write logistica to Firebase — with rollback on failure
     if(window._fbDB){
       const writeTs = Date.now();
       _lastLogisticaWriteTs = writeTs;
+      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica)); // snapshot before write
       window._fbDB.ref('montasa').update({
         logistica: DB.logistica,
         lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
         _ts: writeTs,
         _sid: _SESSION_ID
+      }).then(()=>{
+        console.log('✅ LG order saved to Firebase:', correlativo);
+        renderLogistica();
+        renderDashboard();
+      }).catch(err=>{
+        console.error('❌ Firebase write failed:', err);
+        // Retry with direct path
+        window._fbDB.ref('montasa/logistica').set(lgSnapshot)
+          .then(()=>{
+            window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+            console.log('✅ LG retry success:', correlativo);
+            renderLogistica();
+            renderDashboard();
+          })
+          .catch(err2=>{
+            // Rollback: remove from local DB to keep sync
+            DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
+            DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
+            saveDB();
+            alert('⚠️ Error al guardar la orden '+correlativo+' en Firebase: '+err2.message+'\n\nLa orden fue revertida. Verifica tu conexión e intenta de nuevo.');
+          });
       });
+    } else {
+      // No Firebase — rollback immediately
+      DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
+      DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
+      saveDB();
+      alert('⚠️ Sin conexión a Firebase. La orden no se guardó. Verifica tu conexión e intenta de nuevo.');
     }
   } else {
     const entry = {
