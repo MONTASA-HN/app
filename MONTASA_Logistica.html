@@ -279,6 +279,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 <script>
 const LS_KEY = 'montasa_log_v1';
+const OPERADORES_LOGISTICA = [
+  'Francisco Narvaez',
+  'Miguel Orellana',
+  'Francisco Ramos',
+  'Elvis Pineda',
+  'Miguel Lopez',
+];
 const PIN_CORRECTO = '1624';
 const _SESSION_ID = Math.random().toString(36).slice(2);
 let pinActual = '';
@@ -364,7 +371,7 @@ function renderDashboardLog(){
     return f.getMonth()===mes && f.getFullYear()===anio;
   }).length;
 
-  const tipoLabels = {renta:'🚛 Renta',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.'};
+  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
   const porTipo = {};
   abiertas.forEach(o=>{ const k=tipoLabels[o.tipoLogistica]||'Otro'; porTipo[k]=(porTipo[k]||0)+1; });
 
@@ -413,7 +420,7 @@ function renderOrdenesLog(){
   const el = document.getElementById('ordenes-log-list');
   if(!el) return;
   const buscar = (document.getElementById('log-buscar')?.value||'').toLowerCase();
-  const tipoLabels = {renta:'🚛 Renta',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.'};
+  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   let list = (DB.logistica||[])
     .filter(o=>o.estado==='Pendiente'||o.estado==='En proceso')
@@ -482,26 +489,14 @@ function renderOrdenesLog(){
               onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
           </div>
         </div>
-        <!-- Horómetro — dos campos solo para renta, uno para los demás -->
-        ${o.tipoLogistica==='renta' ? `
-        <div class="form-group"><label>Horómetro de salida (hrs)</label>
-          <input type="number" value="${o.horometroSalida||''}" placeholder="0"
-            onchange="event.stopPropagation();actualizarLog('${o.id}','horometroSalida',this.value)" oninput="event.stopPropagation()">
-        </div>
-        <div class="form-group"><label>Horómetro de retorno (hrs)</label>
-          <input type="number" value="${o.horometroRetorno||''}" placeholder="0"
-            onchange="event.stopPropagation();actualizarLogHorometroRetorno('${o.id}',this.value)" oninput="event.stopPropagation()">
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">Este valor se guardará en la ficha del equipo</div>
-        </div>` : `
-        <div class="form-group"><label>Horómetro (hrs)</label>
-          <input type="number" value="${o.horometro||''}" placeholder="0"
-            onchange="event.stopPropagation();actualizarLog('${o.id}','horometro',this.value)" oninput="event.stopPropagation()">
-        </div>`}
-        <!-- Operador -->
+        <!-- Campos según tipo de orden -->
+        ${renderCamposTipo(o)}
+                <!-- Operador -->
         <div class="form-group"><label>Operador asignado</label>
-          <input type="text" value="${o.operador||''}" placeholder="Nombre del operador..."
-            onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)"
-            oninput="event.stopPropagation()">
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+            <option value="">— Seleccionar operador —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
+          </select>
         </div>
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
@@ -562,6 +557,88 @@ function actualizarLog(id, campo, valor){
     o.fechaInicio = new Date().toISOString().slice(0,16);
   }
   o[campo] = valor;
+  saveDB();
+}
+
+
+function renderCamposTipo(o){
+  var tipo = o.tipoLogistica||'';
+  var isEntrega = tipo==='entrega';
+  var isRetiro  = tipo==='retiro';
+  var isRenta   = tipo==='renta';
+  var isMovimiento = isEntrega||isRetiro||isRenta;
+  var eq1 = DB.equipos.find(function(e){return e.id===o.equipoId;})||{};
+  var eq2 = o.equipoId2 ? (DB.equipos.find(function(e){return e.id===o.equipoId2;})||{}) : null;
+  var eq1Label = eq1.codigo||(o.clienteNombre||'Equipo 1');
+  var eq2Label = eq2 ? (eq2.codigo||'Equipo 2') : '';
+  var id = o.id;
+  var html = '';
+
+  if(isMovimiento){
+    html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    html += '<div class="form-group"><label>Km salida del plantel</label>';
+    html += '<input type="number" value="'+(o.kmSalida||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'kmSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    html += '<div class="form-group"><label>Km retorno al plantel</label>';
+    html += '<input type="number" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    html += '</div>';
+  }
+
+  if(isEntrega||isRetiro){
+    var eq2Opts = DB.equipos.filter(function(e){return e.id!==o.equipoId;})
+      .map(function(e){return '<option value="'+e.id+'"'+(o.equipoId2===e.id?' selected':'')+'>'+e.codigo+' – '+(e.marca||'')+'</option>';}).join('');
+    html += '<div class="form-group"><label>Equipo secundario (opcional)</label>';
+    html += '<select onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'equipoId2\',this.value)" data-id="'+id+'">';
+    html += '<option value="">— Sin segundo equipo —</option>'+eq2Opts;
+    html += '</select></div>';
+  }
+
+  if(isEntrega){
+    html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">⏱ Horómetro de salida</div>';
+    html += '<div class="form-group"><label>Horómetro salida — '+eq1Label+'</label>';
+    html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    if(eq2){
+      html += '<div class="form-group"><label>Horómetro salida — '+eq2Label+'</label>';
+      html += '<input type="number" value="'+(o.horometroSalida2||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida2\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    }
+  } else if(isRetiro){
+    html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">⏱ Horómetro de retorno</div>';
+    html += '<div class="form-group"><label>Horómetro retorno — '+eq1Label+'</label>';
+    html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    if(eq2){
+      html += '<div class="form-group"><label>Horómetro retorno — '+eq2Label+'</label>';
+      html += '<input type="number" value="'+(o.horometroRetorno2||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroRetorno2\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    }
+  } else if(isRenta){
+    html += '<div class="form-group"><label>Horómetro de salida (hrs)</label>';
+    html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
+    html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+  } else {
+    html += '<div class="form-group"><label>Horómetro (hrs)</label>';
+    html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometro\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+  }
+  return html;
+}
+function actualizarLogKmRetorno(id, valor){
+  const o = (DB.logistica||[]).find(x=>x.id===id);
+  if(!o) return;
+  const salida = parseFloat(o.kmSalida||0);
+  const retorno = parseFloat(valor||0);
+  if(retorno && salida && retorno < salida){
+    alert('⚠️ El km de retorno ('+retorno+') no puede ser menor al de salida ('+salida+')');
+    return;
+  }
+  o.kmRetorno = valor;
   saveDB();
 }
 
@@ -626,6 +703,13 @@ function cerrarOrdenLog(id){
         faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
       }
     }
+    if(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'){
+      if(!o.kmSalida) faltantes.push('Kilometraje de salida');
+      if(!o.kmRetorno) faltantes.push('Kilometraje de retorno');
+      if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)){
+        faltantes.push('Km de retorno debe ser ≥ km de salida');
+      }
+    }
   }
   // Try canvas first, then use saved firma
   const firmaCanvas = getFirmaData('firma-log-'+id);
@@ -641,11 +725,21 @@ function cerrarOrdenLog(id){
   o.cerrado = true;
   o.estado = 'Cerrado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
-  // Update horometro in equipos — use retorno for renta, horometro for others
-  const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno : o.horometro;
+  // Update horometro in equipos
+  const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
+                    o.tipoLogistica==='retiro' ? o.horometroRetorno :
+                    o.tipoLogistica==='entrega' ? o.horometroSalida : o.horometro;
   if(horoFinal && o.equipoId){
     const eq = DB.equipos.find(e=>e.id===o.equipoId);
     if(eq) eq.horometro = horoFinal;
+  }
+  // Update second equipo if exists
+  if(o.equipoId2){
+    const eq2 = DB.equipos.find(e=>e.id===o.equipoId2);
+    if(eq2){
+      const horo2 = o.tipoLogistica==='retiro' ? o.horometroRetorno2 : o.horometroSalida2;
+      if(horo2) eq2.horometro = horo2;
+    }
   }
   saveDB();
   openSubgrupos.delete('cb-log-'+id);
@@ -659,7 +753,7 @@ function renderHistorialLog(){
   const el = document.getElementById('historial-log-list');
   if(!el) return;
   const buscar = (document.getElementById('hist-log-buscar')?.value||'').toLowerCase();
-  const tipoLabels = {renta:'🚛 Renta',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.'};
+  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   let list = (DB.logistica||[])
     .filter(o=>o.cerrado||o.estado==='Cancelado')
