@@ -770,7 +770,7 @@ let modalEquipoId = null;
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   try{
-    if(window._fbDB){
+    if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
       // Use .update() NOT .set() — so 'logistica' key (owned by log app) is NOT overwritten
@@ -3346,7 +3346,7 @@ function enviarSolicitudWA(){
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Write logistica to Firebase — with rollback on failure
-    if(window._fbDB){
+    if(window._fbDB && window._fbReady){
       const writeTs = Date.now();
       _lastLogisticaWriteTs = writeTs;
       const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica)); // snapshot before write
@@ -3832,6 +3832,7 @@ function cerrarExito(){
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
       }
+      window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
         if(remote.preventivos)    DB.preventivos    = remote.preventivos;
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
