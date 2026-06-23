@@ -3440,79 +3440,212 @@ function enviarSolicitudWA(){
 }
 
 function copiarMensajeWA(){
-  // Build same data as enviarSolicitudWA but just copy to clipboard
+  // Crea la orden completa (igual que enviarSolicitudWA) y luego copia el mensaje al clipboard
   const equipoSel = document.getElementById('sol-equipo').value;
   const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
   const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
   const tipo      = document.getElementById('sol-tipo').value;
-  const descRaw   = document.getElementById('sol-desc')?.value?.trim() || '';
-  const desc      = descRaw || document.getElementById('sol-mant-tipo')?.value || '';
-  const prioridad = document.getElementById('sol-prioridad')?.value || 'Normal';
-  const operador  = document.getElementById('sol-operador')?.value?.trim() || '';
-  const esLogistica = depto === 'logistica';
+  const descRaw   = document.getElementById('sol-desc').value.trim();
+  const mantTipo  = document.getElementById('sol-mant-tipo')?.value||'';
+  const operador  = document.getElementById('sol-operador')?.value.trim()||'';
+  const desc      = tipo==='preventivo' ? mantTipo : descRaw;
+  const prioridad = document.getElementById('sol-prioridad').value;
+  const fecha     = document.getElementById('sol-fecha').value;
 
-  // Get selected personnel names
-  const checkboxes = document.querySelectorAll(esLogistica
-    ? '#sol-logistica-grid input:checked'
-    : '#sol-tecnicos-grid input:checked');
-  const nombres = Array.from(checkboxes).map(cb => cb.dataset.nombre || '').filter(Boolean);
-  const tecnicoNombre = nombres.join(', ') || '—';
+  // Seleccionar grid correcto según departamento
+  const gridSelector = depto==='logistica'
+    ? '#sol-logistica-grid input[type=checkbox]:checked'
+    : '#sol-tecnicos-grid input[type=checkbox]:checked';
+  const checks = document.querySelectorAll(gridSelector);
+  if(!checks.length){ toast('Selecciona al menos un ' + (depto==='logistica'?'personal':'técnico'), true); return; }
+  const tecnicosData = Array.from(checks).map(c=>({nombre: c.dataset.nombre, num: c.value}));
+  const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
 
+  const faltSol = [];
+  if(!equipoTxt) faltSol.push('Número de equipo');
+  if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
+  if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
+
+  // ── VALIDACIÓN: técnicos con órdenes abiertas (excluye al supervisor) ──
+  const tecConflictos = tecnicosData.filter(t => t.nombre !== 'Miguel Orellana' && ordenAbiertaDeTecnico(t.nombre, null));
+  if(tecConflictos.length){
+    const msgs = tecConflictos.map(t => {
+      const o = ordenAbiertaDeTecnico(t.nombre, null);
+      return t.nombre + ' → orden ' + (o.correlativo||'abierta');
+    });
+    alert('⚠️ Los siguientes técnicos ya tienen una orden abierta:\n\n' + msgs.join('\n') + '\n\nCierra esas órdenes antes de asignarlos.');
+    return;
+  }
+
+  // ── Validaciones logística ─────────────────────────────────────────────
+  if(depto === 'logistica'){
+    const tipo_check = document.getElementById('sol-tipo')?.value||'';
+    const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
+    const eq_check = DB.equipos.find(e=>e.codigo.trim()===equipoSel_check.trim());
+
+    if(eq_check){
+      const estadoEq = eq_check.estado||'DISPONIBLE';
+      if(estadoEq==='MAL ESTADO'){
+        alert('⚠️ No se puede crear una orden de logística para un equipo INACTIVO ('+eq_check.codigo+').');
+        return;
+      }
+      if(tipo_check==='renta' && estadoEq==='EN RENTA'){
+        alert('⚠️ El equipo '+eq_check.codigo+' ya está EN RENTA. No se puede crear una nueva orden de renta.');
+        return;
+      }
+      if(tipo_check==='retiro'){
+        const retiroAbierta = (DB.logistica||[]).find(o=>
+          o.equipoId===eq_check.id && o.tipoLogistica==='retiro' && !o.cerrado && o.estado!=='Cancelado');
+        if(retiroAbierta){
+          alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de RETIRO abierta ('+retiroAbierta.correlativo+').');
+          return;
+        }
+      }
+      if(tipo_check==='entrega'){
+        const entregaAbierta = (DB.logistica||[]).find(o=>
+          o.equipoId===eq_check.id && o.tipoLogistica==='entrega' && !o.cerrado && o.estado!=='Cancelado');
+        if(entregaAbierta){
+          alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de ENTREGA abierta ('+entregaAbierta.correlativo+').');
+          return;
+        }
+      }
+    }
+  }
+  // ── Fin validaciones ───────────────────────────────────────────────────
+
+  const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
+  const ordenId     = uid();
+  const fechaISO    = new Date().toISOString().slice(0,10);
+
+  // Buscar equipoId
+  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  const equipoId = eq ? eq.id : '__cliente__';
+
+  if(tipo === 'preventivo'){
+    const entry = {
+      id: ordenId, correlativo, equipoId,
+      servicio: desc, fecha: fechaISO, fechaInicio: '', fechaFin: '',
+      horometro: '', tecnico: '',
+      notas: desc, sugerencias: '', foto: '',
+      estado: 'Pendiente',
+      prioridad, completado: false,
+      clienteNombre: eq ? '' : equipoTxt
+    };
+    DB.preventivos.push(entry);
+  } else if(depto === 'logistica') {
+    const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
+    const entry = {
+      id: ordenId, correlativo, equipoId,
+      equipoId2: equipoId2Val || null,
+      tipoLogistica: tipo, descripcion: desc, operador,
+      prioridad, fecha: fechaISO, fechaInicio: '', fechaFin: '',
+      tecnico: '', horometro: '', foto: '', firma: '',
+      estado: 'Pendiente', cerrado: false,
+      clienteNombre: eq ? '' : equipoTxt
+    };
+    if(!DB.logistica) DB.logistica = [];
+    DB.logistica.push(entry);
+    // Write logistica to Firebase — with rollback on failure
+    if(window._fbDB && window._fbReady){
+      const writeTs = Date.now();
+      _lastLogisticaWriteTs = writeTs;
+      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
+      window._fbDB.ref('montasa').update({
+        logistica: DB.logistica,
+        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
+        _ts: writeTs,
+        _sid: _SESSION_ID
+      }).then(()=>{
+        console.log('✅ LG order (copiar) saved to Firebase:', correlativo);
+        renderLogistica();
+        renderDashboard();
+      }).catch(err=>{
+        console.error('❌ Firebase write failed (copiar):', err);
+        window._fbDB.ref('montasa/logistica').set(lgSnapshot)
+          .then(()=>{
+            window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+            console.log('✅ LG retry success (copiar):', correlativo);
+            renderLogistica();
+            renderDashboard();
+          })
+          .catch(err2=>{
+            DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
+            DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
+            saveDB();
+            alert('⚠️ Error al guardar la orden '+correlativo+' en Firebase: '+err2.message+'\n\nLa orden fue revertida. Verifica tu conexión e intenta de nuevo.');
+          });
+      });
+    } else {
+      DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
+      DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
+      saveDB();
+      alert('⚠️ Sin conexión a Firebase. La orden no se guardó. Verifica tu conexión e intenta de nuevo.');
+      return;
+    }
+  } else {
+    const entry = {
+      id: ordenId, correlativo, equipoId,
+      sistema: '', falla: desc, prioridad,
+      fecha: fechaISO, fechaInicio: '', fechaFin: '',
+      tecnico: '', diagnostico: '',
+      foto: '', estado: 'Pendiente',
+      clienteNombre: eq ? '' : equipoTxt
+    };
+    DB.correctivos.push(entry);
+  }
+
+  saveDB();
+
+  // Guardar en solicitudes para historial
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({
+    id: ordenId, correlativo, equipoTxt, equipoId,
+    desc, fecha, tecnicoNombre, prioridad, tipo, estado: 'Enviada'
+  });
+  saveDB();
+
+  // Limpiar formulario y confirmar
+  clearSolicitudForm();
+  renderDashboard();
+  toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
+
+  // Construir mensaje y copiar al clipboard
   const tipoLabels = {
-    correctivo:'Correctivo', preventivo:'Preventivo',
-    renta:'Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
-    apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
+    correctivo: 'Correctivo', preventivo: 'Preventivo',
+    renta: 'Renta', entrega: 'Entrega de Equipo', retiro: 'Retiro de Equipo',
+    entrega_retiro: 'Entrega/Retiro', apoyo_mantenimiento: 'Apoyo Mantenimiento', atencion_compras: 'Atención de Compras'
   };
   const tipoLabel = tipoLabels[tipo] || tipo;
-  const fecha = new Date().toLocaleDateString('es-HN');
-  const emoji = esLogistica ? '🚛' : '🔧';
+  const esLogistica = depto === 'logistica';
+  const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
   const appLink = esLogistica
     ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html'
     : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
-
-  if(!nombres.length){
-    alert('⚠️ Selecciona al menos un técnico u operador antes de copiar.');
-    return;
-  }
-  if(!equipoTxt){
-    alert('⚠️ Selecciona un equipo antes de copiar.');
-    return;
-  }
-
-  const correlativo = nextCorrelativo(esLogistica?'LG':'MH');
   const msg = emoji + ' *' + (esLogistica?'ASIGNACION LOGISTICA':'ASIGNACION DE TRABAJO') + ' - MONTASA*\n'
     + '🔗 ' + appLink + '\n\n'
     + '🔢 *Orden:* ' + correlativo + '\n'
     + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
-    + (operador ? '🧑\u200d💼 *Operador:* ' + operador + '\n' : '')
+    + (operador ? '🧑‍💼 *Operador:* ' + operador + '\n' : '')
     + '📋 *Equipo:* ' + equipoTxt + '\n'
     + '🚛 *Tipo:* ' + tipoLabel + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha;
 
-  navigator.clipboard.writeText(msg).then(()=>{
-    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
-    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
-    setTimeout(()=>{
-      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
-    }, 3000);
-  }).catch(()=>{
-    // Fallback para navegadores sin clipboard API
-    const ta = document.createElement('textarea');
-    ta.value = msg;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
-    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
-    setTimeout(()=>{
-      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
-    }, 3000);
-  });
+  const _doCopy = () => {
+    navigator.clipboard.writeText(msg).catch(()=>{
+      const ta = document.createElement('textarea');
+      ta.value = msg;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  };
+  _doCopy();
 }
 
 function clearSolicitudForm(){
