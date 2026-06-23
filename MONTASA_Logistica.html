@@ -280,6 +280,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 <script>
 const LS_KEY = 'montasa_log_v1';
+const MOTORISTAS_LOGISTICA = ['Francisco Narvaez', 'Miguel Lopez'];
 const OPERADORES_LOGISTICA = [
   'Francisco Narvaez',
   'Miguel Orellana',
@@ -499,6 +500,14 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>
+        <!-- Motorista — solo entrega, retiro, apoyo_compras -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`
+        <div class="form-group"><label>Motorista</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
+            <option value="">— Seleccionar motorista —</option>
+            ${MOTORISTAS_LOGISTICA.map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>`:``}
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
@@ -524,6 +533,23 @@ function renderOrdenesLog(){
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>
         <!-- Botones acción -->
+        <!-- P8: Horas trabajadas (renta cerrada) -->
+        ${(o.tipoLogistica==='renta' && o.cerrado && o.horometroSalida && o.horometroRetorno) ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px">
+          <div style="text-align:center">
+            <div style="font-size:11px;color:#1f3864;font-weight:600">⏱ HORAS EQUIPO</div>
+            <div style="font-size:18px;font-weight:800;color:#1f3864">${(parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1)} hrs</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:#1f3864;font-weight:600">👷 HORAS OPERADOR</div>
+            <div style="font-size:18px;font-weight:800;color:#1f3864">${o.fechaInicio&&o.fechaFin ? ((new Date(o.fechaFin)-new Date(o.fechaInicio))/3600000).toFixed(1)+' hrs' : '—'}</div>
+          </div>
+        </div>` : ''}
+        <!-- P9: Motorista asignado (entrega/retiro/compras) -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras') && o.motorista ? `
+        <div style="margin-top:8px;font-size:13px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px">
+          <span style="color:var(--text3)">🚗 Motorista: </span><strong>${o.motorista}</strong>
+        </div>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
           ${!o.cerrado && o.estado!=='Cancelado' ? `<button style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer" onclick="abrirViaticos('${o.id}')">📋 Viáticos</button>` : (o.viaticos ? `<button style="padding:12px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer" onclick="abrirViaticos('${o.id}')">📋 Ver Viáticos</button>` : `<span></span>`)}
           <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
@@ -558,6 +584,17 @@ function actualizarLog(id, campo, valor){
     o.fechaInicio = new Date().toISOString().slice(0,16);
   }
   o[campo] = valor;
+  // P5: Auto-update horometro in equipment card
+  const _hf = ['horometroSalida','horometroRetorno','horometroSalida2','horometroRetorno2','horometro'];
+  if(_hf.includes(campo) && valor){
+    const _t = o.tipoLogistica||'';
+    if(o.equipoId){
+      if((_t==='renta'||_t==='retiro')&&campo==='horometroRetorno'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
+      if(_t==='entrega'&&campo==='horometroSalida'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
+      if(campo==='horometro'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
+    }
+    if(o.equipoId2&&(campo==='horometroSalida2'||campo==='horometroRetorno2')){const _e2=DB.equipos.find(e=>e.id===o.equipoId2);if(_e2)_e2.horometro=valor;}
+  }
   saveDB();
 }
 
