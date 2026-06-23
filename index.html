@@ -3090,13 +3090,17 @@ function initSolicitudes(){
   // Fill equipo select
   const sel = document.getElementById('sol-equipo');
   sel.innerHTML = '<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
+  const tipoActual = document.getElementById('sol-tipo')?.value||'';
   [...DB.equipos].sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
+    const est = e.estado||'DISPONIBLE';
+    // Para renta: solo mostrar DISPONIBLES
+    if(tipoActual==='renta' && est!=='DISPONIBLE') return;
+    // Para cualquier tipo: ocultar INACTIVOS
+    if(est==='MAL ESTADO') return;
     const o = document.createElement('option');
     o.value = e.codigo;
-    const est = e.estado||'DISPONIBLE';
-    const estLabel = est==='EN RENTA'?' [EN RENTA]':est==='MAL ESTADO'?' [INACTIVO]':'';
+    const estLabel = est==='EN RENTA'?' [EN RENTA]':'';
     o.textContent = e.codigo + ' – ' + e.marca + estLabel;
-    if(est==='MAL ESTADO') o.disabled = true;
     sel.appendChild(o);
   });
   sel.onchange = solEquipoChange;
@@ -3148,6 +3152,24 @@ function solDeptoChange(){
 
 function solTipoChange(){
   const tipo = document.getElementById('sol-tipo')?.value || 'correctivo';
+
+  // Re-populate equipo select filtered by tipo
+  const selEq = document.getElementById('sol-equipo');
+  if(selEq && typeof DB !== 'undefined' && DB.equipos){
+    const currentVal = selEq.value;
+    selEq.innerHTML = '<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
+    DB.equipos.sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
+      const est = e.estado||'DISPONIBLE';
+      if(tipo==='renta' && est!=='DISPONIBLE') return;
+      if(est==='MAL ESTADO') return;
+      const o = document.createElement('option');
+      o.value = e.codigo;
+      const estLabel = est==='EN RENTA'?' [EN RENTA]':'';
+      o.textContent = e.codigo + ' – ' + e.marca + estLabel;
+      if(e.codigo===currentVal) o.selected = true;
+      selEq.appendChild(o);
+    });
+  }
   const descWrap = document.getElementById('sol-desc-wrap');
   const mantWrap = document.getElementById('sol-mant-wrap');
   if(descWrap) descWrap.style.display = tipo==='preventivo' ? 'none'  : 'block';
@@ -3157,20 +3179,6 @@ function solTipoChange(){
   const wrap2 = document.getElementById('sol-equipo2-wrap');
   const isEntregaRetiro = tipo==='entrega'||tipo==='retiro';
   if(wrap2) wrap2.style.display = isEntregaRetiro ? 'block' : 'none';
-
-  // Disable/enable options based on tipo
-  const selEq = document.getElementById('sol-equipo');
-  if(selEq){
-    Array.from(selEq.options).forEach(opt=>{
-      if(!opt.value || opt.value==='__otro__') return;
-      const eq = DB.equipos.find(e=>e.codigo===opt.value);
-      if(!eq) return;
-      const est = eq.estado||'DISPONIBLE';
-      if(isEntregaRetiro || tipo==='renta'){
-        opt.disabled = est==='MAL ESTADO';
-      }
-    });
-  }
 
   // Poblar segundo equipo si aplica
   if(isEntregaRetiro){
