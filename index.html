@@ -1989,7 +1989,7 @@ function renderLogistica(){
       +'</div>'
       +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
       +((!o.cerrado && o.estado!=='Cancelado') ? '<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>' : (o.viaticos?'<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer">📋 Ver Viáticos (solo lectura)</button>':''))
-      +(o.vales&&o.vales.length ? '<button onclick="abrirValeGerencia(\''+o.id+'\')" style="width:100%;margin-top:6px;padding:8px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">🍽 Ver / Editar Vale de Alimentación</button>' : '')
+      +(o.estado!=='Cancelado' ? '<button onclick="abrirValeGerencia(\''+o.id+'\')" style="width:100%;margin-top:6px;padding:8px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.vales&&o.vales.length?'🍽 Ver / Editar Vale':'🍽 Generar Vale de Alimentación')+'</button>' : '')
       +'</div></div>';
   }).join('');
 }
@@ -2601,7 +2601,7 @@ function renderHistorial(){
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           ${x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#dce6f1;color:#1f3864" onclick="abrirViaticos('${x.id}')">📋 Viáticos</button>`:''}
-          ${x.vales&&x.vales.length?`<button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="abrirValeGerencia('${x.id}')">🍽 Vale</button>`:''}
+          <button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>
           <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('log','${x.id}')">✏️ Editar</button>
           <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('log','${x.id}')">✕ Eliminar</button>
         </div>
@@ -4908,8 +4908,19 @@ let _valeOrdenId = null;
 function abrirValeGerencia(ordenId){
   solicitarPINAccion(()=>{
     _valeOrdenId = ordenId;
+    const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+    if(!orden) return;
+    // Si no tiene vales aún, intentar calcular automáticamente
+    if(!orden.vales || !orden.vales.length){
+      const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
+      if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
+        orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+        saveDB();
+      }
+      // Si no tiene hora, los checkboxes quedarán vacíos para selección manual
+    }
     _mostrarOverlayVale(ordenId);
-  }, '🍽 Vale de Alimentación', 'Ingresa tu PIN para editar el vale');
+  }, '🍽 Vale de Alimentación', 'Ingresa tu PIN para gestionar el vale');
 }
 
 function _mostrarOverlayVale(ordenId){
@@ -4922,6 +4933,9 @@ function _mostrarOverlayVale(ordenId){
   const ov = document.getElementById('vale-overlay');
   if(!ov) return;
 
+  const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
+  const sinHora = !tieneHora(orden.fechaInicio) || !tieneHora(orden.fechaFin);
+
   ov.innerHTML = `
   <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:flex-end">
   <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:90vh;overflow-y:auto">
@@ -4933,9 +4947,11 @@ function _mostrarOverlayVale(ordenId){
       <button onclick="cerrarValeGerencia()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
     </div>
     <div style="padding:16px">
-      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">
+      ${sinHora ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:#856404">
+        ⚠️ La orden no tiene hora de inicio/fin registrada. Los vales no se pueden calcular automáticamente — selecciónalos manualmente.
+      </div>` : `<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">
         ⚙️ Generado automáticamente al cerrar la orden. Puedes activar o desactivar vales manualmente.
-      </div>
+      </div>`}
       <!-- Checkboxes editables -->
       <div id="vale-checks" style="margin-bottom:14px">
         ${tipos.map(t=>`
