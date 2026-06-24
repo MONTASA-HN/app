@@ -21,6 +21,8 @@
   }
 
 #viaticos-overlay.open{display:block!important}
+#vale-overlay{display:none}
+#vale-overlay.open{display:block!important}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea,#viaticos-overlay input[type=number]~*{text-transform:uppercase}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea{text-transform:uppercase}
 </style>
@@ -797,11 +799,59 @@ function cerrarOrdenLog(id){
       if(horo2) eq2.horometro = horo2;
     }
   }
+  // ── Calcular vales de alimentación automáticamente ──────────────────────
+  if(!esCancelado && o.fechaInicio && o.fechaFin && !o.vales){
+    o.vales = calcularVales(o.fechaInicio, o.fechaFin);
+  }
   saveDB();
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();
   toast('Orden '+o.correlativo+' cerrada ✓');
+}
+
+// ── LÓGICA DE VALES DE ALIMENTACIÓN ──────────────────────────────────────
+function calcularVales(fechaInicio, fechaFin){
+  if(!fechaInicio || !fechaFin) return [];
+  const ini = new Date(fechaInicio);
+  const fin = new Date(fechaFin);
+  if(isNaN(ini) || isNaN(fin)) return [];
+
+  const hIni = ini.getHours() + ini.getMinutes()/60;  // hora inicio decimal
+  const hFin = fin.getHours() + fin.getMinutes()/60;  // hora fin decimal
+
+  const vales = [];
+
+  // Regla 4: inicio antes de las 7:00 am → desayuno
+  if(hIni < 7) vales.push({tipo:'desayuno', monto:120});
+
+  // Regla 5: corrida la hora de almuerzo (12:00–13:00) → almuerzo
+  // La orden cubre el intervalo [12, 13] si ini <= 12 y fin >= 13
+  if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
+
+  // Regla 6: fin después de las 19:00 → cena
+  if(hFin > 19) vales.push({tipo:'cena', monto:150});
+
+  // Regla 7: fin >= 00:00 (medianoche) y < 05:00 → media noche
+  // hFin puede ser 0 si es exactamente medianoche
+  // Si la fecha fin es distinta a la fecha inicio y hFin < 5 → media noche
+  const mismodia = ini.toDateString() === fin.toDateString();
+  if(!mismodia && hFin < 5) vales.push({tipo:'media_noche', monto:150});
+  // también si mismo día pero pasó medianoche (fin en horas < 5 ya cubierto arriba)
+  // o si el fin es exactamente >= 24 equivalente: fin.getDate() > ini.getDate() con hora < 5
+  const hFinReal = fin.getHours() + fin.getMinutes()/60;
+  if(!mismodia && hFinReal >= 0 && hFinReal < 5 && !vales.find(v=>v.tipo==='media_noche')){
+    vales.push({tipo:'media_noche', monto:150});
+  }
+
+  // Validar tope de L. 1500
+  const total = vales.reduce((s,v)=>s+v.monto,0);
+  if(total > 1500){
+    // Recortar desde el último hasta no exceder
+    let acum = 0;
+    return vales.filter(v=>{ acum+=v.monto; return acum<=1500; });
+  }
+  return vales;
 }
 
 // ── HISTORIAL LOGÍSTICA ───────────────────────────────────────────────────
@@ -852,6 +902,10 @@ function renderHistorialLog(){
       ${o.viaticos?`<div style="margin-top:8px;display:flex;gap:6px">
         <span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos adjuntos</span>
         <button onclick="abrirViaticos('${o.id}')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button>
+      </div>`:''}
+      ${o.vales&&o.vales.length?`<div style="margin-top:8px;display:flex;gap:6px">
+        <span style="font-size:11px;background:#fff3cd;color:#856404;padding:2px 10px;border-radius:10px;font-weight:600">🍽 Vale adjunto</span>
+        <button onclick="abrirValeLog('${o.id}')" style="font-size:11px;background:#856404;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver</button>
       </div>`:''}
     </div>`;
   }).join('');
@@ -1361,6 +1415,56 @@ function abrirViaticos(ordenId){
 
 function cerrarViaticos(){
   const ov = document.getElementById('viaticos-overlay');
+  if(ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── VALES DE ALIMENTACIÓN (vista lectura en Logística) ────────────────────
+function abrirValeLog(ordenId){
+  const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+  if(!orden || !orden.vales || !orden.vales.length){ toast('Esta orden no tiene vales generados'); return; }
+  const ov = document.getElementById('vale-overlay');
+  if(!ov) return;
+
+  const vales = orden.vales;
+  const total = vales.reduce((s,v)=>s+v.monto,0);
+  const labels = {desayuno:'🌅 Desayuno', almuerzo:'🍽 Almuerzo', cena:'🌙 Cena', media_noche:'🌃 Media noche'};
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:flex-end">
+  <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:80vh;overflow-y:auto">
+    <div style="background:#856404;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:white">🍽 Vale de Alimentación</div>
+        <div style="font-size:12px;color:#ffe082">${orden.correlativo} · ${fmtDT(orden.fechaInicio)} – ${fmtDT(orden.fechaFin)}</div>
+      </div>
+      <button onclick="cerrarValeLog()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px">
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px;font-size:13px">
+        <div style="color:var(--text3);margin-bottom:4px">Técnico / Personal</div>
+        <strong>${orden.tecnico||orden.operador||'—'}</strong>
+      </div>
+      ${vales.map(v=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:6px;background:var(--surface2)">
+          <span style="font-size:14px;font-weight:500">${labels[v.tipo]||v.tipo}</span>
+          <span style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace">L. ${v.monto.toFixed(2)}</span>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:#856404;color:white;margin-top:4px">
+        <span style="font-size:14px;font-weight:700">💰 TOTAL</span>
+        <span style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">L. ${total.toFixed(2)}</span>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--text3);text-align:center">Generado automáticamente al cerrar la orden</div>
+    </div>
+  </div>
+  </div>`;
+
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarValeLog(){
+  const ov = document.getElementById('vale-overlay');
   if(ov) ov.classList.remove('open');
   document.body.style.overflow = '';
 }
@@ -2093,6 +2197,7 @@ function _buildLiquidacionHTML(v, orden){
 </script>
 
 <div id="viaticos-overlay" style="display:none"></div>
+<div id="vale-overlay" style="display:none"></div>
 
 </body>
 </html>
