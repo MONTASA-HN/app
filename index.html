@@ -775,16 +775,7 @@ function saveDB(){
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      // Use .update() NOT .set() — so 'logistica' key (owned by log app) is NOT overwritten
       window._fbDB.ref('montasa').update({
-        equipos: DB.equipos.map(e=>({
-          id:e.id, codigo:e.codigo, serie:e.serie||'',
-          tipo:e.tipo||'', marca:e.marca||'', desc:e.desc||'',
-          combustible:e.combustible||'',
-          estado:e.estado||'DISPONIBLE',
-          ubicacion:e.ubicacion||'', cliente:e.cliente||'',
-          horometro:e.horometro||'', observaciones:e.observaciones||''
-        })),
         preventivos:    DB.preventivos||[],
         correctivos:    DB.correctivos||[],
         solicitudes:    DB.solicitudes||[],
@@ -796,6 +787,26 @@ function saveDB(){
       });
     }
   }catch(e){}
+}
+
+function saveEquipo(eq){
+  if(!eq || !window._fbDB || !window._fbReady) return;
+  const idx = DB.equipos.findIndex(e => e.id === eq.id);
+  if(idx === -1) return;
+  window._fbDB.ref('montasa/equipos/' + idx).update({
+    id:eq.id,codigo:eq.codigo,serie:eq.serie||'',tipo:eq.tipo||'',marca:eq.marca||'',
+    desc:eq.desc||'',combustible:eq.combustible||'',estado:eq.estado||'DISPONIBLE',
+    ubicacion:eq.ubicacion||'',cliente:eq.cliente||'',horometro:eq.horometro||'',observaciones:eq.observaciones||''
+  }).catch(err => console.error('saveEquipo error:', err));
+}
+
+function saveAllEquipos(){
+  if(!window._fbDB || !window._fbReady) return;
+  window._fbDB.ref('montasa/equipos').set(
+    DB.equipos.map(e=>({id:e.id,codigo:e.codigo,serie:e.serie||'',tipo:e.tipo||'',marca:e.marca||'',
+      desc:e.desc||'',combustible:e.combustible||'',estado:e.estado||'DISPONIBLE',
+      ubicacion:e.ubicacion||'',cliente:e.cliente||'',horometro:e.horometro||'',observaciones:e.observaciones||''}))
+  ).catch(err => console.error('saveAllEquipos error:', err));
 }
 function loadDB(){
   try{
@@ -992,6 +1003,7 @@ function guardarDesdeModal(){
     e.horometro   = document.getElementById('det-horometro').value.trim();
     e.observaciones = document.getElementById('det-obs').value.trim();
     saveDB();
+    saveEquipo(e);
     cerrarModal();
     renderEquipos();
     toast('Equipo actualizado ✓');
@@ -1002,7 +1014,7 @@ function eliminarDesdeModal(){
   if(!modalEquipoId) return;
   solicitarPINAccion(()=>{
     DB.equipos = DB.equipos.filter(x => x.id !== modalEquipoId);
-    saveDB();
+    saveDB(); saveAllEquipos();
     cerrarModal();
     renderEquipos();
     toast('Equipo eliminado');
@@ -1321,7 +1333,7 @@ function fmt(s){
   try{
     const d = new Date(s);
     if(isNaN(d)) return s;
-    return d.toLocaleDateString('es-HN', {day:'2-digit', month:'2-digit', year:'numeric'});
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
   } catch(e){ return s; }
 }
 
@@ -1689,7 +1701,7 @@ function venderEquipo(){
     DB.vendidos.push(vnd);
     // Remove from active fleet
     DB.equipos = DB.equipos.filter(e=>e.id!==modalEquipoId);
-    saveDB();
+    saveDB(); saveAllEquipos();
     cerrarModal();
     renderEquipos();
     toast('Equipo '+eq.codigo+' movido a Vendidos ✓');
@@ -2000,7 +2012,7 @@ function equipoAInactivo(equipoId){
   const eq = DB.equipos.find(e=>e.id===equipoId);
   if(eq && eq.estado==='DISPONIBLE'){
     eq.estado = 'MAL ESTADO';
-    saveDB();
+    saveDB(); saveEquipo(eq);
     renderEquipos();
   }
 }
@@ -2010,7 +2022,7 @@ function equipoADisponible(equipoId){
   const eq = DB.equipos.find(e=>e.id===equipoId);
   if(eq && eq.estado==='MAL ESTADO'){
     eq.estado = 'DISPONIBLE';
-    saveDB();
+    saveDB(); saveEquipo(eq);
     renderEquipos();
   }
 }
@@ -2640,7 +2652,7 @@ function guardarEquipo(){
   const desc = document.getElementById('eq-desc').value.trim();
   if(!codigo||!desc){ toast('Código y descripción requeridos',true); return; }
   DB.equipos.push({id:uid(),codigo,desc,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value.trim(),serie:document.getElementById('eq-serie-new').value.trim(),combustible:document.getElementById('eq-combustible').value,ubicacion:document.getElementById('eq-ubicacion-new').value.trim(),cliente:document.getElementById('eq-cliente-new').value.trim(),estado:'DISPONIBLE',horometro:'',observaciones:''});
-  saveDB(); toggleForm('form-equipo');
+  saveDB(); saveAllEquipos(); toggleForm('form-equipo');
   ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>document.getElementById(id).value='');
   renderEquipos(); toast('Equipo guardado');
 }
@@ -3444,78 +3456,108 @@ function enviarSolicitudWA(){
 }
 
 function copiarMensajeWA(){
-  // Build same data as enviarSolicitudWA but just copy to clipboard
   const equipoSel = document.getElementById('sol-equipo').value;
   const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
   const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
   const tipo      = document.getElementById('sol-tipo').value;
-  const descRaw   = document.getElementById('sol-desc')?.value?.trim() || '';
-  const desc      = descRaw || document.getElementById('sol-mant-tipo')?.value || '';
-  const prioridad = document.getElementById('sol-prioridad')?.value || 'Normal';
-  const operador  = document.getElementById('sol-operador')?.value?.trim() || '';
-  const esLogistica = depto === 'logistica';
-
-  // Get selected personnel names
-  const checkboxes = document.querySelectorAll(esLogistica
-    ? '#sol-logistica-grid input:checked'
-    : '#sol-tecnicos-grid input:checked');
-  const nombres = Array.from(checkboxes).map(cb => cb.dataset.nombre || '').filter(Boolean);
-  const tecnicoNombre = nombres.join(', ') || '—';
-
-  const tipoLabels = {
-    correctivo:'Correctivo', preventivo:'Preventivo',
-    renta:'Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
-    apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
-  };
+  const descRaw   = document.getElementById('sol-desc').value.trim();
+  const mantTipo  = document.getElementById('sol-mant-tipo')?.value||'';
+  const operador  = document.getElementById('sol-operador')?.value.trim()||'';
+  const desc      = tipo==='preventivo' ? mantTipo : descRaw;
+  const prioridad = document.getElementById('sol-prioridad').value;
+  const fecha     = document.getElementById('sol-fecha').value;
+  const gridSelector = depto==='logistica'
+    ? '#sol-logistica-grid input[type=checkbox]:checked'
+    : '#sol-tecnicos-grid input[type=checkbox]:checked';
+  const checks = document.querySelectorAll(gridSelector);
+  if(!checks.length){ toast('Selecciona al menos un ' + (depto==='logistica'?'personal':'técnico'), true); return; }
+  const tecnicosData = Array.from(checks).map(c=>({nombre: c.dataset.nombre, num: c.value}));
+  const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
+  const faltSol = [];
+  if(!equipoTxt) faltSol.push('Número de equipo');
+  if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
+  if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
+  const tecConflictos = tecnicosData.filter(t => t.nombre !== 'Miguel Orellana' && ordenAbiertaDeTecnico(t.nombre, null));
+  if(tecConflictos.length){
+    const msgs = tecConflictos.map(t => { const o = ordenAbiertaDeTecnico(t.nombre, null); return t.nombre + ' → orden ' + (o.correlativo||'abierta'); });
+    alert('⚠️ Los siguientes técnicos ya tienen una orden abierta:\n\n' + msgs.join('\n') + '\n\nCierra esas órdenes antes de asignarlos.');
+    return;
+  }
+  if(depto === 'logistica'){
+    const tipo_check = document.getElementById('sol-tipo')?.value||'';
+    const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
+    const eq_check = DB.equipos.find(e=>e.codigo.trim()===equipoSel_check.trim());
+    if(eq_check){
+      const estadoEq = eq_check.estado||'DISPONIBLE';
+      if(estadoEq==='MAL ESTADO'){ alert('⚠️ No se puede crear una orden de logística para un equipo INACTIVO ('+eq_check.codigo+').'); return; }
+      if(tipo_check==='renta' && estadoEq==='EN RENTA'){ alert('⚠️ El equipo '+eq_check.codigo+' ya está EN RENTA.'); return; }
+      if(tipo_check==='retiro'){
+        const retiroAbierta = (DB.logistica||[]).find(o=>o.equipoId===eq_check.id && o.tipoLogistica==='retiro' && !o.cerrado && o.estado!=='Cancelado');
+        if(retiroAbierta){ alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de RETIRO abierta ('+retiroAbierta.correlativo+').'); return; }
+      }
+      if(tipo_check==='entrega'){
+        const entregaAbierta = (DB.logistica||[]).find(o=>o.equipoId===eq_check.id && o.tipoLogistica==='entrega' && !o.cerrado && o.estado!=='Cancelado');
+        if(entregaAbierta){ alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de ENTREGA abierta ('+entregaAbierta.correlativo+').'); return; }
+      }
+    }
+  }
+  const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
+  const ordenId     = uid();
+  const fechaISO    = new Date().toISOString().slice(0,10);
+  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  const equipoId = eq ? eq.id : '__cliente__';
+  if(tipo === 'preventivo'){
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt});
+  } else if(depto === 'logistica') {
+    const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
+    const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    if(!DB.logistica) DB.logistica = [];
+    DB.logistica.push(entry);
+    if(window._fbDB && window._fbReady){
+      const writeTs = Date.now();
+      _lastLogisticaWriteTs = writeTs;
+      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
+      window._fbDB.ref('montasa').update({logistica:DB.logistica,lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
+        .then(()=>{ renderLogistica(); renderDashboard(); })
+        .catch(err=>{
+          window._fbDB.ref('montasa/logistica').set(lgSnapshot)
+            .then(()=>{ window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard(); })
+            .catch(err2=>{ DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB(); alert('⚠️ Error al guardar: '+err2.message); });
+        });
+    } else {
+      DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB();
+      alert('⚠️ Sin conexión a Firebase.'); return;
+    }
+  } else {
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt});
+  }
+  saveDB();
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt,equipoId,desc,fecha,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
+  saveDB();
+  clearSolicitudForm();
+  renderDashboard();
+  toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
   const tipoLabel = tipoLabels[tipo] || tipo;
-  const fecha = new Date().toLocaleDateString('es-HN');
-  const emoji = esLogistica ? '🚛' : '🔧';
-  const appLink = esLogistica
-    ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html'
-    : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
-
-  if(!nombres.length){
-    alert('⚠️ Selecciona al menos un técnico u operador antes de copiar.');
-    return;
-  }
-  if(!equipoTxt){
-    alert('⚠️ Selecciona un equipo antes de copiar.');
-    return;
-  }
-
-  const correlativo = nextCorrelativo(esLogistica?'LG':'MH');
+  const esLogistica = depto === 'logistica';
+  const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
+  const appLink = esLogistica ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html' : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
   const msg = emoji + ' *' + (esLogistica?'ASIGNACION LOGISTICA':'ASIGNACION DE TRABAJO') + ' - MONTASA*\n'
     + '🔗 ' + appLink + '\n\n'
     + '🔢 *Orden:* ' + correlativo + '\n'
     + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
-    + (operador ? '🧑\u200d💼 *Operador:* ' + operador + '\n' : '')
+    + (operador ? '🧑‍💼 *Operador:* ' + operador + '\n' : '')
     + '📋 *Equipo:* ' + equipoTxt + '\n'
     + '🚛 *Tipo:* ' + tipoLabel + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha;
-
-  navigator.clipboard.writeText(msg).then(()=>{
-    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
-    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
-    setTimeout(()=>{
-      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
-    }, 3000);
-  }).catch(()=>{
-    // Fallback para navegadores sin clipboard API
+  navigator.clipboard.writeText(msg).catch(()=>{
     const ta = document.createElement('textarea');
-    ta.value = msg;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    const btn = document.querySelector('[onclick="copiarMensajeWA()"]');
-    if(btn){ btn.textContent = '✅ ¡Copiado!'; btn.style.background='#18a303'; }
-    setTimeout(()=>{
-      if(btn){ btn.textContent = '📋 Copiar mensaje'; btn.style.background='#1f3864'; }
-    }, 3000);
+    ta.value = msg; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
   });
 }
 
@@ -4855,7 +4897,7 @@ function _buildLiquidacionHTML(v, orden){
   </style></head><body>
   <button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
   <div class="header">
-    <div><h1>MONTASA HANDLING CO.</h1><div style="font-size:10pt">LIQUIDACIÓN DE VIÁTICOS</div></div>
+    <div style="display:flex;align-items:center;gap:12px"><img src="data:image/png;base64,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" style="height:48px;width:auto;object-fit:contain;filter:brightness(0) invert(1)"><div style="font-size:10pt;font-weight:600;color:white">LIQUIDACIÓN DE VIÁTICOS</div></div>
     <div style="font-size:8pt;opacity:0.85;text-align:right">N° OT: ${orden.correlativo||''}<br>FECHA: ${v.fecha_doc||''}</div>
   </div>
   <div class="info-bar">
@@ -4864,23 +4906,24 @@ function _buildLiquidacionHTML(v, orden){
     <div><strong>Destino:</strong> ${v.destino||'—'}</div>
   </div>
   <table>
-    <tr><th style="width:30px">N°</th><th>DESCRIPCIÓN</th><th style="width:70px">FECHA</th><th style="width:80px">N° DOCUMENTO</th><th style="width:70px" class="num">MONTO</th></tr>
+    <tr><th style="width:30px">N°</th><th>DESCRIPCIÓN</th><th style="width:70px">FECHA</th><th style="width:130px">N° DOCUMENTO</th><th style="width:70px" class="num">MONTO</th></tr>
     ${factRows}
     <tr class="tot"><td></td><td colspan="3"><strong>TOTAL DOCUMENTACIÓN</strong></td><td class="num"><strong>L. ${totalFact.toFixed(2)}</strong></td></tr>
     <tr class="diff-row"><td></td><td colspan="3">DIFERENCIA (SOLICITADO - LIQUIDADO)</td><td class="num">L. ${diff.toFixed(2)}</td></tr>
   </table>
   <div style="font-size:7pt;margin-bottom:10px">NOTA: Reporte de documentación física entregada a Finanzas</div>
   <div class="firmas">
-    <div class="firma">MIGUEL ORELLANA<br>___________<br>LOGÍSTICA</div>
-    <div class="firma">${v.gestor_nombre||''}<br>___________<br>GESTOR</div>
-    <div class="firma"><br>___________<br>ACUSE DE RECIBIDO FINANZAS</div>
+    <div class="firma" style="padding-top:30px">___________<br>MIGUEL ORELLANA</div>
+    <div class="firma" style="padding-top:30px">___________<br>${v.gestor_nombre||''}</div>
+    <div class="firma" style="padding-top:30px">___________<br>ACUSE DE RECIBIDO FINANZAS</div>
   </div>
   </body></html>`;
 }
 // ══════════════════════════════════════════════════════════════════════════
-// ── SISTEMA DE VALES DE ALIMENTACIÓN ────────────────────────────────────
 
-// Lógica central: calcula vales según horarios de la orden
+// ══════════════════════════════════════════════════════════════════════════
+// ── SISTEMA DE VALES DE ALIMENTACIÓN ─────────────────────────────────────
+
 function calcularVales(fechaInicio, fechaFin){
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
@@ -4889,16 +4932,11 @@ function calcularVales(fechaInicio, fechaFin){
   const hIni = ini.getHours() + ini.getMinutes()/60;
   const hFin = fin.getHours() + fin.getMinutes()/60;
   const vales = [];
-  // Regla 4: inicio antes de las 7:00 am → desayuno (L.120)
   if(hIni < 7) vales.push({tipo:'desayuno', monto:120});
-  // Regla 5: cubre hora de almuerzo (12:00–13:00) → almuerzo (L.150)
   if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
-  // Regla 6: fin después de las 19:00 → cena (L.150)
   if(hFin > 19) vales.push({tipo:'cena', monto:150});
-  // Regla 7: fin en madrugada (00:00–04:59) del día siguiente → media noche (L.150)
   const mismodia = ini.toDateString() === fin.toDateString();
   if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:150});
-  // Tope L.1500
   let acum = 0;
   return vales.filter(v=>{ acum+=v.monto; return acum<=1500; });
 }
@@ -4910,14 +4948,12 @@ function abrirValeGerencia(ordenId){
     _valeOrdenId = ordenId;
     const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
     if(!orden) return;
-    // Si no tiene vales aún, intentar calcular automáticamente
     if(!orden.vales || !orden.vales.length){
       const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
       if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
         orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
         saveDB();
       }
-      // Si no tiene hora, los checkboxes quedarán vacíos para selección manual
     }
     _mostrarOverlayVale(ordenId);
   }, '🍽 Vale de Alimentación', 'Ingresa tu PIN para gestionar el vale');
@@ -4932,57 +4968,38 @@ function _mostrarOverlayVale(ordenId){
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const ov = document.getElementById('vale-overlay');
   if(!ov) return;
-
   const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
   const sinHora = !tieneHora(orden.fechaInicio) || !tieneHora(orden.fechaFin);
-
-  ov.innerHTML = `
-  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:flex-end">
-  <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:90vh;overflow-y:auto">
-    <div style="background:#856404;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:15px;font-weight:700;color:white">🍽 Vale de Alimentación</div>
-        <div style="font-size:12px;color:#ffe082">${orden.correlativo} · ${fmtDT(orden.fechaInicio||'')} – ${fmtDT(orden.fechaFin||'')}</div>
-      </div>
-      <button onclick="cerrarValeGerencia()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
-    </div>
-    <div style="padding:16px">
-      ${sinHora ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:#856404">
-        ⚠️ La orden no tiene hora de inicio/fin registrada. Los vales no se pueden calcular automáticamente — selecciónalos manualmente.
-      </div>` : `<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">
-        ⚙️ Generado automáticamente al cerrar la orden. Puedes activar o desactivar vales manualmente.
-      </div>`}
-      <!-- Checkboxes editables -->
-      <div id="vale-checks" style="margin-bottom:14px">
-        ${tipos.map(t=>`
-        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:6px;cursor:pointer">
-          <input type="checkbox" id="vc-${t}" ${vales.find(v=>v.tipo===t)?'checked':''} onchange="recalcVales()" style="width:18px;height:18px;cursor:pointer">
-          <span style="font-size:14px">${labels[t]}</span>
-        </label>`).join('')}
-      </div>
-      <!-- Total -->
-      <div id="vale-total" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:#856404;color:white;margin-bottom:14px">
-        <span style="font-size:14px;font-weight:700">💰 TOTAL</span>
-        <span id="vale-total-num" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">L. ${total.toFixed(2)}</span>
-      </div>
-      <!-- Botones -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button onclick="guardarValeGerencia()" style="padding:13px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">💾 Guardar</button>
-        <button onclick="descargarPDFVale()" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">📄 Descargar PDF</button>
-      </div>
-    </div>
-  </div>
-  </div>`;
-
+  ov.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:flex-end">'
+    +'<div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:90vh;overflow-y:auto">'
+    +'<div style="background:#856404;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><div style="font-size:15px;font-weight:700;color:white">🍽 Vale de Alimentación</div>'
+    +'<div style="font-size:12px;color:#ffe082">'+orden.correlativo+' · '+fmtDT(orden.fechaInicio||'')+' – '+fmtDT(orden.fechaFin||'')+'</div></div>'
+    +'<button onclick="cerrarValeGerencia()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>'
+    +'</div>'
+    +'<div style="padding:16px">'
+    +(sinHora
+      ? '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:#856404">⚠️ La orden no tiene hora registrada. Selecciona los vales manualmente.</div>'
+      : '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">⚙️ Generado automáticamente. Puedes ajustar manualmente.</div>'
+    )
+    + tipos.map(t=>'<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:6px;cursor:pointer">'
+      +'<input type="checkbox" id="vc-'+t+'" '+(vales.find(v=>v.tipo===t)?'checked':'')+' onchange="recalcVales()" style="width:18px;height:18px;cursor:pointer">'
+      +'<span style="font-size:14px">'+labels[t]+'</span></label>').join('')
+    +'<div id="vale-total" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:#856404;color:white;margin:8px 0 14px">'
+    +'<span style="font-size:14px;font-weight:700">💰 TOTAL</span>'
+    +'<span id="vale-total-num" style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace">L. '+total.toFixed(2)+'</span></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<button onclick="guardarValeGerencia()" style="padding:13px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="descargarPDFVale()" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">📄 Descargar PDF</button>'
+    +'</div></div></div></div>';
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
 function recalcVales(){
-  const montos = {desayuno:120, almuerzo:150, cena:150, media_noche:150};
-  const tipos = ['desayuno','almuerzo','cena','media_noche'];
+  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
   let total = 0;
-  tipos.forEach(t=>{
+  ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vc-'+t);
     if(cb && cb.checked) total += montos[t];
   });
@@ -4993,12 +5010,10 @@ function recalcVales(){
 function guardarValeGerencia(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
-  const montos = {desayuno:120, almuerzo:150, cena:150, media_noche:150};
-  const tipos = ['desayuno','almuerzo','cena','media_noche'];
-  orden.vales = tipos.filter(t=>{
-    const cb = document.getElementById('vc-'+t);
-    return cb && cb.checked;
-  }).map(t=>({tipo:t, monto:montos[t]}));
+  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
+    const cb = document.getElementById('vc-'+t); return cb && cb.checked;
+  }).map(t=>({tipo:t,monto:montos[t]}));
   saveDB();
   toast('Vale guardado ✓');
   cerrarValeGerencia();
@@ -5012,84 +5027,57 @@ function cerrarValeGerencia(){
 }
 
 function descargarPDFVale(){
+  guardarValeGerencia();
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
-  // Guardar primero
-  guardarValeGerencia();
-  const ordenFresh = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
-  const html = _buildValeHTML(ordenFresh);
-  const blob = new Blob([html],{type:'text/html'});
+  const vales = orden.vales||[];
+  const montoTotal = vales.reduce((s,v)=>s+v.monto,0);
+  const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
+  const concepto = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
+  const tecnico = orden.tecnico||orden.operador||'—';
+  const d = new Date(orden.fechaCierre||orden.fechaInicio||'');
+  const fecha = isNaN(d)?'—':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]');
+  const logoB64 = logoEl ? logoEl.src : '';
+  const htmlContent = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vale '+orden.correlativo+'</title>'
+    +'<style>@media print{@page{margin:10mm;size:letter}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}}'
+    +'body{font-family:Arial,sans-serif;font-size:10pt;margin:0;padding:15mm 20mm;color:#222}'
+    +'.vale-box{border:1.5px solid #1f3864;border-radius:6px;max-width:400px;margin:0 auto;padding:20px 24px}'
+    +'.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;border-bottom:1px solid #1f3864;padding-bottom:10px}'
+    +'.campo{display:flex;justify-content:space-between;margin-bottom:8px;font-size:10pt}'
+    +'.campo span:first-child{color:#555}.campo strong{font-family:"Courier New",monospace}'
+    +'.monto-box{background:#1f3864;color:white;border-radius:4px;text-align:center;padding:12px;margin:14px 0}'
+    +'.monto-box .monto{font-size:20pt;font-weight:bold;font-family:"Courier New",monospace}'
+    +'.firmas{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:24px}'
+    +'.firma{text-align:center;font-size:8pt}.firma-linea{border-top:1px solid #1f3864;padding-top:4px;margin-top:30px}'
+    +'.btn-print{background:#1f3864;color:white;border:none;padding:10px 20px;font-size:11pt;cursor:pointer;border-radius:4px;margin-bottom:14px}'
+    +'</style></head><body>'
+    +'<button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>'
+    +'<div class="vale-box">'
+    +'<div class="header">'
+    +(logoB64?'<img src="'+logoB64+'" style="height:40px;width:auto;object-fit:contain">':'<strong style="font-size:13pt;color:#1f3864">MONTASA</strong>')
+    +'<div style="text-align:right"><div style="font-size:11pt;font-weight:bold;color:#1f3864">Comprobante de entrega<br>de caja chica</div>'
+    +'<span style="font-size:8pt;background:#dce6f1;color:#1f3864;border-radius:4px;padding:2px 8px;font-family:'Courier New',monospace;font-weight:bold">'+orden.correlativo+'</span>'
+    +'</div></div>'
+    +'<div class="campo"><span>Monto:</span><strong>L. '+montoTotal.toFixed(2)+'</strong></div>'
+    +'<div class="campo"><span>Fecha:</span><strong>'+fecha+'</strong></div>'
+    +'<div class="campo"><span>Concepto:</span><strong>VALE DE ALIMENTACIÓN – '+concepto.toUpperCase()+'</strong></div>'
+    +'<div class="monto-box"><div style="font-size:9pt;margin-bottom:4px;opacity:0.85">TOTAL</div><div class="monto">L. '+montoTotal.toFixed(2)+'</div></div>'
+    +'<div class="firmas">'
+    +'<div class="firma"><div class="firma-linea">MIGUEL ORELLANA</div><div style="margin-top:2px;color:#555">Solicita</div></div>'
+    +'<div class="firma"><div class="firma-linea">'+tecnico+'</div><div style="margin-top:2px;color:#555">Recibido</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:7pt;color:#888;margin-top:16px;border-top:1px solid #eee;padding-top:8px">© Derechos Reservados MONTASA Handling Co.</div>'
+    +'</div></body></html>';
+  const blob = new Blob([htmlContent],{type:'text/html'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `Vale_Alimentacion_${orden.correlativo||'OT'}.html`;
-  a.click();
+  a.href=url; a.download='Vale_Alimentacion_'+orden.correlativo+'.html'; a.click();
   URL.revokeObjectURL(url);
   toast('PDF descargado — abre y usa Ctrl+P ✓');
 }
 
-function _buildValeHTML(orden){
-  const vales = orden.vales || [];
-  const montoTotal = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno', almuerzo:'Almuerzo / Cena', cena:'Cena', media_noche:'Media Noche'};
-  const concepto = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
-  const tecnico = orden.tecnico || orden.operador || '—';
-  const fecha = (()=>{ const d=new Date(orden.fechaCierre||orden.fechaInicio||''); return isNaN(d)?'—':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); })();
-  // Logo base64 embebido
-  const logoB64 = document.querySelector('img[alt="MONTASA Handling Co."]')?.src || '';
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Vale de Alimentación ${orden.correlativo||''}</title>
-  <style>
-    @media print { @page { margin: 10mm; size: letter; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
-    body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 15mm 20mm; color: #222; }
-    .vale-box { border: 1.5px solid #1f3864; border-radius: 6px; max-width: 400px; margin: 0 auto; padding: 20px 24px; }
-    .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; border-bottom:1px solid #1f3864; padding-bottom:10px; }
-    .titulo { font-size: 11pt; font-weight: bold; color: #1f3864; }
-    .subtitulo { font-size: 9pt; color: #555; }
-    .campo { display:flex; justify-content:space-between; margin-bottom:8px; font-size:10pt; }
-    .campo span:first-child { color:#555; }
-    .campo strong { font-family: 'Courier New', monospace; }
-    .monto-box { background:#1f3864; color:white; border-radius:4px; text-align:center; padding:12px; margin:14px 0; }
-    .monto-box .monto { font-size:20pt; font-weight:bold; font-family:'Courier New',monospace; }
-    .firmas { display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:24px; }
-    .firma { text-align:center; font-size:8pt; }
-    .firma-linea { border-top: 1px solid #1f3864; padding-top:4px; margin-top:30px; }
-    .btn-print { background:#1f3864; color:white; border:none; padding:10px 20px; font-size:11pt; cursor:pointer; border-radius:4px; margin-bottom:14px; }
-    .correlativo-badge { font-size:8pt; background:#dce6f1; color:#1f3864; border-radius:4px; padding:2px 8px; font-family:'Courier New',monospace; font-weight:bold; }
-  </style></head><body>
-  <button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>
-  <div class="vale-box">
-    <div class="header">
-      ${logoB64 ? `<img src="${logoB64}" style="height:40px;width:auto;object-fit:contain">` : '<strong style="font-size:13pt;color:#1f3864">MONTASA</strong>'}
-      <div style="text-align:right">
-        <div class="titulo">Comprobante de entrega<br>de caja chica</div>
-        <span class="correlativo-badge">${orden.correlativo||''}</span>
-      </div>
-    </div>
-    <div class="campo"><span>Monto:</span> <strong>L. ${montoTotal.toFixed(2)}</strong></div>
-    <div class="campo"><span>Fecha:</span> <strong>${fecha}</strong></div>
-    <div class="campo"><span>Concepto:</span> <strong>VALE DE ALIMENTACIÓN – ${concepto.toUpperCase()}</strong></div>
-    <div class="monto-box">
-      <div style="font-size:9pt;margin-bottom:4px;opacity:0.85">TOTAL</div>
-      <div class="monto">L. ${montoTotal.toFixed(2)}</div>
-    </div>
-    <div class="firmas">
-      <div class="firma">
-        <div class="firma-linea">MIGUEL ORELLANA</div>
-        <div style="margin-top:2px;color:#555">Solicita</div>
-      </div>
-      <div class="firma">
-        <div class="firma-linea">${tecnico}</div>
-        <div style="margin-top:2px;color:#555">Recibido</div>
-      </div>
-    </div>
-    <div style="text-align:center;font-size:7pt;color:#888;margin-top:16px;border-top:1px solid #eee;padding-top:8px">
-      © Derechos Reservados MONTASA Handling Co.
-    </div>
-  </div>
-  </body></html>`;
-}
+</script>
 
 <div id="viaticos-overlay" style="display:none"></div>
 <div id="vale-overlay" style="display:none"></div>
@@ -5149,8 +5137,6 @@ function _buildValeHTML(orden){
   </div>
 </div>
 
-
-</script>
 
 </body>
 </html>
