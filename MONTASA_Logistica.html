@@ -883,29 +883,39 @@ function renderHistorialLog(){
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
     const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const horas = calcHoras(o.fechaInicio, o.fechaFin);
-    return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-        ${o.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${o.correlativo}</span>`:''}
-        <span class="badge" style="background:${o.estado==='Cancelado'?'#fdeaea':'#c8edcc'};color:${o.estado==='Cancelado'?'#8b2020':'#1a5c1a'}">${o.estado==='Cancelado'?'Cancelado':'Cerrado'}</span>
-        <span class="badge">${tipoLbl}</span>
-      </div>
-      <div style="font-weight:600;font-size:15px">${o.descripcion||'Sin descripción'}</div>
-      <div style="font-size:13px;color:var(--text2)">${eqLabel}</div>
-      ${o.operador?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
-      <div style="font-size:12px;color:var(--text3)">👷 ${o.tecnico||'—'}</div>
-      <div style="font-size:12px;color:var(--text3)">📅 ${fmt(o.fechaInicio)} → ${fmt(o.fechaFin)}</div>
-      ${horas?`<div style="font-size:13px;font-weight:600;color:#2d6a9f;margin-top:4px">⏱ ${horas}</div>`:''}
-      ${o.firma?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">✍️ Firma</div>
-        <img src="${o.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
-      </div>`:''}
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(o.fechaCierre)}</div>
-      ${o.viaticos?`<div style="margin-top:8px;display:flex;gap:6px">
-        <span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos adjuntos</span>
-        <button onclick="abrirViaticos('${o.id}')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button>
-      </div>`:''}
-    </div>`;
+    const isOpen = openHistLog.has(o.id);
+    // MINIATURA siempre visible
+    let card = '<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:10px;cursor:pointer" data-hid="'+o.id+'" onclick="toggleHistLog(this.dataset.hid)">';
+    card += '<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">';
+    card += '<div style="flex:1">';
+    card += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
+    card += (o.correlativo?'<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">'+o.correlativo+'</span>':'');
+    card += '<span class="badge" style="background:'+(o.estado==='Cancelado'?'#fdeaea':'#c8edcc')+';color:'+(o.estado==='Cancelado'?'#8b2020':'#1a5c1a')+'">'+(o.estado==='Cancelado'?'Cancelado':'Cerrado')+'</span>';
+    card += '</div>';
+    card += '<div style="font-size:13px;font-weight:600">'+eqLabel+'</div>';
+    card += '<div style="font-size:12px;color:var(--text3)">'+tipoLbl+(horas?' · ⏱ '+horas:'')+'</div>';
+    card += '</div>';
+    card += '<span style="font-size:18px;color:var(--text3);'+(isOpen?'transform:rotate(180deg)':'')+'">⌄</span>';
+    card += '</div>';
+    // DETALLE expandible
+    if(isOpen){
+      card += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+      card += _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
+      // Botón vale
+      card += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">';
+      if(o.viaticos) card += '<button data-oid="'+o.id+'" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📋 Viáticos</button>';
+      if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; card += '<div style="background:#fff3cd;border-radius:6px;padding:6px 10px;font-size:11px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' — L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
+      card += '</div>';
+      card += '</div>';
+    }
+    card += '</div>';
+    return card;
   }).join('');
+}
+
+function toggleHistLog(id){
+  if(openHistLog.has(id)) openHistLog.delete(id); else openHistLog.add(id);
+  renderHistorialLog();
 }
 
 
