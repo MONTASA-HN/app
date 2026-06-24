@@ -4120,7 +4120,7 @@ function renderModalViaticos(orden){
       </button>
     </div>
     <div style="padding:16px" id="viaticos-content">
-      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen)}
+      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen, !!(v.facturas && v.facturas.some(f=>f.monto)))}
     </div>
   </div>
   </div>`;
@@ -4292,7 +4292,7 @@ function renderPersonaRow(p, i){
   </div>`;
 }
 
-function renderLiquidacionForm(v, montoSol){
+function renderLiquidacionForm(v, montoSol, readOnly){
   const facturas = v.facturas || [];
   const totalFact = facturas.reduce((s,f)=>s+(f.monto||0),0);
   const diff = montoSol - totalFact;
@@ -4309,6 +4309,17 @@ function renderLiquidacionForm(v, montoSol){
   <div id="vliq-facturas">
     ${Array.from({length:14},(_,i)=>{
       const f = facturas[i]||{};
+      // En modo lectura: solo mostrar facturas con datos
+      if(readOnly && !f.descripcion && !f.monto) return '';
+      if(readOnly) return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
+        <div style="font-size:13px;margin-bottom:4px"><span style="color:var(--text3)">Descripción: </span><strong>${f.descripcion||'—'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+          <div><span style="color:var(--text3)">Fecha: </span><strong>${f.fecha||'—'}</strong></div>
+          <div><span style="color:var(--text3)">N° Doc: </span><strong>${f.ndocumento||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Monto: </span><strong>L. ${f.monto||0}</strong></div>
+        </div>
+      </div>`;
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
         <div class="form-group"><label>Descripción</label>
@@ -4339,6 +4350,15 @@ function renderLiquidacionForm(v, montoSol){
       <span id="vliq-diff" style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${diff>0?'#ff9999':'#99ffaa'}">L. ${diff.toFixed(2)}</span>
     </div>
   </div>
+  ${readOnly ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <button onclick="editarLiquidacionConPin()" style="padding:13px;background:#c87000;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🔑 Editar liquidación
+    </button>
+    <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>` : `
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     <button onclick="guardarLiquidacion()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       💾 Guardar liquidación
@@ -4346,7 +4366,7 @@ function renderLiquidacionForm(v, montoSol){
     <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
     </button>
-  </div>`;
+  </div>`}`;
 }
 
 // ── FUNCIONES DE CÁLCULO ──────────────────────────────────────────────────
@@ -4433,6 +4453,23 @@ function recalcViaticos(){
   document.getElementById('vp-hosp')&&(document.getElementById('vp-hosp').textContent='L. '+tHosp);
   document.getElementById('vp-otros')&&(document.getElementById('vp-otros').textContent='L. '+otros);
   document.getElementById('vp-total')&&(document.getElementById('vp-total').textContent='L. '+tGen);
+}
+
+function editarLiquidacionConPin(){
+  const pin = prompt('Ingresa el PIN de acceso para editar la liquidación:');
+  if(pin === null) return;
+  if(pin !== '1624'){
+    alert('⚠️ PIN incorrecto.');
+    return;
+  }
+  // Re-render liquidacion in edit mode
+  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  if(!orden || !orden.viaticos) return;
+  const v = orden.viaticos;
+  const montoSol = (v.personas||[]).reduce((s,p)=>s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0),0)
+                 + (v.peajes||0) + (v.combustible||0);
+  const liqContainer = document.getElementById('vliq-container');
+  if(liqContainer) liqContainer.innerHTML = renderLiquidacionForm(v, montoSol, false);
 }
 
 function recalcFacturas(){
@@ -4608,9 +4645,11 @@ function guardarLiquidacion(){
       _sid: _SESSION_ID
     }).then(()=>{
       toast('Liquidación guardada ✓');
+      cerrarViaticos();
     }).catch(e=>toast('Error al guardar: '+e.message, true));
   } else {
     toast('Liquidación guardada ✓');
+    cerrarViaticos();
   }
 }
 
