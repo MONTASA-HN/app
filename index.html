@@ -5041,15 +5041,17 @@ function guardarValeGerencia(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
-  saveDB();
+  // Guardar localmente
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  // Escribir solo el campo vales de esta orden en Firebase por path específico
+  // evita que el listener on('value') sobreescriba con datos sin vales
   if(window._fbDB && window._fbReady){
-    const ts = Date.now();
-    window._fbDB.ref('montasa').update({
-      logistica: DB.logistica,
-      _ts: ts,
-      _sid: _SESSION_ID
-    }).then(()=>console.log('Vale guardado en Firebase:', orden.correlativo))
-      .catch(err=>console.error('Error guardando vale:', err));
+    const idx = DB.logistica.findIndex(o=>o.id===orden.id);
+    if(idx !== -1){
+      window._fbDB.ref('montasa/logistica/'+idx+'/vales').set(orden.vales)
+        .then(()=>console.log('Vale guardado en Firebase path:', orden.correlativo, idx))
+        .catch(err=>console.error('Error guardando vale:', err));
+    }
   }
   toast('Vale guardado ✓');
   cerrarValeGerencia();
