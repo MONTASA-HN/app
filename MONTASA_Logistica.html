@@ -465,7 +465,7 @@ function renderOrdenesLog(){
     const estadoColor = o.estado==='En proceso'?'#f39c12':o.estado==='En espera'?'#3498db':'#e74c3c';
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
-    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;${o.cerrado||o.estado==='Cancelado'?'cursor:pointer':''}" ${o.cerrado||o.estado==='Cancelado'?`onclick="toggleCardLog('${o.id}')"`:''}>
+    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;${o.cerrado||o.estado==='Cancelado'?'cursor:pointer':''}" ${o.cerrado||o.estado==='Cancelado'?`data-lgid="${o.id}"`:''}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
@@ -618,6 +618,13 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.vales&&o.vales.length) h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')+' — L. '+o.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)+'</div>';
   return h;
 }
+  const _elOrd = document.getElementById('ordenes-list');
+  if(_elOrd) _elOrd.onclick = function(e){
+    if(e.target.closest('[onclick]')) return;
+    const card = e.target.closest('[data-lgid]');
+    if(card) toggleCardLog(card.dataset.lgid);
+  };
+
 
 
 function toggleCardLog(id){
@@ -911,6 +918,13 @@ function renderHistorialLog(){
     card += '</div>';
     return card;
   }).join('');
+  // Event delegation historial
+  const elHist = document.getElementById('historial-log-list');
+  if(elHist) elHist.onclick = function(e){
+    if(e.target.closest('[onclick]')) return;
+    const card = e.target.closest('[data-hid]');
+    if(card) toggleHistLog(card.dataset.hid);
+  };
 }
 
 function toggleHistLog(id){
