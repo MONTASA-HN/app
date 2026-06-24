@@ -1970,43 +1970,109 @@ function renderLogistica(){
   const el = document.getElementById('logistica-list');
   if(!el) return;
   const list = [...(DB.logistica||[])].sort((a,b)=>{
-    const na = parseInt((a.correlativo||''). replace(/[^0-9]/g,''))||0;
-    const nb = parseInt((b.correlativo||''). replace(/[^0-9]/g,''))||0;
+    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
     return nb - na;
   });
   if(!list.length){ el.innerHTML = '<div class="empty">Sin órdenes logísticas</div>'; return; }
-  const tipoLabels = {renta:'🚛 Renta', entrega:'📦 Entrega de Equipo', retiro:'🔙 Retiro de Equipo', apoyo_mantenimiento:'🔩 Apoyo Mant.', atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
   el.innerHTML = list.map(o => {
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
-    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||''): (o.clienteNombre||'—');
-    const tipoLbl = tipoLabels[o.tipoLogistica] || o.tipoLogistica || 'Logística';
+    const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
+    const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const ec = o.cerrado?'#27ae60':o.estado==='Cancelado'?'#888':o.estado==='En proceso'?'#f39c12':'#e74c3c';
-    const el2 = o.cerrado?'Cerrado':(o.estado||'Pendiente');
-    const hi  = o.fechaInicio ? o.fechaInicio.slice(11,16) : '—';
-    const op  = o.operador ? '<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+o.operador+'</span>' : '';
-    const mot = o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras') ? '<span style="color:var(--text3)">🚗 Motorista</span><span>'+o.motorista+'</span>' : '';
-    return '<div class="card" style="padding:12px 14px;margin-bottom:8px;border-left:4px solid #2d6a9f">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-      +'<span style="font-size:12px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">'+(o.correlativo||'—')+'</span>'
-      +'<span style="font-size:11px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:10px;font-weight:700">'+el2+'</span>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6">'
-      +'<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>'
-      +'<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>'
-      +(o.equipoId2 ? getEq2Label(o.equipoId2) : '')
-      +mot
-      +op
-      +(o.viaticos ? ('<span style="color:var(--text3)">💰 Costo viaje</span><span style="font-weight:700;color:#1f3864">L. '+_calcTotalSol(o.viaticos).toFixed(0)+'</span>') : '')
+    const estadoLbl = o.cerrado?'Cerrado':(o.estado||'Pendiente');
+    const hi = o.fechaInicio?o.fechaInicio.slice(11,16):'—';
+    const op = o.operador?'<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+o.operador+'</span>':'';
+    const mot = o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?'<span style="color:var(--text3)">🚗 Motorista</span><span>'+o.motorista+'</span>':'';
+    const isCerrada = o.cerrado||o.estado==='Cancelado';
+    const isOpen = openSubgrupos.has('ger-log-'+o.id);
 
-      +(o.fechaInicio&&o.fechaFin ? '<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>' : '<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>')
-      +'</div>'
-      +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
-      +((!o.cerrado && o.estado!=='Cancelado') ? '<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>' : (o.viaticos?'<button onclick="abrirViaticos(\''+o.id+'\')" style="width:100%;padding:8px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer">📋 Ver Viáticos (solo lectura)</button>':''))
-      +(o.estado!=='Cancelado' ? '<button onclick="abrirValeGerencia(\''+o.id+'\')" style="width:100%;margin-top:6px;padding:8px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.vales&&o.vales.length?'🍽 Ver / Editar Vale':'🍽 Generar Vale de Alimentación')+'</button>' : '')
-      +'</div></div>';
+    const _onclick = isCerrada ? ' onclick="toggleLogGer(\'' + o.id + '\'"' : '';
+    let card = '<div class="card" style="padding:12px 14px;margin-bottom:8px;border-left:4px solid '+(isCerrada?'#888':'#2d6a9f')+';'+(isCerrada?'cursor:pointer':'')+' "' + _onclick + ' >';
+    card += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    card += '<span style="font-size:12px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">'+(o.correlativo||'—')+'</span>';
+    card += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:10px;font-weight:700">'+estadoLbl+'</span>'+(isCerrada?'<span style="font-size:16px;color:var(--text3);'+(isOpen?'transform:rotate(180deg)':'')+' ">⌄</span>':'')+'</div>';
+    card += '</div>';
+    card += '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6">';
+    card += '<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>';
+    card += '<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>';
+    card += (o.equipoId2?getEq2Label(o.equipoId2):'')+mot+op;
+    card += (o.fechaInicio&&o.fechaFin?'<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>':'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>');
+    card += '</div>';
+
+    if(isCerrada){
+      card += '<div style="display:'+(isOpen?'block':'none')+';margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">';
+      card += _renderDetalleLGGer(o, eqLabel, tipoLbl);
+      card += '</div>';
+    } else {
+      card += _botonesActLG(o);
+
+      card += '</div>';
+    }
+    card += '</div>';
+    return card;
   }).join('');
 }
 
+function toggleLogGer(id){
+  const key = 'ger-log-'+id;
+  if(openSubgrupos.has(key)) openSubgrupos.delete(key); else openSubgrupos.add(key);
+  renderLogistica();
+}
+
+function _renderDetalleLGGer(o, eqLabel, tipoLbl){
+  const _fdt = function(s){
+    if(!s) return '\u2014';
+    try{
+      var d=new Date(s); if(isNaN(d)) return s;
+      return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    }catch(e){ return s; }
+  };
+  var hEq = o.horometroSalida&&o.horometroRetorno?(parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1)+' hrs':'';
+  var hOp = o.fechaInicio&&o.fechaFin?((new Date(o.fechaFin)-new Date(o.fechaInicio))/3600000).toFixed(1)+' hrs':'\u2014';
+  var h = '';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
+  if(o.operador) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Operador</div><div style="font-size:13px;font-weight:600">'+o.operador+'</div></div>';
+  if(o.motorista) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Motorista</div><div style="font-size:13px;font-weight:600">'+o.motorista+'</div></div>';
+  if(o.prioridad) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Prioridad</div><div style="font-size:13px;font-weight:600">'+o.prioridad+'</div></div>';
+  if(o.horometroSalida) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Hr. salida</div><div style="font-size:13px;font-weight:600">'+o.horometroSalida+' hrs</div></div>';
+  if(o.horometroRetorno) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Hr. retorno</div><div style="font-size:13px;font-weight:600">'+o.horometroRetorno+' hrs</div></div>';
+  h += '</div>';
+  if(o.descripcion) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Descripci\u00f3n</div><div style="font-size:13px;background:var(--surface2);border-radius:6px;padding:8px">'+o.descripcion+'</div></div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">';
+  h += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">&#128336; Inicio</div><div style="font-size:13px;font-weight:700;color:#2d6a9f">'+_fdt(o.fechaInicio)+'</div></div>';
+  h += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">&#128337; Fin</div><div style="font-size:13px;font-weight:700;color:#2d6a9f">'+_fdt(o.fechaFin)+'</div></div>';
+  h += '</div>';
+  if(o.fechaCierre) h += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Cierre: '+fmtDT(o.fechaCierre)+'</div>';
+  if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px"><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS EQUIPO</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hEq+'</div></div><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS OPERADOR</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hOp+'</div></div></div>';
+  if(o.foto) h += '<div style="margin-bottom:10px"><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>';
+  if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Firma</div><img src="'+o.firma+'" style="width:100%;max-height:80px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+  if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' \u2014 L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  if(o.viaticos) h += '<button data-vid="'+o.id+'" onclick="abrirViaticos(this.dataset.vid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Viaticos</button>';
+  h += '<button data-vid="'+o.id+'" onclick="abrirValeGerencia(this.dataset.vid)" style="font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer">'+(o.vales&&o.vales.length?'Vale':'Generar Vale')+'</button>';
+  h += '<button data-vid="'+o.id+'" onclick="editarOrdenHistorial(\'log\',this.dataset.vid)" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Editar</button>';
+  h += '<button data-vid="'+o.id+'" onclick="eliminarDelHistorial(\'log\',this.dataset.vid)" style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Eliminar</button>';
+  h += '</div>';
+  return h;
+}
+
+function _botonesActLG(o){
+  let h = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">';
+  const oid = o.id;
+  if(!o.cerrado && o.estado!=='Cancelado'){
+    h += '<button onclick="abrirViaticos(\'' + oid + '\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>';
+  } else if(o.viaticos){
+    h += '<button onclick="abrirViaticos(\'' + oid + '\')" style="width:100%;padding:8px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer">📋 Ver Viáticos (solo lectura)</button>';
+  }
+  if(o.estado!=='Cancelado'){
+    h += '<button onclick="abrirValeGerencia(\'' + oid + '\')" style="width:100%;margin-top:6px;padding:8px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.vales&&o.vales.length?'🍽 Ver / Editar Vale':'🍽 Generar Vale de Alimentación')+'</button>';
+  }
+  h += '</div>';
+  return h;
+}
 // ── Estado automático de equipos por órdenes ─────────────────────────────
 function equipoAInactivo(equipoId){
   if(!equipoId) return;
@@ -2541,10 +2607,7 @@ function renderHistorial(){
       .map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||p.fecha})),
     ...DB.correctivos
       .filter(c=>c.estado==='Cerrado')
-      .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha})),
-    ...(DB.logistica||[])
-      .filter(o=>o.cerrado||o.estado==='Cancelado')
-      .map(o=>({...o, _t:'L', _f:o.fechaCierre||o.fechaFin||o.fechaInicio||o.fecha}))
+      .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha}))
   ].sort((a,b)=>{
     // Orden descendente por fecha, luego por correlativo
     const da = new Date(a._f||'2000-01-01').getTime();
