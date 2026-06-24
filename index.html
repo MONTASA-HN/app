@@ -3914,8 +3914,15 @@ function cerrarExito(){
     window._fbDB.ref('montasa/logistica').on('value', snapLog => {
       const logData = snapLog.val();
       if(Array.isArray(logData)){
-        DB.logistica = logData;
-        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(logData)); }catch(e){}
+        // Merge preservando campos locales que Firebase no almacena (vales, etc.)
+        DB.logistica = logData.map(remote => {
+          if(!remote) return remote;
+          const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
+          return local ? Object.assign({}, remote, {
+            vales: remote.vales !== undefined ? remote.vales : local.vales
+          }) : remote;
+        });
+        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         const active = document.querySelector('.section.active');
         if(active){
           const tabId = active.id.replace('tab-','');
