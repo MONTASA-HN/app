@@ -3887,7 +3887,7 @@ function cerrarExito(){
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
         if(remote.logistica){
-          DB.logistica = remote.logistica||[];
+          DB.logistica = _mergeLogistica(remote.logistica);
           try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
@@ -3904,7 +3904,7 @@ function cerrarExito(){
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     // logística siempre desde Firebase — su _ts puede diferir del main app
     if(snap.val() && snap.val().logistica){
-      DB.logistica = snap.val().logistica||[];
+      DB.logistica = _mergeLogistica(snap.val().logistica);
       try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
     renderDashboard();
@@ -3960,13 +3960,17 @@ function cerrarExito(){
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
       if(d.logistica){
-        // Only overwrite our logistica if Firebase data is from AFTER our last write
-        // This prevents a stale on() trigger from wiping fresh viáticos data
-        const fbTs = d._ts || 0;
-        if(fbTs >= _lastLogisticaWriteTs){
-          DB.logistica = d.logistica||[];
-          try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
-        }
+        // Merge preservando vales y otros campos locales que Firebase puede no incluir
+        const incoming = d.logistica||[];
+        DB.logistica = incoming.map(remote => {
+          if(!remote) return remote;
+          const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
+          if(!local) return remote;
+          return Object.assign({}, remote, {
+            vales: remote.vales !== undefined ? remote.vales : local.vales
+          });
+        });
+        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
       }
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
@@ -5107,6 +5111,19 @@ function descargarPDFVale(){
   a.href=url; a.download='Vale_Alimentacion_'+orden.correlativo+'.html'; a.click();
   URL.revokeObjectURL(url);
   toast('PDF descargado — abre y usa Ctrl+P ✓');
+}
+
+// Helper: merge logistica preservando vales locales
+function _mergeLogistica(incoming){
+  if(!Array.isArray(incoming)) return incoming||[];
+  return incoming.map(remote => {
+    if(!remote) return remote;
+    const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
+    if(!local) return remote;
+    return Object.assign({}, remote, {
+      vales: remote.vales !== undefined ? remote.vales : local.vales
+    });
+  });
 }
 
 </script>
