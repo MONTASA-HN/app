@@ -3367,7 +3367,7 @@ function enviarSolicitudWA(){
       _lastLogisticaWriteTs = writeTs;
       const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica)); // snapshot before write
       window._fbDB.ref('montasa').update({
-        logistica: DB.logistica,
+        logistica: _cleanLogistica(DB.logistica),
         lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
         _ts: writeTs,
         _sid: _SESSION_ID
@@ -3518,7 +3518,7 @@ function copiarMensajeWA(){
       const writeTs = Date.now();
       _lastLogisticaWriteTs = writeTs;
       const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
-      window._fbDB.ref('montasa').update({logistica:DB.logistica,lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
+      window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
         .then(()=>{ renderLogistica(); renderDashboard(); })
         .catch(err=>{
           window._fbDB.ref('montasa/logistica').set(lgSnapshot)
@@ -4655,7 +4655,7 @@ function guardarViaticos(){
     const writeTs = Date.now();
     _lastLogisticaWriteTs = writeTs;
     window._fbDB.ref('montasa').update({
-      logistica: DB.logistica,
+      logistica: _cleanLogistica(DB.logistica),
       lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
       _ts: writeTs,
       _sid: _SESSION_ID
@@ -4696,7 +4696,7 @@ function guardarLiquidacion(){
     const writeTs = Date.now();
     _lastLogisticaWriteTs = writeTs;
     window._fbDB.ref('montasa').update({
-      logistica: DB.logistica,
+      logistica: _cleanLogistica(DB.logistica),
       lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
       _ts: writeTs,
       _sid: _SESSION_ID
@@ -5160,6 +5160,16 @@ function _mergeLogistica(incoming){
     return Object.assign({}, remote, {
       vales: remote.vales !== undefined ? remote.vales : local.vales
     });
+  });
+}
+
+// Helper: limpiar undefined de logistica antes de escribir a Firebase
+function _cleanLogistica(arr){
+  return (arr||[]).map(o=>{
+    if(!o) return o;
+    const clean = Object.assign({}, o);
+    Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
+    return clean;
   });
 }
 
