@@ -4955,19 +4955,18 @@ function calcularVales(fechaInicio, fechaFin){
 let _valeOrdenId = null;
 
 function abrirValeGerencia(ordenId){
-  solicitarPINAccion(()=>{
-    _valeOrdenId = ordenId;
-    const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
-    if(!orden) return;
-    if(!orden.vales || !orden.vales.length){
-      const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
-      if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-        orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
-        saveDB();
-      }
+  // Sin PIN para ver — solo se pide al guardar/editar
+  _valeOrdenId = ordenId;
+  const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+  if(!orden) return;
+  if(!orden.vales || !orden.vales.length){
+    const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
+    if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+      saveDB();
     }
-    _mostrarOverlayVale(ordenId);
-  }, '🍽 Vale de Alimentación', 'Ingresa tu PIN para gestionar el vale');
+  }
+  _mostrarOverlayVale(ordenId);
 }
 
 function _mostrarOverlayVale(ordenId){
@@ -5035,16 +5034,20 @@ function recalcVales(){
 }
 
 function guardarValeGerencia(){
+  // PIN requerido para editar/guardar
+  solicitarPINAccion(()=>{
+    _ejecutarGuardarVale();
+  }, '🍽 Guardar Vale', 'Ingresa tu PIN para guardar los cambios');
+}
+
+function _ejecutarGuardarVale(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
   const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
-  // Guardar localmente
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
-  // Escribir solo el campo vales de esta orden en Firebase por path específico
-  // evita que el listener on('value') sobreescriba con datos sin vales
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
@@ -5065,7 +5068,7 @@ function cerrarValeGerencia(){
 }
 
 function descargarPDFVale(){
-  guardarValeGerencia();
+  _ejecutarGuardarVale();
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
   const vales = orden.vales||[];
