@@ -766,7 +766,8 @@ let pinActual = '';
 let pinCallback = null;
 let DB = {equipos:[], preventivos:[], correctivos:[], vendidos:[], logistica:[]};
 let filtroSubgrupo = {}; // subId -> estado filter
-let openSubgrupos = new Set(); // track which subgroups are open
+let openSubgrupos = new Set();
+let openHistGer = new Set(); // track which subgroups are open
 let modalEquipoId = null;
 
 function saveDB(){
@@ -2570,7 +2571,8 @@ function renderHistorial(){
     const horas = calcHoras(x.fechaInicio, x.fechaFin);
 
     if(x._t==='P'){
-      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d">
+      const isOpenP = openHistGer.has(x.id);
+      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d;cursor:pointer" onclick="toggleHistGer('${x.id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
           <div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -2596,27 +2598,48 @@ function renderHistorial(){
       </div>`;
     } else if(x._t==='L') {
       const tipoLogLbl = {renta:'🚛 Renta',entrega:'📦 Entrega',retiro:'🔙 Retiro',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Compras'}[x.tipoLogistica]||x.tipoLogistica||'Logística';
-      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      const isOpenL = openHistGer.has(x.id);
+      const horasL = calcHoras(x.fechaInicio, x.fechaFin);
+      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;cursor:pointer" onclick="toggleHistGer('${x.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
               ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
               <span class="badge" style="background:#e8f0fb;color:#2d6a9f">Logística</span>
               <span class="badge">${tipoLogLbl}</span>
             </div>
-            <div class="card-title">${x.descripcion||'Sin descripción'}</div>
-            <div class="card-sub">${getEqLabelFull(x)}</div>
-            ${x.operador?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${x.operador}</div>`:''}
-            <div style="font-size:12px;color:var(--text3)">👷 ${x.tecnico||'—'}</div>
-            <div style="font-size:12px;color:var(--text3)">📅 ${fmt(x.fechaInicio)} → ${fmt(x.fechaFin)}</div>\n            ${x.tipoLogistica==='renta'&&x.horometroSalida&&x.horometroRetorno?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;background:#dce6f1;border-radius:6px;padding:8px;text-align:center"><div><div style="font-size:10px;color:#1f3864;font-weight:600">⏱ HORAS EQUIPO</div><div style="font-size:14px;font-weight:800;color:#1f3864">${(parseFloat(x.horometroRetorno)-parseFloat(x.horometroSalida)).toFixed(1)} hrs</div></div><div><div style="font-size:10px;color:#1f3864;font-weight:600">👷 HORAS OPERADOR</div><div style="font-size:14px;font-weight:800;color:#1f3864">${x.fechaInicio&&x.fechaFin?((new Date(x.fechaFin)-new Date(x.fechaInicio))/3600000).toFixed(1)+' hrs':'—'}</div></div></div>`:''}\n            ${x.motorista&&(x.tipoLogistica==='entrega'||x.tipoLogistica==='retiro'||x.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 Motorista: <strong>${x.motorista}</strong></div>`:''}\n          
+            <div class="card-sub" style="font-weight:600">${getEqLabelFull(x)}</div>
+            <div style="font-size:12px;color:var(--text3)">${fmt(x.fechaInicio)} → ${fmt(x.fechaFin)} ${horasL&&horasL!=='—'?'· '+horasL:''}</div>
           </div>
+          <div style="font-size:18px;color:var(--text3);margin-left:8px;transform:rotate(${isOpenL?'180':'0'}deg)">⌄</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          ${x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#dce6f1;color:#1f3864" onclick="abrirViaticos('${x.id}')">📋 Viáticos</button>`:''}
-          <button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>
-          <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('log','${x.id}')">✏️ Editar</button>
-          <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('log','${x.id}')">✕ Eliminar</button>
-        </div>
+        ${isOpenL?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Tipo</div><div style="font-size:13px;font-weight:600">${tipoLogLbl}</div></div>
+            <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Equipo</div><div style="font-size:13px;font-weight:600">${getEqLabelFull(x)}</div></div>
+            ${x.operador?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Operador</div><div style="font-size:13px;font-weight:600">${x.operador}</div></div>`:''}
+            ${x.tecnico?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Personal</div><div style="font-size:13px;font-weight:600">${x.tecnico}</div></div>`:''}
+            ${x.motorista?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Motorista</div><div style="font-size:13px;font-weight:600">${x.motorista}</div></div>`:''}
+            ${x.prioridad?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Prioridad</div><div style="font-size:13px;font-weight:600">${x.prioridad}</div></div>`:''}
+            ${x.horometroSalida?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Horómetro salida</div><div style="font-size:13px;font-weight:600">${x.horometroSalida} hrs</div></div>`:''}
+            ${x.horometroRetorno?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Horómetro retorno</div><div style="font-size:13px;font-weight:600">${x.horometroRetorno} hrs</div></div>`:''}
+          </div>
+          ${x.descripcion?`<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Descripción</div><div style="font-size:13px;background:var(--surface2);border-radius:6px;padding:8px">${x.descripcion}</div></div>`:''}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text3)">
+            <div>🕐 Inicio: <strong style="color:var(--text)">${fmtDT(x.fechaInicio)}</strong></div>
+            <div>🕑 Fin: <strong style="color:var(--text)">${fmtDT(x.fechaFin)}</strong></div>
+            <div>📅 Cierre: <strong style="color:var(--text)">${fmt(x.fechaCierre)||'—'}</strong></div>
+            ${x.tipoLogistica==='renta'&&x.horometroSalida&&x.horometroRetorno?`<div>⏱ Equipo: <strong style="color:#2d6a9f">${(parseFloat(x.horometroRetorno)-parseFloat(x.horometroSalida)).toFixed(1)} hrs</strong></div>`:''}
+          </div>
+          ${x.firma?`<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="${x.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
+          ${x.vales&&x.vales.length?`<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> ${x.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')} — L. ${x.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)}</div>`:''}
+          <div style="display:flex;gap:8px;margin-top:4px">
+            ${x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#dce6f1;color:#1f3864" onclick="event.stopPropagation();abrirViaticos('${x.id}')">📋 Viáticos</button>`:''}
+            <button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="event.stopPropagation();abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>
+            <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="event.stopPropagation();editarOrdenHistorial('log','${x.id}')">✏️ Editar</button>
+            <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="event.stopPropagation();eliminarDelHistorial('log','${x.id}')">✕</button>
+          </div>
+        </div>`:''}
       </div>`;
     } else {
       return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
@@ -5174,6 +5197,11 @@ function _cleanLogistica(arr){
     Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
     return clean;
   });
+}
+
+function toggleHistGer(id){
+  if(openHistGer.has(id)) openHistGer.delete(id); else openHistGer.add(id);
+  renderHistorial();
 }
 
 </script>
