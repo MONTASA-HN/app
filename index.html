@@ -2046,14 +2046,25 @@ function renderLogistica(){
 
 function _calcCostoViaticos(v){
   if(!v) return 0;
-  var total = (v.personas||[]).reduce(function(s,p){ return s+(parseFloat(p.total)||0); },0);
-  total += parseFloat(v.combustible)||0;
-  total += parseFloat(v.otros_gastos)||0;
-  if(!total){ ['combustible','hotel','peaje','comida','otros','hospedaje'].forEach(function(k){ total+=parseFloat(v[k])||0; }); }
+  var personas = v.personas||[];
+  // Alimentación + transporte + hospedaje por persona
+  var tAlim = personas.reduce(function(s,p){ return s+(parseFloat(p.desayuno)||0)+(parseFloat(p.almuerzo)||0)+(parseFloat(p.cena)||0)+(parseFloat(p.media_noche)||0); },0);
+  var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
+  var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
+  // Peajes según destino y vehículo
+  var PEAJES_MAP = {TRUJILLO:8,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:6,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:4,'LA CEIBA':4,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:2,CORTES:0};
+  var numPeajes = v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0);
+  var cpU = v.vehiculo==='CAMION GRANDE' ? 134 : 22;
+  var tPeaj = numPeajes * cpU;
+  var comb = parseFloat(v.combustible)||0;
+  var otros = parseFloat(v.otros_gastos)||0;
+  var total = tAlim + tTr + tHosp + tPeaj + comb + otros;
+  // Fallback
   if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
   if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
   return total;
 }
+
 
 function toggleLogGer(id){
   const key = 'ger-log-'+id;
@@ -2100,7 +2111,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.viaticos) h += '<button data-vid="'+o.id+'" onclick="abrirViaticos(this.dataset.vid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Viaticos</button>';
   if(!o.viaticos) h += '<button onclick="event.stopPropagation();abrirValeGerencia(\''+o.id+'\')" style="font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer">'+(o.vales&&o.vales.length?'Vale':'Generar Vale')+'</button>';
   h += '<button onclick="event.stopPropagation();editarOrdenHistorial(\'log\',\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Editar</button>';
-  h += '<button onclick="_elimLG(\'' + o.id + '\')" style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">🗑 Eliminar</button>';
+  h += '<button onclick="event.stopPropagation();_elimLG(this.getAttribute(\'data-eid\'))" data-eid=\"'+ o.id +'\"' + ' style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">🗑 Eliminar</button>';
   h += '</div>';
   return h;
 }
