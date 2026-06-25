@@ -1912,6 +1912,19 @@ function limpiarFirma(canvasId){
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.classList.remove('firmado');
+  // Guardar el borrado en DB y Firebase para que no se restaure al reabrir
+  if(canvas.id.startsWith('firma-log-')){
+    const ordenId = canvas.id.replace('firma-log-','');
+    const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+    if(o){
+      o.firma = '';
+      saveDB();
+      if(window._fbDB && window._fbReady){
+        const idx = DB.logistica.findIndex(x=>x.id===ordenId);
+        if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx+'/firma').set('');
+      }
+    }
+  }
 }
 
 function getFirmaData(ordenId){
