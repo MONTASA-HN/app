@@ -1088,6 +1088,22 @@ function cerrarOrdenLog(id){
       if(horo2) eq2.horometro = horo2;
     }
   }
+
+  // Auto-generar vale de alimentación al cerrar
+  (function(){
+    var _o = o;
+    if(_o && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
+      var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
+      if(_v.length){
+        _o.vales = _v;
+        try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+        if(window._fbDB && window._fbReady){
+          var _idx = DB.logistica.findIndex(function(x){return x.id===o.id;});
+          if(_idx>=0) window._fbDB.ref('montasa/logistica/'+_idx+'/vales').set(_v);
+        }
+      }
+    }
+  })();
   saveDB();
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
