@@ -580,6 +580,7 @@ function renderOrdenesLog(){
       </div>
     </div>`;
   }).join('');
+  setTimeout(_restoreFirmas, 50);
 }
 
 function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
@@ -637,6 +638,10 @@ function toggleCardLog(id){
       el.innerHTML = _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
     }
     el.style.display = 'block';
+    // Si es orden activa con firma guardada, restaurarla en el canvas
+    if(o && !o.cerrado && o.estado!=='Cancelado' && o.firma){
+      setTimeout(()=>_restoreFirmas(), 50);
+    }
   } else {
     el.style.display = 'none';
   }
@@ -1149,15 +1154,35 @@ function firmaMove(e, canvas){
 
 function firmaStop(canvas){
   _firmaDrawing = false;
-  // Auto-save firma if it's a logística order canvas
+  // Auto-save firma al levantar el dedo/mouse — sin esperar cerrar la orden
   if(canvas && canvas.id && canvas.id.startsWith('firma-log-')){
     const ordenId = canvas.id.replace('firma-log-','');
     const o = (DB.logistica||[]).find(x=>x.id===ordenId);
     if(o && canvas.classList.contains('firmado')){
       o.firma = canvas.toDataURL('image/png');
       saveDB();
+      // Mostrar indicador visual de que la firma fue guardada
+      const indicator = canvas.parentElement?.querySelector('.firma-saved-indicator');
+      if(indicator){ indicator.style.display='block'; setTimeout(()=>indicator.style.display='none',2000); }
     }
   }
+}
+
+// Restaurar firmas guardadas en los canvas activos
+function _restoreFirmas(){
+  (DB.logistica||[]).forEach(o=>{
+    if(!o.firma || o.cerrado) return;
+    const canvas = document.getElementById('firma-log-'+o.id);
+    if(!canvas) return;
+    const img = new Image();
+    img.onload = function(){
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      canvas.classList.add('firmado');
+    };
+    img.src = o.firma;
+  });
 }
 
 

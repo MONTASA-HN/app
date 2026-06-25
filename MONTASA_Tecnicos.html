@@ -831,6 +831,34 @@ function firmaMove(e, canvas){
 
 function firmaStop(canvas){
   _firmaDrawing = false;
+  // Auto-guardar firma al levantar el dedo — sin esperar cerrar la orden
+  if(canvas && canvas.id && canvas.id.startsWith('firma-') && canvas.classList.contains('firmado')){
+    const ordenId = canvas.id.replace('firma-','');
+    // Buscar en preventivos y correctivos
+    const orden = (DB.preventivos||[]).find(x=>x.id===ordenId) ||
+                  (DB.correctivos||[]).find(x=>x.id===ordenId);
+    if(orden){
+      orden.firma = canvas.toDataURL('image/png');
+      saveDB();
+    }
+  }
+}
+
+// Restaurar firmas guardadas en canvas de órdenes abiertas
+function _restoreFirmasTec(){
+  [...(DB.preventivos||[]), ...(DB.correctivos||[])].forEach(o=>{
+    if(!o.firma || o.completado || o.estado==='Cerrado') return;
+    const canvas = document.getElementById('firma-'+o.id);
+    if(!canvas) return;
+    const img = new Image();
+    img.onload = function(){
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      canvas.classList.add('firmado');
+    };
+    img.src = o.firma;
+  });
 }
 
 
@@ -1015,6 +1043,7 @@ function renderPreventivos(){
       </div>
     </div>
   </div>`; }).join('');
+  setTimeout(_restoreFirmasTec, 50);
 }
 
 
@@ -1314,6 +1343,7 @@ function renderCorrectivos(){
     </div>
   </div>`;
   }).join('');
+  setTimeout(_restoreFirmasTec, 50);
 }
 
 
