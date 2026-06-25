@@ -482,8 +482,23 @@ function renderOrdenesLog(){
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
-      ${o.viaticos&&o.viaticos.costoTotal?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${parseFloat(o.viaticos.costoTotal).toFixed(2)}</div>`:''}
-      ${o.kmSalida&&o.kmRetorno?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km recorridos</div>`:''}
+      ${(()=>{
+    if(!o.viaticos) return '';
+    const v=o.viaticos;
+    // Sumar total de personas + combustible + otros gastos
+    let totalPersonas = (v.personas||[]).reduce((s,p)=>s+(parseFloat(p.total)||0),0);
+    let totalComb = parseFloat(v.combustible)||0;
+    let totalOtros = parseFloat(v.otros_gastos)||0;
+    let total = totalPersonas + totalComb + totalOtros;
+    // Fallback campos directos
+    if(!total) total = ['combustible','hotel','peaje','comida','otros','hospedaje'].reduce((s,k)=>s+(parseFloat(v[k])||0),0);
+    if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
+    if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
+    return total>0
+      ?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${total.toFixed(2)}</div>`
+      :`<div style="font-size:11px;color:#2d6a9f;margin-top:2px">📋 Viáticos solicitados</div>`;
+  })()}
+      ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
@@ -680,13 +695,27 @@ function _eliminarOrdenLog(id){
   solicitarPINAccion(() => {
     if(!confirm('¿Eliminar esta orden de logística? Esta acción no se puede deshacer.')) return;
     DB.logistica = (DB.logistica||[]).filter(o=>o.id!==id);
-    if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa/logistica').set(_cleanLogistica(DB.logistica))
-        .catch(err=>console.error('Error eliminando orden:', err));
-    }
     saveDB();
-    renderOrdenesLog();
-    toast('Orden eliminada ✓');
+    if(window._fbDB && window._fbReady){
+      // Escribir la lista completa sin la orden eliminada
+      const cleanList = _cleanLogistica(DB.logistica);
+      window._fbDB.ref('montasa').update({
+        logistica: cleanList,
+        _ts: Date.now(),
+        _sid: typeof _SESSION_ID !== 'undefined' ? _SESSION_ID : 'log'
+      }).then(()=>{
+        renderOrdenesLog();
+        renderDashboardLog();
+        toast('Orden eliminada ✓');
+      }).catch(err=>{
+        console.error('Error eliminando:', err);
+        toast('Orden eliminada localmente ✓');
+        renderOrdenesLog();
+      });
+    } else {
+      renderOrdenesLog();
+      toast('Orden eliminada ✓');
+    }
   }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden');
 }
 

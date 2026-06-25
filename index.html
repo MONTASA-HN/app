@@ -2,7 +2,18 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js">
+function _calcCostoViaticos(v){
+  if(!v) return 0;
+  var total = (v.personas||[]).reduce(function(s,p){ return s+(parseFloat(p.total)||0); },0);
+  total += parseFloat(v.combustible)||0;
+  total += parseFloat(v.otros_gastos)||0;
+  if(!total) ['combustible','hotel','peaje','comida','otros','hospedaje'].forEach(function(k){ total+=parseFloat(v[k])||0; });
+  if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
+  if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
+  return total;
+}
+</script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
 <meta name="mobile-web-app-capable" content="yes">
@@ -2000,6 +2011,13 @@ function renderLogistica(){
     card += (o.equipoId2?getEq2Label(o.equipoId2):'')+mot+op;
     card += (o.fechaInicio&&o.fechaFin?'<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>':'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>');
     card += '</div>';
+    // Costo de viaje (si tiene viáticos)
+    const _costo = _calcCostoViaticos(o.viaticos);
+    if(_costo>0) card += '<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:4px">💰 Costo viaje: L. '+_costo.toFixed(2)+'</div>';
+    else if(o.viaticos) card += '<div style="font-size:11px;color:#2d6a9f;margin-top:4px">📋 Viáticos solicitados</div>';
+    // Km recorridos (si aplica)
+    if(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))
+      card += '<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 '+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+' km recorridos</div>';
 
     if(isCerrada){
       card += '<div style="display:'+(isOpen?'block':'none')+';margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">';
@@ -2046,6 +2064,12 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   h += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">&#128337; Fin</div><div style="font-size:13px;font-weight:700;color:#2d6a9f">'+_fdt(o.fechaFin)+'</div></div>';
   h += '</div>';
   if(o.fechaCierre) h += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Cierre: '+fmtDT(o.fechaCierre)+'</div>';
+  // Km recorridos
+  if(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))
+    h += '<div style="background:#e8f4e8;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:13px"><span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: '+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+' km</span><span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida '+o.kmSalida+' → Retorno '+o.kmRetorno+')</span></div>';
+  // Costo de viaje
+  var _cv = _calcCostoViaticos(o.viaticos);
+  if(_cv>0) h += '<div style="background:#dce6f1;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700;color:#1f3864">💰 Costo viaje: L. '+_cv.toFixed(2)+'</div>';
   if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px"><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS EQUIPO</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hEq+'</div></div><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS OPERADOR</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hOp+'</div></div></div>';
   if(o.foto) h += '<div style="margin-bottom:10px"><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>';
@@ -2674,6 +2698,8 @@ function renderHistorial(){
             </div>
             <div class="card-sub" style="font-weight:600">${getEqLabelFull(x)}</div>
             <div style="font-size:12px;color:var(--text3)">${fmt(x.fechaInicio)} → ${fmt(x.fechaFin)} ${horasL&&horasL!=='—'?'· '+horasL:''}</div>
+            ${(()=>{ const cv=_calcCostoViaticos(x.viaticos); return cv>0?`<div style="font-size:11px;font-weight:700;color:#1f3864">💰 L. ${cv.toFixed(2)}</div>`:x.viaticos?'<div style="font-size:11px;color:#2d6a9f">📋 Viáticos</div>':''; })()}
+            ${x.kmSalida&&x.kmRetorno&&parseFloat(x.kmRetorno)>parseFloat(x.kmSalida)?`<div style="font-size:11px;color:#1a5c1a">🛣 ${(parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)} km recorridos</div>`:''}
           </div>
           <div style="font-size:18px;color:var(--text3);margin-left:8px;transform:rotate(${isOpenL?'180':'0'}deg)">⌄</div>
         </div>
@@ -2694,12 +2720,14 @@ function renderHistorial(){
             <div>🕑 Fin: <strong style="color:var(--text)">${fmtDT(x.fechaFin)}</strong></div>
             <div>📅 Cierre: <strong style="color:var(--text)">${fmt(x.fechaCierre)||'—'}</strong></div>
             ${x.tipoLogistica==='renta'&&x.horometroSalida&&x.horometroRetorno?`<div>⏱ Equipo: <strong style="color:#2d6a9f">${(parseFloat(x.horometroRetorno)-parseFloat(x.horometroSalida)).toFixed(1)} hrs</strong></div>`:''}
+            ${x.kmSalida&&x.kmRetorno&&parseFloat(x.kmRetorno)>parseFloat(x.kmSalida)?`<div style="grid-column:1/-1">🛣 Km recorridos: <strong style="color:#1a5c1a">${(parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)} km</strong> <span style="color:var(--text3);font-size:10px">(${x.kmSalida} → ${x.kmRetorno})</span></div>`:''}
           </div>
+          ${(()=>{ const cv=_calcCostoViaticos(x.viaticos); return cv>0?`<div style="background:#dce6f1;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700;color:#1f3864">💰 Costo viaje: L. ${cv.toFixed(2)}</div>`:''; })()}
           ${x.firma?`<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="${x.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
           ${x.vales&&x.vales.length?`<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> ${x.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')} — L. ${x.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)}</div>`:''}
           <div style="display:flex;gap:8px;margin-top:4px">
             ${x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#dce6f1;color:#1f3864" onclick="event.stopPropagation();abrirViaticos('${x.id}')">📋 Viáticos</button>`:''}
-            <button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="event.stopPropagation();abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>
+            ${!x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="event.stopPropagation();abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>`:''}
             <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="event.stopPropagation();editarOrdenHistorial('log','${x.id}')">✏️ Editar</button>
             <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="event.stopPropagation();eliminarDelHistorial('log','${x.id}')">✕</button>
           </div>
@@ -2919,16 +2947,31 @@ function eliminarDelHistorial(tipo, id){
     if(tipo==='prev'){
       DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
       if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='log'){
-      if(DB.logistica) DB.logistica = DB.logistica.filter(x=>x.id!==id);
+      DB.logistica = (DB.logistica||[]).filter(x=>x.id!==id);
+      saveDB();
+      if(window._fbDB && window._fbReady){
+        const cleanList = (DB.logistica||[]).map(o=>{
+          if(!o) return null;
+          const c=Object.assign({},o);
+          Object.keys(c).forEach(k=>{ if(c[k]===undefined) delete c[k]; });
+          return c;
+        }).filter(Boolean);
+        window._fbDB.ref('montasa').update({
+          logistica: cleanList,
+          _ts: Date.now(),
+          _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'ger'
+        }).then(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
+          .catch(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });
+      } else {
+        renderLogistica(); renderHistorial(); toast('Orden eliminada ✓');
+      }
     } else {
       DB.correctivos = DB.correctivos.filter(x=>x.id!==id);
       if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     }
-    saveDB();
-    fillHistSel();
-    renderHistorial();
-    toast('Orden eliminada');
   }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden del historial');
 }
 
