@@ -482,6 +482,8 @@ function renderOrdenesLog(){
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
+      ${o.viaticos&&o.viaticos.costoTotal?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${parseFloat(o.viaticos.costoTotal).toFixed(2)}</div>`:''}
+      ${o.kmSalida&&o.kmRetorno?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
@@ -540,7 +542,8 @@ function renderOrdenesLog(){
             onchange="event.stopPropagation();subirFotoLog('${o.id}',this)"
             style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px">
         </div>
-        <!-- Firma -->
+        <!-- Firma — solo entrega y retiro (actividades con cliente) -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
           <canvas id="firma-log-${o.id}" class="firma-canvas" width="600" height="160"
@@ -551,7 +554,7 @@ function renderOrdenesLog(){
             <button onclick="event.stopPropagation();limpiarFirma('firma-log-${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
           </div>
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
-        </div>
+        </div>`:``}
         <!-- Botones acción -->
         <!-- P8: Horas trabajadas (renta cerrada) -->
         ${(o.tipoLogistica==='renta' && o.cerrado && o.horometroSalida && o.horometroRetorno) ? `
@@ -570,13 +573,28 @@ function renderOrdenesLog(){
         <div style="margin-top:8px;font-size:13px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px">
           <span style="color:var(--text3)">🚗 Motorista: </span><strong>${o.motorista}</strong>
         </div>` : ''}
+        <!-- PUNTO 2: Km recorridos si aplica transporte -->
+        ${o.kmSalida && o.kmRetorno ? `
+        <div style="margin-top:8px;background:#e8f4e8;border-radius:var(--radius-sm);padding:8px 12px;font-size:13px">
+          <span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km</span>
+          <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
+        </div>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
-          ${!o.cerrado && o.estado!=='Cancelado' ? `<button style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer" onclick="abrirViaticos('${o.id}')">📋 Viáticos</button>` : (o.viaticos ? `<button style="padding:12px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer" onclick="abrirViaticos('${o.id}')">📋 Ver Viáticos</button>` : `<span></span>`)}
+          ${!o.cerrado && o.estado!=='Cancelado' ? `
+          <button style="padding:12px;background:${o.viaticos?'#888':'#2d6a9f'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:${o.viaticos?'not-allowed':'pointer'}"
+            data-oid="${o.id}" onclick="event.stopPropagation();${o.viaticos?'':'abrirViaticos(this.dataset.oid)'}"
+            ${o.viaticos?'disabled title="Ya tiene viáticos — no se puede generar también un vale"':''}>📋 ${o.viaticos?'Viáticos asignados':'Solicitar Viáticos'}</button>` :
+            (o.viaticos ? `<button style="padding:12px;background:#f0f0f0;color:#888;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer" onclick="abrirViaticos('${o.id}')">📋 Ver Viáticos</button>` : `<span></span>`)}
           <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
             onclick="cerrarOrdenLog('${o.id}')">
             ${o.estado==='Cancelado'?'✅ CERRAR (Cancelada)':'✅ CERRAR'}
           </button>
         </div>
+        <!-- PUNTO 4: Eliminar orden con PIN -->
+        <button data-oid="${o.id}" onclick="event.stopPropagation();_eliminarOrdenLog(this.dataset.oid)"
+          style="width:100%;margin-top:6px;padding:8px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:var(--radius-sm);font-size:12px;cursor:pointer">
+          🗑 Eliminar orden
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -648,6 +666,30 @@ function toggleCardLog(id){
   if(arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)';
   if(isOpen) openSubgrupos.delete(cbId); else openSubgrupos.add(cbId);
 }
+
+function _cleanLogistica(arr){
+  return (arr||[]).map(o=>{
+    if(!o) return o;
+    const c=Object.assign({},o);
+    Object.keys(c).forEach(k=>{ if(c[k]===undefined) delete c[k]; });
+    return c;
+  });
+}
+
+function _eliminarOrdenLog(id){
+  solicitarPINAccion(() => {
+    if(!confirm('¿Eliminar esta orden de logística? Esta acción no se puede deshacer.')) return;
+    DB.logistica = (DB.logistica||[]).filter(o=>o.id!==id);
+    if(window._fbDB && window._fbReady){
+      window._fbDB.ref('montasa/logistica').set(_cleanLogistica(DB.logistica))
+        .catch(err=>console.error('Error eliminando orden:', err));
+    }
+    saveDB();
+    renderOrdenesLog();
+    toast('Orden eliminada ✓');
+  }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden');
+}
+
 
 function actualizarLog(id, campo, valor){
   const o = (DB.logistica||[]).find(x=>x.id===id);
