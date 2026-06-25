@@ -2541,6 +2541,7 @@ function renderPreventivos(){
           </div>
           ${p.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
         </div>
+        <button data-oid="${p.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,\'preventivo\')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${p.vales&&p.vales.length?'Ver Vale':'Generar Vale'}</button>
         <button class="btn-finalizar btn-finalizar-prev" onclick="completarPreventivo(\'${p.id}\')">✅ FINALIZAR ORDEN</button>`
       }
       </div>
@@ -2637,6 +2638,7 @@ function renderCorrectivos(){
           </div>
           ${c.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
         </div>
+        <button data-oid="${c.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,\'correctivo\')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${c.vales&&c.vales.length?'Ver Vale':'Generar Vale'}</button>
         <button class="btn-finalizar btn-finalizar-corr" onclick="cerrarCorrectivo(\'${c.id}\')">✅ FINALIZAR ORDEN</button>`
       }
       </div>
@@ -5366,6 +5368,157 @@ function _elimLG(id){
   }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden');
 }
 
+
+// ── VALES DE ALIMENTACIÓN — MANTENIMIENTO (Correctivos / Preventivos) ─────────
+let _valeMantOrdenId = null;
+let _valeMantTipo = null; // 'correctivo' o 'preventivo'
+
+function abrirValeMant(ordenId, tipo){
+  _valeMantOrdenId = ordenId;
+  _valeMantTipo = tipo || 'correctivo';
+  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const orden = arr.find(o=>o.id===ordenId);
+  if(!orden) return;
+  // Auto-calcular si tiene horas
+  if(!orden.vales || !orden.vales.length){
+    const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
+    if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+      saveDB();
+    }
+  }
+  _mostrarOverlayValeMant(ordenId, tipo);
+}
+
+function _mostrarOverlayValeMant(ordenId, tipo){
+  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const orden = arr.find(o=>o.id===ordenId);
+  if(!orden) return;
+  const vales = orden.vales || [];
+  const total = vales.reduce((s,v)=>s+v.monto,0);
+  const labels = {desayuno:'Desayuno (L.120)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const emojis = {desayuno:'\uD83C\uDF05', almuerzo:'\uD83C\uDF7D', cena:'\uD83C\uDF19', media_noche:'\uD83C\uDF03'};
+  const tipos = ['desayuno','almuerzo','cena','media_noche'];
+  const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
+  const sinHora = !tieneHora(orden.fechaInicio) || !tieneHora(orden.fechaFin);
+  const aviso = sinHora
+    ? '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#856404">La orden no tiene hora registrada. Selecciona los vales manualmente.</div>'
+    : '<div style="background:var(--surface2);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">Generado automaticamente. Puedes ajustar manualmente.</div>';
+  const checksHTML = tipos.map(function(t){
+    const checked = vales.find(function(v){ return v.tipo===t; }) ? 'checked' : '';
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;background:var(--surface2);margin-bottom:6px;cursor:pointer">'
+      + '<input type="checkbox" id="vcm-'+t+'" '+checked+' onchange="recalcValesMant()" style="width:18px;height:18px;cursor:pointer">'
+      + '<span style="font-size:14px">'+emojis[t]+' '+labels[t]+'</span></label>';
+  }).join('');
+  const corr = orden.correlativo || orden.id.slice(-6).toUpperCase();
+  const fIni = typeof fmtDT==='function' ? fmtDT(orden.fechaInicio||'') : (orden.fechaInicio||'').slice(0,16).replace('T',' ');
+  const fFin = typeof fmtDT==='function' ? fmtDT(orden.fechaFin||'') : (orden.fechaFin||'').slice(0,16).replace('T',' ');
+  const ov = document.getElementById('vale-overlay') || document.getElementById('vale-mant-overlay');
+  if(!ov) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:flex-end';
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:90vh;overflow-y:auto';
+  panel.innerHTML = '<div style="background:#856404;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">'
+    + '<div><div style="font-size:15px;font-weight:700;color:white">Vale de Alimentacion</div>'
+    + '<div style="font-size:12px;color:#ffe082">'+corr+' &mdash; '+fIni+' / '+fFin+'</div></div>'
+    + '<button onclick="cerrarValeMant()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">x</button>'
+    + '</div>'
+    + '<div style="padding:16px">'
+    + aviso + checksHTML
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:6px;background:#856404;color:white;margin:8px 0 14px">'
+    + '<span style="font-size:14px;font-weight:700">TOTAL</span>'
+    + '<span id="vale-mant-total" style="font-size:18px;font-weight:700">L. '+total.toFixed(2)+'</span></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<button onclick="guardarValeMant()" style="padding:13px;background:#856404;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">Guardar</button>'
+    + '<button onclick="descargarPDFValeMant()" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">Descargar PDF</button>'
+    + '</div></div>';
+  div.appendChild(panel);
+  ov.innerHTML = '';
+  ov.appendChild(div);
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function recalcValesMant(){
+  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  let total = 0;
+  ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
+    const cb = document.getElementById('vcm-'+t);
+    if(cb && cb.checked) total += montos[t];
+  });
+  const el = document.getElementById('vale-mant-total');
+  if(el) el.textContent = 'L. '+total.toFixed(2);
+}
+
+function guardarValeMant(){
+  solicitarPINAccion(()=>{
+    _ejecutarGuardarValeMant();
+  }, '\uD83C\uDF7D Guardar Vale', 'Ingresa tu PIN para guardar los cambios');
+}
+
+function _ejecutarGuardarValeMant(){
+  const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const orden = arr.find(o=>o.id===_valeMantOrdenId);
+  if(!orden) return;
+  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
+    const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
+  }).map(t=>({tipo:t,monto:montos[t]}));
+  try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+  if(window._fbDB && window._fbReady){
+    const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
+    const idx = arr.findIndex(o=>o.id===orden.id);
+    if(idx !== -1){
+      window._fbDB.ref('montasa/'+fbArr+'/'+idx+'/vales').set(orden.vales)
+        .then(()=>console.log('Vale mant guardado:', fbArr, idx))
+        .catch(err=>console.error('Error guardando vale mant:', err));
+    }
+  }
+  if(typeof toast==='function') toast('Vale guardado ✓');
+  cerrarValeMant();
+  if(_valeMantTipo==='preventivo' && typeof renderPreventivos==='function') renderPreventivos();
+  else if(typeof renderCorrectivos==='function') renderCorrectivos();
+}
+
+function cerrarValeMant(){
+  const ov = document.getElementById('vale-overlay') || document.getElementById('vale-mant-overlay');
+  if(ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function descargarPDFValeMant(){
+  _ejecutarGuardarValeMant();
+  const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const orden = arr.find(o=>o.id===_valeMantOrdenId);
+  if(!orden) return;
+  const vales = orden.vales||[];
+  const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
+  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const total = vales.reduce((s,v)=>s+v.monto,0);
+  const fIni = typeof fmtDT==='function' ? fmtDT(orden.fechaInicio||'') : (orden.fechaInicio||'').slice(0,16).replace('T',' ');
+  const fFin = typeof fmtDT==='function' ? fmtDT(orden.fechaFin||'') : (orden.fechaFin||'').slice(0,16).replace('T',' ');
+  const corr = orden.correlativo || orden.id.slice(-6).toUpperCase();
+  const listaConceptos = vales.map(v=>'- '+(labels[v.tipo]||v.tipo)+': L. '+v.monto.toFixed(2)).join('\n');
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vale '+corr+'</title>'
+    + '<style>body{font-family:Arial,sans-serif;padding:20px;max-width:400px;margin:0 auto}'
+    + '.header{background:#856404;color:white;padding:15px;border-radius:8px 8px 0 0;text-align:center}'
+    + '.body{border:1px solid #856404;padding:15px;border-radius:0 0 8px 8px}'
+    + '.fila{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #eee}'
+    + '.total{background:#856404;color:white;padding:10px;border-radius:6px;display:flex;justify-content:space-between;font-size:18px;font-weight:bold;margin-top:10px}'
+    + '</style></head><body>'
+    + '<div class="header"><h2 style="margin:0">VALE DE ALIMENTACIÓN</h2><p style="margin:4px 0">MONTASA Handling Co.</p></div>'
+    + '<div class="body">'
+    + '<p><strong>Orden:</strong> '+corr+'</p>'
+    + '<p><strong>Inicio:</strong> '+fIni+'</p>'
+    + '<p><strong>Fin:</strong> '+fFin+'</p>'
+    + '<hr>'
+    + vales.map(v=>'<div class="fila"><span>'+(labels[v.tipo]||v.tipo)+'</span><span>L. '+v.monto.toFixed(2)+'</span></div>').join('')
+    + '<div class="total"><span>TOTAL</span><span>L. '+total.toFixed(2)+'</span></div>'
+    + '</div></body></html>';
+  const w = window.open('','_blank','width=420,height=600');
+  if(w){ w.document.write(html); w.document.close(); setTimeout(()=>w.print(),400); }
+}
 </script>
 
 <div id="viaticos-overlay" style="display:none"></div>
