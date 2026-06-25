@@ -279,6 +279,28 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </nav>
 
 <script>
+function _calcCostoViaticos(v){
+  if(!v) return 0;
+  var personas = v.personas||[];
+  // Alimentación + transporte + hospedaje por persona
+  var tAlim = personas.reduce(function(s,p){ return s+(parseFloat(p.desayuno)||0)+(parseFloat(p.almuerzo)||0)+(parseFloat(p.cena)||0)+(parseFloat(p.media_noche)||0); },0);
+  var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
+  var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
+  // Peajes según destino y vehículo
+  var PEAJES_MAP = {TRUJILLO:8,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:6,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:4,'LA CEIBA':4,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:2,CORTES:0};
+  var numPeajes = v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0);
+  var cpU = v.vehiculo==='CAMION GRANDE' ? 134 : 22;
+  var tPeaj = numPeajes * cpU;
+  var comb = parseFloat(v.combustible)||0;
+  var otros = parseFloat(v.otros_gastos)||0;
+  var total = tAlim + tTr + tHosp + tPeaj + comb + otros;
+  // Fallback
+  if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
+  if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
+  return total;
+}
+
+
 const LS_KEY = 'montasa_log_v1';
 const MOTORISTAS_LOGISTICA = ['Francisco Narvaez', 'Miguel Lopez'];
 const OPERADORES_LOGISTICA = [
@@ -482,22 +504,7 @@ function renderOrdenesLog(){
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
-      ${(()=>{
-    if(!o.viaticos) return '';
-    const v=o.viaticos;
-    // Sumar total de personas + combustible + otros gastos
-    let totalPersonas = (v.personas||[]).reduce((s,p)=>s+(parseFloat(p.total)||0),0);
-    let totalComb = parseFloat(v.combustible)||0;
-    let totalOtros = parseFloat(v.otros_gastos)||0;
-    let total = totalPersonas + totalComb + totalOtros;
-    // Fallback campos directos
-    if(!total) total = ['combustible','hotel','peaje','comida','otros','hospedaje'].reduce((s,k)=>s+(parseFloat(v[k])||0),0);
-    if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
-    if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
-    return total>0
-      ?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${total.toFixed(2)}</div>`
-      :`<div style="font-size:11px;color:#2d6a9f;margin-top:2px">📋 Viáticos solicitados</div>`;
-  })()}
+      ${(()=>{ const cv=_calcCostoViaticos(o.viaticos); return cv>0?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${cv.toFixed(2)}</div>`:(o.viaticos?`<div style="font-size:11px;color:#2d6a9f;margin-top:2px">📋 Viáticos solicitados</div>`:''); })()}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
@@ -689,27 +696,6 @@ function _cleanLogistica(arr){
     Object.keys(c).forEach(k=>{ if(c[k]===undefined) delete c[k]; });
     return c;
   });
-}
-
-function _calcCostoViaticos(v){
-  if(!v) return 0;
-  var personas = v.personas||[];
-  // Alimentación + transporte + hospedaje por persona
-  var tAlim = personas.reduce(function(s,p){ return s+(parseFloat(p.desayuno)||0)+(parseFloat(p.almuerzo)||0)+(parseFloat(p.cena)||0)+(parseFloat(p.media_noche)||0); },0);
-  var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
-  var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
-  // Peajes según destino y vehículo
-  var PEAJES_MAP = {TRUJILLO:8,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:6,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:4,'LA CEIBA':4,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:2,CORTES:0};
-  var numPeajes = v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0);
-  var cpU = v.vehiculo==='CAMION GRANDE' ? 134 : 22;
-  var tPeaj = numPeajes * cpU;
-  var comb = parseFloat(v.combustible)||0;
-  var otros = parseFloat(v.otros_gastos)||0;
-  var total = tAlim + tTr + tHosp + tPeaj + comb + otros;
-  // Fallback
-  if(!total && v.costoTotal) total=parseFloat(v.costoTotal)||0;
-  if(!total && v.totalGeneral) total=parseFloat(v.totalGeneral)||0;
-  return total;
 }
 
 function _eliminarOrdenLog(id){
@@ -1001,7 +987,7 @@ function renderHistorialLog(){
       card += _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
       // Botón vale
       card += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">';
-      if(o.viaticos) card += '<button data-oid="'+o.id+'" onclick="event.stopPropagation();abrirViaticos(this.getAttribute(\'data-oid\'))" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📋 Viáticos</button>';
+      if(o.viaticos) card += '<button data-oid="'+o.id+'" onclick="event.stopPropagation();this.disabled=true;abrirViaticos(this.dataset.oid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📋 Ver Viáticos</button>';
       if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; card += '<div style="background:#fff3cd;border-radius:6px;padding:6px 10px;font-size:11px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' — L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
       card += '</div>';
       card += '</div>';
