@@ -1082,6 +1082,8 @@ function cerrarOrdenLog(id){
   o.cerrado = true;
   o.estado = 'Cerrado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
+  // Restituir equipo a DISPONIBLE si era renta
+  if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
   // Update horometro in equipos
   const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
                     o.tipoLogistica==='retiro' ? o.horometroRetorno :
@@ -2490,6 +2492,17 @@ function editarOrdenCerradaLog(id){
   }, '✏️ Editar orden cerrada', 'Ingresa tu PIN para reabrir esta orden');
 }
 
+
+function _cambiarEstadoEquipo(equipoId, nuevoEstado){
+  if(!equipoId) return;
+  var eq = DB.equipos.find(function(e){ return e.id===equipoId; });
+  if(!eq) return;
+  eq.estado = nuevoEstado;
+  saveDB();
+  if(window._fbDB && window._fbReady){
+    window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
+  }
+}
 </script>
 
 <div id="viaticos-overlay" style="display:none"></div>
