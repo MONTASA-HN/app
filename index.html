@@ -3571,48 +3571,34 @@ function enviarSolicitudWA(){
   if(tipo==='revision_fisica'){
     if(!DB.revisiones) DB.revisiones = [];
     const nRev = DB.revisiones.length+1;
-    const corrRev = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
+    correlativo = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
     const revEntry = {
-      id: ordenId, correlativo: corrRev, estado: 'Pendiente',
+      id: ordenId, correlativo, estado: 'Pendiente',
       tecnicos: tecnicosData.map(t=>t.nombre),
-      fecha: fechaISO,
-      placa: document.getElementById('sol-rev-placa')?.value.trim()||'',
-      tipoVehiculo: document.getElementById('sol-rev-tipo')?.value||'',
+      fecha: fechaISO, notas: desc,
       completado: false
     };
     DB.revisiones.push(revEntry);
     saveDB();
     if(window._fbDB && window._fbReady)
       window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
-    clearSolicitudForm();
-    mostrarExitoOrden(corrRev);
-    toast('Revisión '+corrRev+' creada ✓');
-    return;
   }
 
   // ── Evaluación de Equipo ────────────────────────────────────────────────
   if(tipo==='evaluacion'){
     if(!DB.evaluaciones) DB.evaluaciones = [];
     const nEval = DB.evaluaciones.length+1;
-    const corrEval = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
+    correlativo = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
     const evalEntry = {
-      id: ordenId, correlativo: corrEval, estado: 'Pendiente',
+      id: ordenId, correlativo, estado: 'Pendiente',
       tecnicos: tecnicosData.map(t=>t.nombre),
-      fecha: fechaISO,
-      tipoEquipo: document.getElementById('sol-eval-tipo')?.value||'',
-      modelo: document.getElementById('sol-eval-modelo')?.value.trim()||'',
-      serie: document.getElementById('sol-eval-serie')?.value.trim()||'',
-      cliente: document.getElementById('sol-eval-cliente')?.value.trim()||'',
+      fecha: fechaISO, notas: desc,
       completado: false
     };
     DB.evaluaciones.push(evalEntry);
     saveDB();
     if(window._fbDB && window._fbReady)
       window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
-    clearSolicitudForm();
-    mostrarExitoOrden(corrEval);
-    toast('Evaluación '+corrEval+' creada ✓');
-    return;
   }
 
   // ── Validaciones logística ─────────────────────────────────────────────
@@ -3804,7 +3790,7 @@ function copiarMensajeWA(){
   const tecnicosData = Array.from(checks).map(c=>({nombre: c.dataset.nombre, num: c.value}));
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
   const faltSol = [];
-  if(!equipoTxt) faltSol.push('Número de equipo');
+  if(!equipoTxt && tipo!=='revision_fisica' && tipo!=='evaluacion') faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }

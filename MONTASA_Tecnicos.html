@@ -229,8 +229,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .app-header h1{font-size:18px;font-weight:600;letter-spacing:-0.3px}
 .app-header p{font-size:11px;opacity:0.6;margin-top:2px;font-family:'DM Mono',monospace}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,0.08)}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 4px 12px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:13px;font-family:'DM Sans',sans-serif;gap:5px;transition:color 0.15s}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,0.08)}
+.nav-btn{flex:0 0 auto;min-width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 4px 12px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;gap:4px;transition:color 0.15s}
 .nav-btn svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav-btn.active{color:var(--accent)}.nav-btn.active svg{stroke-width:2.3}
 
@@ -491,6 +491,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <label class="tecnico-check"><input type="checkbox" value="Marvin Torres" onchange="toggleTecnico(this)"> Marvin Torres</label>
         </div>
       </div>
+      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" id="corr-horometro" placeholder="Ej: 1500"></div>
       <div class="form-group"><label>Diagnóstico / Trabajos</label><textarea id="corr-diag" placeholder="Diagnóstico..."></textarea></div>
       <div class="form-group"><label>Estado inicial</label><select id="corr-estado"><option>En proceso</option><option>En espera de repuestos</option></select></div>
       <div class="form-group">
@@ -574,6 +575,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   <button class="nav-btn" onclick="showTab('historial',this)">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>Historial
   </button>
+  <button class="nav-btn" onclick="showTab('revision',this)">
+    <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Revisión
+  </button>
+  <button class="nav-btn" onclick="showTab('evaluacion',this)">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Evaluación
+  </button>
 </nav>
 
 <script>
@@ -594,6 +601,8 @@ function loadDB(){
     const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
     if(d.preventivos)     DB.preventivos     = d.preventivos;
     if(d.correctivos)     DB.correctivos     = d.correctivos;
+    if(d.revisiones)      DB.revisiones      = d.revisiones||[];
+    if(d.evaluaciones)    DB.evaluaciones    = d.evaluaciones||[];
     if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
     if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
     if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
@@ -1175,6 +1184,7 @@ function renderPreventivos(){
         <div class="tec-btn" data-n="Dalton Garcia" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Dalton Garcia',this)">Dalton Garcia</div>
         <div class="tec-btn" data-n="Eliberto Peña" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Eliberto Peña',this)">Eliberto Peña</div>
       </div></div>
+      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
       <div style="margin-top:12px">
@@ -1297,11 +1307,9 @@ function completarPreventivo(id){
   if(!p.fechaFin)      faltantes.push('Fecha y hora de finalización');
   if(!p.tecnico)       faltantes.push('Técnico(s) asignado(s)');
   if(!p.notas)         faltantes.push('Trabajo realizado');
-  if(!p.horometro)     faltantes.push('Horómetro');
   if(p.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
   // ── VALIDACIÓN: firma obligatoria ──
   const firmaData = getFirmaData(id);
-  if(!firmaData) faltantes.push('Firma digital del cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -1489,6 +1497,7 @@ function renderCorrectivos(){
     <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
+      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
       <div class="form-group"><label>Fecha inicio</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.previousElementSibling.value+'T'+this.value)"></div></div>
@@ -1503,6 +1512,7 @@ function renderCorrectivos(){
         <div class="tec-btn" data-n="Dalton Garcia" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Dalton Garcia',this)">Dalton Garcia</div>
         <div class="tec-btn" data-n="Eliberto Peña" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Eliberto Peña',this)">Eliberto Peña</div>
       </div></div>
+      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
       <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje (si aplica)</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -1583,7 +1593,7 @@ function guardarCorrectivo(finalizar=false){
         ubicacion: nom,
         cliente: nom,
         estado: 'DISPONIBLE',
-        horometro: '',
+        horometro: document.getElementById('corr-horometro')?.value||'',
         observaciones: 'Agregado automáticamente desde mantenimiento'
       };
       DB.equipos.push(nuevoEq);
@@ -1629,7 +1639,6 @@ function cerrarCorrectivo(id){
   const c = DB.correctivos.find(x=>x.id===id);
   if(!c) return;
   const faltantes = [];
-  if(!c.sistema)       faltantes.push('Sistema afectado');
   if(!c.fechaInicio)   faltantes.push('Fecha y hora de inicio');
   if(!c.fechaFin)      faltantes.push('Fecha y hora de finalización');
   if(!c.tecnico)       faltantes.push('Técnico(s) asignado(s)');
@@ -1638,7 +1647,6 @@ function cerrarCorrectivo(id){
   if(c.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
     // ── VALIDACIÓN: firma obligatoria ──
   const firmaDataC = getFirmaData(id);
-  if(!firmaDataC) faltantes.push('Firma digital del cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -2268,6 +2276,249 @@ function toggleEquipoClienteCorr(){}
     if(e.key==='ArrowLeft') {const n=idx-1;if(n>=0)         showTab(TABS[n],document.querySelector('.nav-btn:nth-child('+(n+1)+')'));}
   });
 })();
+
+// ── REVISIONES FÍSICO-TÉCNICAS ────────────────────────────────────────────────
+let _openRev = new Set();
+let _openEval = new Set();
+
+function guardarRevision(){
+  const estado    = document.getElementById('rev-estado').value;
+  const tec1      = document.getElementById('rev-tec1').value;
+  const tec2      = document.getElementById('rev-tec2').value;
+  const fecha     = document.getElementById('rev-fecha').value;
+  const horaIni   = document.getElementById('rev-hora-ini').value;
+  const horaFin   = document.getElementById('rev-hora-fin').value;
+  const placa     = document.getElementById('rev-placa').value.trim();
+  const tipoVeh   = document.getElementById('rev-tipo-vehiculo').value;
+  const faltantes = [];
+  if(!tec1) faltantes.push('Técnico asignado');
+  if(!fecha) faltantes.push('Fecha');
+  if(!horaIni) faltantes.push('Hora inicio');
+  if(!horaFin) faltantes.push('Hora final');
+  if(!placa) faltantes.push('Placa del vehículo');
+  if(!tipoVeh) faltantes.push('Tipo de vehículo');
+  if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
+  if(!DB.revisiones) DB.revisiones = [];
+  const nRev = (DB.revisiones.length||0)+1;
+  const correlativo = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
+  const entry = {
+    id: uid(), correlativo, estado,
+    tecnicos: [tec1, tec2].filter(Boolean),
+    fecha, horaIni, horaFin,
+    fechaInicio: fecha+'T'+horaIni, fechaFin: fecha+'T'+horaFin,
+    placa, tipoVehiculo: tipoVeh,
+    completado: estado==='Completado'
+  };
+  DB.revisiones.push(entry);
+  saveDB();
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+  ['rev-placa','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('rev-estado').selectedIndex=0;
+  document.getElementById('rev-tec1').selectedIndex=0;
+  document.getElementById('rev-tec2').selectedIndex=0;
+  document.getElementById('rev-tipo-vehiculo').selectedIndex=0;
+  toggleForm('form-rev');
+  renderRevisiones();
+  toast('Revisión guardada ✓');
+}
+
+function renderRevisiones(){
+  const el = document.getElementById('revision-list');
+  if(!el) return;
+  const list = (DB.revisiones||[]).slice().sort((a,b)=>{
+    const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb-na;
+  });
+  if(!list.length){ el.innerHTML='<div class="empty">Sin revisiones</div>'; return; }
+  const COLORES = {Pendiente:{bg:'#fff0f0',txt:'#c00'},
+    'En proceso':{bg:'#fff8e1',txt:'#b45309'},Completado:{bg:'#f0fdf4',txt:'#15803d'}};
+  el.innerHTML = list.map(r=>{
+    const isOpen = _openRev.has(r.id);
+    const cc = COLORES[r.estado]||{bg:'#f5f5f5',txt:'#333'};
+    const tecs = (r.tecnicos||[]).join(', ')||'—';
+    let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-rid="${r.id}">`;
+    card += `<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">`;
+    card += `<div>`;
+    card += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">`;
+    card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${r.correlativo}</span>`;
+    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};padding:2px 8px;border-radius:10px">${r.estado}</span>`;
+    card += `</div>`;
+    card += `<div style="font-size:13px;font-weight:600">${r.placa} — ${r.tipoVehiculo}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">📅 ${r.fecha||'—'} ${r.horaIni||''} - ${r.horaFin||''}</div>`;
+    card += `</div><span style="font-size:18px;color:var(--text3)">${isOpen?'⌃':'⌄'}</span>`;
+    card += `</div>`;
+    if(isOpen){
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+      [['Correlativo',r.correlativo],['Estado',r.estado],['Técnicos',tecs],
+       ['Fecha',r.fecha||'—'],['Hora inicio',r.horaIni||'—'],['Hora final',r.horaFin||'—'],
+       ['Placa',r.placa||'—'],['Tipo vehículo',r.tipoVehiculo||'—']
+      ].forEach(([k,v])=>{
+        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600">${v}</span></div>`;
+      });
+      card += `</div>`;
+      if(!r.completado){
+        card += `<button onclick="event.stopPropagation();cerrarRevision('${r.id}')" style="width:100%;padding:10px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Marcar Completado</button>`;
+      }
+      card += `</div>`;
+    }
+    card += `</div>`;
+    return card;
+  }).join('');
+  el.onclick = function(e){
+    const card = e.target.closest('[data-rid]');
+    if(card && !e.target.closest('button,input,select,textarea')){
+      const id = card.dataset.rid;
+      if(_openRev.has(id)) _openRev.delete(id); else _openRev.add(id);
+      renderRevisiones();
+    }
+  };
+}
+
+function cerrarRevision(id){
+  const r = (DB.revisiones||[]).find(x=>x.id===id);
+  if(!r) return;
+  r.estado = 'Completado';
+  r.completado = true;
+  r.fechaCierre = new Date().toISOString().slice(0,10);
+  saveDB();
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+  renderRevisiones();
+  toast('Revisión completada ✓');
+}
+
+// ── EVALUACIONES DE EQUIPO ────────────────────────────────────────────────────
+function guardarEvaluacion(){
+  const estado    = document.getElementById('eval-estado').value;
+  const tec1      = document.getElementById('eval-tec1').value;
+  const tec2      = document.getElementById('eval-tec2').value;
+  const fecha     = document.getElementById('eval-fecha').value;
+  const horaIni   = document.getElementById('eval-hora-ini').value;
+  const horaFin   = document.getElementById('eval-hora-fin').value;
+  const kmSal     = document.getElementById('eval-km-sal').value;
+  const kmRet     = document.getElementById('eval-km-ret').value;
+  const tipoEq    = document.getElementById('eval-tipo-equipo').value;
+  const modelo    = document.getElementById('eval-modelo').value.trim();
+  const serie     = document.getElementById('eval-serie').value.trim();
+  const cliente   = document.getElementById('eval-cliente').value.trim();
+  const diag      = document.getElementById('eval-diagnostico').value.trim();
+  const firma     = getFirmaData('firma-eval-new');
+  const faltantes = [];
+  if(!tec1) faltantes.push('Técnico asignado');
+  if(!fecha) faltantes.push('Fecha');
+  if(!horaIni) faltantes.push('Hora inicio');
+  if(!horaFin) faltantes.push('Hora final');
+  if(!tipoEq) faltantes.push('Tipo de equipo');
+  if(!modelo) faltantes.push('Modelo del equipo');
+  if(!serie) faltantes.push('Serie del equipo');
+  if(!cliente) faltantes.push('Nombre del cliente');
+  if(!diag) faltantes.push('Diagnóstico');
+  if(!firma) faltantes.push('Firma del cliente');
+  if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
+  if(!DB.evaluaciones) DB.evaluaciones = [];
+  const nEval = (DB.evaluaciones.length||0)+1;
+  const correlativo = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
+  const entry = {
+    id: uid(), correlativo, estado,
+    tecnicos: [tec1, tec2].filter(Boolean),
+    fecha, horaIni, horaFin,
+    fechaInicio: fecha+'T'+horaIni, fechaFin: fecha+'T'+horaFin,
+    kmSalida: kmSal, kmRetorno: kmRet,
+    tipoEquipo: tipoEq, modelo, serie, cliente, diagnostico: diag, firma,
+    completado: estado==='Completado'
+  };
+  DB.evaluaciones.push(entry);
+  saveDB();
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+  ['eval-modelo','eval-serie','eval-cliente','eval-diagnostico','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('eval-estado').selectedIndex=0;
+  document.getElementById('eval-tec1').selectedIndex=0;
+  document.getElementById('eval-tec2').selectedIndex=0;
+  document.getElementById('eval-tipo-equipo').selectedIndex=0;
+  limpiarFirma('firma-eval-new');
+  toggleForm('form-eval');
+  renderEvaluaciones();
+  toast('Evaluación guardada ✓');
+}
+
+function renderEvaluaciones(){
+  const el = document.getElementById('evaluacion-list');
+  if(!el) return;
+  const list = (DB.evaluaciones||[]).slice().sort((a,b)=>{
+    const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb-na;
+  });
+  if(!list.length){ el.innerHTML='<div class="empty">Sin evaluaciones</div>'; return; }
+  const COLORES = {Pendiente:{bg:'#fff0f0',txt:'#c00'},
+    'En proceso':{bg:'#fff8e1',txt:'#b45309'},Completado:{bg:'#f0fdf4',txt:'#15803d'}};
+  el.innerHTML = list.map(v=>{
+    const isOpen = _openEval.has(v.id);
+    const cc = COLORES[v.estado]||{bg:'#f5f5f5',txt:'#333'};
+    const tecs = (v.tecnicos||[]).join(', ')||'—';
+    let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px;cursor:pointer" data-eid="${v.id}">`;
+    card += `<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">`;
+    card += `<div>`;
+    card += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">`;
+    card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#2d6a9f;padding:2px 7px;border-radius:10px">${v.correlativo}</span>`;
+    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};padding:2px 8px;border-radius:10px">${v.estado}</span>`;
+    card += `</div>`;
+    card += `<div style="font-size:13px;font-weight:600">${v.tipoEquipo} — ${v.modelo}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">👤 ${v.cliente}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecs} · 📅 ${v.fecha||'—'}</div>`;
+    card += `</div><span style="font-size:18px;color:var(--text3)">${isOpen?'⌃':'⌄'}</span>`;
+    card += `</div>`;
+    if(isOpen){
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+      const campos = [['Correlativo',v.correlativo],['Estado',v.estado],['Técnicos',tecs],
+        ['Fecha',v.fecha||'—'],['Hora inicio',v.horaIni||'—'],['Hora final',v.horaFin||'—'],
+        ['Tipo equipo',v.tipoEquipo||'—'],['Modelo',v.modelo||'—'],
+        ['Serie',v.serie||'—'],['Cliente',v.cliente||'—']];
+      if(v.kmSalida&&v.kmRetorno) campos.push(['Km recorridos',(parseFloat(v.kmRetorno)-parseFloat(v.kmSalida)).toFixed(0)+' km']);
+      campos.forEach(([k,val])=>{
+        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600">${val}</span></div>`;
+      });
+      card += `</div>`;
+      if(v.diagnostico) card += `<div style="font-size:12px;margin-bottom:8px"><div style="color:var(--text3);font-size:10px;text-transform:uppercase;margin-bottom:3px">Diagnóstico</div><div style="background:var(--surface2);padding:8px;border-radius:6px">${v.diagnostico}</div></div>`;
+      if(v.firma) card += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+      if(!v.completado) card += `<button onclick="event.stopPropagation();cerrarEvaluacion('${v.id}')" style="width:100%;padding:10px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Marcar Completado</button>`;
+      card += `</div>`;
+    }
+    card += `</div>`;
+    return card;
+  }).join('');
+  el.onclick = function(e){
+    const card = e.target.closest('[data-eid]');
+    if(card && !e.target.closest('button,input,select,textarea,canvas')){
+      const id = card.dataset.eid;
+      if(_openEval.has(id)) _openEval.delete(id); else _openEval.add(id);
+      renderEvaluaciones();
+    }
+  };
+}
+
+function cerrarEvaluacion(id){
+  const v = (DB.evaluaciones||[]).find(x=>x.id===id);
+  if(!v) return;
+  v.estado = 'Completado';
+  v.completado = true;
+  v.fechaCierre = new Date().toISOString().slice(0,10);
+  saveDB();
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+  renderEvaluaciones();
+  toast('Evaluación completada ✓');
+}
 </script>
 
 </body>
