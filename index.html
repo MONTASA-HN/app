@@ -888,7 +888,7 @@ function showTab(id, el){
     renderSolicitudes();
   }
   if(id === 'logistica') renderLogistica();
-  if(id === 'historial'){ fillHistSel(); renderHistorial(); }
+  if(id === 'historial'){ fillHistSel(); renderHistorial(); document.querySelector('.fab-item-label#fab-lbl-historial') && (document.querySelector('#fab-lbl-historial').textContent='Mantenimiento'); }
   if(id === 'personal')  renderPersonal();
   if(id === 'dashboard') renderDashboard();
   window.scrollTo(0, 0);
@@ -2674,144 +2674,123 @@ function renderCorrectivos(){
 
 
 function renderHistorial(){
-  const filtEq  = document.getElementById('filt-hist-equipo').value;
+  const filtEq  = document.getElementById('filt-hist-equipo')?.value || '';
   const buscar  = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
+  const ESTADOS_COLOR = {
+    'Pendiente':  {bg:'#fff0f0',border:'#c00',txt:'#c00'},
+    'En proceso': {bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},
+    'En espera de repuestos': {bg:'#eff6ff',border:'#3b82f6',txt:'#1d4ed8'},
+    'Completado': {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
+    'Cerrado':    {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
+  };
 
-  // Merge preventivos + correctivos, only show completed/closed
+  // Todos los estados
   let all = [
-    ...DB.preventivos
-      .filter(p=>p.completado)
-      .map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||p.fecha})),
-    ...DB.correctivos
-      .filter(c=>c.estado==='Cerrado')
-      .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha}))
+    ...(DB.preventivos||[]).map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||''})),
+    ...(DB.correctivos||[]).map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||''}))
   ].sort((a,b)=>{
-    // Orden descendente por fecha, luego por correlativo
-    const da = new Date(a._f||'2000-01-01').getTime();
-    const db = new Date(b._f||'2000-01-01').getTime();
-    if(db !== da) return db - da;
     const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
     const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
     return nb - na;
   });
 
-  if(filtEq) all = all.filter(x=>x.equipoId==filtEq);
+  if(filtEq) all = all.filter(x=>x.equipoId===filtEq);
   if(buscar)  all = all.filter(x=>
-    (x.correlativo||'').toLowerCase().includes(buscar) ||
-    (x.falla||x.servicio||'').toLowerCase().includes(buscar) ||
+    (x.correlativo||'').toLowerCase().includes(buscar)||
+    (x.falla||x.servicio||x.notas||'').toLowerCase().includes(buscar)||
     (x.tecnico||'').toLowerCase().includes(buscar)
   );
 
   const el = document.getElementById('historial-list');
-  if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes finalizadas</div>'; return; }
+  if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes de mantenimiento</div>'; return; }
 
-  el.innerHTML = all.map(x => {
+  el.innerHTML = all.map(x=>{
     const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
-    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (x.clienteNombre ? 'Cliente: '+x.clienteNombre : '—');
-    const horas = calcHoras(x.fechaInicio, x.fechaFin);
+    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
+    const horas = calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
+    const estRaw = x._t==='P' ? (x.completado?'Completado':(x.estado||'Pendiente')) : (x.estado||'Pendiente');
+    const estCfg = ESTADOS_COLOR[estRaw] || {bg:'#f5f5f5',border:'#888',txt:'#333'};
+    const tipo = x._t==='P' ? 'Preventivo' : 'Correctivo';
+    const tipoColor = x._t==='P' ? '#2d6a2d' : '#1f3864';
+    const trabajo = x.falla || x.servicio || x.notas || '—';
+    const tecnicos = (x.tecnicos && x.tecnicos.length) ? x.tecnicos.join(', ') : (x.tecnico||'—');
+    const isOpen = openHistGer.has(x.id);
+    const corr = x.correlativo||'';
 
-    if(x._t==='P'){
-      const isOpenP = openHistGer.has(x.id);
-      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d;cursor:pointer" onclick="toggleHistGer('${x.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700">📅 ${x.servicio}</span>
-              ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
-            </div>
-            <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
-          </div>
-          <span class="badge badge-ok" style="flex-shrink:0">Completado</span>
-        </div>
-        <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
-        <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
-        ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${horas}</span></div>`:''}
-        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
-        ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
-        ${x.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${x.sugerencias}</span></div>`:''}
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
-        ${x.firma ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div>
-          <img src="${x.firma}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
-        </div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('prev','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar orden</button></div>
-      </div>`;
-    } else if(x._t==='L') {
-      const tipoLogLbl = {renta:'🚛 Renta',entrega:'📦 Entrega',retiro:'🔙 Retiro',entrega_retiro:'🔄 Entrega/Retiro',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Compras'}[x.tipoLogistica]||x.tipoLogistica||'Logística';
-      const isOpenL = openHistGer.has(x.id);
-      const horasL = calcHoras(x.fechaInicio, x.fechaFin);
-      return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;cursor:pointer" onclick="toggleHistGer('${x.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-              ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
-              <span class="badge" style="background:#e8f0fb;color:#2d6a9f">Logística</span>
-              <span class="badge">${tipoLogLbl}</span>
-            </div>
-            <div class="card-sub" style="font-weight:600">${getEqLabelFull(x)}</div>
-            <div style="font-size:12px;color:var(--text3)">${fmt(x.fechaInicio)} → ${fmt(x.fechaFin)} ${horasL&&horasL!=='—'?'· '+horasL:''}</div>
-            ${(()=>{ const cv=_calcCostoViaticos(x.viaticos); return cv>0?`<div style="font-size:11px;font-weight:700;color:#1f3864">💰 L. ${cv.toFixed(2)}</div>`:x.viaticos?'<div style="font-size:11px;color:#2d6a9f">📋 Viáticos</div>':''; })()}
-            ${x.kmSalida&&x.kmRetorno&&parseFloat(x.kmRetorno)>parseFloat(x.kmSalida)?`<div style="font-size:11px;color:#1a5c1a">🛣 ${(parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)} km recorridos</div>`:''}
-          </div>
-          <div style="font-size:18px;color:var(--text3);margin-left:8px;transform:rotate(${isOpenL?'180':'0'}deg)">⌄</div>
-        </div>
-        ${isOpenL?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Tipo</div><div style="font-size:13px;font-weight:600">${tipoLogLbl}</div></div>
-            <div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Equipo</div><div style="font-size:13px;font-weight:600">${getEqLabelFull(x)}</div></div>
-            ${x.operador?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Operador</div><div style="font-size:13px;font-weight:600">${x.operador}</div></div>`:''}
-            ${x.tecnico?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Personal</div><div style="font-size:13px;font-weight:600">${x.tecnico}</div></div>`:''}
-            ${x.motorista?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Motorista</div><div style="font-size:13px;font-weight:600">${x.motorista}</div></div>`:''}
-            ${x.prioridad?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Prioridad</div><div style="font-size:13px;font-weight:600">${x.prioridad}</div></div>`:''}
-            ${x.horometroSalida?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Horómetro salida</div><div style="font-size:13px;font-weight:600">${x.horometroSalida} hrs</div></div>`:''}
-            ${x.horometroRetorno?`<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Horómetro retorno</div><div style="font-size:13px;font-weight:600">${x.horometroRetorno} hrs</div></div>`:''}
-          </div>
-          ${x.descripcion?`<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Descripción</div><div style="font-size:13px;background:var(--surface2);border-radius:6px;padding:8px">${x.descripcion}</div></div>`:''}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text3)">
-            <div>🕐 Inicio: <strong style="color:var(--text)">${fmtDT(x.fechaInicio)}</strong></div>
-            <div>🕑 Fin: <strong style="color:var(--text)">${fmtDT(x.fechaFin)}</strong></div>
-            <div>📅 Cierre: <strong style="color:var(--text)">${fmt(x.fechaCierre)||'—'}</strong></div>
-            ${x.tipoLogistica==='renta'&&x.horometroSalida&&x.horometroRetorno?`<div>⏱ Equipo: <strong style="color:#2d6a9f">${(parseFloat(x.horometroRetorno)-parseFloat(x.horometroSalida)).toFixed(1)} hrs</strong></div>`:''}
-            ${x.kmSalida&&x.kmRetorno&&parseFloat(x.kmRetorno)>parseFloat(x.kmSalida)?`<div style="grid-column:1/-1">🛣 Km recorridos: <strong style="color:#1a5c1a">${(parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)} km</strong> <span style="color:var(--text3);font-size:10px">(${x.kmSalida} → ${x.kmRetorno})</span></div>`:''}
-          </div>
-          ${(()=>{ const cv=_calcCostoViaticos(x.viaticos); return cv>0?`<div style="background:#dce6f1;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700;color:#1f3864">💰 Costo viaje: L. ${cv.toFixed(2)}</div>`:''; })()}
-          ${x.firma?`<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="${x.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
-          ${x.vales&&x.vales.length?`<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> ${x.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')} — L. ${x.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)}</div>`:''}
-          <div style="display:flex;gap:8px;margin-top:4px">
-            ${x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#dce6f1;color:#1f3864" onclick="event.stopPropagation();abrirViaticos('${x.id}')">📋 Viáticos</button>`:''}
-            ${!x.viaticos?`<button class="btn" style="flex:1;font-size:12px;background:#fff3cd;color:#856404;border-color:#ffc107" onclick="event.stopPropagation();abrirValeGerencia('${x.id}')">${x.vales&&x.vales.length?'🍽 Vale':'🍽 Generar Vale'}</button>`:''}
-            <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="event.stopPropagation();editarOrdenHistorial('log','${x.id}')">✏️ Editar</button>
-            <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="event.stopPropagation();eliminarDelHistorial('log','${x.id}')">✕</button>
-          </div>
-        </div>`:''}
-      </div>`;
-    } else {
-      return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700">🔧 ${x.falla}</span>
-              ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
-            </div>
-            <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
-          </div>
-          <span class="badge badge-gray" style="flex-shrink:0">Cerrado</span>
-        </div>
-        ${x.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span>${x.sistema}</span></div>`:''}
-        <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
-        <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
-        ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${horas}</span></div>`:''}
-        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
-        ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${x.diagnostico}</span></div>`:''}
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCierre||x._f)}</div>
-        ${x.firma ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div>
-          <img src="${x.firma}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
-        </div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial(\'corr\',\'${x.id}\')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('corr','${x.id}')">✕ Eliminar orden</button></div>
-      </div>`;
+    // MINIATURA
+    let card = `<div class="card" style="padding:12px 14px;border-left:3px solid ${tipoColor};margin-bottom:8px;cursor:pointer" data-hid="${x.id}" onclick="toggleHistGer('${x.id}')">`;
+    card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
+    card += `<div style="flex:1;min-width:0">`;
+    // Badges
+    card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+    if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
+    card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
+    card += `<span style="font-size:11px;background:#f0f4ff;color:${tipoColor};padding:2px 7px;border-radius:10px">${tipo}</span>`;
+    card += `</div>`;
+    // Trabajo
+    card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
+    // Equipo + horas + técnicos
+    card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
+    if(x.fechaInicio) card += `<div style="font-size:11px;color:var(--text3)">📅 ${fmtDT(x.fechaInicio)||'—'} ${x.fechaFin||x.fechaCompletado?'→ '+(fmtDT(x.fechaFin||x.fechaCompletado)||''):''}${horas&&horas!=='—'?' · ⏱ '+horas:''}</div>`;
+    if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
+    if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
+    card += `</div>`;
+    card += `<span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
+    card += `</div>`;
+
+    // DETALLE EXPANDIDO
+    if(isOpen){
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      // Grid de info
+      const campos = [
+        ['Correlativo', corr],
+        ['Tipo', tipo],
+        ['Estado', estRaw],
+        ['Equipo', eqLabel],
+        ['Técnicos', tecnicos],
+        ['Inicio', fmtDT(x.fechaInicio)||'—'],
+        ['Fin', fmtDT(x.fechaFin||x.fechaCompletado)||'—'],
+        ['Horas trabajadas', horas&&horas!=='—'?horas:'—'],
+      ];
+      if(x._t==='P' && x.servicio) campos.push(['Servicio', x.servicio]);
+      if(x._t==='C' && x.falla) campos.push(['Falla reportada', x.falla]);
+      if(x.notas||x.diagnostico) campos.push(['Notas / Diagnóstico', x.notas||x.diagnostico]);
+      if(x.repuestosUsados) campos.push(['Repuestos', x.repuestosUsados]);
+      if(x.kmSalida&&x.kmRetorno) campos.push(['Km recorridos', (parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)+' km']);
+      if(x.vales&&x.vales.length){
+        const vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'};
+        campos.push(['Vale alimentación', x.vales.map(v=>(vlbl[v.tipo]||v.tipo)+' L.'+v.monto).join(', ')]);
+      }
+
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:12px">`;
+      campos.forEach(([k,v])=>{
+        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+      });
+      card += `</div>`;
+
+      // Firma si existe
+      if(x.firma) card += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+
+      // Botones de acción
+      card += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">`;
+      if(x.vales&&x.vales.length){
+        card += `<button onclick="event.stopPropagation();abrirValeMant('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#856404;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🍽 Ver Vale</button>`;
+      } else {
+        card += `<button onclick="event.stopPropagation();abrirValeMant('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#b8860b;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🍽 Generar Vale</button>`;
+      }
+      card += `<button onclick="event.stopPropagation();eliminarDelHistorial('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:6px;font-size:12px;cursor:pointer">✕ Eliminar</button>`;
+      card += `</div>`;
+      card += `</div>`;
     }
+    card += `</div>`;
+    return card;
   }).join('');
+
+  // Event delegation
+  el.onclick = function(e){
+    const card = e.target.closest('[data-hid]');
+    if(card && !e.target.closest('button,input,select,textarea')) toggleHistGer(card.dataset.hid);
+  };
 }
 
 function guardarEquipo(){
@@ -5596,7 +5575,7 @@ function imprimirValeMant(){
       </div>
     </div>
     <div class="fab-item" onclick="fabGoTo('historial')">
-      <span class="fab-item-label" id="fab-lbl-historial">Historial</span>
+      <span class="fab-item-label" id="fab-lbl-historial">Mantenimiento</span>
       <div class="fab-item-btn" id="fab-btn-historial">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
       </div>
@@ -5607,13 +5586,13 @@ function imprimirValeMant(){
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
     </div>
-    <div class="fab-item" onclick="fabGoTo('correctivo')">
+    <div class="fab-item" onclick="fabGoTo('correctivo')" style="display:none">
       <span class="fab-item-label" id="fab-lbl-correctivo">Correctivos</span>
       <div class="fab-item-btn" id="fab-btn-correctivo">
         <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
       </div>
     </div>
-    <div class="fab-item" onclick="fabGoTo('preventivo')">
+    <div class="fab-item" onclick="fabGoTo('preventivo')" style="display:none">
       <span class="fab-item-label" id="fab-lbl-preventivo">Preventivos</span>
       <div class="fab-item-btn" id="fab-btn-preventivo">
         <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="M9 12h6M9 16h4"/></svg>
