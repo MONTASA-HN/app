@@ -3561,6 +3561,8 @@ function enviarSolicitudWA(){
     };
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
+    // Cambiar estado del equipo si es renta
+    if(tipo === 'renta') _cambiarEstadoEquipo(equipoId, 'EN RENTA');
     // Write logistica to Firebase — with rollback on failure
     if(window._fbDB && window._fbReady){
       const writeTs = Date.now();
@@ -5560,6 +5562,18 @@ function imprimirValeMant(){
     + '<div class="total"><span>TOTAL</span><span>L. '+total.toFixed(2)+'</span></div>'
     + '</div></body></html>';
   _imprimirHTML(html);
+}
+
+function _cambiarEstadoEquipo(equipoId, nuevoEstado){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq) return;
+  eq.estado = nuevoEstado;
+  saveDB();
+  if(window._fbDB && window._fbReady){
+    const idx = DB.equipos.findIndex(e=>e.id===equipoId);
+    if(idx>=0) window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
+  }
 }
 </script>
 
