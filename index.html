@@ -3567,40 +3567,6 @@ function enviarSolicitudWA(){
   // --- Crear orden directamente en el sistema ---
   const depto_check = document.getElementById('sol-depto')?.value||'mantenimiento';
 
-  // ── Revisión Físico-Técnica ─────────────────────────────────────────────
-  if(tipo==='revision_fisica'){
-    if(!DB.revisiones) DB.revisiones = [];
-    const nRev = DB.revisiones.length+1;
-    correlativo = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
-    const revEntry = {
-      id: ordenId, correlativo, estado: 'Pendiente',
-      tecnicos: tecnicosData.map(t=>t.nombre),
-      fecha: fechaISO, notas: desc,
-      completado: false
-    };
-    DB.revisiones.push(revEntry);
-    saveDB();
-    if(window._fbDB && window._fbReady)
-      window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
-  }
-
-  // ── Evaluación de Equipo ────────────────────────────────────────────────
-  if(tipo==='evaluacion'){
-    if(!DB.evaluaciones) DB.evaluaciones = [];
-    const nEval = DB.evaluaciones.length+1;
-    correlativo = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
-    const evalEntry = {
-      id: ordenId, correlativo, estado: 'Pendiente',
-      tecnicos: tecnicosData.map(t=>t.nombre),
-      fecha: fechaISO, notas: desc,
-      completado: false
-    };
-    DB.evaluaciones.push(evalEntry);
-    saveDB();
-    if(window._fbDB && window._fbReady)
-      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
-  }
-
   // ── Validaciones logística ─────────────────────────────────────────────
   if(depto_check === 'logistica'){
     const tipo_check = document.getElementById('sol-tipo')?.value||'';
@@ -3645,6 +3611,34 @@ function enviarSolicitudWA(){
   const correlativo = nextCorrelativo(depto_check==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
+  // ── Revisión Físico-Técnica ─────────────────────────────────────────────
+  if(tipo==='revision_fisica'){
+    if(!DB.revisiones) DB.revisiones = [];
+    const nRev = DB.revisiones.length+1;
+    const corrRev = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
+    const revEntry = {id:ordenId, correlativo:corrRev, estado:'Pendiente', tecnicos:tecnicosData.map(t=>t.nombre), fecha:fechaISO, notas:desc, completado:false};
+    DB.revisiones.push(revEntry);
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+    clearSolicitudForm();
+    toast('Revisión '+corrRev+' creada ✓');
+    renderDashboard();
+    return;
+  }
+  // ── Evaluación de Equipo ────────────────────────────────────────────────
+  if(tipo==='evaluacion'){
+    if(!DB.evaluaciones) DB.evaluaciones = [];
+    const nEval = DB.evaluaciones.length+1;
+    const corrEval = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
+    const evalEntry = {id:ordenId, correlativo:corrEval, estado:'Pendiente', tecnicos:tecnicosData.map(t=>t.nombre), fecha:fechaISO, notas:desc, completado:false};
+    DB.evaluaciones.push(evalEntry);
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+    clearSolicitudForm();
+    toast('Evaluación '+corrEval+' creada ✓');
+    renderDashboard();
+    return;
+  }
 
   // Buscar equipoId
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
