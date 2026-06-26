@@ -3402,6 +3402,17 @@ function solTipoChange(){
   const isEval = tipo==='evaluacion';
   const isRevEval = isRev || isEval;
 
+  // Reset visibilidad de todos los grupos antes de aplicar lógica
+  ['sol-prioridad-group','sol-equipo-manual','sol-mant-wrap','sol-operador-group'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='';
+  });
+  const eqEl2 = document.getElementById('sol-equipo');
+  if(eqEl2) { const g=eqEl2.closest('.form-group'); if(g) g.style.display=''; }
+  const fechaEl2 = document.getElementById('sol-fecha');
+  if(fechaEl2) { const g=fechaEl2.closest('.form-group'); if(g) g.style.display=''; }
+  const tecEl2 = document.getElementById('sol-tecnicos-grid');
+  if(tecEl2) { const g=tecEl2.closest('.form-group'); if(g) g.style.display=''; }
+
   // Re-populate equipo select filtered by tipo (solo si no es rev/eval)
   const selEq = document.getElementById('sol-equipo');
   if(selEq && typeof DB !== 'undefined' && DB.equipos && !isRevEval){
@@ -3433,19 +3444,29 @@ function solTipoChange(){
 
   // En revisión/evaluación: solo descripción simple y personal
   if(isRevEval){
-    if(eqGroup)   eqGroup.style.display   = 'none';
-    if(prioGroup) prioGroup.style.display = 'none';
-    if(wrap2)     wrap2.style.display     = 'none';
-    if(eqManual)  eqManual.style.display  = 'none';
-    if(mantWrap)  mantWrap.style.display  = 'none';
+    // Ocultar todo excepto descripción y técnicos
+    ['sol-prioridad-group','sol-equipo-manual','sol-equipo2-wrap','sol-mant-wrap',
+     'sol-operador-group','sol-logistica-personal'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    // Ocultar equipo y fecha por closest form-group
+    const eqEl = document.getElementById('sol-equipo');
+    if(eqEl) eqEl.closest('.form-group').style.display='none';
+    const fechaEl = document.getElementById('sol-fecha');
+    if(fechaEl) fechaEl.closest('.form-group').style.display='none';
     // Mostrar descripción con label adecuado
-    if(descWrap){
-      descWrap.style.display = 'block';
-      const lbl = document.getElementById('sol-desc-label');
-      if(lbl) lbl.textContent = isRev ? 'Descripción de la revisión' : 'Descripción de la evaluación';
-    }
-    if(revWrap)  revWrap.style.display  = isRev  ? 'block' : 'none';
-    if(evalWrap) evalWrap.style.display = isEval ? 'block' : 'none';
+    const descWrap = document.getElementById('sol-desc-wrap');
+    if(descWrap) descWrap.style.display='block';
+    const lbl = document.getElementById('sol-desc-label');
+    if(lbl) lbl.textContent = isRev ? 'Descripción de la revisión' : 'Descripción de la evaluación';
+    // Ocultar campos específicos de rev/eval que no aplican
+    const revWrap  = document.getElementById('sol-rev-wrap');
+    const evalWrap = document.getElementById('sol-eval-wrap');
+    if(revWrap)  revWrap.style.display  = 'none';
+    if(evalWrap) evalWrap.style.display = 'none';
+    // Mostrar técnicos de mantenimiento
+    const tecGrid = document.getElementById('sol-tecnicos-grid');
+    if(tecGrid) tecGrid.closest('.form-group').style.display='block';
     return;
   }
 
