@@ -554,16 +554,16 @@ function renderOrdenesLog(){
         </div>
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-                <!-- Operador — NO en renta -->
-        ${o.tipoLogistica!=='renta'?`
+                <!-- Operador: renta + entrega + retiro -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Motorista — entrega, retiro, apoyo_compras y renta -->
-        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')?`
+        <!-- Motorista: entrega + retiro + compras + apoyo -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
@@ -640,11 +640,6 @@ function renderOrdenesLog(){
           style="width:100%;margin-top:6px;padding:10px;background:${o.vales&&o.vales.length?'#856404':'#b8860b'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
           🍽 ${o.vales&&o.vales.length?'Ver Vale de Alimentación':'Generar Vale de Alimentación'}
         </button>` : ''}
-        <!-- PUNTO 4: Eliminar orden con PIN -->
-        <button data-oid="${o.id}" onclick="event.stopPropagation();_eliminarOrdenLog('${o.id}')"
-          style="width:100%;margin-top:6px;padding:8px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:var(--radius-sm);font-size:12px;cursor:pointer">
-          🗑 Eliminar orden
-        </button>
       </div>
     </div>`;
   }).join('');
@@ -1162,6 +1157,7 @@ function renderHistorialLog(){
       card += _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
       // Botón vale
       card += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">';
+      card += '<button data-oid="'+o.id+'" onclick="event.stopPropagation();editarOrdenCerradaLog(this.getAttribute(\'data-oid\'))" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">✏️ Editar</button>';
       if(o.viaticos) card += '<button data-oid="'+o.id+'" onclick="event.stopPropagation();this.disabled=true;abrirViaticos(this.dataset.oid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📋 Ver Viáticos</button>';
       if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; card += '<div style="background:#fff3cd;border-radius:6px;padding:6px 10px;font-size:11px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' — L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
       card += '</div>';
@@ -2460,6 +2456,27 @@ document.addEventListener('click', function(e){
     toggleHistLog(cardHist.dataset.hid);
   }
 });
+
+function editarOrdenCerradaLog(id){
+  solicitarPINAccion(function(){
+    // Reabrir la orden: quitar cerrado, volver a En proceso
+    const o = (DB.logistica||[]).find(x=>x.id===id);
+    if(!o) return;
+    o.cerrado = false;
+    o.estado = 'En proceso';
+    o.fechaCierre = '';
+    saveDB();
+    if(window._fbDB && window._fbReady){
+      const idx = DB.logistica.findIndex(x=>x.id===id);
+      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+    }
+    openHistLog.delete(id);
+    renderHistorialLog();
+    renderOrdenesLog();
+    renderDashboardLog();
+    toast('Orden reabierta para edición ✓');
+  }, '✏️ Editar orden cerrada', 'Ingresa tu PIN para reabrir esta orden');
+}
 
 </script>
 
