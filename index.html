@@ -636,6 +636,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <option value="retiro" data-depto="logistica" style="display:none">🔙 Retiro de Equipo</option>
           <option value="apoyo_mantenimiento" data-depto="logistica" style="display:none">🔩 Apoyo Mantenimiento</option>
           <option value="atencion_compras" data-depto="logistica" style="display:none">🛒 Atención de Compras</option>
+          <option value="revision_fisica" data-depto="mantenimiento">🚌 Revisión Físico-Técnica</option>
+          <option value="evaluacion" data-depto="mantenimiento">📋 Evaluación de Equipo</option>
         </select>
       </div>
 
@@ -674,6 +676,32 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div id="sol-desc-wrap" class="form-group">
         <label id="sol-desc-label">Descripción de la falla</label>
         <textarea id="sol-desc" placeholder="Describe brevemente la falla o trabajo..." style="min-height:80px"></textarea>
+      </div>
+
+      <!-- 4c. Revisión Físico-Técnica -->
+      <div id="sol-rev-wrap" style="display:none">
+        <div class="form-group"><label>Placa del vehículo</label><input id="sol-rev-placa" placeholder="Ej: PBM-1234"></div>
+        <div class="form-group"><label>Tipo de vehículo</label>
+          <select id="sol-rev-tipo">
+            <option value="">— Seleccionar —</option>
+            <option>Microbus</option><option>Bus</option><option>Camion no articulado</option>
+            <option>Cabezal</option><option>Contenedor</option><option>Remolque</option><option>Cisterna</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 4d. Evaluación de Equipo -->
+      <div id="sol-eval-wrap" style="display:none">
+        <div class="form-group"><label>Tipo de equipo</label>
+          <select id="sol-eval-tipo">
+            <option value="">— Seleccionar —</option>
+            <option>Montacargas</option><option>Elevadora</option><option>Camion</option>
+            <option>Staker</option><option>Pallet</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Modelo del equipo</label><input id="sol-eval-modelo" placeholder="Ej: BAOLI KBE-20"></div>
+        <div class="form-group"><label>Serie del equipo</label><input id="sol-eval-serie" placeholder="Ej: B16091J00102"></div>
+        <div class="form-group"><label>Nombre del cliente</label><input id="sol-eval-cliente" placeholder="Nombre completo"></div>
       </div>
 
       <!-- 4b. Tipo de mantenimiento preventivo -->
@@ -3370,19 +3398,19 @@ function solDeptoChange(){
 
 function solTipoChange(){
   const tipo = document.getElementById('sol-tipo')?.value || 'correctivo';
+  const isRev  = tipo==='revision_fisica';
+  const isEval = tipo==='evaluacion';
+  const isRevEval = isRev || isEval;
 
-  // Re-populate equipo select filtered by tipo
+  // Re-populate equipo select filtered by tipo (solo si no es rev/eval)
   const selEq = document.getElementById('sol-equipo');
-  if(selEq && typeof DB !== 'undefined' && DB.equipos){
+  if(selEq && typeof DB !== 'undefined' && DB.equipos && !isRevEval){
     const currentVal = selEq.value;
     selEq.innerHTML = '<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
     DB.equipos.sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
       const est = e.estado||'DISPONIBLE';
-      // Renta y Entrega: solo DISPONIBLES
       if((tipo==='renta'||tipo==='entrega') && est!=='DISPONIBLE') return;
-      // Retiro: solo EN RENTA y DISPONIBLES
       if(tipo==='retiro' && est==='MAL ESTADO') return;
-      // Resto: ocultar INACTIVOS
       if(est==='MAL ESTADO') return;
       const o = document.createElement('option');
       o.value = e.codigo;
@@ -3392,17 +3420,46 @@ function solTipoChange(){
       selEq.appendChild(o);
     });
   }
-  const descWrap = document.getElementById('sol-desc-wrap');
-  const mantWrap = document.getElementById('sol-mant-wrap');
-  if(descWrap) descWrap.style.display = tipo==='preventivo' ? 'none'  : 'block';
-  if(mantWrap) mantWrap.style.display = tipo==='preventivo' ? 'block' : 'none';
 
-  // Mostrar/ocultar segundo equipo (solo entrega/retiro)
-  const wrap2 = document.getElementById('sol-equipo2-wrap');
+  // Campos a mostrar/ocultar
+  const descWrap   = document.getElementById('sol-desc-wrap');
+  const mantWrap   = document.getElementById('sol-mant-wrap');
+  const revWrap    = document.getElementById('sol-rev-wrap');
+  const evalWrap   = document.getElementById('sol-eval-wrap');
+  const eqGroup    = document.getElementById('sol-equipo')?.closest('.form-group');
+  const prioGroup  = document.getElementById('sol-prioridad-group');
+  const wrap2      = document.getElementById('sol-equipo2-wrap');
+  const eqManual   = document.getElementById('sol-equipo-manual');
+
+  // En revisión/evaluación: solo descripción simple y personal
+  if(isRevEval){
+    if(eqGroup)   eqGroup.style.display   = 'none';
+    if(prioGroup) prioGroup.style.display = 'none';
+    if(wrap2)     wrap2.style.display     = 'none';
+    if(eqManual)  eqManual.style.display  = 'none';
+    if(mantWrap)  mantWrap.style.display  = 'none';
+    // Mostrar descripción con label adecuado
+    if(descWrap){
+      descWrap.style.display = 'block';
+      const lbl = document.getElementById('sol-desc-label');
+      if(lbl) lbl.textContent = isRev ? 'Descripción de la revisión' : 'Descripción de la evaluación';
+    }
+    if(revWrap)  revWrap.style.display  = isRev  ? 'block' : 'none';
+    if(evalWrap) evalWrap.style.display = isEval ? 'block' : 'none';
+    return;
+  }
+
+  // Resto de tipos: comportamiento normal
+  if(eqGroup)   eqGroup.style.display   = 'block';
+  if(prioGroup) prioGroup.style.display = 'block';
+  if(descWrap)  descWrap.style.display  = tipo==='preventivo' ? 'none' : 'block';
+  if(mantWrap)  mantWrap.style.display  = tipo==='preventivo' ? 'block' : 'none';
+  if(revWrap)   revWrap.style.display   = 'none';
+  if(evalWrap)  evalWrap.style.display  = 'none';
   const isEntregaRetiro = tipo==='entrega'||tipo==='retiro';
   if(wrap2) wrap2.style.display = isEntregaRetiro ? 'block' : 'none';
-
-  // Poblar segundo equipo si aplica
+  const lbl = document.getElementById('sol-desc-label');
+  if(lbl) lbl.textContent = 'Descripción de la falla';
   if(isEntregaRetiro){
     const sel1 = document.getElementById('sol-equipo');
     const sel2 = document.getElementById('sol-equipo2');
@@ -3469,9 +3526,19 @@ function enviarSolicitudWA(){
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
 
   const faltSol = [];
-  if(!equipoTxt) faltSol.push('Número de equipo');
+  if(tipo!=='revision_fisica' && tipo!=='evaluacion' && !equipoTxt) faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  if(tipo==='revision_fisica'){
+    if(!document.getElementById('sol-rev-placa')?.value.trim()) faltSol.push('Placa del vehículo');
+    if(!document.getElementById('sol-rev-tipo')?.value) faltSol.push('Tipo de vehículo');
+  }
+  if(tipo==='evaluacion'){
+    if(!document.getElementById('sol-eval-tipo')?.value) faltSol.push('Tipo de equipo');
+    if(!document.getElementById('sol-eval-modelo')?.value.trim()) faltSol.push('Modelo del equipo');
+    if(!document.getElementById('sol-eval-serie')?.value.trim()) faltSol.push('Serie del equipo');
+    if(!document.getElementById('sol-eval-cliente')?.value.trim()) faltSol.push('Nombre del cliente');
+  }
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
 
   // ── VALIDACIÓN 1: técnicos con órdenes abiertas (excluye al supervisor) ──
@@ -3487,6 +3554,54 @@ function enviarSolicitudWA(){
 
   // --- Crear orden directamente en el sistema ---
   const depto_check = document.getElementById('sol-depto')?.value||'mantenimiento';
+
+  // ── Revisión Físico-Técnica ─────────────────────────────────────────────
+  if(tipo==='revision_fisica'){
+    if(!DB.revisiones) DB.revisiones = [];
+    const nRev = DB.revisiones.length+1;
+    const corrRev = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
+    const revEntry = {
+      id: ordenId, correlativo: corrRev, estado: 'Pendiente',
+      tecnicos: tecnicosData.map(t=>t.nombre),
+      fecha: fechaISO,
+      placa: document.getElementById('sol-rev-placa')?.value.trim()||'',
+      tipoVehiculo: document.getElementById('sol-rev-tipo')?.value||'',
+      completado: false
+    };
+    DB.revisiones.push(revEntry);
+    saveDB();
+    if(window._fbDB && window._fbReady)
+      window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+    clearSolicitudForm();
+    mostrarExitoOrden(corrRev);
+    toast('Revisión '+corrRev+' creada ✓');
+    return;
+  }
+
+  // ── Evaluación de Equipo ────────────────────────────────────────────────
+  if(tipo==='evaluacion'){
+    if(!DB.evaluaciones) DB.evaluaciones = [];
+    const nEval = DB.evaluaciones.length+1;
+    const corrEval = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
+    const evalEntry = {
+      id: ordenId, correlativo: corrEval, estado: 'Pendiente',
+      tecnicos: tecnicosData.map(t=>t.nombre),
+      fecha: fechaISO,
+      tipoEquipo: document.getElementById('sol-eval-tipo')?.value||'',
+      modelo: document.getElementById('sol-eval-modelo')?.value.trim()||'',
+      serie: document.getElementById('sol-eval-serie')?.value.trim()||'',
+      cliente: document.getElementById('sol-eval-cliente')?.value.trim()||'',
+      completado: false
+    };
+    DB.evaluaciones.push(evalEntry);
+    saveDB();
+    if(window._fbDB && window._fbReady)
+      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+    clearSolicitudForm();
+    mostrarExitoOrden(corrEval);
+    toast('Evaluación '+corrEval+' creada ✓');
+    return;
+  }
 
   // ── Validaciones logística ─────────────────────────────────────────────
   if(depto_check === 'logistica'){
@@ -3619,7 +3734,8 @@ function enviarSolicitudWA(){
   // --- Mensaje WhatsApp sin link ---
   const tipoLabels = {
     correctivo: 'Correctivo', preventivo: 'Preventivo',
-    renta: 'Renta', entrega: 'Entrega de Equipo', retiro: 'Retiro de Equipo', entrega_retiro: 'Entrega/Retiro', apoyo_mantenimiento: 'Apoyo Mantenimiento', atencion_compras: 'Atención de Compras'
+    renta: 'Renta', entrega: 'Entrega de Equipo', retiro: 'Retiro de Equipo', entrega_retiro: 'Entrega/Retiro', apoyo_mantenimiento: 'Apoyo Mantenimiento', atencion_compras: 'Atención de Compras',
+    revision_fisica: 'Revisión Físico-Técnica', evaluacion: 'Evaluación de Equipo'
   };
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
