@@ -3670,11 +3670,47 @@ function enviarSolicitudWA(){
 
 
 function copiarMensajeWA(){
+  const tipo      = document.getElementById('sol-tipo').value;
+  const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
+
+  // ── REVISIÓN Y EVALUACIÓN ─────────────────────────────────────────────────
+  if(tipo === 'revision_fisica' || tipo === 'evaluacion'){
+    const cbs = document.querySelectorAll('#sol-tecnicos-grid input[type=checkbox]:checked');
+    if(!cbs.length){ toast('Selecciona al menos un técnico', true); return; }
+    if(!descRaw){ toast('Falta: Descripción', true); return; }
+    const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
+    const tecNombre = tecs.join(', ');
+    const fechaRevEval = document.getElementById('sol-fecha')?.value||new Date().toISOString().slice(0,10);
+    if(tipo === 'revision_fisica'){
+      if(!DB.revisiones) DB.revisiones = [];
+      const n = DB.revisiones.length + 1;
+      const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
+      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      saveDB();
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+      clearSolicitudForm(); renderDashboard();
+      toast('Revisión '+corr+' creada ✓');
+      const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
+      navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
+    } else {
+      if(!DB.evaluaciones) DB.evaluaciones = [];
+      const n = DB.evaluaciones.length + 1;
+      const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
+      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      saveDB();
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+      clearSolicitudForm(); renderDashboard();
+      toast('Evaluación '+corr+' creada ✓');
+      const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
+      navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
+    }
+    return;
+  }
+
+  // ── RESTO DE TIPOS (lógica original) ─────────────────────────────────────
   const equipoSel = document.getElementById('sol-equipo').value;
   const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
   const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
-  const tipo      = document.getElementById('sol-tipo').value;
-  const descRaw   = document.getElementById('sol-desc').value.trim();
   const mantTipo  = document.getElementById('sol-mant-tipo')?.value||'';
   const operador  = document.getElementById('sol-operador')?.value.trim()||'';
   const desc      = tipo==='preventivo' ? mantTipo : descRaw;
@@ -3699,7 +3735,6 @@ function copiarMensajeWA(){
     return;
   }
   if(depto === 'logistica'){
-    const tipo_check = document.getElementById('sol-tipo')?.value||'';
     const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
     const eq_check = DB.equipos.find(e=>e.codigo.trim()===equipoSel_check.trim());
     if(eq_check){
