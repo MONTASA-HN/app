@@ -3526,241 +3526,167 @@ function actualizarBtnWA(){
 }
 
 function enviarSolicitudWA(){
-  const equipoSel = document.getElementById('sol-equipo').value;
-  const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt').value.trim() : equipoSel;
-  const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
   const tipo      = document.getElementById('sol-tipo').value;
+  const depto     = document.getElementById('sol-depto')?.value || 'mantenimiento';
   const isRevEval = tipo==='revision_fisica' || tipo==='evaluacion';
-  const descRaw   = document.getElementById('sol-desc').value.trim();
-  const mantTipo  = document.getElementById('sol-mant-tipo')?.value||'';
-  const operador  = document.getElementById('sol-operador')?.value.trim()||'';
-  const desc      = tipo==='preventivo' ? mantTipo : descRaw;
-  const prioridad = document.getElementById('sol-prioridad').value;
-  const fecha     = document.getElementById('sol-fecha').value;
 
-  // Seleccionar grid correcto según departamento
+  // ── Técnicos ──────────────────────────────────────────────────────────────
   const gridSelector = depto==='logistica'
     ? '#sol-logistica-grid input[type=checkbox]:checked'
     : '#sol-tecnicos-grid input[type=checkbox]:checked';
   const checks = document.querySelectorAll(gridSelector);
-  if(!checks.length){ toast('Selecciona al menos un ' + (depto==='logistica'?'personal':'técnico'), true); return; }
+  if(!checks.length){ toast('Selecciona al menos un técnico', true); return; }
   const tecnicosData = Array.from(checks).map(c=>({nombre: c.dataset.nombre, num: c.value}));
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
 
+  // ── Campos comunes ────────────────────────────────────────────────────────
+  const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
+  const fecha     = document.getElementById('sol-fecha')?.value||new Date().toISOString().slice(0,10);
+  const fechaISO  = fecha;
+  const ordenId   = uid();
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REVISIÓN FÍSICO-TÉCNICA — solo guarda en DB.revisiones y retorna
+  // ══════════════════════════════════════════════════════════════════════════
+  if(tipo === 'revision_fisica'){
+    if(!descRaw && !tecnicosData.length){ toast('Faltan: Técnico y Descripción', true); return; }
+    if(!descRaw){ toast('Falta: Descripción', true); return; }
+    if(!DB.revisiones) DB.revisiones = [];
+    const nRev = DB.revisiones.length + 1;
+    const corrRev = 'RV-' + (nRev<10?'000':nRev<100?'00':nRev<1000?'0':'') + nRev;
+    DB.revisiones.push({
+      id: ordenId, correlativo: corrRev, estado: 'Pendiente',
+      tecnicos: tecnicosData.map(t=>t.nombre),
+      notas: descRaw, fecha: fechaISO, completado: false
+    });
+    saveDB();
+    if(window._fbDB && window._fbReady)
+      window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+    clearSolicitudForm();
+    renderDashboard();
+    toast('Revisión ' + corrRev + ' creada ✓');
+    // Enviar WA
+    const msgRev = '🔍 *REVISIÓN FÍSICO-TÉCNICA*\n🔢 *Orden:* ' + corrRev + '\n👷 *Técnico:* ' + tecnicoNombre + '\n📝 *Detalle:* ' + descRaw + '\n📅 *Fecha:* ' + fechaISO;
+    tecnicosData.forEach((t,i)=>{ const url='https://wa.me/'+t.num.replace(/[^0-9]/g,'')+encodeURIComponent('?text='+msgRev); setTimeout(()=>window.open(url,'_blank'),i*800); });
+    return;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // EVALUACIÓN DE EQUIPO — solo guarda en DB.evaluaciones y retorna
+  // ══════════════════════════════════════════════════════════════════════════
+  if(tipo === 'evaluacion'){
+    if(!descRaw){ toast('Falta: Descripción', true); return; }
+    if(!DB.evaluaciones) DB.evaluaciones = [];
+    const nEval = DB.evaluaciones.length + 1;
+    const corrEval = 'EV-' + (nEval<10?'000':nEval<100?'00':nEval<1000?'0':'') + nEval;
+    DB.evaluaciones.push({
+      id: ordenId, correlativo: corrEval, estado: 'Pendiente',
+      tecnicos: tecnicosData.map(t=>t.nombre),
+      notas: descRaw, fecha: fechaISO, completado: false
+    });
+    saveDB();
+    if(window._fbDB && window._fbReady)
+      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+    clearSolicitudForm();
+    renderDashboard();
+    toast('Evaluación ' + corrEval + ' creada ✓');
+    // Enviar WA
+    const msgEval = '📋 *EVALUACIÓN DE EQUIPO*\n🔢 *Orden:* ' + corrEval + '\n👷 *Técnico:* ' + tecnicoNombre + '\n📝 *Detalle:* ' + descRaw + '\n📅 *Fecha:* ' + fechaISO;
+    tecnicosData.forEach((t,i)=>{ const url='https://wa.me/'+t.num.replace(/[^0-9]/g,'')+encodeURIComponent('?text='+msgEval); setTimeout(()=>window.open(url,'_blank'),i*800); });
+    return;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RESTO DE TIPOS (correctivo, preventivo, logística)
+  // ══════════════════════════════════════════════════════════════════════════
+  const equipoSel = document.getElementById('sol-equipo')?.value||'';
+  const equipoTxt = equipoSel==='__otro__' ? document.getElementById('sol-equipo-txt')?.value.trim()||'' : equipoSel;
+  const mantTipo  = document.getElementById('sol-mant-tipo')?.value||'';
+  const operador  = document.getElementById('sol-operador')?.value.trim()||'';
+  const desc      = tipo==='preventivo' ? mantTipo : descRaw;
+  const prioridad = document.getElementById('sol-prioridad')?.value||'Normal';
+  const depto_check = depto;
+
+  // Validaciones
   const faltSol = [];
-  if(tipo!=='revision_fisica' && tipo!=='evaluacion' && !equipoTxt) faltSol.push('Número de equipo');
+  if(!equipoTxt) faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
-
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
 
-  // ── VALIDACIÓN 1: técnicos con órdenes abiertas (excluye al supervisor) ──
+  // Validación técnicos con órdenes abiertas
   const tecConflictos = tecnicosData.filter(t => t.nombre !== 'Miguel Orellana' && ordenAbiertaDeTecnico(t.nombre, null));
   if(tecConflictos.length){
-    const msgs = tecConflictos.map(t => {
-      const o = ordenAbiertaDeTecnico(t.nombre, null);
-      return t.nombre + ' → orden ' + (o.correlativo||'abierta');
-    });
+    const msgs = tecConflictos.map(t => { const o = ordenAbiertaDeTecnico(t.nombre, null); return t.nombre + ' → orden ' + (o.correlativo||'abierta'); });
     alert('⚠️ Los siguientes técnicos ya tienen una orden abierta:\n\n' + msgs.join('\n') + '\n\nCierra esas órdenes antes de asignarlos.');
     return;
   }
 
-  // --- Crear orden directamente en el sistema ---
-  const depto_check = document.getElementById('sol-depto')?.value||'mantenimiento';
-
-  // ── Validaciones logística ─────────────────────────────────────────────
+  // Validaciones logística
   if(depto_check === 'logistica'){
-    const tipo_check = document.getElementById('sol-tipo')?.value||'';
-    const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
-    const eq_check = DB.equipos.find(e=>e.codigo.trim()===equipoSel_check.trim());
-
+    const eq_check = DB.equipos.find(e=>e.codigo.trim()===equipoTxt.trim());
     if(eq_check){
       const estadoEq = eq_check.estado||'DISPONIBLE';
-
-      // P1: Equipo inactivo no puede tener ninguna orden LG
-      if(estadoEq==='MAL ESTADO'){
-        alert('⚠️ No se puede crear una orden de logística para un equipo INACTIVO ('+eq_check.codigo+').');
-        return;
-      }
-      // P2: Equipo EN RENTA no puede tener nueva orden de renta
-      if(tipo_check==='renta' && estadoEq==='EN RENTA'){
-        alert('⚠️ El equipo '+eq_check.codigo+' ya está EN RENTA. No se puede crear una nueva orden de renta.');
-        return;
-      }
-      // P3: No se puede crear orden de retiro si ya tiene una orden de retiro abierta
-      if(tipo_check==='retiro'){
-        const retiroAbierta = (DB.logistica||[]).find(o=>
-          o.equipoId===eq_check.id && o.tipoLogistica==='retiro' && !o.cerrado && o.estado!=='Cancelado');
-        if(retiroAbierta){
-          alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de RETIRO abierta ('+retiroAbierta.correlativo+').');
-          return;
-        }
-      }
-      // P4: No se puede crear orden de entrega si ya tiene una orden de entrega abierta
-      if(tipo_check==='entrega'){
-        const entregaAbierta = (DB.logistica||[]).find(o=>
-          o.equipoId===eq_check.id && o.tipoLogistica==='entrega' && !o.cerrado && o.estado!=='Cancelado');
-        if(entregaAbierta){
-          alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de ENTREGA abierta ('+entregaAbierta.correlativo+').');
-          return;
-        }
-      }
+      if(estadoEq==='MAL ESTADO'){ alert('⚠️ No se puede crear una orden para un equipo INACTIVO ('+eq_check.codigo+').'); return; }
+      if(tipo==='renta' && estadoEq==='EN RENTA'){ alert('⚠️ El equipo '+eq_check.codigo+' ya está EN RENTA.'); return; }
     }
   }
-  // ── Fin validaciones ───────────────────────────────────────────────────
 
   const correlativo = nextCorrelativo(depto_check==='logistica'?'LG':'MH');
-  const ordenId     = uid();
-  const fechaISO    = new Date().toISOString().slice(0,10);
-  // ── Revisión Físico-Técnica ─────────────────────────────────────────────
-  if(tipo==='revision_fisica'){
-    if(!DB.revisiones) DB.revisiones = [];
-    const nRev = DB.revisiones.length+1;
-    const corrRev = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
-    const revEntry = {id:ordenId, correlativo:corrRev, estado:'Pendiente', tecnicos:tecnicosData.map(t=>t.nombre), fecha:fechaISO, notas:desc, completado:false};
-    DB.revisiones.push(revEntry);
-    saveDB();
-    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
-    clearSolicitudForm();
-    toast('Revisión '+corrRev+' creada ✓');
-    renderDashboard();
-    return;
-  }
-  // ── Evaluación de Equipo ────────────────────────────────────────────────
-  if(tipo==='evaluacion'){
-    if(!DB.evaluaciones) DB.evaluaciones = [];
-    const nEval = DB.evaluaciones.length+1;
-    const corrEval = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
-    const evalEntry = {id:ordenId, correlativo:corrEval, estado:'Pendiente', tecnicos:tecnicosData.map(t=>t.nombre), fecha:fechaISO, notas:desc, completado:false};
-    DB.evaluaciones.push(evalEntry);
-    saveDB();
-    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
-    clearSolicitudForm();
-    toast('Evaluación '+corrEval+' creada ✓');
-    renderDashboard();
-    return;
-  }
-
-  // Buscar equipoId
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
 
+  // Crear la orden según tipo
   if(tipo === 'preventivo'){
-    const entry = {
-      id: ordenId, correlativo, equipoId,
-      servicio: desc, fecha: fechaISO, fechaInicio: '', fechaFin: '',
-      horometro: '', tecnico: '',
-      notas: desc, sugerencias: '', foto: '',
-      estado: 'Pendiente',
-      prioridad, completado: false,
-      clienteNombre: eq ? '' : equipoTxt
-    };
+    const entry = {id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt};
     DB.preventivos.push(entry);
-  } else if(depto === 'logistica') {
-    const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
-    const entry = {
-      id: ordenId, correlativo, equipoId,
-      equipoId2: equipoId2Val || null,
-      tipoLogistica: tipo, descripcion: desc, operador,
-      prioridad, fecha: fechaISO, fechaInicio: '', fechaFin: '',
-      tecnico: '', horometro: '', foto: '', firma: '',
-      estado: 'Pendiente', cerrado: false,
-      clienteNombre: eq ? '' : equipoTxt
-    };
-    if(!DB.logistica) DB.logistica = [];
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa').update({preventivos:DB.preventivos,lastCorrelativo_MH:DB['lastCorrelativo_MH']||0});
+  } else if(depto_check === 'logistica'){
+    const equipoId2Val = document.getElementById('sol-equipo2')?.value||'';
+    const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    if(!DB.logistica) DB.logistica=[];
     DB.logistica.push(entry);
-    // Cambiar estado del equipo si es renta
-    if(tipo === 'renta') _cambiarEstadoEquipo(equipoId, 'EN RENTA');
-    // Write logistica to Firebase — with rollback on failure
+    if(tipo==='renta') _cambiarEstadoEquipo(equipoId,'EN RENTA');
+    saveDB();
     if(window._fbDB && window._fbReady){
-      const writeTs = Date.now();
-      _lastLogisticaWriteTs = writeTs;
-      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica)); // snapshot before write
-      window._fbDB.ref('montasa').update({
-        logistica: _cleanLogistica(DB.logistica),
-        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-        _ts: writeTs,
-        _sid: _SESSION_ID
-      }).then(()=>{
-        console.log('✅ LG order saved to Firebase:', correlativo);
-        renderLogistica();
-        renderDashboard();
-      }).catch(err=>{
-        console.error('❌ Firebase write failed:', err);
-        // Retry with direct path
-        window._fbDB.ref('montasa/logistica').set(lgSnapshot)
-          .then(()=>{
-            window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
-            console.log('✅ LG retry success:', correlativo);
-            renderLogistica();
-            renderDashboard();
-          })
-          .catch(err2=>{
-            // Rollback: remove from local DB to keep sync
-            DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
-            DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
-            saveDB();
-            alert('⚠️ Error al guardar la orden '+correlativo+' en Firebase: '+err2.message+'\n\nLa orden fue revertida. Verifica tu conexión e intenta de nuevo.');
-          });
-      });
-    } else {
-      // No Firebase — rollback immediately
-      DB.logistica = DB.logistica.filter(o=>o.id!==entry.id);
-      DB['lastCorrelativo_LG'] = (DB['lastCorrelativo_LG']||1) - 1;
-      saveDB();
-      alert('⚠️ Sin conexión a Firebase. La orden no se guardó. Verifica tu conexión e intenta de nuevo.');
+      window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:Date.now(),_sid:_SESSION_ID});
     }
-  } else if(!isRevEval) {
-    const entry = {
-      id: ordenId, correlativo, equipoId,
-      sistema: '', falla: desc, prioridad,
-      fecha: fechaISO, fechaInicio: '', fechaFin: '',
-      tecnico: '', diagnostico: '',
-      foto: '', estado: 'Pendiente',
-      clienteNombre: eq ? '' : equipoTxt
-    };
+    renderLogistica();
+  } else {
+    // Correctivo
+    const entry = {id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt};
     DB.correctivos.push(entry);
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa').update({correctivos:DB.correctivos,lastCorrelativo_MH:DB['lastCorrelativo_MH']||0});
   }
 
+  // Guardar en solicitudes para historial
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt,equipoId,desc,fecha:fechaISO,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
   saveDB();
 
-  // --- Mensaje WhatsApp sin link ---
-  const tipoLabels = {
-    correctivo: 'Correctivo', preventivo: 'Preventivo',
-    renta: 'Renta', entrega: 'Entrega de Equipo', retiro: 'Retiro de Equipo', entrega_retiro: 'Entrega/Retiro', apoyo_mantenimiento: 'Apoyo Mantenimiento', atencion_compras: 'Atención de Compras',
-    revision_fisica: 'Revisión Físico-Técnica', evaluacion: 'Evaluación de Equipo'
-  };
-  const tipoLabel = tipoLabels[tipo] || tipo;
+  // Mensaje WhatsApp
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
+  const tipoLabel = tipoLabels[tipo]||tipo;
   const esLogistica = depto === 'logistica';
-  const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
-  const appLink = esLogistica
-    ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html'
-    : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
-  const msg = emoji + ' *' + (esLogistica?'ASIGNACION LOGISTICA':'ASIGNACION DE TRABAJO') + ' - MONTASA*\n'
-    + '🔗 ' + appLink + '\n\n'
+  const emoji = prioridad==='Urgente'?'🚨':prioridad==='Alta'?'🔴':(esLogistica?'🚛':'🔧');
+  const appLink = esLogistica ? 'https://montasa-hn.github.io/app/MONTASA_Logistica.html' : 'https://montasa-hn.github.io/app/MONTASA_Tecnicos.html';
+  const msg = emoji + ' *NUEVA ORDEN DE TRABAJO*\n'
     + '🔢 *Orden:* ' + correlativo + '\n'
-    + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
+    + '👷 *Técnico:* ' + tecnicoNombre + '\n'
     + (operador ? '🧑‍💼 *Operador:* ' + operador + '\n' : '')
     + '📋 *Equipo:* ' + equipoTxt + '\n'
     + '🚛 *Tipo:* ' + tipoLabel + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
-    + '📅 *Fecha:* ' + fecha;
+    + '📅 *Fecha:* ' + fechaISO;
 
   tecnicosData.forEach((t, i) => {
     const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
     setTimeout(() => window.open(url, '_blank'), i * 800);
   });
 
-  // Guardar en solicitudes para historial
-  if(!DB.solicitudes) DB.solicitudes = [];
-  DB.solicitudes.unshift({
-    id: ordenId, correlativo, equipoTxt, equipoId,
-    desc, fecha, tecnicoNombre, prioridad, tipo, estado: 'Enviada'
-  });
-  saveDB();
-
-  // Limpiar formulario
   clearSolicitudForm();
   toast('Orden ' + correlativo + ' creada y enviada por WhatsApp ✓');
   renderDashboard();
