@@ -3400,104 +3400,47 @@ function solDeptoChange(){
 }
 
 function solTipoChange(){
-  const tipo = document.getElementById('sol-tipo').value;
-  const isRevEval = tipo==='revision_fisica' || tipo==='evaluacion';
-  const isLogistica = ['renta','entrega','retiro','apoyo_mantenimiento','atencion_compras'].includes(tipo);
-
-  // Re-poblar equipo según tipo
+  const tipo  = document.getElementById('sol-tipo').value;
+  const depto = document.getElementById('sol-depto')?.value||'mantenimiento';
   const selEq = document.getElementById('sol-equipo');
-  if(selEq && typeof DB !== 'undefined' && DB.equipos && !isRevEval){
-    const currentVal = selEq.value;
-    selEq.innerHTML = '<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
+  if(selEq && typeof DB!=='undefined' && DB.equipos && tipo!=='revision_fisica' && tipo!=='evaluacion'){
+    const cur=selEq.value;
+    selEq.innerHTML='<option value="">-- Seleccionar equipo --</option><option value="__otro__">Otro / No está en lista</option>';
     DB.equipos.sort((a,b)=>a.codigo.localeCompare(b.codigo)).forEach(e=>{
-      const est = e.estado||'DISPONIBLE';
-      if((tipo==='renta'||tipo==='entrega') && est!=='DISPONIBLE') return;
-      if(tipo==='retiro' && est==='MAL ESTADO') return;
+      const est=e.estado||'DISPONIBLE';
+      if((tipo==='renta'||tipo==='entrega')&&est!=='DISPONIBLE') return;
+      if(tipo==='retiro'&&est==='MAL ESTADO') return;
       if(est==='MAL ESTADO') return;
-      const o = document.createElement('option');
-      o.value = e.codigo;
-      o.textContent = e.codigo + ' – ' + e.marca + (est==='EN RENTA'?' [EN RENTA]':'');
-      if(e.codigo===currentVal) o.selected = true;
+      const o=document.createElement('option');
+      o.value=e.codigo; o.textContent=e.codigo+' – '+e.marca+(est==='EN RENTA'?' [EN RENTA]':'');
+      if(e.codigo===cur) o.selected=true;
       selEq.appendChild(o);
     });
   }
-
-  // Reset todos los grupos
-  const show = (id) => { const el=document.getElementById(id); if(el) el.style.display=''; };
-  const hide = (id) => { const el=document.getElementById(id); if(el) el.style.display='none'; };
-  const showB = (id, block=true) => { const el=document.getElementById(id); if(el) el.style.display=block?'block':'none'; };
-  const eqGroup = document.getElementById('sol-equipo')?.closest('.form-group');
-  const eqManual = document.getElementById('sol-equipo-manual');
-  const eqGroup2 = document.getElementById('sol-equipo2-wrap');
-  const descWrap = document.getElementById('sol-desc-wrap');
-  const descLbl  = document.getElementById('sol-desc-label');
-  const mantWrap = document.getElementById('sol-mant-wrap');
-  const revWrap  = document.getElementById('sol-rev-wrap');
-  const evalWrap = document.getElementById('sol-eval-wrap');
-  const prioGrp  = document.getElementById('sol-prioridad-group');
-  const opGrp    = document.getElementById('sol-operador-group');
-  const tecGrid  = document.getElementById('sol-tecnicos-grid');
-  const tecGrpLabel = tecGrid?.closest('.form-group');
-  const logGrid  = document.getElementById('sol-logistica-personal');
-
-  // Ocultar todo por defecto
-  if(tecGrpLabel) tecGrpLabel.style.display='none';
-
-  // ── REV / EVAL — solo descripción y técnicos ─────────────────────────────
-  if(isRevEval){
-    if(descWrap) descWrap.style.display='block';
-    if(descLbl) descLbl.textContent = tipo==='revision_fisica' ? 'Descripción de la revisión' : 'Descripción de la evaluación';
-    if(tecGrpLabel) tecGrpLabel.style.display='block';
-    return;
+  const visEl=(el,show)=>{ if(el) el.style.display=show?'block':'none'; };
+  const eqGroup=document.getElementById('sol-equipo')?.closest('.form-group');
+  const eqManual=document.getElementById('sol-equipo-manual');
+  const eq2=document.getElementById('sol-equipo2-wrap');
+  const descWrap=document.getElementById('sol-desc-wrap');
+  const descLbl=document.getElementById('sol-desc-label');
+  const mantWrap=document.getElementById('sol-mant-wrap');
+  const prioGrp=document.getElementById('sol-prioridad-group');
+  const opGrp=document.getElementById('sol-operador-group');
+  const tecGrp=document.getElementById('sol-tecnicos-grid')?.closest('.form-group');
+  const logGrp=document.getElementById('sol-logistica-personal');
+  [eqGroup,eqManual,eq2,descWrap,mantWrap,prioGrp,opGrp,tecGrp,logGrp].forEach(el=>visEl(el,false));
+  if(tipo==='revision_fisica'||tipo==='evaluacion'){
+    visEl(descWrap,true);
+    if(descLbl) descLbl.textContent=tipo==='revision_fisica'?'Descripción de la revisión':'Descripción de la evaluación';
+    visEl(tecGrp,true); return;
   }
-
-  // ── RENTA — equipo + descripción + operador ───────────────────────────────
-  if(tipo==='renta'){
-    if(eqGroup)  eqGroup.style.display='block';
-    if(descWrap) { descWrap.style.display='block'; if(descLbl) descLbl.textContent='Descripción'; }
-    if(logGrid)  logGrid.style.display='block';
-    return;
-  }
-
-  // ── ENTREGA / RETIRO — equipo + trabajo a realizar + personal ─────────────
-  if(tipo==='entrega' || tipo==='retiro'){
-    if(eqGroup)  eqGroup.style.display='block';
-    if(eqGroup2) eqGroup2.style.display='block';
-    if(descWrap) { descWrap.style.display='block'; if(descLbl) descLbl.textContent='Trabajo a realizar'; }
-    if(logGrid)  logGrid.style.display='block';
-    return;
-  }
-
-  // ── APOYO / COMPRAS — trabajo a realizar + operador ──────────────────────
-  if(tipo==='apoyo_mantenimiento' || tipo==='atencion_compras'){
-    if(descWrap) { descWrap.style.display='block'; if(descLbl) descLbl.textContent='Trabajo a realizar'; }
-    if(logGrid)  logGrid.style.display='block';
-    return;
-  }
-
-  // ── CORRECTIVO — todo normal ──────────────────────────────────────────────
-  if(tipo==='correctivo'){
-    if(eqGroup)  eqGroup.style.display='block';
-    if(eqManual) eqManual.style.display=''; // controlado por solEquipoChange
-    if(descWrap) { descWrap.style.display='block'; if(descLbl) descLbl.textContent='Descripción de la falla'; }
-    if(prioGrp)  prioGrp.style.display='block';
-    if(tecGrpLabel) tecGrpLabel.style.display='block';
-    return;
-  }
-
-  // ── PREVENTIVO ────────────────────────────────────────────────────────────
-  if(tipo==='preventivo'){
-    if(eqGroup)  eqGroup.style.display='block';
-    if(mantWrap) mantWrap.style.display='block';
-    if(prioGrp)  prioGrp.style.display='block';
-    if(tecGrpLabel) tecGrpLabel.style.display='block';
-    return;
-  }
-
-  // Fallback — mostrar todo
-  [eqGroup, descWrap, prioGrp, tecGrpLabel].forEach(el=>{if(el) el.style.display='block';});
+  if(tipo==='renta'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción'; visEl(logGrp,true); return; }
+  if(tipo==='entrega'||tipo==='retiro'){ visEl(eqGroup,true); visEl(eq2,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
+  if(tipo==='apoyo_mantenimiento'||tipo==='atencion_compras'){ visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
+  if(tipo==='correctivo'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción de la falla'; visEl(prioGrp,true); visEl(tecGrp,true); return; }
+  if(tipo==='preventivo'){ visEl(eqGroup,true); visEl(mantWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); return; }
+  visEl(eqGroup,true); visEl(descWrap,true); visEl(prioGrp,true); visEl(tecGrp,true);
 }
-
 function solEquipoChange(){
   const val = document.getElementById('sol-equipo')?.value || '';
   const manual = document.getElementById('sol-equipo-manual');
