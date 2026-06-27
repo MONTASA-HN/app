@@ -2409,63 +2409,64 @@ function renderRevisiones(){
     return nb-na;
   });
   if(!list.length){ el.innerHTML='<div class="empty">Sin revisiones</div>'; return; }
-  const COLORES = {Pendiente:{bg:'#fff0f0',txt:'#c00'},
-    'En proceso':{bg:'#fff8e1',txt:'#b45309'},Completado:{bg:'#f0fdf4',txt:'#15803d'}};
+  const COLORES = {
+    Pendiente:{bg:'#fff0f0',txt:'#c00',border:'#f5c6c6'},
+    'En proceso':{bg:'#fff8e1',txt:'#b45309',border:'#fde68a'},
+    Cancelado:{bg:'#f5f5f5',txt:'#888',border:'#ddd'},
+    Completado:{bg:'#f0fdf4',txt:'#15803d',border:'#bbf7d0'}
+  };
   el.innerHTML = list.map(r=>{
     const isOpen = _openRev.has(r.id);
-    const cc = COLORES[r.estado]||{bg:'#f5f5f5',txt:'#333'};
-    const tecs = (r.tecnicos||[]).join(', ')||'—';
+    const est = r.estado||'Pendiente';
+    const cc = COLORES[est]||{bg:'#f5f5f5',txt:'#333',border:'#ddd'};
+    const tecs = (r.tecnicos||[]).filter(Boolean).join(', ')||'—';
+    const fechaHora = (r.fecha?r.fecha+' '+(r.horaIni||''):'—').trim();
     let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-rid="${r.id}">`;
+    // MINIATURA
     card += `<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">`;
-    card += `<div>`;
-    card += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">`;
-    card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${r.correlativo}</span>`;
-    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};padding:2px 8px;border-radius:10px">${r.estado}</span>`;
+    card += `<div style="flex:1;min-width:0">`;
+    card += `<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px">`;
+    card += `<span style="font-size:11px;font-weight:700;font-family:monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${r.correlativo||'—'}</span>`;
+    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};border:1px solid ${cc.border};padding:2px 8px;border-radius:10px">${est}</span>`;
     card += `</div>`;
-    card += `<div style="font-size:13px;font-weight:600">${r.placa||''} ${r.tipoVehiculo?'— '+r.tipoVehiculo:''}</div>`;
-    card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
-    card += `<div style="font-size:11px;color:var(--text3)">📅 ${r.fecha||'—'} ${r.horaIni||''} - ${r.horaFin||''}</div>`;
-    card += `</div><span style="font-size:18px;color:var(--text3)">${isOpen?'⌃':'⌄'}</span>`;
+    card += `<div style="font-size:12px;color:var(--text2);margin-bottom:2px">👷 ${tecs}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">📅 ${fechaHora}</div>`;
+    card += `</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
     card += `</div>`;
+    // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-      [['Correlativo',r.correlativo],['Estado',r.estado],['Técnicos',tecs],
-       ['Fecha',r.fecha||'—'],['Hora inicio',r.horaIni||'—'],['Hora final',r.horaFin||'—'],
-       ['Placa',r.placa||'—'],['Tipo vehículo',r.tipoVehiculo||'—']
-      ].forEach(([k,v])=>{
-        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600">${v}</span></div>`;
-      });
+      // Selector de estado
+      card += `<div class="form-group"><label>Estado de la orden</label>
+        <select onchange="event.stopPropagation();actualizarRevision('${r.id}','estado',this.value)">
+          ${['Pendiente','En proceso','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
+        </select></div>`;
+      // Campos editables
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${r.fecha||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${r.horaIni||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `</div>`;
-      // Campos editables P4
-      card += `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">✏️ Editar campos</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${r.fecha||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>
-          <div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${r.horaIni||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>
-        </div>
-        <div class="form-group" style="margin-bottom:8px"><label>Placa del vehículo</label><input value="${r.placa||''}" placeholder="Ej: PBM-1234" onchange="event.stopPropagation();actualizarRevision('${r.id}','placa',this.value)" oninput="event.stopPropagation()"></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Tipo de vehículo</label>
-          <select onchange="event.stopPropagation();actualizarRevision('${r.id}','tipoVehiculo',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${['Microbus','Bus','Camion no articulado','Cabezal','Cisterna','Contenedor','Remolque'].map(v=>`<option ${r.tipoVehiculo===v?'selected':''}>${v}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:8px"><label>Técnico 1</label>
-          <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',0,this.value)">
-            <option value="">— Seleccionar —</option>
-            ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:0"><label>Técnico 2 (opcional)</label>
-          <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',1,this.value)">
-            <option value="">— Ninguno —</option>
-            ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-      </div>`;
+      card += `<div class="form-group"><label>Placa del vehículo</label><input value="${r.placa||''}" placeholder="Ej: PBM-1234" onchange="event.stopPropagation();actualizarRevision('${r.id}','placa',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Tipo de vehículo</label>
+        <select onchange="event.stopPropagation();actualizarRevision('${r.id}','tipoVehiculo',this.value)">
+          <option value="">— Seleccionar —</option>
+          ${['Microbus','Bus','Camion no articulado','Cabezal','Cisterna','Contenedor','Remolque'].map(v=>`<option ${r.tipoVehiculo===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>`;
+      card += `<div class="form-group"><label>Técnico 1</label>
+        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',0,this.value)">
+          <option value="">— Seleccionar —</option>
+          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>`;
+      card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
+        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',1,this.value)">
+          <option value="">— Ninguno —</option>
+          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>`;
+      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation()">${r.notas||''}</textarea></div>`;
       if(!r.completado){
-        card += `<button onclick="event.stopPropagation();cerrarRevision('${r.id}')" style="width:100%;padding:10px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px">✅ Marcar Completado</button>`;
+        card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
+      } else {
+        card += `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${r.fechaCierre||''}</div>`;
       }
       card += `</div>`;
     }
@@ -2474,7 +2475,7 @@ function renderRevisiones(){
   }).join('');
   el.onclick = function(e){
     const card = e.target.closest('[data-rid]');
-    if(card && !e.target.closest('button,input,select,textarea')){
+    if(card && !e.target.closest('button,input,select,textarea,canvas,label')){
       const id = card.dataset.rid;
       if(_openRev.has(id)) _openRev.delete(id); else _openRev.add(id);
       renderRevisiones();
@@ -2482,9 +2483,10 @@ function renderRevisiones(){
   };
 }
 
-function cerrarRevision(id){
+function finalizarRevision(id){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
   if(!r) return;
+  if(!confirm('¿Finalizar esta orden de revisión?')) return;
   r.estado = 'Completado';
   r.completado = true;
   r.fechaCierre = new Date().toISOString().slice(0,10);
@@ -2492,10 +2494,9 @@ function cerrarRevision(id){
   if(window._fbDB && window._fbReady)
     window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
   renderRevisiones();
-  toast('Revisión completada ✓');
+  toast('Revisión finalizada y enviada al historial ✓');
 }
 
-// ── EVALUACIONES DE EQUIPO ────────────────────────────────────────────────────
 function guardarEvaluacion(){
   const estado    = document.getElementById('eval-estado').value;
   const tec1      = document.getElementById('eval-tec1').value;
@@ -2553,64 +2554,77 @@ function renderEvaluaciones(){
     return nb-na;
   });
   if(!list.length){ el.innerHTML='<div class="empty">Sin evaluaciones</div>'; return; }
-  const COLORES = {Pendiente:{bg:'#fff0f0',txt:'#c00'},
-    'En proceso':{bg:'#fff8e1',txt:'#b45309'},Completado:{bg:'#f0fdf4',txt:'#15803d'}};
+  const COLORES = {
+    Pendiente:{bg:'#fff0f0',txt:'#c00',border:'#f5c6c6'},
+    'En proceso':{bg:'#fff8e1',txt:'#b45309',border:'#fde68a'},
+    Cancelado:{bg:'#f5f5f5',txt:'#888',border:'#ddd'},
+    Completado:{bg:'#f0fdf4',txt:'#15803d',border:'#bbf7d0'}
+  };
   el.innerHTML = list.map(v=>{
     const isOpen = _openEval.has(v.id);
-    const cc = COLORES[v.estado]||{bg:'#f5f5f5',txt:'#333'};
-    const tecs = (v.tecnicos||[]).join(', ')||'—';
+    const est = v.estado||'Pendiente';
+    const cc = COLORES[est]||{bg:'#f5f5f5',txt:'#333',border:'#ddd'};
+    const tecs = (v.tecnicos||[]).filter(Boolean).join(', ')||'—';
+    const fechaHora = (v.fecha?v.fecha+' '+(v.horaIni||''):'—').trim();
     let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px;cursor:pointer" data-eid="${v.id}">`;
+    // MINIATURA
     card += `<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">`;
-    card += `<div>`;
-    card += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:4px">`;
-    card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#2d6a9f;padding:2px 7px;border-radius:10px">${v.correlativo}</span>`;
-    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};padding:2px 8px;border-radius:10px">${v.estado}</span>`;
+    card += `<div style="flex:1;min-width:0">`;
+    card += `<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px">`;
+    card += `<span style="font-size:11px;font-weight:700;font-family:monospace;background:#e8edf5;color:#2d6a9f;padding:2px 7px;border-radius:10px">${v.correlativo||'—'}</span>`;
+    card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};border:1px solid ${cc.border};padding:2px 8px;border-radius:10px">${est}</span>`;
     card += `</div>`;
-    card += `<div style="font-size:13px;font-weight:600">${v.tipoEquipo} — ${v.modelo}</div>`;
-    card += `<div style="font-size:11px;color:var(--text3)">👤 ${v.cliente}</div>`;
-    card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecs} · 📅 ${v.fecha||'—'}</div>`;
-    card += `</div><span style="font-size:18px;color:var(--text3)">${isOpen?'⌃':'⌄'}</span>`;
+    card += `<div style="font-size:12px;color:var(--text2);margin-bottom:2px">👷 ${tecs}</div>`;
+    card += `<div style="font-size:11px;color:var(--text3)">📅 ${fechaHora}</div>`;
+    card += `</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
     card += `</div>`;
+    // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-      const campos = [['Correlativo',v.correlativo],['Estado',v.estado],['Técnicos',tecs],
-        ['Fecha',v.fecha||'—'],['Hora inicio',v.horaIni||'—'],['Hora final',v.horaFin||'—'],
-        ['Tipo equipo',v.tipoEquipo||'—'],['Modelo',v.modelo||'—'],
-        ['Serie',v.serie||'—'],['Cliente',v.cliente||'—']];
-      if(v.kmSalida&&v.kmRetorno) campos.push(['Km recorridos',(parseFloat(v.kmRetorno)-parseFloat(v.kmSalida)).toFixed(0)+' km']);
-      campos.forEach(([k,val])=>{
-        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600">${val}</span></div>`;
-      });
+      // Selector de estado
+      card += `<div class="form-group"><label>Estado de la orden</label>
+        <select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','estado',this.value)">
+          ${['Pendiente','En proceso','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
+        </select></div>`;
+      // Campos editables
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${v.fecha||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${v.horaIni||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `</div>`;
-      if(v.diagnostico) card += `<div style="font-size:12px;margin-bottom:8px"><div style="color:var(--text3);font-size:10px;text-transform:uppercase;margin-bottom:3px">Diagnóstico</div><div style="background:var(--surface2);padding:8px;border-radius:6px">${v.diagnostico}</div></div>`;
-      if(v.firma) card += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
-      // Campos editables P5
-      card += `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">✏️ Editar campos</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${v.fecha||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>
-          <div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${v.horaIni||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>
-        </div>
-        <div class="form-group" style="margin-bottom:8px"><label>Hora final</label><input type="time" value="${v.horaFin||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaFin',this.value)" oninput="event.stopPropagation()"></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Modelo</label><input value="${v.modelo||''}" placeholder="Ej: BAOLI KBE-20" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','modelo',this.value)" oninput="event.stopPropagation()"></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)" oninput="event.stopPropagation()">${v.diagnostico||''}</textarea></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Técnico 1</label>
-          <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
-            <option value="">— Seleccionar —</option>
-            ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:0"><label>Técnico 2 (opcional)</label>
-          <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',1,this.value)">
-            <option value="">— Ninguno —</option>
-            ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-      </div>`;
-      if(!v.completado) card += `<button onclick="event.stopPropagation();cerrarEvaluacion('${v.id}')" style="width:100%;padding:10px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px">✅ Marcar Completado</button>`;
+      card += `<div class="form-group"><label>Hora final</label><input type="time" value="${v.horaFin||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaFin',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Modelo</label><input value="${v.modelo||''}" placeholder="Ej: BAOLI KBE-20" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','modelo',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)" oninput="event.stopPropagation()">${v.diagnostico||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Técnico 1</label>
+        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
+          <option value="">— Seleccionar —</option>
+          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>`;
+      card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
+        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',1,this.value)">
+          <option value="">— Ninguno —</option>
+          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>`;
+      // Firma del cliente (P4 — solo cuando está cerrada o siempre)
+      const firmaId = 'firma-eval-'+v.id;
+      if(v.completado && v.firma){
+        card += `<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA DEL CLIENTE</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+      } else if(!v.completado){
+        card += `<div class="form-group"><label>✍️ Firma del cliente</label>
+          <canvas id="${firmaId}" class="firma-canvas" width="600" height="160"
+            ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+            onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
+            <button onclick="event.stopPropagation();limpiarFirma('${firmaId}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+          </div></div>`;
+      }
+      if(!v.completado){
+        card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${v.id}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
+      } else {
+        card += `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${v.fechaCierre||''}</div>`;
+      }
       card += `</div>`;
     }
     card += `</div>`;
@@ -2618,17 +2632,32 @@ function renderEvaluaciones(){
   }).join('');
   el.onclick = function(e){
     const card = e.target.closest('[data-eid]');
-    if(card && !e.target.closest('button,input,select,textarea,canvas')){
+    if(card && !e.target.closest('button,input,select,textarea,canvas,label')){
       const id = card.dataset.eid;
       if(_openEval.has(id)) _openEval.delete(id); else _openEval.add(id);
       renderEvaluaciones();
     }
   };
+  // Restaurar firmas guardadas
+  setTimeout(()=>{
+    (DB.evaluaciones||[]).forEach(v=>{
+      if(v.firma && !v.completado){
+        const c = document.getElementById('firma-eval-'+v.id);
+        if(c){ const img=new Image(); img.onload=()=>{ const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height); c.classList.add('firmado'); }; img.src=v.firma; }
+      }
+    });
+  }, 100);
 }
 
-function cerrarEvaluacion(id){
+function finalizarEvaluacion(id){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
+  if(!confirm('¿Finalizar esta orden de evaluación?')) return;
+  // Guardar firma si existe
+  const firmaCanvas = document.getElementById('firma-eval-'+id);
+  if(firmaCanvas && firmaCanvas.classList.contains('firmado')){
+    v.firma = firmaCanvas.toDataURL('image/png');
+  }
   v.estado = 'Completado';
   v.completado = true;
   v.fechaCierre = new Date().toISOString().slice(0,10);
@@ -2636,7 +2665,7 @@ function cerrarEvaluacion(id){
   if(window._fbDB && window._fbReady)
     window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
   renderEvaluaciones();
-  toast('Evaluación completada ✓');
+  toast('Evaluación finalizada y enviada al historial ✓');
 }
 
 function actualizarRevision(id, campo, valor){
