@@ -525,11 +525,11 @@ function renderOrdenesLog(){
             <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
-          <div style="font-size:13px;color:var(--text2)">${eqLabel}</div>
+          ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
-          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
-          ${o.operador?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
+          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
+          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
@@ -567,16 +567,16 @@ function renderOrdenesLog(){
         </div>
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-                <!-- Operador: renta + entrega + retiro -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
+                <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Motorista: entrega + retiro + compras + apoyo -->
-        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
+        <!-- Motorista: entrega + retiro + compras (no apoyo) -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>

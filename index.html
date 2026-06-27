@@ -832,6 +832,8 @@ function saveDB(){
       window._fbDB.ref('montasa').update({
         preventivos:    DB.preventivos||[],
         correctivos:    DB.correctivos||[],
+        revisiones:     DB.revisiones||[],
+        evaluaciones:   DB.evaluaciones||[],
         solicitudes:    DB.solicitudes||[],
         vendidos:       DB.vendidos||[],
         ordenesCerradas:DB.ordenesCerradas||[],
@@ -2726,7 +2728,9 @@ function renderHistorial(){
   // Todos los estados
   let all = [
     ...(DB.preventivos||[]).map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||''})),
-    ...(DB.correctivos||[]).map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||''}))
+    ...(DB.correctivos||[]).map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||''})),
+    ...(DB.revisiones||[]).map(r=>({...r, _t:'RV', _f:r.fechaCierre||r.fecha||''})),
+    ...(DB.evaluaciones||[]).map(v=>({...v, _t:'EV', _f:v.fechaCierre||v.fecha||''}))
   ].sort((a,b)=>{
     const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
     const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -2747,6 +2751,71 @@ function renderHistorial(){
     const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
     const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
     const horas = calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
+
+    // ── REVISIÓN FÍSICO-TÉCNICA ──────────────────────────────────────────
+    if(x._t==='RV'){
+      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+      const estRV=x.estado||'Pendiente';
+      const ESTADOS_COLOR_RV={'Pendiente':{bg:'#fff0f0',border:'#c00',txt:'#c00'},'En proceso':{bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},'Completado':{bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},'Cancelado':{bg:'#f5f5f5',border:'#888',txt:'#888'}};
+      const ccRV=ESTADOS_COLOR_RV[estRV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+      const isOpenRV=openHistGer.has(x.id);
+      let cRV=`<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+      cRV+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none"><div style="flex:1;min-width:0">`;
+      cRV+=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+      if(x.correlativo) cRV+=`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${x.correlativo}</span>`;
+      cRV+=`<span style="font-size:11px;font-weight:700;background:${ccRV.bg};color:${ccRV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${ccRV.border}">${estRV}</span>`;
+      cRV+=`<span style="font-size:11px;background:#f0f4ff;color:#1f3864;padding:2px 7px;border-radius:10px">🚌 Revisión F/T</span></div>`;
+      cRV+=`<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">${x.notas||x.placa||'Revisión Físico-Técnica'}</div>`;
+      if(x.placa) cRV+=`<div style="font-size:11px;color:var(--text3)">🚌 ${x.placa} ${x.tipoVehiculo?'— '+x.tipoVehiculo:''}</div>`;
+      if(x.fecha) cRV+=`<div style="font-size:11px;color:var(--text3)">📅 ${x.fecha} ${x.horaIni||''}</div>`;
+      if(tecs!=='—') cRV+=`<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
+      cRV+=`</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenRV?'⌃':'⌄'}</span></div>`;
+      if(isOpenRV){
+        cRV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+        cRV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+        [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—'],['Cerrado',x.fechaCierre||'—']].forEach(([k,v])=>{
+          cRV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+        });
+        cRV+=`</div></div>`;
+      }
+      cRV+=`</div>`;
+      return cRV;
+    }
+
+    // ── EVALUACIÓN DE EQUIPO ─────────────────────────────────────────────
+    if(x._t==='EV'){
+      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+      const estEV=x.estado||'Pendiente';
+      const ESTADOS_COLOR_EV={'Pendiente':{bg:'#fff0f0',border:'#c00',txt:'#c00'},'En proceso':{bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},'Completado':{bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},'Cancelado':{bg:'#f5f5f5',border:'#888',txt:'#888'}};
+      const ccEV=ESTADOS_COLOR_EV[estEV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+      const isOpenEV=openHistGer.has(x.id);
+      let cEV=`<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+      cEV+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none"><div style="flex:1;min-width:0">`;
+      cEV+=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+      if(x.correlativo) cEV+=`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#2d6a9f;padding:2px 7px;border-radius:10px">${x.correlativo}</span>`;
+      cEV+=`<span style="font-size:11px;font-weight:700;background:${ccEV.bg};color:${ccEV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${ccEV.border}">${estEV}</span>`;
+      cEV+=`<span style="font-size:11px;background:#f0f4ff;color:#2d6a9f;padding:2px 7px;border-radius:10px">📋 Evaluación</span></div>`;
+      cEV+=`<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">${x.notas||x.modelo||'Evaluación de Equipo'}</div>`;
+      if(x.modelo) cEV+=`<div style="font-size:11px;color:var(--text3)">🔧 ${x.modelo}${x.marca?' — '+x.marca:''}${x.serie?' ('+x.serie+')':''}</div>`;
+      if(x.fecha) cEV+=`<div style="font-size:11px;color:var(--text3)">📅 ${x.fecha} ${x.horaIni||''} ${x.horaFin?'– '+x.horaFin:''}</div>`;
+      if(tecs!=='—') cEV+=`<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
+      if(x.cliente) cEV+=`<div style="font-size:11px;color:var(--text3)">👤 ${x.cliente}</div>`;
+      cEV+=`</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenEV?'⌃':'⌄'}</span></div>`;
+      if(isOpenEV){
+        cEV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+        cEV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+        [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Cliente',x.cliente||'—'],['Cerrado',x.fechaCierre||'—']].forEach(([k,v])=>{
+          cEV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+        });
+        if(x.diagnostico) cEV+=`<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
+        cEV+=`</div>`;
+        if(x.firma) cEV+=`<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+        cEV+=`</div>`;
+      }
+      cEV+=`</div>`;
+      return cEV;
+    }
+
     const estRaw = x._t==='P' ? (x.completado?'Completado':(x.estado||'Pendiente')) : (x.estado||'Pendiente');
     const estCfg = ESTADOS_COLOR[estRaw] || {bg:'#f5f5f5',border:'#888',txt:'#333'};
     const tipo = x._t==='P' ? 'Preventivo' : 'Correctivo';
@@ -4139,6 +4208,8 @@ function cerrarExito(){
         });
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
+      if(d.revisiones)     DB.revisiones     = d.revisiones||[];
+      if(d.evaluaciones)   DB.evaluaciones   = d.evaluaciones||[];
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
