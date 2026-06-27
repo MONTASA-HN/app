@@ -692,6 +692,8 @@ function saveDB(){
       window._fbDB.ref('montasa').update({
         preventivos:     DB.preventivos,
         correctivos:     DB.correctivos,
+        revisiones:      DB.revisiones||[],
+        evaluaciones:    DB.evaluaciones||[],
         ordenesCerradas: DB.ordenesCerradas||[],
         _ts: ts,
         _sid: _SESSION_ID
@@ -2498,35 +2500,16 @@ function renderRevisiones(){
 }
 
 function finalizarRevision(id){
-  const doFinalizar = function(revisiones){
-    const r = revisiones.find(x=>x.id===id);
-    if(!r){ toast('Orden no encontrada'); return; }
-    r.estado = 'Completado';
-    r.completado = true;
-    r.fechaCierre = new Date().toISOString().slice(0,10);
-    DB.revisiones = revisiones;
-    saveDB();
-    _blockFBrev = true;
-    if(window._fbDB){
-      window._fbDB.ref('montasa/revisiones').set(revisiones)
-        .then(()=>{ setTimeout(()=>_blockFBrev=false,3000); renderRevisiones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Revisión finalizada ✓'); })
-        .catch(e=>{ _blockFBrev=false; toast('Error al guardar: '+e.message); });
-    } else {
-      renderRevisiones();
-      if(typeof renderHistorial==='function') renderHistorial();
-      toast('Revisión finalizada ✓');
-      setTimeout(()=>_blockFBrev=false,3000);
-    }
-  };
-  if(window._fbDB){
-    window._fbDB.ref('montasa/revisiones').once('value').then(snap=>{
-      doFinalizar(snap.val()||[]);
-    }).catch(()=>doFinalizar(DB.revisiones||[]));
-  } else {
-    doFinalizar(DB.revisiones||[]);
-  }
+  const r = (DB.revisiones||[]).find(x=>x.id===id);
+  if(!r){ toast('Orden no encontrada'); return; }
+  r.estado = 'Completado';
+  r.completado = true;
+  r.fechaCierre = new Date().toISOString().slice(0,10);
+  saveDB();
+  renderRevisiones();
+  renderHistorial();
+  toast('Revisión ' + (r.correlativo||'') + ' finalizada ✓');
 }
-
 function guardarEvaluacion(){
   const estado    = document.getElementById('eval-estado').value;
   const tec1      = document.getElementById('eval-tec1').value;
@@ -2680,84 +2663,45 @@ function renderEvaluaciones(){
 }
 
 function finalizarEvaluacion(id){
-  const firmaCanvas = document.getElementById('firma-eval-'+id);
-  const firmaData = (firmaCanvas && firmaCanvas.classList.contains('firmado')) ? firmaCanvas.toDataURL('image/png') : null;
-  const doFinalizar = function(evaluaciones){
-    const v = evaluaciones.find(x=>x.id===id);
-    if(!v){ toast('Orden no encontrada'); return; }
-    if(firmaData) v.firma = firmaData;
-    v.estado = 'Completado';
-    v.completado = true;
-    v.fechaCierre = new Date().toISOString().slice(0,10);
-    DB.evaluaciones = evaluaciones;
-    saveDB();
-    _blockFBeval = true;
-    if(window._fbDB){
-      window._fbDB.ref('montasa/evaluaciones').set(evaluaciones)
-        .then(()=>{ setTimeout(()=>_blockFBeval=false,3000); renderEvaluaciones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Evaluación finalizada ✓'); })
-        .catch(e=>{ _blockFBeval=false; toast('Error al guardar: '+e.message); });
-    } else { renderEvaluaciones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Evaluación finalizada ✓'); setTimeout(()=>_blockFBeval=false,3000); }
-  };
-  if(window._fbDB){
-    window._fbDB.ref('montasa/evaluaciones').once('value').then(snap=>doFinalizar(snap.val()||[])).catch(()=>doFinalizar(DB.evaluaciones||[]));
-  } else { doFinalizar(DB.evaluaciones||[]); }
+  const v = (DB.evaluaciones||[]).find(x=>x.id===id);
+  if(!v){ toast('Orden no encontrada'); return; }
+  const fc = document.getElementById('firma-eval-'+id);
+  if(fc && fc.classList.contains('firmado')) v.firma = fc.toDataURL('image/png');
+  v.estado = 'Completado';
+  v.completado = true;
+  v.fechaCierre = new Date().toISOString().slice(0,10);
+  saveDB();
+  renderEvaluaciones();
+  renderHistorial();
+  toast('Evaluación ' + (v.correlativo||'') + ' finalizada ✓');
 }
-
 function actualizarRevision(id, campo, valor){
-  if(window._fbDB){
-    _blockFBrev = true;
-    window._fbDB.ref('montasa/revisiones').once('value').then(snap=>{
-      const revs = snap.val()||[];
-      const r = revs.find(x=>x.id===id);
-      if(!r){ _blockFBrev=false; return; }
-      r[campo] = valor;
-      DB.revisiones = revs;
-      saveDB();
-      window._fbDB.ref('montasa/revisiones').set(revs)
-        .then(()=>setTimeout(()=>_blockFBrev=false,2000))
-        .catch(()=>{ _blockFBrev=false; });
-    }).catch(()=>{ _blockFBrev=false; });
-  } else {
-    const r = (DB.revisiones||[]).find(x=>x.id===id);
-    if(r){ r[campo]=valor; saveDB(); }
-  }
+  const r = (DB.revisiones||[]).find(x=>x.id===id);
+  if(!r) return;
+  r[campo] = valor;
+  saveDB();
 }
 function actualizarRevisionTecnico(id, pos, valor){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
   if(!r) return;
-  if(!r.tecnicos) r.tecnicos = [];
-  r.tecnicos[pos] = valor;
+  if(!r.tecnicos) r.tecnicos=[];
+  if(valor) r.tecnicos[pos]=valor; else r.tecnicos.splice(pos,1);
   r.tecnicos = r.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB){ _blockFBrev=true; window._fbDB.ref('montasa/revisiones').set(DB.revisiones).then(()=>setTimeout(()=>_blockFBrev=false,2000)).catch(()=>_blockFBrev=false); }
 }
 function actualizarEvaluacion(id, campo, valor){
-  if(window._fbDB){
-    _blockFBeval = true;
-    window._fbDB.ref('montasa/evaluaciones').once('value').then(snap=>{
-      const evals = snap.val()||[];
-      const v = evals.find(x=>x.id===id);
-      if(!v){ _blockFBeval=false; return; }
-      v[campo] = valor;
-      DB.evaluaciones = evals;
-      saveDB();
-      window._fbDB.ref('montasa/evaluaciones').set(evals)
-        .then(()=>setTimeout(()=>_blockFBeval=false,2000))
-        .catch(()=>{ _blockFBeval=false; });
-    }).catch(()=>{ _blockFBeval=false; });
-  } else {
-    const v = (DB.evaluaciones||[]).find(x=>x.id===id);
-    if(v){ v[campo]=valor; saveDB(); }
-  }
+  const v = (DB.evaluaciones||[]).find(x=>x.id===id);
+  if(!v) return;
+  v[campo] = valor;
+  saveDB();
 }
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
-  if(!v.tecnicos) v.tecnicos = [];
-  v.tecnicos[pos] = valor;
+  if(!v.tecnicos) v.tecnicos=[];
+  if(valor) v.tecnicos[pos]=valor; else v.tecnicos.splice(pos,1);
   v.tecnicos = v.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB){ _blockFBeval=true; window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones).then(()=>setTimeout(()=>_blockFBeval=false,2000)).catch(()=>_blockFBeval=false); }
 }
 </script>
 
