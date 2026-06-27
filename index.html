@@ -1512,7 +1512,7 @@ function editarOrdenHistorial(tipo, id){
 function ordenAbiertaDeTecnico(nombre, excluirId){
   const activos = [
     ...DB.preventivos.filter(p => !p.completado),
-    ...DB.correctivos.filter(c => c.estado !== 'Cerrado')
+    ...DB.correctivos.filter(c => c.estado!=='Completado'&&c.estado!=='Cancelado')
   ];
   return activos.find(o => {
     if(o.id === excluirId) return false; // No contar la misma orden
@@ -1530,7 +1530,7 @@ function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId)
 
   const cerradas = [
     ...DB.preventivos.filter(p => p.completado),
-    ...DB.correctivos.filter(c => c.estado === 'Cerrado'),
+    ...DB.correctivos.filter(c => c.estado === 'Completado'),
     ...(DB.ordenesCerradas||[])
   ];
 
@@ -1612,7 +1612,7 @@ function renderPersonal(){
       return f.getMonth()===mes && f.getFullYear()===anio;
     }),
     ...DB.correctivos.filter(c => {
-      if(c.estado!=='Cerrado') return false;
+      if(c.estado!=='Completado') return false;
       const f = new Date(c.fechaCierre||c.fechaFin||c.fecha);
       return f.getMonth()===mes && f.getFullYear()===anio;
     })
@@ -2049,7 +2049,7 @@ function renderLogistica(){
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
     const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const ec = o.cerrado?'#27ae60':o.estado==='Cancelado'?'#888':o.estado==='En proceso'?'#f39c12':'#e74c3c';
-    const estadoLbl = o.cerrado?'Cerrado':(o.estado||'Pendiente');
+    const estadoLbl = o.cerrado?'Completado':(o.estado||'Pendiente');
     const hi = o.fechaInicio?o.fechaInicio.slice(11,16):'—';
     const op = o.operador?'<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+o.operador+'</span>':'';
     const mot = o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?'<span style="color:var(--text3)">🚗 Motorista</span><span>'+o.motorista+'</span>':'';
@@ -2269,7 +2269,7 @@ function renderDashboard(){
   if(document.getElementById('st-prev-esp'))      document.getElementById('st-prev-esp').textContent      = prevEsp;
 
   // Correctivos - 3 estados
-  const corrAbiertos = DB.correctivos.filter(c=>c.estado!=='Cerrado').length;
+  const corrAbiertos = DB.correctivos.filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').length;
   const corrPend     = DB.correctivos.filter(c=>(c.estado||'Pendiente')==='Pendiente').length;
   const corrProc     = DB.correctivos.filter(c=>c.estado==='En proceso').length;
   const corrEsp      = DB.correctivos.filter(c=>c.estado==='En espera de repuestos').length;
@@ -2512,7 +2512,7 @@ function renderPreventivos(){
     });
     // Also search in correctivos — if found there, show redirect banner
     if(!list.length){
-      const enCorr = DB.correctivos.filter(c=>c.estado!=='Cerrado').filter(c=>{
+      const enCorr = DB.correctivos.filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').filter(c=>{
         const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
         return (c.correlativo||'').toLowerCase().includes(prevBuscar)
           || (eq.codigo||'').toLowerCase().includes(prevBuscar)
@@ -2611,7 +2611,7 @@ function renderPreventivos(){
 
 function renderCorrectivos(){
   const corrBuscar = (document.getElementById('corr-buscar')?.value||'').toLowerCase();
-  let list = [...DB.correctivos].filter(c=>c.estado!=='Cerrado').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  let list = [...DB.correctivos].filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').sort((a,b)=>b.fecha.localeCompare(a.fecha));
   if(corrBuscar){
     list = list.filter(c=>{
       const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
@@ -2686,7 +2686,7 @@ function renderCorrectivos(){
       </div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
       <div style="margin-top:12px">
-      ${c.estado==='Cerrado'
+      ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
@@ -2722,7 +2722,7 @@ function renderHistorial(){
     'En proceso': {bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},
     'En espera de repuestos': {bg:'#eff6ff',border:'#3b82f6',txt:'#1d4ed8'},
     'Completado': {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
-    'Cerrado':    {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
+    'Completado':    {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
   };
 
   // Todos los estados
@@ -2776,7 +2776,7 @@ function renderHistorial(){
       if(isOpenRV){
         cRV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
         cRV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-        [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—'],['Cerrado',x.fechaCierre||'—']].forEach(([k,v])=>{
+        [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
           cRV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
         });
         cRV+=`</div></div>`;
@@ -2807,7 +2807,7 @@ function renderHistorial(){
       if(isOpenEV){
         cEV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
         cEV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-        [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Cliente',x.cliente||'—'],['Cerrado',x.fechaCierre||'—']].forEach(([k,v])=>{
+        [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
           cEV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
         });
         if(x.diagnostico) cEV+=`<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
@@ -3195,7 +3195,7 @@ function guardarCorrectivo(finalizar=false){
   }
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
-    if(finalizar){ entry.estado='Cerrado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
+    if(finalizar){ entry.estado='Completado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
     DB.correctivos.push(entry);
     equipoAInactivo(equipoId);
     saveDB(); toggleForm('form-corr');
@@ -3208,7 +3208,7 @@ function guardarCorrectivo(finalizar=false){
   document.getElementById('corr-cliente-fields').style.display='none';
   if(finalizar){
       try{
-        entry.estado = 'Cerrado';
+        entry.estado = 'Completado';
         entry.fechaCierre = new Date().toISOString().slice(0,10);
         registrarOrdenCerrada(entry,'Correctivo');
         saveDB();
@@ -3257,7 +3257,7 @@ function cerrarCorrectivo(id){
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   c.firma = getFirmaData(id);
-  c.estado = 'Cerrado';
+  c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   // Auto-generar vale de alimentación al cerrar
   (function(){
@@ -3849,7 +3849,7 @@ function renderSolicitudes(){
       const enHistorial = (DB.ordenesCerradas||[]).find(o=>o.correlativo===sol.correlativo);
       return enHistorial ? 'Finalizada' : (sol.estado||'Pendiente');
     }
-    if(orden.completado || orden.estado==='Cerrado') return 'Finalizada';
+    if(orden.completado || orden.estado==='Completado') return 'Finalizada';
     return orden.estado || 'Pendiente';
   }
 
