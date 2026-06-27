@@ -1797,39 +1797,59 @@ function finalizarOrdenCorrectivo(){
 
 
 function renderHistorial(){
-  const filtEq  = document.getElementById('filt-hist-equipo').value;
-  const buscar  = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
+  const filtEq = document.getElementById('filt-hist-equipo').value;
+  const buscar = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
 
-  // Merge preventivos + correctivos, only show completed/closed
   let all = [
-    ...DB.preventivos
-      .filter(p=>p.completado)
-      .map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||p.fecha})),
-    ...DB.correctivos
-      .filter(c=>c.estado==='Cerrado')
-      .map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||c.fecha}))
+    ...(DB.preventivos||[]).filter(p=>p.completado).map(p=>({...p,_t:'P',_f:p.fechaCompletado||p.fecha||''})),
+    ...(DB.correctivos||[]).filter(c=>c.estado==='Cerrado').map(c=>({...c,_t:'C',_f:c.fechaCierre||c.fecha||''})),
+    ...(DB.revisiones||[]).filter(r=>r.completado||r.estado==='Completado').map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
+    ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}))
   ].sort((a,b)=>{
-    // Orden descendente por correlativo numérico
-    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
-    return nb - na;
+    const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb-na;
   });
 
-  if(filtEq) all = all.filter(x=>x.equipoId==filtEq);
-  if(buscar)  all = all.filter(x=>
-    (x.correlativo||'').toLowerCase().includes(buscar) ||
-    (x.falla||x.servicio||'').toLowerCase().includes(buscar) ||
-    (x.tecnico||'').toLowerCase().includes(buscar)
-  );
+  if(filtEq) all=all.filter(x=>x.equipoId==filtEq);
+  if(buscar) all=all.filter(x=>(x.correlativo||'').toLowerCase().includes(buscar)||(x.falla||x.servicio||x.notas||'').toLowerCase().includes(buscar)||(x.tecnico||'').toLowerCase().includes(buscar));
 
-  const el = document.getElementById('historial-list');
+  const el=document.getElementById('historial-list');
   if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes finalizadas</div>'; return; }
 
-  el.innerHTML = all.map(x => {
-    const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
-    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (x.clienteNombre ? 'Cliente: '+x.clienteNombre : '—');
-    const horas = calcHoras(x.fechaInicio, x.fechaFin);
+  el.innerHTML=all.map(x=>{
+    const eq=DB.equipos.find(e=>e.id===x.equipoId)||{};
+    const eqLabel=eq.codigo?eq.codigo+' – '+(eq.marca||''):(x.clienteNombre?'Cliente: '+x.clienteNombre:'—');
+    const horas=calcHoras(x.fechaInicio,x.fechaFin);
 
+    if(x._t==='RV'){
+      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+      var html='<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">';
+      html+='<div><div style="font-size:13px;font-weight:700">🚌 '+x.correlativo+'</div>';
+      html+='<div style="font-size:12px;color:var(--text2)">'+(x.placa||'')+(x.tipoVehiculo?' — '+x.tipoVehiculo:'')+'</div></div>';
+      html+='<span class="badge badge-ok">Completado</span></div>';
+      if(x.notas) html+='<div class="detail-row"><span class="detail-lbl">Descripción</span><span>'+x.notas+'</span></div>';
+      html+='<div class="detail-row"><span class="detail-lbl">Técnico(s)</span><span>'+tecs+'</span></div>';
+      if(x.fecha) html+='<div class="detail-row"><span class="detail-lbl">Fecha</span><span>'+x.fecha+' '+(x.horaIni||'')+'</span></div>';
+      html+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: '+(x.fechaCierre||'—')+'</div></div>';
+      return html;
+    }
+    if(x._t==='EV'){
+      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+      var html='<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">';
+      html+='<div><div style="font-size:13px;font-weight:700">📋 '+x.correlativo+'</div>';
+      html+='<div style="font-size:12px;color:var(--text2)">'+(x.modelo||'')+(x.marca?' — '+x.marca:'')+'</div></div>';
+      html+='<span class="badge badge-ok">Completado</span></div>';
+      if(x.cliente) html+='<div class="detail-row"><span class="detail-lbl">Cliente</span><span>'+x.cliente+'</span></div>';
+      if(x.diagnostico) html+='<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span>'+x.diagnostico+'</span></div>';
+      html+='<div class="detail-row"><span class="detail-lbl">Técnico(s)</span><span>'+tecs+'</span></div>';
+      if(x.fecha) html+='<div class="detail-row"><span class="detail-lbl">Fecha</span><span>'+x.fecha+' '+(x.horaIni||'')+' – '+(x.horaFin||'')+'</span></div>';
+      if(x.firma) html+='<div style="margin-top:8px"><img src="'+x.firma+'" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+      html+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: '+(x.fechaCierre||'—')+'</div></div>';
+      return html;
+    }
     if(x._t==='P'){
       return `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
@@ -1847,43 +1867,32 @@ function renderHistorial(){
         ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
         <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
         ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
-        ${x.sugerencias?`<div class="detail-row"><span class="detail-lbl">Sugerencias</span><span class="detail-val">${x.sugerencias}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
-        ${x.firma ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div>
-          <img src="${x.firma}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
-        </div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('prev','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar orden</button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('prev','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar</button></div>
       </div>`;
     } else {
       return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
           <div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700">🔧 ${x.falla}</span>
+              <span style="font-size:13px;font-weight:700">🔧 ${x.falla||'Correctivo'}</span>
               ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
             </div>
             <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
           </div>
-          <span class="badge badge-gray" style="flex-shrink:0">Cerrado</span>
+          <span class="badge badge-ok" style="flex-shrink:0">Cerrado</span>
         </div>
-        ${x.sistema?`<div class="detail-row"><span class="detail-lbl">Sistema</span><span>${x.sistema}</span></div>`:''}
         <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
         <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
         ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
         <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
         ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${x.diagnostico}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCierre||x._f)}</div>
-        ${x.firma ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div>
-          <img src="${x.firma}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff">
-        </div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial(\'corr\',\'${x.id}\')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('corr','${x.id}')">✕ Eliminar orden</button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('corr','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('corr','${x.id}')">✕ Eliminar</button></div>
       </div>`;
     }
   }).join('');
 }
-
 
 function editarOrdenHistorial(tipo, id){
   solicitarPINAccion(()=>{
@@ -2294,8 +2303,8 @@ renderDashboardTec();
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       if(d.preventivos)     DB.preventivos     = d.preventivos;
       if(d.correctivos)     DB.correctivos     = d.correctivos;
-      if(d.revisiones)      DB.revisiones      = d.revisiones||[];
-      if(d.evaluaciones)    DB.evaluaciones    = d.evaluaciones||[];
+      if(d.revisiones && !_blockFBrev)      DB.revisiones      = d.revisiones||[];
+      if(d.evaluaciones && !_blockFBeval)    DB.evaluaciones    = d.evaluaciones||[];
       if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
       if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
@@ -2360,6 +2369,8 @@ function toggleEquipoClienteCorr(){}
 // ── REVISIONES FÍSICO-TÉCNICAS ────────────────────────────────────────────────
 let _openRev = new Set();
 let _openEval = new Set();
+let _blockFBrev = false;
+let _blockFBeval = false;
 
 function guardarRevision(){
   const estado    = document.getElementById('rev-estado').value;
@@ -2487,23 +2498,32 @@ function renderRevisiones(){
 }
 
 function finalizarRevision(id){
-  const r = (DB.revisiones||[]).find(x=>x.id===id);
-  if(!r) return;
-  if(!confirm('¿Finalizar esta orden de revisión?')) return;
-  r.estado = 'Completado';
-  r.completado = true;
-  r.fechaCierre = new Date().toISOString().slice(0,10);
-  saveDB();
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa').update({
-      revisiones: DB.revisiones,
-      _ts: Date.now(),
-      _sid: _SESSION_ID
-    }).then(()=>{ renderRevisiones(); toast('Revisión finalizada ✓'); })
-      .catch(()=>{ renderRevisiones(); toast('Revisión finalizada ✓'); });
+  // Asegurar que revisiones está cargado
+  const doFinalizar = function(revisiones){
+    DB.revisiones = revisiones;
+    const r = revisiones.find(x=>x.id===id);
+    if(!r){ toast('Orden no encontrada'); return; }
+    r.estado = 'Completado';
+    r.completado = true;
+    r.fechaCierre = new Date().toISOString().slice(0,10);
+    saveDB();
+    _blockFBrev = true;
+    if(window._fbDB){
+      window._fbDB.ref('montasa/revisiones').set(DB.revisiones)
+        .then(()=>{ setTimeout(()=>_blockFBrev=false,3000); renderRevisiones(); toast('Revisión finalizada ✓'); })
+        .catch(e=>{ _blockFBrev=false; renderRevisiones(); toast('Revisión finalizada ✓'); });
+    } else {
+      renderRevisiones();
+      toast('Revisión finalizada ✓');
+      setTimeout(()=>_blockFBrev=false,3000);
+    }
+  };
+  if(window._fbDB){
+    window._fbDB.ref('montasa/revisiones').once('value').then(snap=>{
+      doFinalizar(snap.val()||[]);
+    }).catch(()=>doFinalizar(DB.revisiones||[]));
   } else {
-    renderRevisiones();
-    toast('Revisión finalizada ✓');
+    doFinalizar(DB.revisiones||[]);
   }
 }
 
@@ -2660,28 +2680,27 @@ function renderEvaluaciones(){
 }
 
 function finalizarEvaluacion(id){
-  const v = (DB.evaluaciones||[]).find(x=>x.id===id);
-  if(!v) return;
-  if(!confirm('¿Finalizar esta orden de evaluación?')) return;
   const firmaCanvas = document.getElementById('firma-eval-'+id);
-  if(firmaCanvas && firmaCanvas.classList.contains('firmado')){
-    v.firma = firmaCanvas.toDataURL('image/png');
-  }
-  v.estado = 'Completado';
-  v.completado = true;
-  v.fechaCierre = new Date().toISOString().slice(0,10);
-  saveDB();
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa').update({
-      evaluaciones: DB.evaluaciones,
-      _ts: Date.now(),
-      _sid: _SESSION_ID
-    }).then(()=>{ renderEvaluaciones(); toast('Evaluación finalizada ✓'); })
-      .catch(()=>{ renderEvaluaciones(); toast('Evaluación finalizada ✓'); });
-  } else {
-    renderEvaluaciones();
-    toast('Evaluación finalizada ✓');
-  }
+  const firmaData = (firmaCanvas && firmaCanvas.classList.contains('firmado')) ? firmaCanvas.toDataURL('image/png') : null;
+  const doFinalizar = function(evaluaciones){
+    DB.evaluaciones = evaluaciones;
+    const v = evaluaciones.find(x=>x.id===id);
+    if(!v){ toast('Orden no encontrada'); return; }
+    if(firmaData) v.firma = firmaData;
+    v.estado = 'Completado';
+    v.completado = true;
+    v.fechaCierre = new Date().toISOString().slice(0,10);
+    saveDB();
+    _blockFBeval = true;
+    if(window._fbDB){
+      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones)
+        .then(()=>{ setTimeout(()=>_blockFBeval=false,3000); renderEvaluaciones(); toast('Evaluación finalizada ✓'); })
+        .catch(e=>{ _blockFBeval=false; renderEvaluaciones(); toast('Evaluación finalizada ✓'); });
+    } else { renderEvaluaciones(); toast('Evaluación finalizada ✓'); setTimeout(()=>_blockFBeval=false,3000); }
+  };
+  if(window._fbDB){
+    window._fbDB.ref('montasa/evaluaciones').once('value').then(snap=>doFinalizar(snap.val()||[])).catch(()=>doFinalizar(DB.evaluaciones||[]));
+  } else { doFinalizar(DB.evaluaciones||[]); }
 }
 
 function actualizarRevision(id, campo, valor){
@@ -2689,8 +2708,7 @@ function actualizarRevision(id, campo, valor){
   if(!r) return;
   r[campo] = valor;
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa').update({revisiones:DB.revisiones,_ts:Date.now(),_sid:_SESSION_ID});
+  if(window._fbDB){ _blockFBrev=true; window._fbDB.ref('montasa/revisiones').set(DB.revisiones).then(()=>setTimeout(()=>_blockFBrev=false,2000)).catch(()=>_blockFBrev=false); }
 }
 function actualizarRevisionTecnico(id, pos, valor){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
@@ -2699,16 +2717,14 @@ function actualizarRevisionTecnico(id, pos, valor){
   r.tecnicos[pos] = valor;
   r.tecnicos = r.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa').update({revisiones:DB.revisiones,_ts:Date.now(),_sid:_SESSION_ID});
+  if(window._fbDB){ _blockFBrev=true; window._fbDB.ref('montasa/revisiones').set(DB.revisiones).then(()=>setTimeout(()=>_blockFBrev=false,2000)).catch(()=>_blockFBrev=false); }
 }
 function actualizarEvaluacion(id, campo, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
   v[campo] = valor;
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa').update({evaluaciones:DB.evaluaciones,_ts:Date.now(),_sid:_SESSION_ID});
+  if(window._fbDB){ _blockFBeval=true; window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones).then(()=>setTimeout(()=>_blockFBeval=false,2000)).catch(()=>_blockFBeval=false); }
 }
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
@@ -2717,8 +2733,7 @@ function actualizarEvaluacionTecnico(id, pos, valor){
   v.tecnicos[pos] = valor;
   v.tecnicos = v.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa').update({evaluaciones:DB.evaluaciones,_ts:Date.now(),_sid:_SESSION_ID});
+  if(window._fbDB){ _blockFBeval=true; window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones).then(()=>setTimeout(()=>_blockFBeval=false,2000)).catch(()=>_blockFBeval=false); }
 }
 </script>
 
