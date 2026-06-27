@@ -2491,10 +2491,17 @@ function finalizarRevision(id){
   r.completado = true;
   r.fechaCierre = new Date().toISOString().slice(0,10);
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
-  renderRevisiones();
-  toast('Revisión finalizada y enviada al historial ✓');
+  if(window._fbDB && window._fbReady){
+    window._fbDB.ref('montasa').update({
+      revisiones: DB.revisiones,
+      _ts: Date.now(),
+      _sid: _SESSION_ID
+    }).then(()=>{ renderRevisiones(); toast('Revisión finalizada ✓'); })
+      .catch(()=>{ renderRevisiones(); toast('Revisión finalizada ✓'); });
+  } else {
+    renderRevisiones();
+    toast('Revisión finalizada ✓');
+  }
 }
 
 function guardarEvaluacion(){
@@ -2653,7 +2660,6 @@ function finalizarEvaluacion(id){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
   if(!confirm('¿Finalizar esta orden de evaluación?')) return;
-  // Guardar firma si existe
   const firmaCanvas = document.getElementById('firma-eval-'+id);
   if(firmaCanvas && firmaCanvas.classList.contains('firmado')){
     v.firma = firmaCanvas.toDataURL('image/png');
@@ -2662,10 +2668,17 @@ function finalizarEvaluacion(id){
   v.completado = true;
   v.fechaCierre = new Date().toISOString().slice(0,10);
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
-  renderEvaluaciones();
-  toast('Evaluación finalizada y enviada al historial ✓');
+  if(window._fbDB && window._fbReady){
+    window._fbDB.ref('montasa').update({
+      evaluaciones: DB.evaluaciones,
+      _ts: Date.now(),
+      _sid: _SESSION_ID
+    }).then(()=>{ renderEvaluaciones(); toast('Evaluación finalizada ✓'); })
+      .catch(()=>{ renderEvaluaciones(); toast('Evaluación finalizada ✓'); });
+  } else {
+    renderEvaluaciones();
+    toast('Evaluación finalizada ✓');
+  }
 }
 
 function actualizarRevision(id, campo, valor){
@@ -2673,10 +2686,8 @@ function actualizarRevision(id, campo, valor){
   if(!r) return;
   r[campo] = valor;
   saveDB();
-  if(window._fbDB && window._fbReady){
-    const idx = DB.revisiones.findIndex(x=>x.id===id);
-    if(idx>=0) window._fbDB.ref('montasa/revisiones/'+idx+'/'+campo).set(valor);
-  }
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa').update({revisiones:DB.revisiones,_ts:Date.now(),_sid:_SESSION_ID});
 }
 function actualizarRevisionTecnico(id, pos, valor){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
@@ -2685,20 +2696,16 @@ function actualizarRevisionTecnico(id, pos, valor){
   r.tecnicos[pos] = valor;
   r.tecnicos = r.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB && window._fbReady){
-    const idx = DB.revisiones.findIndex(x=>x.id===id);
-    if(idx>=0) window._fbDB.ref('montasa/revisiones/'+idx+'/tecnicos').set(r.tecnicos);
-  }
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa').update({revisiones:DB.revisiones,_ts:Date.now(),_sid:_SESSION_ID});
 }
 function actualizarEvaluacion(id, campo, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
   v[campo] = valor;
   saveDB();
-  if(window._fbDB && window._fbReady){
-    const idx = DB.evaluaciones.findIndex(x=>x.id===id);
-    if(idx>=0) window._fbDB.ref('montasa/evaluaciones/'+idx+'/'+campo).set(valor);
-  }
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa').update({evaluaciones:DB.evaluaciones,_ts:Date.now(),_sid:_SESSION_ID});
 }
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
@@ -2707,10 +2714,8 @@ function actualizarEvaluacionTecnico(id, pos, valor){
   v.tecnicos[pos] = valor;
   v.tecnicos = v.tecnicos.filter(Boolean);
   saveDB();
-  if(window._fbDB && window._fbReady){
-    const idx = DB.evaluaciones.findIndex(x=>x.id===id);
-    if(idx>=0) window._fbDB.ref('montasa/evaluaciones/'+idx+'/tecnicos').set(v.tecnicos);
-  }
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa').update({evaluaciones:DB.evaluaciones,_ts:Date.now(),_sid:_SESSION_ID});
 }
 </script>
 
