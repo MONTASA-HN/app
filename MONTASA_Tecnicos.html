@@ -2498,22 +2498,22 @@ function renderRevisiones(){
 }
 
 function finalizarRevision(id){
-  // Asegurar que revisiones está cargado
   const doFinalizar = function(revisiones){
-    DB.revisiones = revisiones;
     const r = revisiones.find(x=>x.id===id);
     if(!r){ toast('Orden no encontrada'); return; }
     r.estado = 'Completado';
     r.completado = true;
     r.fechaCierre = new Date().toISOString().slice(0,10);
+    DB.revisiones = revisiones;
     saveDB();
     _blockFBrev = true;
     if(window._fbDB){
-      window._fbDB.ref('montasa/revisiones').set(DB.revisiones)
-        .then(()=>{ setTimeout(()=>_blockFBrev=false,3000); renderRevisiones(); toast('Revisión finalizada ✓'); })
-        .catch(e=>{ _blockFBrev=false; renderRevisiones(); toast('Revisión finalizada ✓'); });
+      window._fbDB.ref('montasa/revisiones').set(revisiones)
+        .then(()=>{ setTimeout(()=>_blockFBrev=false,3000); renderRevisiones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Revisión finalizada ✓'); })
+        .catch(e=>{ _blockFBrev=false; toast('Error al guardar: '+e.message); });
     } else {
       renderRevisiones();
+      if(typeof renderHistorial==='function') renderHistorial();
       toast('Revisión finalizada ✓');
       setTimeout(()=>_blockFBrev=false,3000);
     }
@@ -2683,20 +2683,20 @@ function finalizarEvaluacion(id){
   const firmaCanvas = document.getElementById('firma-eval-'+id);
   const firmaData = (firmaCanvas && firmaCanvas.classList.contains('firmado')) ? firmaCanvas.toDataURL('image/png') : null;
   const doFinalizar = function(evaluaciones){
-    DB.evaluaciones = evaluaciones;
     const v = evaluaciones.find(x=>x.id===id);
     if(!v){ toast('Orden no encontrada'); return; }
     if(firmaData) v.firma = firmaData;
     v.estado = 'Completado';
     v.completado = true;
     v.fechaCierre = new Date().toISOString().slice(0,10);
+    DB.evaluaciones = evaluaciones;
     saveDB();
     _blockFBeval = true;
     if(window._fbDB){
-      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones)
-        .then(()=>{ setTimeout(()=>_blockFBeval=false,3000); renderEvaluaciones(); toast('Evaluación finalizada ✓'); })
-        .catch(e=>{ _blockFBeval=false; renderEvaluaciones(); toast('Evaluación finalizada ✓'); });
-    } else { renderEvaluaciones(); toast('Evaluación finalizada ✓'); setTimeout(()=>_blockFBeval=false,3000); }
+      window._fbDB.ref('montasa/evaluaciones').set(evaluaciones)
+        .then(()=>{ setTimeout(()=>_blockFBeval=false,3000); renderEvaluaciones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Evaluación finalizada ✓'); })
+        .catch(e=>{ _blockFBeval=false; toast('Error al guardar: '+e.message); });
+    } else { renderEvaluaciones(); if(typeof renderHistorial==='function') renderHistorial(); toast('Evaluación finalizada ✓'); setTimeout(()=>_blockFBeval=false,3000); }
   };
   if(window._fbDB){
     window._fbDB.ref('montasa/evaluaciones').once('value').then(snap=>doFinalizar(snap.val()||[])).catch(()=>doFinalizar(DB.evaluaciones||[]));
@@ -2704,11 +2704,23 @@ function finalizarEvaluacion(id){
 }
 
 function actualizarRevision(id, campo, valor){
-  const r = (DB.revisiones||[]).find(x=>x.id===id);
-  if(!r) return;
-  r[campo] = valor;
-  saveDB();
-  if(window._fbDB){ _blockFBrev=true; window._fbDB.ref('montasa/revisiones').set(DB.revisiones).then(()=>setTimeout(()=>_blockFBrev=false,2000)).catch(()=>_blockFBrev=false); }
+  if(window._fbDB){
+    _blockFBrev = true;
+    window._fbDB.ref('montasa/revisiones').once('value').then(snap=>{
+      const revs = snap.val()||[];
+      const r = revs.find(x=>x.id===id);
+      if(!r){ _blockFBrev=false; return; }
+      r[campo] = valor;
+      DB.revisiones = revs;
+      saveDB();
+      window._fbDB.ref('montasa/revisiones').set(revs)
+        .then(()=>setTimeout(()=>_blockFBrev=false,2000))
+        .catch(()=>{ _blockFBrev=false; });
+    }).catch(()=>{ _blockFBrev=false; });
+  } else {
+    const r = (DB.revisiones||[]).find(x=>x.id===id);
+    if(r){ r[campo]=valor; saveDB(); }
+  }
 }
 function actualizarRevisionTecnico(id, pos, valor){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
@@ -2720,11 +2732,23 @@ function actualizarRevisionTecnico(id, pos, valor){
   if(window._fbDB){ _blockFBrev=true; window._fbDB.ref('montasa/revisiones').set(DB.revisiones).then(()=>setTimeout(()=>_blockFBrev=false,2000)).catch(()=>_blockFBrev=false); }
 }
 function actualizarEvaluacion(id, campo, valor){
-  const v = (DB.evaluaciones||[]).find(x=>x.id===id);
-  if(!v) return;
-  v[campo] = valor;
-  saveDB();
-  if(window._fbDB){ _blockFBeval=true; window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones).then(()=>setTimeout(()=>_blockFBeval=false,2000)).catch(()=>_blockFBeval=false); }
+  if(window._fbDB){
+    _blockFBeval = true;
+    window._fbDB.ref('montasa/evaluaciones').once('value').then(snap=>{
+      const evals = snap.val()||[];
+      const v = evals.find(x=>x.id===id);
+      if(!v){ _blockFBeval=false; return; }
+      v[campo] = valor;
+      DB.evaluaciones = evals;
+      saveDB();
+      window._fbDB.ref('montasa/evaluaciones').set(evals)
+        .then(()=>setTimeout(()=>_blockFBeval=false,2000))
+        .catch(()=>{ _blockFBeval=false; });
+    }).catch(()=>{ _blockFBeval=false; });
+  } else {
+    const v = (DB.evaluaciones||[]).find(x=>x.id===id);
+    if(v){ v[campo]=valor; saveDB(); }
+  }
 }
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
