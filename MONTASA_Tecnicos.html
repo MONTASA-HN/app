@@ -1076,7 +1076,7 @@ function getFirmaData(ordenId){
 function ordenAbiertaDeTecnico(nombre, excluirId){
   const activos = [
     ...DB.preventivos.filter(p => !p.completado),
-    ...DB.correctivos.filter(c => c.estado !== 'Cerrado')
+    ...DB.correctivos.filter(c => c.estado!=='Completado'&&c.estado!=='Cancelado')
   ];
   return activos.find(o => {
     if(o.id === excluirId) return false; // No contar la misma orden
@@ -1094,7 +1094,7 @@ function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId)
 
   const cerradas = [
     ...DB.preventivos.filter(p => p.completado),
-    ...DB.correctivos.filter(c => c.estado === 'Cerrado'),
+    ...DB.correctivos.filter(c => c.estado === 'Completado'),
     ...(DB.ordenesCerradas||[])
   ];
 
@@ -1146,7 +1146,7 @@ function renderPreventivos(){
     });
     // Also search in correctivos — if found there, show redirect banner
     if(!list.length){
-      const enCorr = DB.correctivos.filter(c=>c.estado!=='Cerrado').filter(c=>{
+      const enCorr = DB.correctivos.filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').filter(c=>{
         const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
         return (c.correlativo||'').toLowerCase().includes(prevBuscar)
           || (eq.codigo||'').toLowerCase().includes(prevBuscar)
@@ -1558,7 +1558,7 @@ function renderCorrectivos(){
       </div>
       <div style="margin-top:12px">
       ${c.firma ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${c.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
-      ${c.estado==='Cerrado'
+      ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
@@ -1637,7 +1637,7 @@ function guardarCorrectivo(finalizar=false){
   }
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
-    if(finalizar){ entry.estado='Cerrado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
+    if(finalizar){ entry.estado='Completado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
     DB.correctivos.push(entry);
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
@@ -1649,7 +1649,7 @@ function guardarCorrectivo(finalizar=false){
   document.getElementById('corr-cliente-fields').style.display='none';
   if(finalizar){
       try{
-        entry.estado = 'Cerrado';
+        entry.estado = 'Completado';
         entry.fechaCierre = new Date().toISOString().slice(0,10);
         registrarOrdenCerrada(entry,'Correctivo');
         saveDB();
@@ -1698,7 +1698,7 @@ function cerrarCorrectivo(id){
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   c.firma = getFirmaData(id);
-  c.estado = 'Cerrado';
+  c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   // Auto-generar vale de alimentación al cerrar
   (function(){
@@ -1761,7 +1761,7 @@ function renderHistorial(){
 
   let all = [
     ...(DB.preventivos||[]).filter(p=>p.completado).map(p=>({...p,_t:'P',_f:p.fechaCompletado||p.fecha||''})),
-    ...(DB.correctivos||[]).filter(c=>c.estado==='Cerrado').map(c=>({...c,_t:'C',_f:c.fechaCierre||c.fecha||''})),
+    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado').map(c=>({...c,_t:'C',_f:c.fechaCierre||c.fecha||''})),
     ...(DB.revisiones||[]).filter(r=>r.completado||r.estado==='Completado').map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
     ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}))
   ].sort((a,b)=>{
@@ -1839,7 +1839,7 @@ function renderHistorial(){
             </div>
             <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
           </div>
-          <span class="badge badge-ok" style="flex-shrink:0">Cerrado</span>
+          <span class="badge badge-ok" style="flex-shrink:0">Completado</span>
         </div>
         <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
         <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
@@ -2076,7 +2076,7 @@ function renderDashboardTec(){
   const corrPend   = DB.correctivos.filter(c=>c.estado==='Pendiente').length;
   const corrProc   = DB.correctivos.filter(c=>c.estado==='En proceso').length;
   const corrEsp    = DB.correctivos.filter(c=>c.estado==='En espera de repuestos').length;
-  const corrTotal  = DB.correctivos.filter(c=>c.estado!=='Cerrado').length;
+  const corrTotal  = DB.correctivos.filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').length;
 
   // ── Closed this month ─────────────────────────────────────────────────
   const cerradosEstesMes = [
@@ -2086,14 +2086,14 @@ function renderDashboardTec(){
       return f.getMonth()===mes && f.getFullYear()===anio;
     }),
     ...DB.correctivos.filter(c=>{
-      if(c.estado!=='Cerrado') return false;
+      if(c.estado!=='Completado') return false;
       const f = new Date(c.fechaCierre||c.fechaFin||c.fecha);
       return f.getMonth()===mes && f.getFullYear()===anio;
     })
   ];
   const cerradosMes = cerradosEstesMes.length;
   const cerradosPrevMes = cerradosEstesMes.filter(o=>o.completado).length;
-  const cerradosCorrMes = cerradosEstesMes.filter(o=>o.estado==='Cerrado').length;
+  const cerradosCorrMes = cerradosEstesMes.filter(o=>o.estado==='Completado').length;
 
   function statCard(val, label, color, bg){
     return `<div style="background:${bg};border-radius:var(--radius-sm);padding:14px 10px;text-align:center;flex:1;min-width:0">

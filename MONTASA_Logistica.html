@@ -673,7 +673,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   let h = '<div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
   h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Tipo</div><div style="font-size:13px;font-weight:600">'+tipoLbl+'</div></div>';
-  h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Estado</div><div style="font-size:13px;font-weight:600">'+(o.estado||'Cerrado')+'</div></div>';
+  h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Estado</div><div style="font-size:13px;font-weight:600">'+(o.estado||'Completado')+'</div></div>';
   h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Equipo</div><div style="font-size:13px;font-weight:600">'+eqLabel+'</div></div>';
   if(o.operador) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Operador</div><div style="font-size:13px;font-weight:600">'+o.operador+'</div></div>';
   if(o.motorista) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Motorista</div><div style="font-size:13px;font-weight:600">'+o.motorista+'</div></div>';
@@ -1080,7 +1080,7 @@ function cerrarOrdenLog(id){
   if(!confirm('¿Cerrar la orden '+o.correlativo+'?')) return;
   o.firma = firmaCanvas || o.firma;
   o.cerrado = true;
-  o.estado = 'Cerrado';
+  o.estado = 'Completado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
   // Restituir equipo a DISPONIBLE si era renta
   if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
@@ -1131,7 +1131,7 @@ function renderHistorialLog(){
   const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   let list = (DB.logistica||[])
-    .filter(o=>o.cerrado||o.estado==='Cancelado')
+    .filter(o=>o.cerrado||o.estado==='Completado'||o.estado==='Cancelado')
     .sort((a,b)=>{
       const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
       const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -1158,7 +1158,7 @@ function renderHistorialLog(){
     card += '<div style="flex:1">';
     card += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
     card += (o.correlativo?'<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">'+o.correlativo+'</span>':'');
-    card += '<span class="badge" style="background:'+(o.estado==='Cancelado'?'#fdeaea':'#c8edcc')+';color:'+(o.estado==='Cancelado'?'#8b2020':'#1a5c1a')+'">'+(o.estado==='Cancelado'?'Cancelado':'Cerrado')+'</span>';
+    card += '<span class="badge" style="background:'+(o.estado==='Cancelado'?'#fdeaea':'#c8edcc')+';color:'+(o.estado==='Cancelado'?'#8b2020':'#1a5c1a')+'">'+(o.estado==='Cancelado'?'Cancelado':'Completado')+'</span>';
     card += '</div>';
     card += '<div style="font-size:13px;font-weight:600">'+eqLabel+'</div>';
     card += '<div style="font-size:12px;color:var(--text3)">'+tipoLbl+(horas?' · ⏱ '+horas:'')+'</div>';
