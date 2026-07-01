@@ -970,9 +970,12 @@ function toggleCard(id){
   body.classList.toggle('open', !isOpen);
   if(btn) btn.classList.toggle('open', !isOpen);
   if(!isOpen){
+    _openMant.add(id);
     // Initialize tec-btn visual state when opening
     const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===id);
     if(orden) initTecBtns('cb-'+id, orden.tecnico);
+  } else {
+    _openMant.delete(id);
   }
 }
 
@@ -1240,10 +1243,10 @@ function renderPreventivos(){
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
         <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button>
-        <button id="ct-${p.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
+        <button id="ct-${p.id}" class="card-toggle${_openMant.has(p.id)?' open':''}" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+    <div id="cb-${p.id}" class="card-body${_openMant.has(p.id)?' open':''}" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
       ${est==='Completado' ? `
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1336,6 +1339,10 @@ function renderPreventivos(){
       }
     </div>
   </div>`; }).join('');
+  _openMant.forEach(id=>{
+    const orden = DB.preventivos.find(o=>o.id===id);
+    if(orden) initTecBtns('cb-'+id, orden.tecnico);
+  });
   if(typeof updateBadges==='function') updateBadges();
 }
 
@@ -1610,10 +1617,10 @@ function renderCorrectivos(){
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
         <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('corr','${c.id}')">✕</button>
-        <button id="ct-${c.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${c.id}')">▼</button>
+        <button id="ct-${c.id}" class="card-toggle${_openMant.has(c.id)?' open':''}" onclick="event.stopPropagation();toggleCard('${c.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+    <div id="cb-${c.id}" class="card-body${_openMant.has(c.id)?' open':''}" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
       ${c.estado==='Completado' ? `
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1694,6 +1701,10 @@ function renderCorrectivos(){
     </div>
   </div>`;
   }).join('');
+  _openMant.forEach(id=>{
+    const orden = DB.correctivos.find(o=>o.id===id);
+    if(orden) initTecBtns('cb-'+id, orden.tecnico);
+  });
   if(typeof updateBadges==='function') updateBadges();
 }
 
@@ -2482,6 +2493,7 @@ function toggleEquipoClienteCorr(){}
 // ── REVISIONES FÍSICO-TÉCNICAS ────────────────────────────────────────────────
 let _openRev = new Set();
 let _openEval = new Set();
+let _openMant = new Set();
 let _blockFBrev = false;
 let _blockFBeval = false;
 
