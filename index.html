@@ -1617,11 +1617,11 @@ function renderPersonal(){
 
     // ── Gráfica de barras 3D ──
     const n = sorted.length;
-    const svgW = Math.max(360, n*90), svgH = 260, padL=46, padB=50, padT=34, padR=20;
+    const svgW = Math.max(360, n*120), svgH = 275, padL=46, padB=62, padT=34, padR=20;
     const chartH = svgH - padT - padB;
     const depth = 12;
     const step = (svgW-padL-padR) / n;
-    const barW = Math.min(46, step - 24);
+    const barW = Math.min(46, step - 30);
 
     const yLines = [25,50,75,100].map(pct=>{
       const y = padT + chartH - Math.round(pct/100*chartH);
@@ -1638,9 +1638,21 @@ function renderPersonal(){
       const frontFace = `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${colorBarra}"/>`;
       const sideFace  = `<polygon points="${bx+barW},${by} ${bx+barW+depth},${by-depth} ${bx+barW+depth},${by+bh-depth} ${bx+barW},${by+bh}" fill="${colorBarra}" opacity="0.55"/>`;
       const topFace   = `<polygon points="${bx},${by} ${bx+depth},${by-depth} ${bx+barW+depth},${by-depth} ${bx+barW},${by}" fill="${colorBarra}" opacity="0.85"/>`;
+      // Partir el nombre en 2 líneas para que no se encimen con el vecino
+      const palabras = nombre.toUpperCase().split(' ');
+      let linea1, linea2;
+      if(palabras.length <= 1){ linea1 = palabras[0]||''; linea2 = ''; }
+      else if(palabras.length === 2){ linea1 = palabras[0]; linea2 = palabras[1]; }
+      else {
+        const mitad = Math.ceil(palabras.length/2);
+        linea1 = palabras.slice(0,mitad).join(' ');
+        linea2 = palabras.slice(mitad).join(' ');
+      }
+      const cx = bx+barW/2;
       return `${sideFace}${frontFace}${topFace}
-        <text x="${bx+barW/2}" y="${by-depth-8}" text-anchor="middle" font-size="15" fill="#1a1a18" font-weight="800">${pctVal}%</text>
-        <text x="${bx+barW/2}" y="${svgH-padB+18}" text-anchor="middle" font-size="11" fill="#404040" font-weight="600">${nombre.toUpperCase()}</text>`;
+        <text x="${cx}" y="${by-depth-8}" text-anchor="middle" font-size="15" fill="#1a1a18" font-weight="800">${pctVal}%</text>
+        <text x="${cx}" y="${svgH-padB+18}" text-anchor="middle" font-size="10.5" fill="#404040" font-weight="600">${linea1}</text>
+        ${linea2?`<text x="${cx}" y="${svgH-padB+31}" text-anchor="middle" font-size="10.5" fill="#404040" font-weight="600">${linea2}</text>`:''}`;
     }).join('');
 
     const chart = `<div style="overflow-x:auto">
