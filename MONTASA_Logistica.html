@@ -949,6 +949,7 @@ function actualizarLog(id, campo, valor){
     if(o.equipoId2&&(campo==='horometroSalida2'||campo==='horometroRetorno2')){const _e2=DB.equipos.find(e=>e.id===o.equipoId2);if(_e2)_e2.horometro=valor;}
   }
   saveDB();
+  if(campo==='estado') renderOrdenesLog();
 }
 
 
@@ -1126,10 +1127,10 @@ function abrirChecklist(ordenId){
     return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;font-size:12px;font-weight:600">${item}</div>
       <div style="display:flex;gap:3px">
-        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','si')" style="width:30px;height:26px;border-radius:5px;border:1px solid #1a5c1a;background:${row.si?'#1a5c1a':'#fff'};color:${row.si?'#fff':'#1a5c1a'};font-size:11px;font-weight:700;cursor:pointer">SI</button>
-        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','no')" style="width:30px;height:26px;border-radius:5px;border:1px solid #8b2020;background:${row.no?'#8b2020':'#fff'};color:${row.no?'#fff':'#8b2020'};font-size:11px;font-weight:700;cursor:pointer">NO</button>
-        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','b')" style="width:30px;height:26px;border-radius:5px;border:1px solid #2d6a9f;background:${row.b?'#2d6a9f':'#fff'};color:${row.b?'#fff':'#2d6a9f'};font-size:11px;font-weight:700;cursor:pointer">B</button>
-        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','m')" style="width:30px;height:26px;border-radius:5px;border:1px solid #b85c00;background:${row.m?'#b85c00':'#fff'};color:${row.m?'#fff':'#b85c00'};font-size:11px;font-weight:700;cursor:pointer">M</button>
+        <button id="chk-${k}-si" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','si')" style="width:30px;height:26px;border-radius:5px;border:1px solid #1a5c1a;background:${row.si?'#1a5c1a':'#fff'};color:${row.si?'#fff':'#1a5c1a'};font-size:11px;font-weight:700;cursor:pointer">SI</button>
+        <button id="chk-${k}-no" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','no')" style="width:30px;height:26px;border-radius:5px;border:1px solid #8b2020;background:${row.no?'#8b2020':'#fff'};color:${row.no?'#fff':'#8b2020'};font-size:11px;font-weight:700;cursor:pointer">NO</button>
+        <button id="chk-${k}-b" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','b')" style="width:30px;height:26px;border-radius:5px;border:1px solid #2d6a9f;background:${row.b?'#2d6a9f':'#fff'};color:${row.b?'#fff':'#2d6a9f'};font-size:11px;font-weight:700;cursor:pointer">B</button>
+        <button id="chk-${k}-m" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','m')" style="width:30px;height:26px;border-radius:5px;border:1px solid #b85c00;background:${row.m?'#b85c00':'#fff'};color:${row.m?'#fff':'#b85c00'};font-size:11px;font-weight:700;cursor:pointer">M</button>
       </div>
     </div>
     <input ${dis} type="text" placeholder="Estado / observación" value="${(row.estado||'').replace(/"/g,'&quot;')}"
@@ -1170,7 +1171,14 @@ function chkSet(ordenId, key, campo){
   if(campo==='si'||campo==='no'){ row.si = campo==='si'; row.no = campo==='no'; }
   if(campo==='b'||campo==='m'){ row.b = campo==='b'; row.m = campo==='m'; }
   saveDB();
-  abrirChecklist(ordenId);
+  const COLORS = {si:'#1a5c1a', no:'#8b2020', b:'#2d6a9f', m:'#b85c00'};
+  ['si','no','b','m'].forEach(c=>{
+    const btn = document.getElementById('chk-'+key+'-'+c);
+    if(!btn) return;
+    const active = !!row[c];
+    btn.style.background = active ? COLORS[c] : '#fff';
+    btn.style.color = active ? '#fff' : COLORS[c];
+  });
 }
 
 function chkSetEstado(ordenId, key, valor){
