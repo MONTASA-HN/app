@@ -1244,7 +1244,26 @@ function renderPreventivos(){
       </div>
     </div>
     <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
-      ${(p.estado||'Pendiente')==='Pendiente'?`<style>#cb-${p.id} input,#cb-${p.id} textarea,#cb-${p.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${p.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
+      ${est==='Completado' ? `
+      <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
+        <span style="font-size:11px;color:var(--text3)">${p.fechaCierre||''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${p.servicio||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${p.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha inicio</span><span style="font-weight:600">${(p.fechaInicio||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha fin</span><span style="font-weight:600">${(p.fechaFin||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horas trabajadas</span><span style="font-weight:600">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${p.horometro||'—'} hrs</span></div>
+        ${p.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${p.vehiculo}</span></div>`:''}
+        ${(p.kmSalida&&p.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(p.kmRetorno)-parseFloat(p.kmSalida)).toFixed(0)} km</span></div>`:''}
+      </div>
+      ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${p.notas}</span></div>`:''}
+      ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${p.sugerencias}</span></div>`:''}
+      ` : `
+      <style>#cb-${p.id} input,#cb-${p.id} textarea,#cb-${p.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${p.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
@@ -1296,6 +1315,8 @@ function renderPreventivos(){
             onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','kmRetorno',this.value)"
             oninput="event.stopPropagation()"></div>
       </div>
+      </div>
+      `}
       ${p.firma ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${p.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
@@ -1313,7 +1334,6 @@ function renderPreventivos(){
         ${!p.viaticos ? `<button data-oid="${p.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,'preventivo')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${p.vales&&p.vales.length?'Ver Vale':'Generar Vale'}</button>` : ''}
         <button class="btn-finalizar btn-finalizar-prev" onclick="completarPreventivo(\'${p.id}\')">✅ FINALIZAR ORDEN</button>`
       }
-      </div>
     </div>
   </div>`; }).join('');
   if(typeof updateBadges==='function') updateBadges();
@@ -1594,7 +1614,26 @@ function renderCorrectivos(){
       </div>
     </div>
     <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
-      ${(c.estado||'Pendiente')==='Pendiente'?`<style>#cb-${c.id} input,#cb-${c.id} textarea,#cb-${c.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${c.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
+      ${c.estado==='Completado' ? `
+      <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
+        <span style="font-size:11px;color:var(--text3)">${c.fechaCierre||''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${c.sistema||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${c.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha inicio</span><span style="font-weight:600">${(c.fechaInicio||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha fin</span><span style="font-weight:600">${(c.fechaFin||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horas trabajadas</span><span style="font-weight:600">${calcHoras(c.fechaInicio,c.fechaFin)}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${c.horometro||'—'} hrs</span></div>
+        ${c.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${c.vehiculo}</span></div>`:''}
+        ${(c.kmSalida&&c.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(c.kmRetorno)-parseFloat(c.kmSalida)).toFixed(0)} km</span></div>`:''}
+      </div>
+      ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${c.falla}</span></div>`:''}
+      ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${c.diagnostico}</span></div>`:''}
+      ` : `
+      <style>#cb-${c.id} input,#cb-${c.id} textarea,#cb-${c.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${c.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
@@ -1632,6 +1671,7 @@ function renderCorrectivos(){
             onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','kmRetorno',this.value)"
             oninput="event.stopPropagation()"></div>
       </div>
+      `}
       <div style="margin-top:12px">
       ${c.firma ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${c.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
       ${c.estado==='Completado'
@@ -2523,6 +2563,23 @@ function renderRevisiones(){
     // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-rev-${r.id}" onclick="event.stopPropagation()">`;
+      if(r.completado){
+        card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
+          <span style="font-size:11px;color:var(--text3)">${r.fechaCierre||''}</span>
+        </div>`;
+        card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:8px">
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${(r.tecnicos||[]).filter(Boolean).join(', ')||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha inicio</span><span style="font-weight:600">${r.fecha||'—'} ${r.horaIni||''}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Placa</span><span style="font-weight:600">${r.placa||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo de vehículo</span><span style="font-weight:600">${r.tipoVehiculo||'—'}</span></div>
+        </div>
+        ${r.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Descripción / Notas</span><span style="font-weight:600;font-size:12px">${r.notas}</span></div>`:''}
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${r.fechaCierre||''}</div>`;
+        card += `</div>`;
+        card += `</div>`;
+        return card;
+      }
       card += est==='Pendiente'?`<style>#cb-rev-${r.id} input,#cb-rev-${r.id} textarea{pointer-events:none;opacity:0.5}#cb-rev-${r.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
@@ -2553,11 +2610,7 @@ function renderRevisiones(){
           ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation()">${r.notas||''}</textarea></div>`;
-      if(!r.completado){
-        card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
-      } else {
-        card += `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${r.fechaCierre||''}</div>`;
-      }
+      card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
     card += `</div>`;
@@ -2678,6 +2731,25 @@ function renderEvaluaciones(){
     // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-eval-${v.id}" onclick="event.stopPropagation()">`;
+      if(v.completado){
+        card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
+          <span style="font-size:11px;color:var(--text3)">${v.fechaCierre||''}</span>
+        </div>`;
+        card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:8px">
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${(v.tecnicos||[]).filter(Boolean).join(', ')||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha</span><span style="font-weight:600">${v.fecha||'—'} ${v.horaIni||''}–${v.horaFin||''}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${v.modelo||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${v.marca||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${v.serie||'—'}</span></div>
+        </div>
+        ${v.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;font-size:12px">${v.diagnostico}</span></div>`:''}
+        ${v.firma?`<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA DEL CLIENTE</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${v.fechaCierre||''}</div>`;
+        card += `</div>`;
+        card += `</div>`;
+        return card;
+      }
       card += est==='Pendiente'?`<style>#cb-eval-${v.id} input,#cb-eval-${v.id} textarea{pointer-events:none;opacity:0.5}#cb-eval-${v.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
@@ -2706,25 +2778,17 @@ function renderEvaluaciones(){
           <option value="">— Ninguno —</option>
           ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
-      // Firma del cliente (P4 — solo cuando está cerrada o siempre)
+      // Firma del cliente
       const firmaId = 'firma-eval-'+v.id;
-      if(v.completado && v.firma){
-        card += `<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA DEL CLIENTE</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
-      } else if(!v.completado){
-        card += `<div class="form-group"><label>✍️ Firma del cliente</label>
-          <canvas id="${firmaId}" class="firma-canvas" width="600" height="160"
-            ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
-            onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-            <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
-            <button onclick="event.stopPropagation();limpiarFirma('${firmaId}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
-          </div></div>`;
-      }
-      if(!v.completado){
-        card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${v.id}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
-      } else {
-        card += `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${v.fechaCierre||''}</div>`;
-      }
+      card += `<div class="form-group"><label>✍️ Firma del cliente</label>
+        <canvas id="${firmaId}" class="firma-canvas" width="600" height="160"
+          ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+          onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
+          <button onclick="event.stopPropagation();limpiarFirma('${firmaId}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+        </div></div>`;
+      card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${v.id}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
     card += `</div>`;
