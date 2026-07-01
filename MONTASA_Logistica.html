@@ -1433,13 +1433,17 @@ async function cerrarOrdenLog(id){
   if(horoFinal && o.equipoId){
     const eq = DB.equipos.find(e=>e.id===o.equipoId);
     if(eq) eq.horometro = horoFinal;
+    _syncEquipoCampoFB(o.equipoId, 'horometro', horoFinal);
   }
   // Update second equipo if exists
   if(o.equipoId2){
     const eq2 = DB.equipos.find(e=>e.id===o.equipoId2);
     if(eq2){
       const horo2 = o.tipoLogistica==='retiro' ? o.horometroRetorno2 : o.horometroSalida2;
-      if(horo2) eq2.horometro = horo2;
+      if(horo2){
+        eq2.horometro = horo2;
+        _syncEquipoCampoFB(o.equipoId2, 'horometro', horo2);
+      }
     }
   }
 
@@ -2837,15 +2841,20 @@ function editarOrdenCerradaLog(id){
 }
 
 
+function _syncEquipoCampoFB(equipoId, campo, valor){
+  if(!window._fbDB || !window._fbReady || !equipoId) return;
+  const idx = DB.equipos.findIndex(function(e){ return e.id===equipoId; });
+  if(idx<0) return;
+  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(function(e){ console.warn('Error sincronizando '+campo+' del equipo:', e); });
+}
+
 function _cambiarEstadoEquipo(equipoId, nuevoEstado){
   if(!equipoId) return;
   var eq = DB.equipos.find(function(e){ return e.id===equipoId; });
   if(!eq) return;
   eq.estado = nuevoEstado;
   saveDB();
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
-  }
+  _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
 }
 </script>
 
