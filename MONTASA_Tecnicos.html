@@ -752,6 +752,13 @@ function _lunchOverlapMin(dayRefDate, segStart, segEnd){
 // Calcula minutos trabajados considerando turno ordinario 7:30am–4:30pm
 // y almuerzo 12:00m–1:00pm (no se cuenta). Si la orden abarca varios días,
 // cada día intermedio cuenta como 8 horas completas (jornada ordinaria).
+function _syncEquipoCampoFB(equipoId, campo, valor){
+  if(!window._fbDB || !window._fbReady || !equipoId) return;
+  const idx = DB.equipos.findIndex(e => e.id===equipoId);
+  if(idx<0) return;
+  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(e=>console.warn('Error sincronizando '+campo+' del equipo:', e));
+}
+
 function calcHorasMinutos(inicio, fin){
   if(!inicio || !fin) return 0;
   const dIni = new Date(inicio), dFin = new Date(fin);
@@ -1478,6 +1485,7 @@ function completarPreventivo(id){
   if(p.horometro && p.equipoId){
     const _eq = DB.equipos.find(e=>e.id===p.equipoId);
     if(_eq) _eq.horometro = p.horometro;
+    _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
   }
   registrarOrdenCerrada(p, 'Preventivo');
   saveDB();
@@ -1839,6 +1847,7 @@ function cerrarCorrectivo(id){
   if(c.horometro && c.equipoId){
     const _eq = DB.equipos.find(e=>e.id===c.equipoId);
     if(_eq) _eq.horometro = c.horometro;
+    _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
   }
   // Auto-generar vale de alimentación al cerrar
   (function(){
