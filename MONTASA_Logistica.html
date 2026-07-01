@@ -369,6 +369,16 @@ function loadDB(){
 
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  _scheduleFirebaseWrite();
+}
+
+let _fbWriteTimer = null;
+function _scheduleFirebaseWrite(){
+  if(_fbWriteTimer) clearTimeout(_fbWriteTimer);
+  _fbWriteTimer = setTimeout(_writeToFirebase, 400);
+}
+function _flushFirebaseWrite(){
+  if(_fbWriteTimer){ clearTimeout(_fbWriteTimer); _fbWriteTimer = null; }
   _writeToFirebase();
 }
 
@@ -1193,13 +1203,13 @@ function chkSetEstado(ordenId, key, valor){
 }
 
 function guardarChecklist(ordenId){
-  saveDB();
+  _flushFirebaseWrite();
   toast('Checklist guardado ✓');
   cerrarChecklist(ordenId);
 }
 
 function cerrarChecklist(ordenId){
-  saveDB();
+  _flushFirebaseWrite();
   const ov = document.getElementById('checklist-overlay');
   if(ov){ ov.style.display='none'; ov.innerHTML=''; }
   renderOrdenesLog();
@@ -1826,12 +1836,12 @@ renderDashboardLog();
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
+      if(ownWrite) return; // Es el eco de nuestra propia escritura — nuestros datos en memoria ya son los correctos y pueden ser más nuevos que este snapshot
       if(d.logistica)   DB.logistica   = d.logistica;
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-      if(ownWrite) return;
       const active=document.querySelector('.section.active');
       if(!active) return;
       const id=active.id.replace('tab-','');
