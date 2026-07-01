@@ -736,12 +736,60 @@ function fmtDT(s){
 }
 
 
+function _lunchOverlapMin(dayRefDate, segStart, segEnd){
+  const lunchStart = new Date(dayRefDate); lunchStart.setHours(12,0,0,0);
+  const lunchEnd = new Date(dayRefDate); lunchEnd.setHours(13,0,0,0);
+  const oStart = segStart > lunchStart ? segStart : lunchStart;
+  const oEnd = segEnd < lunchEnd ? segEnd : lunchEnd;
+  return oStart < oEnd ? (oEnd - oStart) / 60000 : 0;
+}
+
+// Calcula minutos trabajados considerando turno ordinario 7:30am–4:30pm
+// y almuerzo 12:00m–1:00pm (no se cuenta). Si la orden abarca varios días,
+// cada día intermedio cuenta como 8 horas completas (jornada ordinaria).
+function calcHorasMinutos(inicio, fin){
+  if(!inicio || !fin) return 0;
+  const dIni = new Date(inicio), dFin = new Date(fin);
+  if(isNaN(dIni) || isNaN(dFin) || dFin <= dIni) return 0;
+
+  const mismoDia = dIni.getFullYear()===dFin.getFullYear() && dIni.getMonth()===dFin.getMonth() && dIni.getDate()===dFin.getDate();
+  if(mismoDia){
+    const totalMin = (dFin - dIni) / 60000;
+    const almuerzo = _lunchOverlapMin(dIni, dIni, dFin);
+    return Math.max(0, totalMin - almuerzo);
+  }
+
+  // Multi-día: día 1 (inicio → 4:30pm), días intermedios (8h fijas), último día (7:30am → fin)
+  let totalMin = 0;
+  const finDia1 = new Date(dIni); finDia1.setHours(16,30,0,0);
+  if(finDia1 > dIni){
+    const min1 = (finDia1 - dIni) / 60000;
+    const alm1 = _lunchOverlapMin(dIni, dIni, finDia1);
+    totalMin += Math.max(0, min1 - alm1);
+  }
+
+  // Días intermedios completos
+  const cursor = new Date(dIni); cursor.setHours(0,0,0,0); cursor.setDate(cursor.getDate()+1);
+  const finDiaFin = new Date(dFin); finDiaFin.setHours(0,0,0,0);
+  while(cursor < finDiaFin){
+    totalMin += 480; // 8 horas jornada ordinaria
+    cursor.setDate(cursor.getDate()+1);
+  }
+
+  const inicioDiaFin = new Date(dFin); inicioDiaFin.setHours(7,30,0,0);
+  if(dFin > inicioDiaFin){
+    const minF = (dFin - inicioDiaFin) / 60000;
+    const almF = _lunchOverlapMin(dFin, inicioDiaFin, dFin);
+    totalMin += Math.max(0, minF - almF);
+  }
+  return Math.max(0, totalMin);
+}
+
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
   try{
-    const diff = new Date(fin) - new Date(inicio);
-    if(diff <= 0) return '—';
-    const totalMin = Math.floor(diff / 60000);
+    const totalMin = Math.round(calcHorasMinutos(inicio, fin));
+    if(totalMin<=0) return '—';
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return h > 0 ? h + 'h ' + (m > 0 ? m + 'min' : '') : m + 'min';
@@ -1078,8 +1126,8 @@ function getFirmaData(ordenId){
 
 function ordenAbiertaDeTecnico(nombre, excluirId){
   const activos = [
-    ...DB.preventivos.filter(p => !p.completado),
-    ...DB.correctivos.filter(c => c.estado!=='Completado'&&c.estado!=='Cancelado')
+    ...DB.preventivos.filter(p => !p.completado && p.estado!=='En espera de repuestos' && p.estado!=='En pausa'),
+    ...DB.correctivos.filter(c => c.estado!=='Completado'&&c.estado!=='Cancelado'&&c.estado!=='En espera de repuestos'&&c.estado!=='En pausa')
   ];
   return activos.find(o => {
     if(o.id === excluirId) return false; // No contar la misma orden
@@ -1188,8 +1236,11 @@ function renderPreventivos(){
       </div>
     </div>
     <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+      ${(p.estado||'Pendiente')==='Pendiente'?`<style>#cb-${p.id} input,#cb-${p.id} textarea,#cb-${p.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${p.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
-      <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
+      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
+        ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
+      </div>
       <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.servicio==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
@@ -1528,8 +1579,11 @@ function renderCorrectivos(){
       </div>
     </div>
     <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+      ${(c.estado||'Pendiente')==='Pendiente'?`<style>#cb-${c.id} input,#cb-${c.id} textarea,#cb-${c.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${c.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
-      <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
+      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
+        ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
+      </div>
       <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
@@ -2079,6 +2133,14 @@ function renderDashboardTec(){
   const corrEsp    = DB.correctivos.filter(c=>c.estado==='En espera de repuestos').length;
   const corrTotal  = DB.correctivos.filter(c=>c.estado!=='Completado'&&c.estado!=='Cancelado').length;
 
+  // ── Counts revisiones/evaluaciones ──────────────────────────────────────
+  const revPend    = (DB.revisiones||[]).filter(r=>(r.estado||'Pendiente')==='Pendiente').length;
+  const revProc    = (DB.revisiones||[]).filter(r=>r.estado==='En proceso').length;
+  const revTotal   = (DB.revisiones||[]).filter(r=>!r.completado&&r.estado!=='Cancelado').length;
+  const evalPend   = (DB.evaluaciones||[]).filter(v=>(v.estado||'Pendiente')==='Pendiente').length;
+  const evalProc   = (DB.evaluaciones||[]).filter(v=>v.estado==='En proceso').length;
+  const evalTotal  = (DB.evaluaciones||[]).filter(v=>!v.completado&&v.estado!=='Cancelado').length;
+
   // ── Closed this month ─────────────────────────────────────────────────
   const cerradosEstesMes = [
     ...DB.preventivos.filter(p=>{
@@ -2201,6 +2263,36 @@ function renderDashboardTec(){
       <button onclick="document.querySelector('.nav-btn:nth-child(3)').click()"
         style="width:100%;margin-top:10px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:#2d6a9f;cursor:pointer">
         Ver correctivos →
+      </button>
+    </div>
+
+    <!-- Revisión Físico-Técnica -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-weight:700;font-size:16px;color:#1f3864">✅ Revisión Físico-Técnica</div>
+        <div style="display:flex;align-items:center;gap:6px">${donut(revPend,revProc,0)}</div>
+      </div>
+      ${statusRow('🔴','Pendientes', revPend, '#e74c3c', '#fdeaea')}
+      ${statusRow('🟡','En proceso', revProc, '#f39c12', '#fef9e7')}
+      ${revTotal===0?`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">✅ Sin órdenes abiertas</div>`:''}
+      <button onclick="document.querySelector('.nav-btn:nth-child(4)').click()"
+        style="width:100%;margin-top:10px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:#1f3864;cursor:pointer">
+        Ver revisiones →
+      </button>
+    </div>
+
+    <!-- Evaluación de Equipo -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-weight:700;font-size:16px;color:#2d6a9f">📄 Evaluación de Equipo</div>
+        <div style="display:flex;align-items:center;gap:6px">${donut(evalPend,evalProc,0)}</div>
+      </div>
+      ${statusRow('🔴','Pendientes', evalPend, '#e74c3c', '#fdeaea')}
+      ${statusRow('🟡','En proceso', evalProc, '#f39c12', '#fef9e7')}
+      ${evalTotal===0?`<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">✅ Sin órdenes abiertas</div>`:''}
+      <button onclick="document.querySelector('.nav-btn:nth-child(5)').click()"
+        style="width:100%;margin-top:10px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:#2d6a9f;cursor:pointer">
+        Ver evaluaciones →
       </button>
     </div>
 
@@ -2409,12 +2501,15 @@ function renderRevisiones(){
     card += `</div>`;
     // DETALLE EXPANDIDO
     if(isOpen){
-      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-rev-${r.id}" onclick="event.stopPropagation()">`;
+      card += est==='Pendiente'?`<style>#cb-rev-${r.id} input,#cb-rev-${r.id} textarea{pointer-events:none;opacity:0.5}#cb-rev-${r.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
-        <select onchange="event.stopPropagation();actualizarRevision('${r.id}','estado',this.value)">
-          ${['Pendiente','En proceso','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
-        </select></div>`;
+        <select class="estado-select" onchange="event.stopPropagation();actualizarRevision('${r.id}','estado',this.value)">
+          ${['Pendiente','En proceso','En pausa','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+        ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
+      </div>`;
       // Campos editables
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
       card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${r.fecha||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
@@ -2429,12 +2524,12 @@ function renderRevisiones(){
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
-          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
         <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',1,this.value)">
           <option value="">— Ninguno —</option>
-          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation()">${r.notas||''}</textarea></div>`;
       if(!r.completado){
@@ -2461,6 +2556,15 @@ function renderRevisiones(){
 function finalizarRevision(id){
   const r = (DB.revisiones||[]).find(x=>x.id===id);
   if(!r){ toast('Orden no encontrada'); return; }
+  const faltantes = [];
+  if(!(r.tecnicos&&r.tecnicos[0])) faltantes.push('Técnico 1');
+  if(!r.fecha) faltantes.push('Fecha inicio');
+  if(!r.horaIni) faltantes.push('Hora inicio');
+  if(!r.horaFin) faltantes.push('Hora final');
+  if(!r.placa) faltantes.push('Placa del vehículo');
+  if(!r.tipoVehiculo) faltantes.push('Tipo de vehículo');
+  if(!r.notas) faltantes.push('Descripción / Notas');
+  if(faltantes.length){ alert('No se puede finalizar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   r.estado = 'Completado';
   r.completado = true;
   r.fechaCierre = new Date().toISOString().slice(0,10);
@@ -2552,12 +2656,15 @@ function renderEvaluaciones(){
     card += `</div>`;
     // DETALLE EXPANDIDO
     if(isOpen){
-      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-eval-${v.id}" onclick="event.stopPropagation()">`;
+      card += est==='Pendiente'?`<style>#cb-eval-${v.id} input,#cb-eval-${v.id} textarea{pointer-events:none;opacity:0.5}#cb-eval-${v.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
-        <select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','estado',this.value)">
-          ${['Pendiente','En proceso','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
-        </select></div>`;
+        <select class="estado-select" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','estado',this.value)">
+          ${['Pendiente','En proceso','En pausa','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+        ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
+      </div>`;
       // Campos editables
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
       card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${v.fecha||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
@@ -2571,12 +2678,12 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
-          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',1,this.value)">
           <option value="">— Ninguno —</option>
-          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+          ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       // Firma del cliente (P4 — solo cuando está cerrada o siempre)
       const firmaId = 'firma-eval-'+v.id;
@@ -2626,6 +2733,18 @@ function finalizarEvaluacion(id){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v){ toast('Orden no encontrada'); return; }
   const fc = document.getElementById('firma-eval-'+id);
+  const firmaOk = (fc && fc.classList.contains('firmado')) || v.firma;
+  const faltantes = [];
+  if(!(v.tecnicos&&v.tecnicos[0])) faltantes.push('Técnico 1');
+  if(!v.fecha) faltantes.push('Fecha inicio');
+  if(!v.horaIni) faltantes.push('Hora inicio');
+  if(!v.horaFin) faltantes.push('Hora final');
+  if(!v.modelo) faltantes.push('Modelo');
+  if(!v.marca) faltantes.push('Marca');
+  if(!v.serie) faltantes.push('Serie');
+  if(!v.diagnostico) faltantes.push('Diagnóstico');
+  if(!firmaOk) faltantes.push('Firma del cliente');
+  if(faltantes.length){ alert('No se puede finalizar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   if(fc && fc.classList.contains('firmado')) v.firma = fc.toDataURL('image/png');
   v.estado = 'Completado';
   v.completado = true;
