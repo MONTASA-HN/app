@@ -1474,6 +1474,11 @@ function completarPreventivo(id){
   })();
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
+  // Sincronizar horómetro con la ficha del equipo al finalizar
+  if(p.horometro && p.equipoId){
+    const _eq = DB.equipos.find(e=>e.id===p.equipoId);
+    if(_eq) _eq.horometro = p.horometro;
+  }
   registrarOrdenCerrada(p, 'Preventivo');
   saveDB();
   renderPreventivos();
@@ -1728,6 +1733,7 @@ function guardarCorrectivo(finalizar=false){
     fecha:fechaInicio, fechaInicio, fechaFin:document.getElementById('corr-fecha-fin').value,
     tecnico:getTecnicos('corr-tecnicos-grid'),
     diagnostico:document.getElementById('corr-diag').value.trim(),
+    horometro:document.getElementById('corr-horometro')?.value||'',
     estado:document.getElementById('corr-estado').value
   };
   if(equipoId === '__cliente__'){
@@ -1829,6 +1835,11 @@ function cerrarCorrectivo(id){
   c.firma = getFirmaData(id);
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
+  // Sincronizar horómetro con la ficha del equipo al finalizar
+  if(c.horometro && c.equipoId){
+    const _eq = DB.equipos.find(e=>e.id===c.equipoId);
+    if(_eq) _eq.horometro = c.horometro;
+  }
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = c;
