@@ -674,11 +674,14 @@ function renderOrdenesLog(){
           <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
         </div>` : ''}
         <!-- Checklist de equipo — renta/entrega/retiro -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') ? `
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') ? (function(){
+          const _falt = checklistFaltantes(o);
+          return `
         <button data-oid="${o.id}" onclick="event.stopPropagation();abrirChecklist(this.dataset.oid)"
-          style="width:100%;margin-top:10px;padding:12px;background:${checklistCompleto(o)?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
-          ${checklistCompleto(o)?'✅ Checklist de Equipo — Completo':'📋 Checklist de Equipo — Pendiente'}
-        </button>` : ''}
+          style="width:100%;margin-top:10px;padding:12px;background:${_falt.length===0?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
+          ${_falt.length===0?'✅ Checklist de Equipo — Completo':'📋 Checklist de Equipo — Faltan '+_falt.length+' de 55 ítems'}
+        </button>`;
+        })() : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
           ${o.viaticos ? `
           <button data-oid="${o.id}" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)"
@@ -1115,14 +1118,18 @@ const CHECKLIST_CATS = [
 function _checklistItemKey(cat, item){ return (cat+'|'+item).replace(/[^a-zA-Z0-9|]/g,'_'); }
 
 function checklistCompleto(o){
-  if(!o.checklist) return false;
-  let ok = true;
+  return checklistFaltantes(o).length === 0;
+}
+
+function checklistFaltantes(o){
+  const faltan = [];
+  const chk = o.checklist || {};
   CHECKLIST_CATS.forEach(g=>g.items.forEach(it=>{
     const k = _checklistItemKey(g.cat,it);
-    const row = o.checklist[k];
-    if(!row || (!row.si && !row.no && !row.na)) ok = false;
+    const row = chk[k];
+    if(!row || (!row.si && !row.no && !row.na)) faltan.push(g.cat+' — '+it);
   }));
-  return ok;
+  return faltan;
 }
 
 function abrirChecklist(ordenId){
@@ -1153,9 +1160,14 @@ function abrirChecklist(ordenId){
   }
 
   const body = CHECKLIST_CATS.map(g=>`
-    <div style="font-size:12px;font-weight:700;color:#2d6a9f;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px;padding-top:10px;border-top:1px solid var(--border)">${g.cat}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 6px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:#2d6a9f;text-transform:uppercase;letter-spacing:0.5px">${g.cat}</div>
+      ${soloLectura?'':`<button onclick="event.stopPropagation();chkSetCategoriaNA('${o.id}','${g.cat.replace(/'/g,"\\'")}')" style="font-size:10px;padding:4px 8px;border-radius:5px;border:1px solid #6b6960;background:#fff;color:#6b6960;font-weight:700;cursor:pointer;white-space:nowrap">No aplica ⟶ N/A todo</button>`}
+    </div>
     ${g.items.map(it=>itemRow(g.cat,it)).join('')}
   `).join('');
+
+  const _faltAbrir = checklistFaltantes(o).length;
 
   ov.innerHTML = `
   <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;display:flex;align-items:flex-end" onclick="cerrarChecklist('${o.id}')">
@@ -1163,7 +1175,7 @@ function abrirChecklist(ordenId){
     <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:2">
       <div>
         <div style="color:white;font-weight:700;font-size:15px">📋 Checklist de Equipo</div>
-        <div style="color:rgba(255,255,255,0.7);font-size:11px">GL-FO-32 · Orden ${o.correlativo||''}</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:11px">GL-FO-32 · Orden ${o.correlativo||''} · <span id="chk-contador">${_faltAbrir===0?'✅ Completo':'Faltan '+_faltAbrir+' de 55'}</span></div>
       </div>
       <button onclick="cerrarChecklist('${o.id}')" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">✕</button>
     </div>
@@ -1194,6 +1206,39 @@ function chkSet(ordenId, key, campo){
     btn.style.background = active ? COLORS[c] : '#fff';
     btn.style.color = active ? '#fff' : COLORS[c];
   });
+  _actualizarContadorChecklist(o);
+}
+
+function _actualizarContadorChecklist(o){
+  const cont = document.getElementById('chk-contador');
+  if(!cont) return;
+  const falt = checklistFaltantes(o).length;
+  cont.textContent = falt===0 ? '✅ Completo' : 'Faltan '+falt+' de 55';
+}
+
+function chkSetCategoriaNA(ordenId, cat){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o || o.cerrado) return;
+  if(!o.checklist) o.checklist = {};
+  const grupo = CHECKLIST_CATS.find(g=>g.cat===cat);
+  if(!grupo) return;
+  grupo.items.forEach(item=>{
+    const k = _checklistItemKey(cat, item);
+    if(!o.checklist[k]) o.checklist[k] = {};
+    const row = o.checklist[k];
+    row.na = true; row.si = false; row.no = false;
+    const COLORS = {si:'#1a5c1a', no:'#8b2020', b:'#2d6a9f', m:'#b85c00', na:'#6b6960'};
+    ['si','no','na'].forEach(c=>{
+      const btn = document.getElementById('chk-'+k+'-'+c);
+      if(!btn) return;
+      const active = !!row[c];
+      btn.style.background = active ? COLORS[c] : '#fff';
+      btn.style.color = active ? '#fff' : COLORS[c];
+    });
+  });
+  saveDB();
+  _actualizarContadorChecklist(o);
+  toast('Sección "'+cat+'" marcada como N/A ✓');
 }
 
 function chkSetEstado(ordenId, key, valor){
@@ -1336,8 +1381,11 @@ async function cerrarOrdenLog(id){
     if(o.tipoLogistica==='apoyo_mantenimiento' && !o.operador){
       faltantes.push('Operador 1');
     }
-    if((o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && !checklistCompleto(o)){
-      faltantes.push('Favor llenar el checklist de equipo');
+    if((o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')){
+      const _faltChk = checklistFaltantes(o);
+      if(_faltChk.length){
+        faltantes.push('Checklist de equipo — faltan '+_faltChk.length+' ítems: '+_faltChk.slice(0,8).join(', ')+(_faltChk.length>8?' … y '+(_faltChk.length-8)+' más':''));
+      }
     }
   }
   // Try canvas first, then use saved firma
