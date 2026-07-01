@@ -44,6 +44,8 @@ function _imprimirHTML(htmlContent){
 <title>MONTASA — Gestión de Mantenimiento</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 :root{
   --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;--border2:#cccac0;
@@ -84,6 +86,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .fab-overlay{position:fixed;inset:0;z-index:199;display:none}
 .fab-overlay.open{display:block}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 4px 12px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:13px;font-family:'DM Sans',sans-serif;gap:5px;transition:color 0.15s}
+.nav-icon-wrap{position:relative;display:inline-flex}
+.nav-badge{position:absolute;top:-6px;right:-8px;background:#e63946;color:white;border-radius:999px;font-size:10px;font-weight:800;font-family:'DM Mono',monospace;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 4px;display:none;border:1.5px solid var(--surface);pointer-events:none;z-index:10}
+.nav-badge.visible{display:block}
 .nav-btn svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav-btn.active{color:var(--accent)}.nav-btn.active svg{stroke-width:2.3}
 
@@ -284,7 +289,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Inicio
   </button>
   <button class="nav-btn" onclick="showTab('ordenes',this)">
-    <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Órdenes
+    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="nav-badge" id="badge-ordenes-log"></span></span>Órdenes
   </button>
   <button class="nav-btn" onclick="showTab('historial',this)">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>Historial
@@ -484,6 +489,15 @@ function renderDashboardLog(){
       </button>
     </div>
   `;
+  updateBadgesLog();
+}
+
+function updateBadgesLog(){
+  const n = (DB.logistica||[]).filter(o=>(o.estado||'Pendiente')==='Pendiente').length;
+  const el = document.getElementById('badge-ordenes-log');
+  if(!el) return;
+  if(n > 0){ el.textContent = n > 99 ? '99+' : n; el.classList.add('visible'); }
+  else { el.textContent = ''; el.classList.remove('visible'); }
 }
 
 // ── ÓRDENES LOGÍSTICA ─────────────────────────────────────────────────────
@@ -529,7 +543,7 @@ function renderOrdenesLog(){
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
-          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
+          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}${o.operador2?', '+o.operador2:''}${o.operador3?', '+o.operador3:''}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
@@ -537,16 +551,17 @@ function renderOrdenesLog(){
       ${(()=>{ const cv=_calcCostoViaticos(o.viaticos); return cv>0?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${cv.toFixed(2)}</div>`:(o.viaticos?`<div style="font-size:11px;color:#2d6a9f;margin-top:2px">📋 Viáticos solicitados</div>`:''); })()}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
-        ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]):not(:first-of-type),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(:first-of-type){pointer-events:none;opacity:0.5}</style>`:''}
+        ${(o.estado==='Cancelado'||o.estado==='Pendiente'||!o.estado)?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select-log){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
         <!-- Estado -->
         <div class="form-group"><label>Estado</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','estado',this.value)">
-            <option ${o.estado==='Pendiente'?'selected':''}>Pendiente</option>
+          <select class="estado-select-log" onchange="event.stopPropagation();actualizarLog('${o.id}','estado',this.value)">
+            <option ${o.estado==='Pendiente'||!o.estado?'selected':''}>Pendiente</option>
             <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
             <option ${o.estado==='Cancelado'?'selected':''}>Cancelado</option>
           </select>
           ${o.estado==='Cancelado'?'<div style="font-size:12px;color:#e74c3c;margin-top:4px">⚠️ Orden cancelada — campos bloqueados</div>':''}
+          ${(o.estado==='Pendiente'||!o.estado)?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
         </div>
         <!-- Fechas -->
         <div class="form-group"><label>Fecha inicio</label>
@@ -567,12 +582,32 @@ function renderOrdenesLog(){
         </div>
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-                <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
+                <!-- Operador: renta + entrega + retiro -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
+          </select>
+        </div>`:``}
+        <!-- Operadores: apoyo_mantenimiento (hasta 3, el 1 obligatorio) -->
+        ${o.tipoLogistica==='apoyo_mantenimiento'?`
+        <div class="form-group"><label>Operador 1 (obligatorio)</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+            <option value="">— Seleccionar operador —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Operador 2 (opcional)</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador2',this.value)">
+            <option value="">— Seleccionar operador —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador2===op?'selected':''}>${op}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Operador 3 (opcional)</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador3',this.value)">
+            <option value="">— Seleccionar operador —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador3===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
         <!-- Motorista: entrega + retiro + compras (no apoyo) -->
@@ -587,13 +622,6 @@ function renderOrdenesLog(){
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
             oninput="event.stopPropagation()">${o.descripcion||''}</textarea>
-        </div>
-        <!-- Foto -->
-        <div class="form-group"><label>📷 Fotografía</label>
-          ${o.foto?`<div style="margin-bottom:8px"><img src="${o.foto}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>`:''}
-          <input type="file" accept="image/*" capture="environment"
-            onchange="event.stopPropagation();subirFotoLog('${o.id}',this)"
-            style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px">
         </div>
         <!-- Firma — entrega, retiro y renta -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
@@ -632,6 +660,12 @@ function renderOrdenesLog(){
           <span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km</span>
           <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
         </div>` : ''}
+        <!-- Checklist de equipo — renta/entrega/retiro -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') ? `
+        <button data-oid="${o.id}" onclick="event.stopPropagation();abrirChecklist(this.dataset.oid)"
+          style="width:100%;margin-top:10px;padding:12px;background:${checklistCompleto(o)?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
+          ${checklistCompleto(o)?'✅ Checklist de Equipo — Completo':'📋 Checklist de Equipo — Pendiente'}
+        </button>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
           ${o.viaticos ? `
           <button data-oid="${o.id}" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)"
@@ -692,6 +726,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.foto) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">📷 Foto</div><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>';
   if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="'+o.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
   if(o.viaticos) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos</span><button onclick="event.stopPropagation();abrirViaticos(\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button></div>';
+  if(o.checklistPdf) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:2px 10px;border-radius:10px;font-weight:600">✅ Checklist de Equipo</span><button onclick="event.stopPropagation();descargarChecklistPDF(\''+o.id+'\')" style="font-size:11px;background:#1a5c1a;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Descargar PDF</button></div>';
   if(o.vales&&o.vales.length) h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')+' — L. '+o.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)+'</div>';
   return h;
 }
@@ -930,7 +965,18 @@ function renderCamposTipo(o){
   var id = o.id;
   var html = '';
 
-  if(isMovimiento || tipo==='atencion_compras'){
+  if(tipo==='atencion_compras'){
+    var EQUIPOS_COMPRA = ['MTV-04','MTV-02','CM-39','CM-35','PATRULLA','CM-08'];
+    html += '<div class="form-group"><label>Equipo</label>';
+    html += '<select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)">';
+    html += '<option value="">— Seleccionar equipo —</option>';
+    EQUIPOS_COMPRA.forEach(function(eqc){
+      html += '<option value="'+eqc+'" '+(o.equipoCompra===eqc?'selected':'')+'>'+eqc+'</option>';
+    });
+    html += '</select></div>';
+  }
+
+  if(isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento'){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
@@ -1039,7 +1085,202 @@ function subirFotoLog(id, input){
   reader.readAsDataURL(file);
 }
 
-function cerrarOrdenLog(id){
+// ══════════════════════════════════════════════════════════════════════════
+// CHECKLIST DE EQUIPO — GL-FO-32
+// ══════════════════════════════════════════════════════════════════════════
+const CHECKLIST_CATS = [
+  {cat:'SISTEMA ELÉCTRICO', items:['ALARMA DE PRECAUCIÓN','BOTÓN DE EMERGENCIA','LUZ ESTROBOSCÓPICA','LUCES DE TRABAJO','LUCES DE STOP','LUCES DE VÍAS','BATERÍAS','PITO']},
+  {cat:'ESTRUCTURA', items:['GOLPES O ABOLLADURAS','INDICADORES TABLERO','TABLERO PRINCIPAL','CÁMARA FRONTAL','CÁMARA TRASERA','PANTALLA VISUAL','PINTURA GENERAL','CINTURONES','ASIENTOS','EXTINTOR']},
+  {cat:'ACCESORIOS', items:['EXTENSIONES HORQUILLA','LLAVES DE ENCENDIDO','KIT ANTIDERRAME','CADENAS','CONOS']},
+  {cat:'LLANTAS', items:['DELANTERA IZQUIERDA','DELANTERA DERECHA','TRASERA IZQUIERDA','TRASERA DERECHA']},
+  {cat:'REVISIÓN GENERAL', items:['LUBRICACIÓN Y ENGRASE','TAPÓN DE COMBUSTIBLE','FRENO DE EMERGENCIA','SISTEMA HIDRÁULICO','BANDAS DE MOTOR','FUGAS DE ACEITES','TORRE COMPLETA','FRENOS GENERAL','CILINDRO DE GAS','MANGUERAS','CUCHILLAS','BALINERAS','PALANCAS','PISTONES','CADENAS DE TORRE','SHIFTER']},
+  {cat:'NIVELES', items:['REFRIGERANTE/COOLANT','LÍQUIDO DE FRENOS','ACEITE HIDRÁULICO','ACEITE MOTOR','COMBUSTIBLE']},
+  {cat:'GENIES', items:['CONECTORES DE CORRIENTE','CABLE DE EMERGENCIA','CANASTA Y SEGUROS','CARGADOR','BOTONES','JOYSTICK','SWITCH']}
+];
+
+function _checklistItemKey(cat, item){ return (cat+'|'+item).replace(/[^a-zA-Z0-9|]/g,'_'); }
+
+function checklistCompleto(o){
+  if(!o.checklist) return false;
+  let ok = true;
+  CHECKLIST_CATS.forEach(g=>g.items.forEach(it=>{
+    const k = _checklistItemKey(g.cat,it);
+    const row = o.checklist[k];
+    if(!row || (!row.si && !row.no)) ok = false;
+  }));
+  return ok;
+}
+
+function abrirChecklist(ordenId){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o) return;
+  if(!o.checklist) o.checklist = {};
+  const ov = document.getElementById('checklist-overlay');
+  if(!ov) return;
+  const soloLectura = !!o.cerrado || o.estado==='Cancelado';
+
+  function itemRow(cat, item){
+    const k = _checklistItemKey(cat,item);
+    const row = o.checklist[k] || {};
+    const dis = soloLectura ? 'disabled' : '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;font-size:12px;font-weight:600">${item}</div>
+      <div style="display:flex;gap:3px">
+        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','si')" style="width:30px;height:26px;border-radius:5px;border:1px solid #1a5c1a;background:${row.si?'#1a5c1a':'#fff'};color:${row.si?'#fff':'#1a5c1a'};font-size:11px;font-weight:700;cursor:pointer">SI</button>
+        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','no')" style="width:30px;height:26px;border-radius:5px;border:1px solid #8b2020;background:${row.no?'#8b2020':'#fff'};color:${row.no?'#fff':'#8b2020'};font-size:11px;font-weight:700;cursor:pointer">NO</button>
+        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','b')" style="width:30px;height:26px;border-radius:5px;border:1px solid #2d6a9f;background:${row.b?'#2d6a9f':'#fff'};color:${row.b?'#fff':'#2d6a9f'};font-size:11px;font-weight:700;cursor:pointer">B</button>
+        <button ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','m')" style="width:30px;height:26px;border-radius:5px;border:1px solid #b85c00;background:${row.m?'#b85c00':'#fff'};color:${row.m?'#fff':'#b85c00'};font-size:11px;font-weight:700;cursor:pointer">M</button>
+      </div>
+    </div>
+    <input ${dis} type="text" placeholder="Estado / observación" value="${(row.estado||'').replace(/"/g,'&quot;')}"
+      onchange="event.stopPropagation();chkSetEstado('${o.id}','${k}',this.value)" oninput="event.stopPropagation()"
+      style="width:100%;margin-bottom:8px;padding:6px 8px;font-size:12px;border:1px solid var(--border2);border-radius:5px">`;
+  }
+
+  const body = CHECKLIST_CATS.map(g=>`
+    <div style="font-size:12px;font-weight:700;color:#2d6a9f;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px;padding-top:10px;border-top:1px solid var(--border)">${g.cat}</div>
+    ${g.items.map(it=>itemRow(g.cat,it)).join('')}
+  `).join('');
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;display:flex;align-items:flex-end" onclick="cerrarChecklist('${o.id}')">
+  <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:92vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:2">
+      <div>
+        <div style="color:white;font-weight:700;font-size:15px">📋 Checklist de Equipo</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:11px">GL-FO-32 · Orden ${o.correlativo||''}</div>
+      </div>
+      <button onclick="cerrarChecklist('${o.id}')" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:14px 16px">
+      ${body}
+      ${soloLectura?'':`<button onclick="guardarChecklist('${o.id}')" style="width:100%;margin-top:14px;padding:13px;background:#1a5c1a;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">💾 Guardar Checklist</button>`}
+    </div>
+  </div>
+  </div>`;
+  ov.style.display = 'block';
+}
+
+function chkSet(ordenId, key, campo){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o || o.cerrado) return;
+  if(!o.checklist) o.checklist = {};
+  if(!o.checklist[key]) o.checklist[key] = {};
+  const row = o.checklist[key];
+  if(campo==='si'||campo==='no'){ row.si = campo==='si'; row.no = campo==='no'; }
+  if(campo==='b'||campo==='m'){ row.b = campo==='b'; row.m = campo==='m'; }
+  saveDB();
+  abrirChecklist(ordenId);
+}
+
+function chkSetEstado(ordenId, key, valor){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o || o.cerrado) return;
+  if(!o.checklist) o.checklist = {};
+  if(!o.checklist[key]) o.checklist[key] = {};
+  o.checklist[key].estado = valor;
+  saveDB();
+}
+
+function guardarChecklist(ordenId){
+  saveDB();
+  toast('Checklist guardado ✓');
+  cerrarChecklist(ordenId);
+}
+
+function cerrarChecklist(ordenId){
+  saveDB();
+  const ov = document.getElementById('checklist-overlay');
+  if(ov){ ov.style.display='none'; ov.innerHTML=''; }
+  renderOrdenesLog();
+}
+
+async function generarChecklistPDF(o){
+  const cont = document.createElement('div');
+  cont.style.position='fixed'; cont.style.left='-9999px'; cont.style.top='0';
+  cont.style.width='760px'; cont.style.background='#fff'; cont.style.padding='24px';
+  cont.style.fontFamily="'DM Sans',sans-serif"; cont.style.color='#1a1a18';
+  const filas = CHECKLIST_CATS.map(g=>{
+    const rows = g.items.map(it=>{
+      const k = _checklistItemKey(g.cat,it);
+      const row = (o.checklist||{})[k] || {};
+      const mk = v => v ? '●' : '○';
+      return `<tr>
+        <td style="padding:4px 6px;border:1px solid #ccc;font-size:11px">${it}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.si)}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.no)}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.b)}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.m)}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;font-size:10px">${row.estado||''}</td>
+      </tr>`;
+    }).join('');
+    return `<tr><td colspan="6" style="background:#1f3864;color:#fff;font-weight:700;font-size:11px;padding:5px 6px;border:1px solid #ccc">${g.cat}</td></tr>${rows}`;
+  }).join('');
+  cont.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1f3864;padding-bottom:10px;margin-bottom:12px">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:#1f3864">CHECKLIST DE EQUIPO</div>
+        <div style="font-size:12px;color:#555">ENTREGA / RECEPCIÓN LOGÍSTICA</div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:#555">
+        <div><strong>CÓDIGO:</strong> GL-FO-32</div>
+        <div><strong>VERSIÓN:</strong> 3</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+      <div><strong>Orden:</strong> ${o.correlativo||''}</div>
+      <div><strong>Tipo:</strong> ${({renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo'})[o.tipoLogistica]||''}</div>
+      <div><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-HN')}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <tr style="background:#e8f0fb"><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px;text-align:left">ÍTEM</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">SI</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">NO</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">B</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">M</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">ESTADO</th></tr>
+      ${filas}
+    </table>`;
+  document.body.appendChild(cont);
+  try{
+    const canvas = await html2canvas(cont, {scale:1.5});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','pt','a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW = pageW - 40;
+    const imgH = imgW * canvas.height / canvas.width;
+    let y = 20, remaining = imgH;
+    if(imgH <= pageH - 40){
+      pdf.addImage(imgData, 'PNG', 20, 20, imgW, imgH);
+    } else {
+      // Paginar imagen larga
+      let renderedH = 0;
+      const pageContentH = pageH - 40;
+      while(renderedH < imgH){
+        pdf.addImage(imgData, 'PNG', 20, 20 - renderedH, imgW, imgH);
+        renderedH += pageContentH;
+        if(renderedH < imgH) pdf.addPage();
+      }
+    }
+    const dataUrl = pdf.output('datauristring');
+    document.body.removeChild(cont);
+    return dataUrl;
+  }catch(e){
+    document.body.removeChild(cont);
+    console.error('Error generando PDF checklist', e);
+    return null;
+  }
+}
+
+function descargarChecklistPDF(ordenId){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o || !o.checklistPdf) return;
+  const a = document.createElement('a');
+  a.href = o.checklistPdf;
+  a.download = 'Checklist_'+(o.correlativo||ordenId)+'.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function cerrarOrdenLog(id){
   const o = (DB.logistica||[]).find(x=>x.id===id);
   if(!o) return;
   const faltantes = [];
@@ -1065,6 +1306,15 @@ function cerrarOrdenLog(id){
         faltantes.push('Km de retorno debe ser ≥ km de salida');
       }
     }
+    if(o.tipoLogistica==='atencion_compras' && !o.equipoCompra){
+      faltantes.push('Equipo');
+    }
+    if(o.tipoLogistica==='apoyo_mantenimiento' && !o.operador){
+      faltantes.push('Operador 1');
+    }
+    if((o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && !checklistCompleto(o)){
+      faltantes.push('Favor llenar el checklist de equipo');
+    }
   }
   // Try canvas first, then use saved firma
   const firmaCanvas = getFirmaData('firma-log-'+id);
@@ -1082,6 +1332,11 @@ function cerrarOrdenLog(id){
   o.cerrado = true;
   o.estado = 'Completado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
+  if(!esCancelado && (o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && o.checklist){
+    toast('Generando PDF del checklist...');
+    const pdfDataUrl = await generarChecklistPDF(o);
+    if(pdfDataUrl) o.checklistPdf = pdfDataUrl;
+  }
   // Restituir equipo a DISPONIBLE si era renta
   if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
   // Update horometro in equipos
@@ -2506,6 +2761,7 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
 </script>
 
 <div id="viaticos-overlay" style="display:none"></div>
+<div id="checklist-overlay" style="display:none"></div>
 
 </body>
 </html>
