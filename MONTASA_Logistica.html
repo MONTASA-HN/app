@@ -1107,7 +1107,7 @@ function checklistCompleto(o){
   CHECKLIST_CATS.forEach(g=>g.items.forEach(it=>{
     const k = _checklistItemKey(g.cat,it);
     const row = o.checklist[k];
-    if(!row || (!row.si && !row.no)) ok = false;
+    if(!row || (!row.si && !row.no && !row.na)) ok = false;
   }));
   return ok;
 }
@@ -1131,6 +1131,7 @@ function abrirChecklist(ordenId){
         <button id="chk-${k}-no" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','no')" style="width:30px;height:26px;border-radius:5px;border:1px solid #8b2020;background:${row.no?'#8b2020':'#fff'};color:${row.no?'#fff':'#8b2020'};font-size:11px;font-weight:700;cursor:pointer">NO</button>
         <button id="chk-${k}-b" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','b')" style="width:30px;height:26px;border-radius:5px;border:1px solid #2d6a9f;background:${row.b?'#2d6a9f':'#fff'};color:${row.b?'#fff':'#2d6a9f'};font-size:11px;font-weight:700;cursor:pointer">B</button>
         <button id="chk-${k}-m" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','m')" style="width:30px;height:26px;border-radius:5px;border:1px solid #b85c00;background:${row.m?'#b85c00':'#fff'};color:${row.m?'#fff':'#b85c00'};font-size:11px;font-weight:700;cursor:pointer">M</button>
+        <button id="chk-${k}-na" ${dis} onclick="event.stopPropagation();chkSet('${o.id}','${k}','na')" style="width:34px;height:26px;border-radius:5px;border:1px solid #6b6960;background:${row.na?'#6b6960':'#fff'};color:${row.na?'#fff':'#6b6960'};font-size:10px;font-weight:700;cursor:pointer">N/A</button>
       </div>
     </div>
     <input ${dis} type="text" placeholder="Estado / observación" value="${(row.estado||'').replace(/"/g,'&quot;')}"
@@ -1168,11 +1169,12 @@ function chkSet(ordenId, key, campo){
   if(!o.checklist) o.checklist = {};
   if(!o.checklist[key]) o.checklist[key] = {};
   const row = o.checklist[key];
-  if(campo==='si'||campo==='no'){ row.si = campo==='si'; row.no = campo==='no'; }
+  if(campo==='si'||campo==='no'){ row.si = campo==='si'; row.no = campo==='no'; row.na = false; }
   if(campo==='b'||campo==='m'){ row.b = campo==='b'; row.m = campo==='m'; }
+  if(campo==='na'){ row.na = !row.na; if(row.na){ row.si = false; row.no = false; } }
   saveDB();
-  const COLORS = {si:'#1a5c1a', no:'#8b2020', b:'#2d6a9f', m:'#b85c00'};
-  ['si','no','b','m'].forEach(c=>{
+  const COLORS = {si:'#1a5c1a', no:'#8b2020', b:'#2d6a9f', m:'#b85c00', na:'#6b6960'};
+  ['si','no','b','m','na'].forEach(c=>{
     const btn = document.getElementById('chk-'+key+'-'+c);
     if(!btn) return;
     const active = !!row[c];
@@ -1219,10 +1221,11 @@ async function generarChecklistPDF(o){
         <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.no)}</td>
         <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.b)}</td>
         <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${mk(row.m)}</td>
+        <td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">${row.na?'N/A':''}</td>
         <td style="padding:4px 6px;border:1px solid #ccc;font-size:10px">${row.estado||''}</td>
       </tr>`;
     }).join('');
-    return `<tr><td colspan="6" style="background:#1f3864;color:#fff;font-weight:700;font-size:11px;padding:5px 6px;border:1px solid #ccc">${g.cat}</td></tr>${rows}`;
+    return `<tr><td colspan="7" style="background:#1f3864;color:#fff;font-weight:700;font-size:11px;padding:5px 6px;border:1px solid #ccc">${g.cat}</td></tr>${rows}`;
   }).join('');
   cont.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1f3864;padding-bottom:10px;margin-bottom:12px">
@@ -1241,7 +1244,7 @@ async function generarChecklistPDF(o){
       <div><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-HN')}</div>
     </div>
     <table style="width:100%;border-collapse:collapse">
-      <tr style="background:#e8f0fb"><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px;text-align:left">ÍTEM</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">SI</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">NO</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">B</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">M</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">ESTADO</th></tr>
+      <tr style="background:#e8f0fb"><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px;text-align:left">ÍTEM</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">SI</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">NO</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">B</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">M</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">N/A</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">ESTADO</th></tr>
       ${filas}
     </table>`;
   document.body.appendChild(cont);
