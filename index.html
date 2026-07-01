@@ -748,6 +748,11 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
   <!-- PERSONAL TÉCNICO -->
   <div id="tab-personal" class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+      <div style="font-size:22px;font-weight:600">Personal</div>
+      <select id="personal-mes-sel" onchange="renderPersonal()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border2);font-size:13px;background:var(--surface)"></select>
+    </div>
+    <div id="personal-mes-label" style="font-size:12px;color:var(--text2);margin-bottom:14px"></div>
     <div id="personal-list"></div>
   </div>
 
@@ -1534,12 +1539,11 @@ function renderPersonal(){
 
   // ── Poblar selector de meses ──────────────────────────────────────────
   const sel = document.getElementById('personal-mes-sel');
-  if(sel && sel.options.length <= 1){
+  if(sel && sel.options.length === 0){
     const now = new Date();
-    sel.innerHTML = '';
     for(let i = 0; i < 12; i++){
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val  = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0'); // mes 0-based
+      const val  = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
       const lbl  = d.toLocaleString('es-HN',{month:'long',year:'numeric'});
       const opt  = document.createElement('option');
       opt.value  = val;
@@ -1555,7 +1559,7 @@ function renderPersonal(){
   if(selVal){
     const parts = selVal.split('-');
     anio = parseInt(parts[0]);
-    mes  = parseInt(parts[1]); // 0-based
+    mes  = parseInt(parts[1]);
   } else {
     const now = new Date();
     mes  = now.getMonth();
@@ -1566,132 +1570,137 @@ function renderPersonal(){
   const label = document.getElementById('personal-mes-label');
   if(label) label.textContent = 'Mostrando: ' + mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1);
 
-  // ── Órdenes del mes seleccionado ──────────────────────────────────────
+  const el = document.getElementById('personal-list');
+  if(!el) return;
+
+  function fmtMins(m){
+    if(!m) return '0.0h';
+    return (m/60).toFixed(1)+'h';
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Tabla + gráfica 3D reutilizable
+  // ══════════════════════════════════════════════════════════════════════
+  function bloquePersonal(titulo, icono, sorted, colorBarra){
+    if(!sorted.length){
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px">
+        <div style="font-weight:700;font-size:15px;margin-bottom:10px">${icono} ${titulo}</div>
+        <div class="empty" style="padding:14px 0">Sin órdenes cerradas en este mes</div>
+      </div>`;
+    }
+
+    // ── Tabla ──
+    const filas = sorted.map(([nombre, s]) => {
+      const pct = Math.round(s.minutos / META_MINS * 100);
+      const pctColor = pct >= 80 ? '#18A303' : pct >= 50 ? '#e6a817' : '#C9211E';
+      return `<tr>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600">${nombre}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;text-align:right;font-family:'DM Mono',monospace">${fmtMins(s.minutos)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;text-align:right;font-family:'DM Mono',monospace;color:var(--text3)">189.0h</td>
+        <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;text-align:right;font-weight:700;font-family:'DM Mono',monospace;color:${pctColor}">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+    const tabla = `<div style="overflow-x:auto;margin-bottom:14px">
+      <table style="width:100%;border-collapse:collapse;min-width:420px">
+        <thead>
+          <tr style="background:#236292">
+            <th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left;text-transform:uppercase;letter-spacing:0.4px">Técnico</th>
+            <th style="padding:8px 10px;color:#fff;font-size:11px;text-align:right;text-transform:uppercase;letter-spacing:0.4px">Horas trabajadas</th>
+            <th style="padding:8px 10px;color:#fff;font-size:11px;text-align:right;text-transform:uppercase;letter-spacing:0.4px">Meta horas</th>
+            <th style="padding:8px 10px;color:#fff;font-size:11px;text-align:right;text-transform:uppercase;letter-spacing:0.4px">Productividad</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>`;
+
+    // ── Gráfica de barras 3D ──
+    const n = sorted.length;
+    const svgW = Math.max(360, n*90), svgH = 260, padL=46, padB=50, padT=34, padR=20;
+    const chartH = svgH - padT - padB;
+    const depth = 12;
+    const step = (svgW-padL-padR) / n;
+    const barW = Math.min(46, step - 24);
+
+    const yLines = [25,50,75,100].map(pct=>{
+      const y = padT + chartH - Math.round(pct/100*chartH);
+      return `<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#999">${pct}%</text>`;
+    }).join('');
+
+    const bars = sorted.map(([nombre,s],i)=>{
+      const pctVal = Math.round(s.minutos/META_MINS*100);
+      const pctClamped = Math.max(Math.min(pctVal,100),0);
+      const bh = Math.max(Math.round(pctClamped/100*chartH),2);
+      const bx = padL + i*step + (step-barW)/2;
+      const by = padT + chartH - bh;
+      const frontFace = `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${colorBarra}"/>`;
+      const sideFace  = `<polygon points="${bx+barW},${by} ${bx+barW+depth},${by-depth} ${bx+barW+depth},${by+bh-depth} ${bx+barW},${by+bh}" fill="${colorBarra}" opacity="0.55"/>`;
+      const topFace   = `<polygon points="${bx},${by} ${bx+depth},${by-depth} ${bx+barW+depth},${by-depth} ${bx+barW},${by}" fill="${colorBarra}" opacity="0.85"/>`;
+      return `${sideFace}${frontFace}${topFace}
+        <text x="${bx+barW/2}" y="${by-depth-8}" text-anchor="middle" font-size="15" fill="#1a1a18" font-weight="800">${pctVal}%</text>
+        <text x="${bx+barW/2}" y="${svgH-padB+18}" text-anchor="middle" font-size="11" fill="#404040" font-weight="600">${nombre.toUpperCase()}</text>`;
+    }).join('');
+
+    const chart = `<div style="overflow-x:auto">
+      <svg width="${svgW}" height="${svgH}" style="display:block;margin:0 auto">
+        ${yLines}
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
+        <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
+        ${bars}
+      </svg>
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px">
+        <span style="width:11px;height:11px;background:${colorBarra};display:inline-block;border-radius:2px"></span>
+        <span style="font-size:12px;color:var(--text2)">Productividad</span>
+      </div>
+    </div>`;
+
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px">
+      <div style="font-weight:700;font-size:15px;margin-bottom:2px">${icono} ${titulo}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Fórmula: (horas trabajadas del mes ÷ 189) × 100% · Meta: 189h = 100%</div>
+      ${tabla}
+      ${chart}
+    </div>`;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // TÉCNICOS — Mantenimiento (preventivos + correctivos completados)
+  // ══════════════════════════════════════════════════════════════════════
+  const TECNICOS_LIST = ['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'];
+  const statsTec = {};
+  TECNICOS_LIST.forEach(t => { statsTec[t] = { ordenes:0, minutos:0 }; });
+
   const ordenesDelMes = [
     ...DB.preventivos.filter(p => {
       if(!p.completado) return false;
       const f = new Date(p.fechaCompletado||p.fechaFin||p.fecha);
-      return f.getMonth()===mes && f.getFullYear()===anio;
+      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
     }),
     ...DB.correctivos.filter(c => {
       if(c.estado!=='Completado') return false;
       const f = new Date(c.fechaCierre||c.fechaFin||c.fecha);
-      return f.getMonth()===mes && f.getFullYear()===anio;
+      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
     })
   ];
-
-  // ── Calcular stats por técnico ────────────────────────────────────────
-  const stats = {};
-  for(const t of ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña', 'Miguel Orellana']){
-    stats[t] = { ordenes:0, minutos:0 };
-  }
-  for(const o of ordenesDelMes){
+  ordenesDelMes.forEach(o => {
     const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
     const ini  = new Date(o.fechaInicio||o.fecha);
     const fin  = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre);
     const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
-    for(const t of tecs){
-      if(!stats[t]) stats[t] = {ordenes:0, minutos:0};
-      stats[t].ordenes++;
-      stats[t].minutos += mins;
-    }
-  }
-
-  // ── Ordenar por productividad desc ────────────────────────────────────
-  const sorted = Object.entries(stats)
+    tecs.forEach(t => {
+      if(!statsTec[t]) statsTec[t] = {ordenes:0, minutos:0};
+      statsTec[t].ordenes++;
+      statsTec[t].minutos += mins;
+    });
+  });
+  const sortedTec = Object.entries(statsTec)
     .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
     .sort((a,b) => b[1].minutos - a[1].minutos);
 
-  const el = document.getElementById('personal-list');
-  if(!el) return;
-  if(!sorted.length){
-    el.innerHTML = '<div class="empty">Sin órdenes cerradas en este mes</div>';
-    return;
-  }
-
-  function fmtMins(m){
-    if(!m) return '0 min';
-    const h = Math.floor(m/60), mm = m%60;
-    return h ? h+'h '+(mm?mm+'min':'') : mm+'min';
-  }
-
-  const colores = ['#1f3864','#2d6a9f','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#f39c12'];
-
-  // ── Gráfica de productividad (barras horizontales) ───────────────────
-  const barCards = sorted.map(([nombre, s], i) => {
-    const pct     = Math.min(Math.round(s.minutos / META_MINS * 100), 100);
-    const pctReal = Math.round(s.minutos / META_MINS * 100); // puede pasar 100%
-    const color   = colores[i % colores.length];
-    const horas   = (s.minutos/60).toFixed(1);
-    // Color semáforo según productividad
-    const barColor = pctReal >= 80 ? '#27ae60' : pctReal >= 50 ? '#f39c12' : '#e74c3c';
-    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:12px;height:12px;border-radius:50%;background:${color}"></div>
-          <div style="font-weight:600;font-size:14px">${nombre}</div>
-        </div>
-        <div style="font-size:20px;font-weight:700;color:${barColor};font-family:DM Mono,monospace">${pctReal}%</div>
-      </div>
-      <!-- Barra de productividad -->
-      <div style="position:relative;height:22px;background:var(--surface2);border-radius:11px;overflow:hidden;margin-bottom:8px">
-        <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${barColor};border-radius:11px;transition:width 0.6s ease"></div>
-        <div style="position:absolute;left:0;top:0;height:100%;width:100%;display:flex;align-items:center;padding:0 10px;justify-content:space-between">
-          <span style="font-size:11px;font-weight:600;color:${pct>30?'white':'var(--text)'}">${fmtMins(s.minutos)}</span>
-          <span style="font-size:11px;color:var(--text3)">meta: ${189}h</span>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
-        <span>📋 ${s.ordenes} orden${s.ordenes!==1?'es':''} cerrada${s.ordenes!==1?'s':''}</span>
-        <span>⏱ ${horas}h / ${189}h</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  // ── Gráfica de barras verticales SVG ─────────────────────────────────
-  const svgW = 360, svgH = 200, padL = 42, padB = 45, padT = 16, padR = 10;
-  const barW  = Math.min(30, Math.floor((svgW-padL-padR)/sorted.length - 8));
-  const chartH = svgH - padT - padB;
-  const step   = (svgW-padL-padR) / sorted.length;
-
-  // Y-axis lines at 25, 50, 75, 100%
-  const yLines = [25,50,75,100].map(pct => {
-    const y = padT + chartH - Math.round(pct/100 * chartH);
-    return `<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3,3"/>
-      <text x="${padL-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#999">${pct}%</text>`;
-  }).join('');
-
-  // Meta line at 100%
-  const metaY = padT;
-
-  const bars = sorted.map(([nombre,s],i) => {
-    const pct    = Math.min(s.minutos / META_MINS, 1);
-    const bh     = Math.max(Math.round(pct * chartH), 2);
-    const bx     = padL + i*step + (step-barW)/2;
-    const by     = padT + chartH - bh;
-    const pctVal = Math.round(s.minutos/META_MINS*100);
-    const barColor = pctVal >= 80 ? '#27ae60' : pctVal >= 50 ? '#f39c12' : '#e74c3c';
-    const lbl    = nombre.split(' ')[0];
-    return `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" rx="4" fill="${barColor}"/>
-      <text x="${bx+barW/2}" y="${by-4}" text-anchor="middle" font-size="9" fill="#333" font-weight="600">${pctVal}%</text>
-      <text x="${bx+barW/2}" y="${svgH-padB+14}" text-anchor="middle" font-size="9" fill="#555">${lbl}</text>`;
-  }).join('');
-
-  const svgChart = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px">
-      <div style="font-weight:600;font-size:14px;margin-bottom:4px">📊 Productividad del mes</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">🟢 ≥80% · 🟡 50-79% · 🔴 &lt;50% · Meta: ${189}h = 100%</div>
-      <div style="overflow-x:auto">
-        <svg width="${svgW}" height="${svgH}" style="display:block;margin:0 auto">
-          ${yLines}
-          <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
-          <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
-          ${bars}
-        </svg>
-      </div>
-    </div>`;
-
-  // ── Productividad de OPERADORES DE LOGÍSTICA (mismo mes seleccionado) ──
+  // ══════════════════════════════════════════════════════════════════════
+  // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
+  // ══════════════════════════════════════════════════════════════════════
   const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
   const statsLog = {};
   PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
@@ -1711,62 +1720,16 @@ function renderPersonal(){
       statsLog[p].minutos += mins;
     });
   });
-  const sortedLog = Object.entries(statsLog).filter(([,s]) => s.ordenes>0 || s.minutos>0);
+  const sortedLog = Object.entries(statsLog)
+    .filter(([,s]) => s.ordenes>0 || s.minutos>0)
+    .sort((a,b) => b[1].minutos - a[1].minutos);
 
-  // Paleta MONTASA
-  const MONTASA_COLORS = ['#236292','#2E83C3','#17B0E4','#5FCBEF','#18A303','#C9211E','#404040'];
-
-  function barra3D(sorted3D, svgId){
-    const n = sorted3D.length;
-    if(!n) return '<div class="empty" style="padding:20px 0">Sin órdenes de logística cerradas en este mes</div>';
-    const svgW = Math.max(360, n*70), svgH = 240, padL=44, padB=56, padT=20, padR=20;
-    const chartH = svgH - padT - padB;
-    const depth = 10; // profundidad del efecto 3D
-    const step = (svgW-padL-padR) / n;
-    const barW = Math.min(34, step - 18);
-    const yLines = [25,50,75,100].map(pct=>{
-      const y = padT + chartH - Math.round(pct/100*chartH);
-      return `<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="3,3"/>
-        <text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="9" fill="#999">${pct}%</text>`;
-    }).join('');
-    const bars = sorted3D.map(([nombre,s],i)=>{
-      const pctVal = Math.round(s.minutos/META_MINS*100);
-      const pctClamped = Math.min(pctVal,100);
-      const bh = Math.max(Math.round(pctClamped/100*chartH),2);
-      const bx = padL + i*step + (step-barW)/2;
-      const by = padT + chartH - bh;
-      const color = MONTASA_COLORS[i % MONTASA_COLORS.length];
-      // Cara frontal, cara lateral (más oscura) y cara superior para efecto 3D
-      const frontFace = `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${color}"/>`;
-      const sideFace  = `<polygon points="${bx+barW},${by} ${bx+barW+depth},${by-depth} ${bx+barW+depth},${by+bh-depth} ${bx+barW},${by+bh}" fill="${color}" opacity="0.55"/>`;
-      const topFace   = `<polygon points="${bx},${by} ${bx+depth},${by-depth} ${bx+barW+depth},${by-depth} ${bx+barW},${by}" fill="${color}" opacity="0.85"/>`;
-      const lbl = nombre.split(' ')[0];
-      return `${sideFace}${frontFace}${topFace}
-        <text x="${bx+barW/2}" y="${by-depth-6}" text-anchor="middle" font-size="10" fill="#333" font-weight="700">${pctVal}%</text>
-        <text x="${bx+barW/2}" y="${svgH-padB+16}" text-anchor="middle" font-size="10" fill="#404040">${lbl}</text>`;
-    }).join('');
-    return `<div style="overflow-x:auto">
-      <svg width="${svgW}" height="${svgH}" style="display:block;margin:0 auto" id="${svgId}">
-        ${yLines}
-        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
-        <line x1="${padL}" y1="${svgH-padB}" x2="${svgW-padR}" y2="${svgH-padB}" stroke="#ccc" stroke-width="1.5"/>
-        ${bars}
-      </svg>
-    </div>`;
-  }
-
-  const chart3DLog = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;margin-top:20px">
-      <div style="font-weight:600;font-size:14px;margin-bottom:4px">🚛 Productividad de Operadores — Logística</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Fórmula: (horas trabajadas del mes ÷ 189) × 100% · Meta: 189h = 100%</div>
-      ${barra3D(sortedLog, 'chart-personal-log')}
-    </div>`;
-
+  // ══════════════════════════════════════════════════════════════════════
+  // Render final — dos bloques independientes
+  // ══════════════════════════════════════════════════════════════════════
   el.innerHTML =
-    svgChart +
-    '<div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--accent)">Detalle por técnico</div>' +
-    barCards +
-    chart3DLog;
+    bloquePersonal('Técnicos — Mantenimiento', '🔧', sortedTec, '#18A303') +
+    bloquePersonal('Logística', '🚛', sortedLog, '#236292');
 }
 
 
