@@ -553,6 +553,7 @@ function renderOrdenesLog(){
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
+          ${(o.tipoLogistica==='apoyo_mantenimiento'||o.tipoLogistica==='atencion_compras')&&o.equipoCompra?`<div style="font-size:13px;color:var(--text2)">🚗 ${o.equipoCompra}</div>`:''}
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
@@ -742,7 +743,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.foto) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">📷 Foto</div><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>';
   if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="'+o.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
   if(o.viaticos) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos</span><button onclick="event.stopPropagation();abrirViaticos(\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button></div>';
-  if(o.checklistPdf) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:2px 10px;border-radius:10px;font-weight:600">✅ Checklist de Equipo</span><button onclick="event.stopPropagation();descargarChecklistPDF(\''+o.id+'\')" style="font-size:11px;background:#1a5c1a;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Descargar PDF</button></div>';
+  if(o.checklistPdf) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:2px 10px;border-radius:10px;font-weight:600">✅ Checklist de Equipo</span><button onclick="event.stopPropagation();verChecklistPDF(\''+o.id+'\')" style="font-size:11px;background:#2d6a9f;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver</button><button onclick="event.stopPropagation();descargarChecklistPDF(\''+o.id+'\')" style="font-size:11px;background:#1a5c1a;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Descargar PDF</button></div>';
   if(o.vales&&o.vales.length) h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')+' — L. '+o.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)+'</div>';
   return h;
 }
@@ -965,7 +966,7 @@ function actualizarLog(id, campo, valor){
     if(o.equipoId2&&(campo==='horometroSalida2'||campo==='horometroRetorno2')){const _e2=DB.equipos.find(e=>e.id===o.equipoId2);if(_e2)_e2.horometro=valor;}
   }
   saveDB();
-  if(campo==='estado') renderOrdenesLog();
+  if(campo==='estado'){ _flushFirebaseWrite(); renderOrdenesLog(); }
 }
 
 
@@ -982,11 +983,11 @@ function renderCamposTipo(o){
   var id = o.id;
   var html = '';
 
-  if(tipo==='atencion_compras'){
+  if(tipo==='atencion_compras' || tipo==='apoyo_mantenimiento'){
     var EQUIPOS_COMPRA = ['MTV-04','MTV-02','CM-39','CM-35','PATRULLA','CM-08'];
-    html += '<div class="form-group"><label>Equipo</label>';
+    html += '<div class="form-group"><label>Vehículo</label>';
     html += '<select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)">';
-    html += '<option value="">— Seleccionar equipo —</option>';
+    html += '<option value="">— Seleccionar vehículo —</option>';
     EQUIPOS_COMPRA.forEach(function(eqc){
       html += '<option value="'+eqc+'" '+(o.equipoCompra===eqc?'selected':'')+'>'+eqc+'</option>';
     });
@@ -1081,6 +1082,7 @@ function cancelarOrdenLog(id){
   o.cerrado = false;
   o.fechaCancelado = new Date().toISOString().slice(0,10);
   saveDB();
+  _flushFirebaseWrite();
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();
@@ -1127,7 +1129,7 @@ function checklistFaltantes(o){
   CHECKLIST_CATS.forEach(g=>g.items.forEach(it=>{
     const k = _checklistItemKey(g.cat,it);
     const row = chk[k];
-    if(!row || (!row.si && !row.no && !row.na)) faltan.push(g.cat+' — '+it);
+    if(!row || (!row.si && !row.no && !row.na && !row.b && !row.m)) faltan.push(g.cat+' — '+it);
   }));
   return faltan;
 }
@@ -1194,8 +1196,16 @@ function chkSet(ordenId, key, campo){
   if(!o.checklist) o.checklist = {};
   if(!o.checklist[key]) o.checklist[key] = {};
   const row = o.checklist[key];
-  if(campo==='si'||campo==='no'){ row.si = campo==='si'; row.no = campo==='no'; row.na = false; }
-  if(campo==='b'||campo==='m'){ row.b = campo==='b'; row.m = campo==='m'; }
+  if(campo==='si'||campo==='no'){
+    const activando = !row[campo];
+    row.si = false; row.no = false;
+    if(activando){ row[campo] = true; row.na = false; }
+  }
+  if(campo==='b'||campo==='m'){
+    const activando = !row[campo];
+    row.b = false; row.m = false;
+    if(activando){ row[campo] = true; }
+  }
   if(campo==='na'){ row.na = !row.na; if(row.na){ row.si = false; row.no = false; } }
   saveDB();
   const COLORS = {si:'#1a5c1a', no:'#8b2020', b:'#2d6a9f', m:'#b85c00', na:'#6b6960'};
@@ -1285,6 +1295,9 @@ async function generarChecklistPDF(o){
     }).join('');
     return `<tr><td colspan="7" style="background:#1f3864;color:#fff;font-weight:700;font-size:11px;padding:5px 6px;border:1px solid #ccc">${g.cat}</td></tr>${rows}`;
   }).join('');
+  const _eqPdf = DB.equipos.find(e=>e.id===o.equipoId);
+  const _equipoLabel = _eqPdf ? (_eqPdf.codigo+(_eqPdf.marca?' – '+_eqPdf.marca:'')) : (o.clienteNombre||'—');
+  const _operadorLabel = [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ') || o.motorista || '—';
   cont.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1f3864;padding-bottom:10px;margin-bottom:12px">
       <div>
@@ -1296,11 +1309,13 @@ async function generarChecklistPDF(o){
         <div><strong>VERSIÓN:</strong> 3</div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:4px">
       <div><strong>Orden:</strong> ${o.correlativo||''}</div>
       <div><strong>Tipo:</strong> ${({renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo'})[o.tipoLogistica]||''}</div>
-      <div><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-HN')}</div>
+      <div><strong>Equipo:</strong> ${_equipoLabel}</div>
+      <div><strong>Operador:</strong> ${_operadorLabel}</div>
     </div>
+    <div style="font-size:12px;margin-bottom:12px"><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-HN')}</div>
     <table style="width:100%;border-collapse:collapse">
       <tr style="background:#e8f0fb"><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px;text-align:left">ÍTEM</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">SI</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">NO</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">B</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">M</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">N/A</th><th style="padding:5px 6px;border:1px solid #ccc;font-size:11px">ESTADO</th></tr>
       ${filas}
@@ -1335,6 +1350,23 @@ async function generarChecklistPDF(o){
     document.body.removeChild(cont);
     console.error('Error generando PDF checklist', e);
     return null;
+  }
+}
+
+function verChecklistPDF(ordenId){
+  const o = (DB.logistica||[]).find(x=>x.id===ordenId);
+  if(!o || !o.checklistPdf) return;
+  try{
+    const partes = o.checklistPdf.split(',');
+    const base64 = partes[1] || partes[0];
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }catch(e){
+    window.open(o.checklistPdf, '_blank');
   }
 }
 
@@ -1444,6 +1476,7 @@ async function cerrarOrdenLog(id){
     }
   })();
   saveDB();
+  _flushFirebaseWrite();
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();

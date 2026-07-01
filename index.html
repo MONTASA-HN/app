@@ -2046,7 +2046,7 @@ function renderLogistica(){
   const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
   el.innerHTML = list.map(o => {
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
-    const eqLabel = o.tipoLogistica==='atencion_compras' ? (o.equipoCompra||'—') : (eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—'));
+    const eqLabel = (o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento') ? (o.equipoCompra||'—') : (eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—'));
     const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const ec = o.cerrado?'#27ae60':o.estado==='Cancelado'?'#888':o.estado==='En proceso'?'#f39c12':'#e74c3c';
     const estadoLbl = o.cerrado?'Completado':(o.estado||'Pendiente');
@@ -2064,7 +2064,8 @@ function renderLogistica(){
     card += '</div>';
     card += '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6;pointer-events:'+(isCerrada?'none':'auto')+' ">';
     card += '<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>';
-    card += '<span style="color:var(--text3)">🚜 Equipo</span><span>'+eqLabel+'</span>';
+    const _eqLabelTitulo = (o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento') ? '🚗 Vehículo' : '🚜 Equipo';
+    card += '<span style="color:var(--text3)">'+_eqLabelTitulo+'</span><span>'+eqLabel+'</span>';
     card += (o.equipoId2?getEq2Label(o.equipoId2):'')+mot+op;
     card += (o.fechaInicio&&o.fechaFin?'<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>':'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>');
     card += '</div>';
@@ -2156,7 +2157,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' \u2014 L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
   if(o.viaticos) h += '<button data-vid="'+o.id+'" onclick="abrirViaticos(this.dataset.vid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Viaticos</button>';
-  if(o.checklistPdf) h += '<button onclick="event.stopPropagation();descargarChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📄 Checklist PDF</button>';
+  if(o.checklistPdf) h += '<button onclick="event.stopPropagation();verChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">👁 Ver Checklist</button><button onclick="event.stopPropagation();descargarChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📄 Descargar</button>';
   if(!o.viaticos) h += '<button onclick="event.stopPropagation();abrirValeGerencia(\''+o.id+'\')" style="font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer">'+(o.vales&&o.vales.length?'Vale':'Generar Vale')+'</button>';
   h += '<button onclick="event.stopPropagation();editarOrdenHistorial(\'log\',\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Editar</button>';
   h += '<button onclick="event.stopPropagation();_elimLG(this.getAttribute(\'data-eid\'))" data-eid=\"'+ o.id +'\"' + ' style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">🗑 Eliminar</button>';
@@ -5422,6 +5423,23 @@ document.addEventListener('click', function(e){
   }
 });
 
+
+function verChecklistPDFGer(id){
+  const o = (DB.logistica||[]).find(function(x){ return x.id===id; });
+  if(!o || !o.checklistPdf) return;
+  try{
+    const partes = o.checklistPdf.split(',');
+    const base64 = partes[1] || partes[0];
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }catch(e){
+    window.open(o.checklistPdf, '_blank');
+  }
+}
 
 function descargarChecklistPDFGer(id){
   const o = (DB.logistica||[]).find(function(x){ return x.id===id; });
