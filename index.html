@@ -1708,9 +1708,6 @@ function renderPersonal(){
       statsTec[t].minutos += mins;
     });
   });
-  const sortedTec = Object.entries(statsTec)
-    .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
-    .sort((a,b) => b[1].minutos - a[1].minutos);
 
   // ══════════════════════════════════════════════════════════════════════
   // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
@@ -1734,6 +1731,39 @@ function renderPersonal(){
       statsLog[p].minutos += mins;
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // REVISIONES FÍSICO-TÉCNICAS — el técnico1/técnico2 puede ser personal
+  // técnico o de logística; se reparte el tiempo al grupo correspondiente.
+  // ══════════════════════════════════════════════════════════════════════
+  const revisionesDelMes = (DB.revisiones||[]).filter(r => {
+    if(!r.completado) return false;
+    const f = parseFechaLocal(r.fechaCierre||r.fecha);
+    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+  });
+  revisionesDelMes.forEach(r => {
+    const tecs = (r.tecnicos||[]).filter(Boolean);
+    if(!tecs.length) return;
+    const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
+    const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
+    const ini = new Date(iniStr), fin = new Date(finStr);
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    tecs.forEach(nombre => {
+      if(PERSONAL_LOG.includes(nombre)){
+        if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
+        statsLog[nombre].ordenes++;
+        statsLog[nombre].minutos += mins;
+      } else {
+        if(!statsTec[nombre]) statsTec[nombre] = {ordenes:0, minutos:0};
+        statsTec[nombre].ordenes++;
+        statsTec[nombre].minutos += mins;
+      }
+    });
+  });
+
+  const sortedTec = Object.entries(statsTec)
+    .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
+    .sort((a,b) => b[1].minutos - a[1].minutos);
   const sortedLog = Object.entries(statsLog)
     .filter(([,s]) => s.ordenes>0 || s.minutos>0)
     .sort((a,b) => b[1].minutos - a[1].minutos);
