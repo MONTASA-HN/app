@@ -1528,6 +1528,17 @@ function validarFechasOrden(fechaInicio, fechaFin){
 function renderPersonal(){
   const META_MINS = 189 * 60; // 189 horas en minutos
 
+  // Parser de fecha seguro: evita que un string tipo "YYYY-MM-DD" se interprete
+  // como medianoche UTC y se corra al mes anterior en zonas horarias negativas (Honduras UTC-6).
+  function parseFechaLocal(val){
+    if(!val) return new Date(NaN);
+    if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)){
+      const [y,m,d] = val.split('-').map(Number);
+      return new Date(y, m-1, d);
+    }
+    return new Date(val);
+  }
+
   // ── Poblar selector de meses ──────────────────────────────────────────
   const sel = document.getElementById('personal-mes-sel');
   if(sel && sel.options.length === 0){
@@ -1677,12 +1688,12 @@ function renderPersonal(){
   const ordenesDelMes = [
     ...DB.preventivos.filter(p => {
       if(!p.completado) return false;
-      const f = new Date(p.fechaCompletado||p.fechaFin||p.fecha);
+      const f = parseFechaLocal(p.fechaCompletado||p.fechaFin||p.fecha);
       return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
     }),
     ...DB.correctivos.filter(c => {
       if(c.estado!=='Completado') return false;
-      const f = new Date(c.fechaCierre||c.fechaFin||c.fecha);
+      const f = parseFechaLocal(c.fechaCierre||c.fechaFin||c.fecha);
       return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
     })
   ];
@@ -1709,7 +1720,7 @@ function renderPersonal(){
   PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
   const logCerradasMes = (DB.logistica||[]).filter(o => {
     if(!o.cerrado || o.estado==='Cancelado') return false;
-    const f = new Date(o.fechaCierre||o.fechaFin||o.fecha);
+    const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
     return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
   });
   logCerradasMes.forEach(o => {
