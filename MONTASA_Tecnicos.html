@@ -1352,6 +1352,15 @@ function renderPreventivos(){
     const orden = DB.preventivos.find(o=>o.id===id);
     if(orden) initTecBtns('cb-'+id, orden.tecnico);
   });
+  // Restaurar firma guardada en el lienzo (si la orden se reabrió para editar)
+  setTimeout(()=>{
+    DB.preventivos.forEach(p=>{
+      if(p.firma && !p.completado){
+        const c = document.getElementById('firma-'+p.id);
+        if(c){ const img=new Image(); img.onload=()=>{ const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height); }; img.src=p.firma; }
+      }
+    });
+  }, 100);
   if(typeof updateBadges==='function') updateBadges();
 }
 
@@ -1462,7 +1471,8 @@ function completarPreventivo(id){
     }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
-  p.firma = getFirmaData(id);
+  const _nuevaFirmaP = getFirmaData(id);
+  if(_nuevaFirmaP) p.firma = _nuevaFirmaP;
 
   // Auto-generar vale de alimentación al cerrar
   (function(){
@@ -1720,6 +1730,15 @@ function renderCorrectivos(){
     const orden = DB.correctivos.find(o=>o.id===id);
     if(orden) initTecBtns('cb-'+id, orden.tecnico);
   });
+  // Restaurar firma guardada en el lienzo (si la orden se reabrió para editar)
+  setTimeout(()=>{
+    DB.correctivos.forEach(c=>{
+      if(c.firma && c.estado!=='Completado'){
+        const cv = document.getElementById('firma-'+c.id);
+        if(cv){ const img=new Image(); img.onload=()=>{ const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,cv.width,cv.height); }; img.src=c.firma; }
+      }
+    });
+  }, 100);
   if(typeof updateBadges==='function') updateBadges();
 }
 
@@ -1840,7 +1859,8 @@ function cerrarCorrectivo(id){
     }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
-  c.firma = getFirmaData(id);
+  const _nuevaFirmaC = getFirmaData(id);
+  if(_nuevaFirmaC) c.firma = _nuevaFirmaC;
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   // Sincronizar horómetro con la ficha del equipo al finalizar
