@@ -2010,7 +2010,18 @@ function abrirViaticos(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
   const v = orden.viaticos;
-  if(!v){ toast('Esta orden no tiene viáticos solicitados'); return; }
+  if(!v){
+    // No hay viáticos aún — es una SOLICITUD NUEVA
+    const estaCompletada = orden.cerrado || orden.estado==='Completado';
+    if(estaCompletada){
+      solicitarPINAccion(function(){
+        _iniciarSolicitudViaticos(orden);
+      }, '🔒 Solicitar viáticos', 'Esta orden ya está completada. Ingresa tu PIN para solicitar viáticos de todas formas.');
+    } else {
+      _iniciarSolicitudViaticos(orden);
+    }
+    return;
+  }
 
   const ov = document.getElementById('viaticos-overlay');
   if(!ov) return;
@@ -2069,12 +2080,35 @@ function abrirViaticos(ordenId){
         <span>${p.nombre||'—'}</span>
         <span style="color:var(--text2)">L. ${((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)).toFixed(0)}</span>
       </div>`).join('')}` : ''}
+      <button onclick="event.stopPropagation();_eliminarViaticosLog('${orden.id}')" style="width:100%;margin-top:16px;padding:12px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">🗑 Eliminar solicitud de viáticos (PIN)</button>
     </div>
   </div>
   </div>`;
 
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+function _iniciarSolicitudViaticos(orden){
+  _viaticosOrdenId = orden.id;
+  _viaticosMode = 'solicitud';
+  _viaticosData = {};
+  renderModalViaticos(orden);
+}
+
+function _eliminarViaticosLog(ordenId){
+  solicitarPINAccion(function(){
+    const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+    if(!orden) return;
+    delete orden.viaticos;
+    delete orden.vales;
+    saveDB();
+    _flushFirebaseWrite();
+    cerrarViaticos();
+    renderOrdenesLog();
+    renderHistorialLog();
+    toast('Solicitud de viáticos eliminada ✓');
+  }, '🗑 Eliminar viáticos', 'Ingresa tu PIN para eliminar esta solicitud de viáticos');
 }
 
 function cerrarViaticos(){

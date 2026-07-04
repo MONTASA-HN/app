@@ -38,6 +38,21 @@ function abrirValeMant(ordenId, tipo){
   const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
+  const yaGenerado = orden.vales && orden.vales.length;
+  const estaCompletada = tipo==='preventivo' ? orden.completado : orden.estado==='Completado';
+  if(!yaGenerado && estaCompletada){
+    solicitarPINAccion(function(){
+      _abrirValeMantInterno(ordenId, tipo);
+    }, '🔒 Generar vale', 'Esta orden ya está completada. Ingresa tu PIN para generar el vale de todas formas.');
+    return;
+  }
+  _abrirValeMantInterno(ordenId, tipo);
+}
+
+function _abrirValeMantInterno(ordenId, tipo){
+  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const orden = arr.find(o=>o.id===ordenId);
+  if(!orden) return;
   // Auto-calcular si tiene horas
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
@@ -91,12 +106,27 @@ function _mostrarOverlayValeMant(ordenId, tipo){
     + '<div style="display:flex;gap:8px">'
     + '<button onclick="cerrarValeMant()" style="flex:1;padding:13px;background:#888;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">Cerrar</button>'
     + '<button onclick="imprimirValeMant()" style="flex:1;padding:13px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">📄 PDF</button>'
-    + '</div></div>';
+    + '</div>'
+    + '<button onclick="_eliminarValeMant()" style="width:100%;margin-top:8px;padding:11px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🗑 Eliminar vale (PIN)</button>'
+    + '</div>';
   div.appendChild(panel);
   ov.innerHTML = '';
   ov.appendChild(div);
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+function _eliminarValeMant(){
+  solicitarPINAccion(function(){
+    const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+    const orden = arr.find(o=>o.id===_valeMantOrdenId);
+    if(!orden) return;
+    delete orden.vales;
+    saveDB();
+    cerrarValeMant();
+    if(_valeMantTipo==='preventivo') renderPreventivos(); else renderCorrectivos();
+    toast('Vale eliminado ✓');
+  }, '🗑 Eliminar vale', 'Ingresa tu PIN para eliminar este vale de alimentación');
 }
 
 function recalcValesMant(){
