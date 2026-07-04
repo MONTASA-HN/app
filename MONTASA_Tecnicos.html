@@ -62,13 +62,14 @@ function _getOrdenPorTipoViaticos(id, tipo){
 
 // Resumen de viáticos — SOLO LECTURA (la solicitud/edición se hace desde Gerencia)
 function verViaticosResumen(ordenId, tipo){
+ try{
   const orden = _getOrdenPorTipoViaticos(ordenId, tipo);
-  if(!orden) return;
+  if(!orden){ toast('Orden no encontrada'); return; }
   const v = orden.viaticos;
   if(!v){ toast('Esta orden no tiene viáticos solicitados'); return; }
 
   const ov = document.getElementById('viaticos-overlay');
-  if(!ov) return;
+  if(!ov){ toast('Error: no se encontró el contenedor de viáticos'); return; }
 
   const personas = v.personas||[];
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
@@ -126,6 +127,10 @@ function verViaticosResumen(ordenId, tipo){
   </div>`;
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
+ }catch(err){
+   console.error('Error mostrando resumen de viáticos:', err);
+   toast('Error al mostrar viáticos: '+err.message);
+ }
 }
 
 function cerrarViaticosResumen(){
