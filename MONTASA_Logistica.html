@@ -668,8 +668,8 @@ function renderOrdenesLog(){
           <span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km</span>
           <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
         </div>` : ''}
-        <!-- Checklist de equipo — renta/entrega/retiro -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') ? (function(){
+        <!-- Checklist de equipo — entrega/retiro (renta ya no lo requiere) -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') ? (function(){
           const _falt = checklistFaltantes(o);
           return `
         <button data-oid="${o.id}" onclick="event.stopPropagation();abrirChecklist(this.dataset.oid)"
@@ -1396,7 +1396,7 @@ async function cerrarOrdenLog(id){
     if(o.tipoLogistica==='apoyo_mantenimiento' && !o.operador){
       faltantes.push('Operador 1');
     }
-    if((o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')){
+    if((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')){
       const _faltChk = checklistFaltantes(o);
       if(_faltChk.length){
         faltantes.push('Checklist de equipo — faltan '+_faltChk.length+' ítems: '+_faltChk.slice(0,8).join(', ')+(_faltChk.length>8?' … y '+(_faltChk.length-8)+' más':''));
@@ -1464,7 +1464,7 @@ async function cerrarOrdenLog(id){
   toast('Orden '+o.correlativo+' cerrada ✓');
 
   // ── Generar el PDF del checklist DESPUÉS (no bloquea el cierre) ──
-  if(!esCancelado && (o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && o.checklist){
+  if(!esCancelado && (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && o.checklist){
     toast('Generando PDF del checklist...');
     const pdfDataUrl = await generarChecklistPDF(o);
     if(pdfDataUrl){
