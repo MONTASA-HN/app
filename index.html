@@ -2769,6 +2769,7 @@ function renderHistorial(){
           cRV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
         });
         cRV+=`</div>`;
+        cRV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
         if(estRV==='Completado'){
           cRV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
         }
@@ -2807,6 +2808,7 @@ function renderHistorial(){
         if(x.diagnostico) cEV+=`<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
         cEV+=`</div>`;
         if(x.firma) cEV+=`<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+        cEV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
         if(estEV==='Completado'){
           cEV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
         }
@@ -2886,6 +2888,7 @@ function renderHistorial(){
       } else {
         card += `<button onclick="event.stopPropagation();abrirValeMant('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#b8860b;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🍽 Generar Vale</button>`;
       }
+      card += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
       if(estRaw==='Completado'){
         card += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
       }
@@ -4330,25 +4333,49 @@ const DESTINOS_VIATICOS = [
 ];
 
 let _viaticosOrdenId = null;
+let _viaticosTipo = 'logistica'; // 'logistica' | 'preventivo' | 'correctivo' | 'revision' | 'evaluacion'
 let _viaticosMode = 'solicitud'; // 'solicitud' | 'liquidacion'
 let _viaticosReadOnly = false;
 let _viaticosData = null;
 
-function abrirViaticos(ordenId){
-  const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
+function _getViaticosArray(tipo){
+  if(tipo==='preventivo') return DB.preventivos||[];
+  if(tipo==='correctivo') return DB.correctivos||[];
+  if(tipo==='revision')   return DB.revisiones||[];
+  if(tipo==='evaluacion') return DB.evaluaciones||[];
+  return DB.logistica||[];
+}
+function _getViaticosOrden(){
+  return _getViaticosArray(_viaticosTipo).find(o=>o.id===_viaticosOrdenId);
+}
+function _viaticosOrdenCompletada(orden, tipo){
+  if(tipo==='preventivo') return !!orden.completado;
+  if(tipo==='correctivo') return orden.estado==='Completado';
+  if(tipo==='revision'||tipo==='evaluacion') return !!orden.completado || orden.estado==='Completado';
+  return !!orden.cerrado || orden.estado==='Completado'; // logistica
+}
+function _renderListaSegunTipo(tipo){
+  if(tipo==='logistica') renderLogistica();
+  else renderHistorial();
+}
+
+function abrirViaticos(ordenId, tipo){
+  tipo = tipo || 'logistica';
+  const orden = _getViaticosArray(tipo).find(o=>o.id===ordenId);
   if(!orden) return;
-  const estaCompletada = orden.cerrado || orden.estado==='Completado';
+  const estaCompletada = _viaticosOrdenCompletada(orden, tipo);
   if(!orden.viaticos && estaCompletada){
     solicitarPINAccion(()=>{
-      _abrirViaticosInterno(orden);
+      _abrirViaticosInterno(orden, tipo);
     }, '🔒 Solicitar viáticos', 'Esta orden ya está completada. Ingresa tu PIN para solicitar viáticos de todas formas.');
     return;
   }
-  _abrirViaticosInterno(orden);
+  _abrirViaticosInterno(orden, tipo);
 }
 
-function _abrirViaticosInterno(orden){
+function _abrirViaticosInterno(orden, tipo){
   _viaticosOrdenId = orden.id;
+  _viaticosTipo = tipo || 'logistica';
   _viaticosData = orden.viaticos || null;
   _viaticosMode = 'solicitud';
   _viaticosReadOnly = !!(orden.viaticos); // read-only if viaticos already saved
@@ -4357,12 +4384,12 @@ function _abrirViaticosInterno(orden){
 
 function eliminarViaticosConPin(){
   solicitarPINAccion(()=>{
-    const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+    const orden = _getViaticosOrden();
     if(!orden) return;
     delete orden.viaticos;
     saveDB();
     cerrarViaticos();
-    renderLogistica();
+    _renderListaSegunTipo(_viaticosTipo);
     toast('Solicitud de viáticos eliminada ✓');
   }, '🗑 Eliminar viáticos', 'Ingresa tu PIN para eliminar esta solicitud de viáticos');
 }
@@ -4370,7 +4397,7 @@ function eliminarViaticosConPin(){
 function editarViaticosConPin(){
   solicitarPINAccion(()=>{
     _viaticosReadOnly = false;
-    const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+    const orden = _getViaticosOrden();
     if(orden) renderModalViaticos(orden);
   });
 }
@@ -4460,7 +4487,7 @@ function renderModalViaticos(orden){
 
 function switchTabViaticos(mode){
   _viaticosMode = mode;
-  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden = _getViaticosOrden();
   if(orden) renderModalViaticos(orden);
 }
 
@@ -4793,7 +4820,7 @@ function editarLiquidacionConPin(){
     return;
   }
   // Re-render liquidacion in edit mode
-  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden = _getViaticosOrden();
   if(!orden || !orden.viaticos) return;
   const v = orden.viaticos;
   const montoSol = (v.personas||[]).reduce((s,p)=>s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0),0)
@@ -4827,7 +4854,7 @@ function _calcTotalSol(v){
 }
 
 function agregarPersonaViaticos(){
-  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden=_getViaticosOrden();
   if(!orden) return;
   const v=_viaticosData||{};
   const personas=v.personas||[];
@@ -4837,7 +4864,7 @@ function agregarPersonaViaticos(){
 }
 
 function quitarPersonaViaticos(i){
-  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden=_getViaticosOrden();
   if(!orden) return;
   const v=_viaticosData||{};
   const personas=(v.personas||[]).filter((_,idx)=>idx!==i);
@@ -4915,77 +4942,32 @@ function _leerFormLiquidacion(){
 
 function guardarViaticos(){
   const formData = _leerFormSolicitud();
-  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden = _getViaticosOrden();
   if(!orden) return;
   const existingFacturas = (_viaticosData||{}).facturas || [];
   orden.viaticos = {...formData, facturas: existingFacturas};
   _viaticosData = orden.viaticos;
-  // Save to localStorage immediately
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
-  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
-  // Write to Firebase and ONLY THEN render + toast
-  if(window._fbDB){
-    const writeTs = Date.now();
-    _lastLogisticaWriteTs = writeTs;
-    window._fbDB.ref('montasa').update({
-      logistica: _cleanLogistica(DB.logistica),
-      lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-      _ts: writeTs,
-      _sid: _SESSION_ID
-    }).then(()=>{
-      // Verify data survived the write
-      const check = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
-      if(check && check.viaticos && check.viaticos.cliente){
-        cerrarViaticos();
-        renderLogistica();
-        toast('Solicitud de viáticos guardada ✓');
-      } else {
-        // Data was wiped by on() listener — restore and retry
-        orden.viaticos = {...formData, facturas: existingFacturas};
-        _viaticosData = orden.viaticos;
-        window._fbDB.ref('montasa/logistica').set(DB.logistica).then(()=>{
-          cerrarViaticos();
-          renderLogistica();
-          toast('Solicitud de viáticos guardada ✓');
-        });
-      }
-    }).catch(e=>toast('Error al guardar: '+e.message, true));
-  } else {
-    cerrarViaticos();
-    renderLogistica();
-    toast('Solicitud de viáticos guardada ✓');
-  }
+  saveDB();
+  cerrarViaticos();
+  _renderListaSegunTipo(_viaticosTipo);
+  toast('Solicitud de viáticos guardada ✓');
 }
 
 function guardarLiquidacion(){
   const liqData = _leerFormLiquidacion();
-  const orden = (DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden = _getViaticosOrden();
   if(!orden) return;
   orden.viaticos = {...(_viaticosData||{}), ...liqData};
   _viaticosData = orden.viaticos;
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
-  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
-  if(window._fbDB){
-    const writeTs = Date.now();
-    _lastLogisticaWriteTs = writeTs;
-    window._fbDB.ref('montasa').update({
-      logistica: _cleanLogistica(DB.logistica),
-      lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-      _ts: writeTs,
-      _sid: _SESSION_ID
-    }).then(()=>{
-      toast('Liquidación guardada ✓');
-      cerrarViaticos();
-    }).catch(e=>toast('Error al guardar: '+e.message, true));
-  } else {
-    toast('Liquidación guardada ✓');
-    cerrarViaticos();
-  }
+  saveDB();
+  toast('Liquidación guardada ✓');
+  cerrarViaticos();
+  _renderListaSegunTipo(_viaticosTipo);
 }
 
 // ── GENERADOR DE PDF (client-side con API Anthropic) ─────────────────────
 async function generarPDFViaticos(tipo){
-  const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
+  const orden=_getViaticosOrden();
   if(!orden) return;
 
   // Leer datos frescos del formulario y guardar

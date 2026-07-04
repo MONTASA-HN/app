@@ -32,6 +32,108 @@ function calcularVales(fechaInicio, fechaFin){
 let _valeMantOrdenId = null;
 let _valeMantTipo = null; // 'correctivo' o 'preventivo'
 
+const DESTINOS_VIATICOS = [
+  {nombre:"TRUJILLO",            km:767, peajes:8},
+  {nombre:"CHOLUTECA",           km:756, peajes:6},
+  {nombre:"DANLI",               km:735, peajes:6},
+  {nombre:"COYOLITO",            km:693, peajes:4},
+  {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
+  {nombre:"TOCOA",               km:630, peajes:6},
+  {nombre:"OLANCHO",             km:609, peajes:6},
+  {nombre:"TEGUCIGALPA",         km:525, peajes:6},
+  {nombre:"GRACIAS LEMPIRA",     km:420, peajes:4},
+  {nombre:"COPAN",               km:416, peajes:4},
+  {nombre:"LA CEIBA",            km:410, peajes:4},
+  {nombre:"COMAYAGUA",           km:347, peajes:4},
+  {nombre:"SANTA ROSA DE COPAN", km:336, peajes:4},
+  {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
+  {nombre:"SANTA BARBARA",       km:221, peajes:2},
+  {nombre:"TELA",                km:200, peajes:2},
+  {nombre:"CORTES",              km:116, peajes:0},
+];
+
+function _getOrdenPorTipoViaticos(id, tipo){
+  const arr = tipo==='preventivo' ? (DB.preventivos||[])
+            : tipo==='correctivo' ? (DB.correctivos||[])
+            : tipo==='revision'   ? (DB.revisiones||[])
+            : (DB.evaluaciones||[]);
+  return arr.find(o=>o.id===id);
+}
+
+// Resumen de viáticos — SOLO LECTURA (la solicitud/edición se hace desde Gerencia)
+function verViaticosResumen(ordenId, tipo){
+  const orden = _getOrdenPorTipoViaticos(ordenId, tipo);
+  if(!orden) return;
+  const v = orden.viaticos;
+  if(!v){ toast('Esta orden no tiene viáticos solicitados'); return; }
+
+  const ov = document.getElementById('viaticos-overlay');
+  if(!ov) return;
+
+  const personas = v.personas||[];
+  const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
+  const cpU = v.vehiculo==='CAMION GRANDE'?134:22;
+  const tPeaj = d.peajes * cpU;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tComb = v.combustible||0;
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const tOtros = v.otros_gastos||0;
+  const tTotal = tAlim + tPeaj + tComb + tHosp + tOtros;
+
+  function row(label, value, highlight){
+    if(!value) return '';
+    const bg = highlight ? 'background:#1f3864;color:white' : 'background:var(--surface2)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:8px;margin-bottom:6px;${bg}">
+      <span style="font-size:14px;font-weight:${highlight?'700':'500'}">${label}</span>
+      <span style="font-size:${highlight?'18':'14'}px;font-weight:700;font-family:'DM Mono',monospace">L. ${value.toFixed(2)}</span>
+    </div>`;
+  }
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:flex-end" onclick="cerrarViaticosResumen()">
+  <div style="background:var(--surface);width:100%;border-radius:var(--radius) var(--radius) 0 0;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:white">📋 Resumen de Viáticos</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo||''} · ${v.destino||'—'}</div>
+      </div>
+      <button onclick="cerrarViaticosResumen()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px">
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+          <div><span style="color:var(--text3)">Gestor</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${v.vehiculo||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Destino</span><br><strong>${v.destino||'—'}</strong></div>
+          <div><span style="color:var(--text3)">KM total</span><br><strong>${d.km} km</strong></div>
+        </div>
+      </div>
+      ${row('🍽 Total alimentación', tAlim)}
+      ${row('🛣 Total peajes', tPeaj)}
+      ${row('⛽ Combustible', tComb)}
+      ${tHosp ? row('🏨 Hospedaje', tHosp) : ''}
+      ${tOtros ? row('📎 Otros gastos', tOtros) : ''}
+      ${row('💰 TOTAL DEL VIAJE', tTotal, true)}
+      ${personas.length ? `
+      <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Personal viajando</div>
+      ${personas.map(p=>`<div style="background:var(--surface2);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:13px">
+        <span>${p.nombre||'—'}</span>
+        <span style="color:var(--text2)">L. ${((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)).toFixed(0)}</span>
+      </div>`).join('')}` : ''}
+      <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:14px">Para editar o eliminar esta solicitud, contacta a Gerencia</div>
+    </div>
+  </div>
+  </div>`;
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarViaticosResumen(){
+  const ov = document.getElementById('viaticos-overlay');
+  if(ov){ ov.classList.remove('open'); ov.innerHTML=''; }
+  document.body.style.overflow = '';
+}
+
 function abrirValeMant(ordenId, tipo){
   _valeMantOrdenId = ordenId;
   _valeMantTipo = tipo || 'correctivo';
@@ -384,6 +486,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 /* MODAL */
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:flex-end;justify-content:center}
+#vale-overlay.open{display:block!important}
+#viaticos-overlay.open{display:block!important}
 #modal-overlay.open{display:flex}
 #modal-box{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:90vh;overflow-y:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
 #modal-header{border-radius:18px 18px 0 0;padding:18px 18px 14px;color:white;transition:background 0.25s}
@@ -1355,6 +1459,7 @@ function renderPreventivos(){
       </div>
       `}
       ${p.firma ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${p.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
+      ${p.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -1368,7 +1473,7 @@ function renderPreventivos(){
           </div>
           ${p.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
         </div>
-        ${!p.viaticos ? `<button data-oid="${p.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,'preventivo')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${p.vales&&p.vales.length?'Ver Vale':'Generar Vale'}</button>` : ''}
+        ${p.viaticos ? `<button data-oid="${p.id}" onclick="event.stopPropagation();verViaticosResumen(this.dataset.oid,'preventivo')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">📋 Ver Viáticos</button>` : `<button data-oid="${p.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,'preventivo')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${p.vales&&p.vales.length?'Ver Vale':'Generar Vale'}</button>`}
         <button class="btn-finalizar btn-finalizar-prev" onclick="completarPreventivo(\'${p.id}\')">✅ FINALIZAR ORDEN</button>`
       }
     </div>
@@ -1735,6 +1840,7 @@ function renderCorrectivos(){
       `}
       <div style="margin-top:12px">
       ${c.firma ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${c.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
+      ${c.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
       ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -1748,7 +1854,7 @@ function renderCorrectivos(){
           </div>
           ${c.firma?`<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>`:''}
         </div>
-        ${!c.viaticos ? `<button data-oid="${c.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,'correctivo')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${c.vales&&c.vales.length?'Ver Vale':'Generar Vale'}</button>` : ''}
+        ${c.viaticos ? `<button data-oid="${c.id}" onclick="event.stopPropagation();verViaticosResumen(this.dataset.oid,'correctivo')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">📋 Ver Viáticos</button>` : `<button data-oid="${c.id}" onclick="event.stopPropagation();abrirValeMant(this.dataset.oid,'correctivo')" style="width:100%;padding:12px;background:#b8860b;color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px">🍽 ${c.vales&&c.vales.length?'Ver Vale':'Generar Vale'}</button>`}
         <button class="btn-finalizar btn-finalizar-corr" onclick="cerrarCorrectivo(\'${c.id}\')">✅ FINALIZAR ORDEN</button>`
       }
       </div>
@@ -2662,6 +2768,7 @@ function renderRevisiones(){
           ${r.ejeTresCuatro?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 3-4</span><span style="font-weight:600">${r.ejeTresCuatro} mts</span></div>`:''}
         </div>
         ${r.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Descripción / Notas</span><span style="font-weight:600;font-size:12px">${r.notas}</span></div>`:''}
+        ${r.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${r.fechaCierre||''}</div>`;
         card += `</div>`;
         card += `</div>`;
@@ -2707,6 +2814,7 @@ function renderRevisiones(){
           ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation()">${r.notas||''}</textarea></div>`;
+      if(r.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
       card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
@@ -2846,6 +2954,7 @@ function renderEvaluaciones(){
         </div>
         ${v.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;font-size:12px">${v.diagnostico}</span></div>`:''}
         ${v.firma?`<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA DEL CLIENTE</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
+        ${v.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${v.id}','evaluacion')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${v.fechaCierre||''}</div>`;
         card += `</div>`;
         card += `</div>`;
@@ -2889,6 +2998,7 @@ function renderEvaluaciones(){
           <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
           <button onclick="event.stopPropagation();limpiarFirma('${firmaId}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
         </div></div>`;
+      if(v.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${v.id}','evaluacion')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
       card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${v.id}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
@@ -2989,6 +3099,9 @@ function updateBadges(){
   set('badge-eval', eval_);
 }
 </script>
+
+<div id="vale-overlay" style="display:none"></div>
+<div id="viaticos-overlay" style="display:none"></div>
 
 </body>
 </html>
