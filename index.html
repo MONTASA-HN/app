@@ -161,7 +161,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 .fleet-tiles{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px }
 .fleet-tile{
-  position:relative; border-radius:16px; padding:14px 14px 12px; cursor:pointer;
+  position:relative; border-radius:16px; padding:16px 14px 14px; cursor:pointer;
   background:var(--surface); border:1px solid var(--border); overflow:hidden;
   transition:transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -169,16 +169,24 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .fleet-tile::before{
   content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--tile-color);
 }
-.fleet-tile-icon{
-  width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-  background:var(--tile-bg); margin-bottom:10px;
+.fleet-tile-glow{
+  position:absolute; width:110px; height:110px; border-radius:50%; background:var(--tile-color);
+  opacity:0.16; filter:blur(26px); top:-40px; right:-36px; pointer-events:none;
 }
-.fleet-tile-icon svg{ width:18px; height:18px; stroke:var(--tile-color); }
-.fleet-tile-value{ font-family:'DM Mono',monospace; font-size:26px; font-weight:700; color:var(--text); line-height:1 }
-.fleet-tile-label{ font-size:12.5px; color:var(--text2); font-weight:600; margin-top:3px }
-.fleet-tile-pct{ position:absolute; top:12px; right:14px; font-family:'DM Mono',monospace; font-size:12px; font-weight:700; color:var(--tile-color) }
-.fleet-tile-bar{ height:4px; border-radius:3px; background:var(--surface2); margin-top:10px; overflow:hidden }
-.fleet-tile-bar-fill{ height:100%; background:var(--tile-color); border-radius:3px; transition:width 0.8s ease; width:0% }
+.fleet-tile-top{ display:flex; align-items:center; justify-content:space-between; position:relative; z-index:1; margin-bottom:12px }
+.fleet-tile-ring{ position:relative; width:50px; height:50px; flex-shrink:0 }
+.fleet-tile-ring svg{ width:100%; height:100%; transform:rotate(-90deg) }
+.fleet-tile-ring circle{ fill:none; stroke-width:4.5 }
+.fleet-tile-ring-bg{ stroke:var(--tile-bg) }
+.fleet-tile-ring-fg{ stroke-linecap:round; transition:stroke-dasharray 0.8s ease }
+.fleet-tile-ring-icon{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center }
+.fleet-tile-ring-icon svg{ width:20px; height:20px; stroke:var(--tile-color) }
+.fleet-tile-pct{
+  font-family:'DM Mono',monospace; font-size:13px; font-weight:700; color:var(--tile-color);
+  background:var(--tile-bg); padding:3px 9px; border-radius:20px;
+}
+.fleet-tile-value{ font-family:'DM Mono',monospace; font-size:28px; font-weight:700; color:var(--text); line-height:1; position:relative; z-index:1 }
+.fleet-tile-label{ font-size:12.5px; color:var(--text2); font-weight:600; margin-top:4px; position:relative; z-index:1; text-transform:uppercase; letter-spacing:0.4px }
 
 .card-mal{background:#fdf0f0;border-color:var(--red-border)}
 
@@ -401,7 +409,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <div class="content">
 
   <!-- DASHBOARD -->
-  <div id="tab-dashboard" class="section active">
+  <div id="tab-dashboard" class="section active" style="zoom:1.3">
 
     <!-- Bienvenida -->
     <div style="margin-bottom:16px">
@@ -446,32 +454,64 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
     <div class="fleet-tiles">
       <div class="fleet-tile" style="--tile-color:#18A303;--tile-bg:#e3f5d9" onclick="document.getElementById('filt-eq-estado').value='DISPONIBLE';document.querySelector('.nav-btn:nth-child(4)').click();renderEquipos()">
-        <span class="fleet-tile-pct" id="pct-disp">0%</span>
-        <div class="fleet-tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div class="fleet-tile-glow"></div>
+        <div class="fleet-tile-top">
+          <div class="fleet-tile-ring">
+            <svg viewBox="0 0 56 56">
+              <circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/>
+              <circle id="ring-disp" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#18A303"/>
+            </svg>
+            <div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+          </div>
+          <span class="fleet-tile-pct" id="pct-disp">0%</span>
+        </div>
         <div class="fleet-tile-value" id="st-disp">0</div>
         <div class="fleet-tile-label">Disponibles</div>
-        <div class="fleet-tile-bar"><div class="fleet-tile-bar-fill" id="bar-disp"></div></div>
       </div>
       <div class="fleet-tile" style="--tile-color:#E8811A;--tile-bg:#fdead9" onclick="document.getElementById('filt-eq-estado').value='EN RENTA';document.querySelector('.nav-btn:nth-child(4)').click();renderEquipos()">
-        <span class="fleet-tile-pct" id="pct-renta">0%</span>
-        <div class="fleet-tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+        <div class="fleet-tile-glow"></div>
+        <div class="fleet-tile-top">
+          <div class="fleet-tile-ring">
+            <svg viewBox="0 0 56 56">
+              <circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/>
+              <circle id="ring-renta" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#E8811A"/>
+            </svg>
+            <div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+          </div>
+          <span class="fleet-tile-pct" id="pct-renta">0%</span>
+        </div>
         <div class="fleet-tile-value" id="st-renta">0</div>
         <div class="fleet-tile-label">En renta</div>
-        <div class="fleet-tile-bar"><div class="fleet-tile-bar-fill" id="bar-renta"></div></div>
       </div>
       <div class="fleet-tile" style="--tile-color:#B8860B;--tile-bg:#f5ecd2" onclick="document.getElementById('filt-eq-estado').value='EN MANTENIMIENTO';document.querySelector('.nav-btn:nth-child(4)').click();renderEquipos()">
-        <span class="fleet-tile-pct" id="pct-mant">0%</span>
-        <div class="fleet-tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+        <div class="fleet-tile-glow"></div>
+        <div class="fleet-tile-top">
+          <div class="fleet-tile-ring">
+            <svg viewBox="0 0 56 56">
+              <circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/>
+              <circle id="ring-mant" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#B8860B"/>
+            </svg>
+            <div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+          </div>
+          <span class="fleet-tile-pct" id="pct-mant">0%</span>
+        </div>
         <div class="fleet-tile-value" id="st-mant">0</div>
         <div class="fleet-tile-label">En mantenimiento</div>
-        <div class="fleet-tile-bar"><div class="fleet-tile-bar-fill" id="bar-mant"></div></div>
       </div>
       <div class="fleet-tile" style="--tile-color:#D32F2F;--tile-bg:#fbe0e0" onclick="document.getElementById('filt-eq-estado').value='MAL ESTADO';document.querySelector('.nav-btn:nth-child(4)').click();renderEquipos()">
-        <span class="fleet-tile-pct" id="pct-mal">0%</span>
-        <div class="fleet-tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div class="fleet-tile-glow"></div>
+        <div class="fleet-tile-top">
+          <div class="fleet-tile-ring">
+            <svg viewBox="0 0 56 56">
+              <circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/>
+              <circle id="ring-mal" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#D32F2F"/>
+            </svg>
+            <div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          </div>
+          <span class="fleet-tile-pct" id="pct-mal">0%</span>
+        </div>
         <div class="fleet-tile-value" id="st-mal">0</div>
         <div class="fleet-tile-label">Inactivos</div>
-        <div class="fleet-tile-bar"><div class="fleet-tile-bar-fill" id="bar-mal"></div></div>
       </div>
     </div>
 
@@ -2385,16 +2425,23 @@ function renderDashboard(){
   document.getElementById('st-mant').textContent  = mant;
   document.getElementById('st-mal').textContent   = mal;
 
-  // Porcentajes + barras de cada tile
+  // Porcentajes + anillos de progreso de cada tile
   if(total > 0){
     const pDisp  = Math.round(disp /total*100);
     const pRenta = Math.round(renta/total*100);
     const pMant  = Math.round(mant /total*100);
     const pMal   = Math.round(mal  /total*100);
-    document.getElementById('bar-disp').style.width  = pDisp+'%';
-    document.getElementById('bar-renta').style.width = pRenta+'%';
-    document.getElementById('bar-mant').style.width  = pMant+'%';
-    document.getElementById('bar-mal').style.width   = pMal+'%';
+    const Rt = 23, Ct = 2*Math.PI*Rt;
+    const setRing = (id, pct) => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      const len = (pct/100)*Ct;
+      el.setAttribute('stroke-dasharray', len.toFixed(1)+' '+(Ct-len).toFixed(1));
+    };
+    setRing('ring-disp', pDisp);
+    setRing('ring-renta', pRenta);
+    setRing('ring-mant', pMant);
+    setRing('ring-mal', pMal);
     document.getElementById('pct-disp').textContent  = pDisp+'%';
     document.getElementById('pct-renta').textContent = pRenta+'%';
     document.getElementById('pct-mant').textContent  = pMant+'%';
@@ -2423,7 +2470,7 @@ function renderDashboard(){
     const elOp = document.getElementById('fleet-pct-op');
     if(elOp) elOp.textContent = pctOperativa+'%';
   } else {
-    ['bar-disp','bar-renta','bar-mant','bar-mal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.width='0%'; });
+    ['ring-disp','ring-renta','ring-mant','ring-mal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.setAttribute('stroke-dasharray','0 999'); });
     ['pct-disp','pct-renta','pct-mant','pct-mal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='0%'; });
     const elOp = document.getElementById('fleet-pct-op');
     if(elOp) elOp.textContent = '0%';
