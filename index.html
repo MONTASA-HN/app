@@ -1412,6 +1412,25 @@ document.addEventListener('keydown', function(e){
   }
 });
 
+function _reabrirOrdenLogGer(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(x=>x.id===id);
+    if(!o) return;
+    o.cerrado = false;
+    o.estado = 'En proceso';
+    o.fechaCierre = '';
+    saveDB();
+    if(window._fbDB && window._fbReady){
+      const idx = DB.logistica.findIndex(x=>x.id===id);
+      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+    }
+    openSubgrupos.delete('ger-log-'+id);
+    renderLogistica();
+    renderDashboard();
+    toast('Orden reabierta ✓ — ya se puede editar (incluye km salida/retorno) desde Logística');
+  }, '✏️ Editar orden', 'Ingresa tu PIN para reabrir esta orden y habilitar su edición completa (incluye kilometraje)');
+}
+
 function editarOrdenHistorial(tipo, id){
   solicitarPINAccion(()=>{
     // Search in preventivos (completado) and correctivos (cerrado) — same source as historial
@@ -2201,7 +2220,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.viaticos) h += '<button data-vid="'+o.id+'" onclick="abrirViaticos(this.dataset.vid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Viaticos</button>';
   if(o.checklistPdf) h += '<button onclick="event.stopPropagation();verChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">👁 Ver Checklist</button><button onclick="event.stopPropagation();descargarChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📄 Descargar</button>';
   if(!o.viaticos) h += '<button onclick="event.stopPropagation();abrirValeGerencia(\''+o.id+'\')" style="font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer">'+(o.vales&&o.vales.length?'Vale':'Generar Vale')+'</button>';
-  h += '<button onclick="event.stopPropagation();editarOrdenHistorial(\'log\',\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Editar</button>';
+  h += '<button onclick="event.stopPropagation();_reabrirOrdenLogGer(\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">✏️ Editar (PIN)</button>';
   h += '<button onclick="event.stopPropagation();_elimLG(this.getAttribute(\'data-eid\'))" data-eid=\"'+ o.id +'\"' + ' style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">🗑 Eliminar</button>';
   h += '</div>';
   return h;
