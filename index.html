@@ -45,7 +45,6 @@ document.addEventListener('click', function(e){
 #viaticos-overlay.open{display:block!important}
 #vale-overlay{display:none}
 #vale-overlay.open{display:block!important}
-#notif-mant-overlay.open{display:block!important}
 </style>
 <style>
 .notif-item{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
@@ -158,19 +157,6 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   100%{ box-shadow:0 0 0 0 rgba(57,224,122,0); }
 }
 .fleet-donut-wrap{ position:relative; width:136px; height:136px; flex-shrink:0; z-index:1; }
-.fleet-bell{
-  position:relative; width:44px; height:44px; border-radius:50%; border:none; cursor:pointer;
-  background:rgba(255,255,255,0.16); display:flex; align-items:center; justify-content:center; z-index:1;
-  transition:background 0.15s ease;
-}
-.fleet-bell:active{ background:rgba(255,255,255,0.28); }
-.fleet-bell svg{ width:21px; height:21px; }
-.fleet-bell-badge{
-  position:absolute; top:-3px; right:-3px; background:#FF5060; color:#fff;
-  font-size:13px; font-weight:700; min-width:21px; height:21px; border-radius:11px;
-  display:flex; align-items:center; justify-content:center; padding:0 3px;
-  font-family:'DM Mono',monospace; border:2px solid #173a5c;
-}
 .fleet-donut{ width:100%; height:100%; transform:rotate(-90deg); }
 .fleet-donut circle{ fill:none; stroke-width:11; }
 .fleet-donut-bg{ stroke:rgba(255,255,255,0.14); }
@@ -469,12 +455,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <div class="fleet-hero-total" id="st-equipos-total">0</div>
           <div class="fleet-hero-sub"><span class="fleet-pulse-dot"></span>Monitoreo en tiempo real</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-          <button class="fleet-bell" onclick="abrirNotificacionesMant()" aria-label="Notificaciones de mantenimiento">
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-            <span class="fleet-bell-badge" id="fleet-bell-badge" style="display:none">0</span>
-          </button>
-          <div class="fleet-donut-wrap">
+        <div class="fleet-donut-wrap">
           <svg class="fleet-donut" viewBox="0 0 120 120">
             <circle class="fleet-donut-bg" cx="60" cy="60" r="52"/>
             <circle id="donut-disp"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#39e07a"/>
@@ -485,7 +466,6 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <div class="fleet-donut-center">
             <div class="fleet-donut-pct" id="fleet-pct-op">0%</div>
             <div class="fleet-donut-caption">Operativa</div>
-          </div>
           </div>
         </div>
       </div>
@@ -557,7 +537,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div class="card" id="notif-preview-card" style="margin-bottom:18px;padding:21px 21px;display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">
         <div style="font-weight:700;font-size:21px">🔔 Próximos mantenimientos</div>
-        <button onclick="abrirNotificacionesMant()" style="background:none;border:none;color:#2d6a9f;font-size:17px;font-weight:600;cursor:pointer">Ver todos</button>
+        <button onclick="document.querySelector('.nav-btn:nth-child(7)').click()" style="background:none;border:none;color:#2d6a9f;font-size:17px;font-weight:600;cursor:pointer">Ver todos</button>
       </div>
       <div id="notif-preview-list"></div>
     </div>
@@ -928,6 +908,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div id="personal-list"></div>
   </div>
 
+  <!-- NOTIFICACIONES -->
+  <div id="tab-notificaciones" class="section">
+    <div style="font-size:22px;font-weight:600;margin-bottom:4px">🔔 Notificaciones</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Próximos mantenimientos de la flota</div>
+    <div id="notif-mant-list"></div>
+  </div>
+
   <!-- HISTORIAL -->
   <div id="tab-historial" class="section">
     <div style="padding:4px 0 14px">
@@ -1090,6 +1077,7 @@ function showTab(id, el){
   if(id === 'historial'){ fillHistSel(); renderHistorial(); }
   if(id === 'personal')  renderPersonal();
   if(id === 'dashboard') renderDashboard();
+  if(id === 'notificaciones') renderNotificacionesTab();
   window.scrollTo(0, 0);
 }
 
@@ -2498,13 +2486,14 @@ function calcularNotificacionesMant(){
 
 function actualizarBadgeNotifMant(){
   const notifs = calcularNotificacionesMant();
-  const badge = document.getElementById('fleet-bell-badge');
+  const badge = document.getElementById('badge-notif-mant');
   if(badge){
     if(notifs.length){
       badge.textContent = notifs.length>99?'99+':notifs.length;
-      badge.style.display = 'flex';
+      badge.classList.add('visible');
     } else {
-      badge.style.display = 'none';
+      badge.textContent = '';
+      badge.classList.remove('visible');
     }
   }
 
@@ -2519,7 +2508,7 @@ function actualizarBadgeNotifMant(){
           ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))
           : 'En '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s');
         const badgeStyle = urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800';
-        return `<div class="notif-item ${urgente?'notif-urgent':''}" style="cursor:pointer" onclick="abrirNotificacionesMant()">
+        return `<div class="notif-item ${urgente?'notif-urgent':''}" style="cursor:pointer" onclick="document.querySelector('.nav-btn:nth-child(7)').click()">
           <div class="notif-item-top">
             <span class="notif-codigo">🔧 ${n.codigo}</span>
             <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${diasTexto}</span>
@@ -2537,11 +2526,11 @@ function actualizarBadgeNotifMant(){
   }
 }
 
-function abrirNotificacionesMant(){
-  const ov = document.getElementById('notif-mant-overlay');
-  if(!ov) return;
+function renderNotificacionesTab(){
+  const el = document.getElementById('notif-mant-list');
+  if(!el) return;
   const notifs = calcularNotificacionesMant();
-  const itemsHTML = notifs.length ? notifs.map(n=>{
+  el.innerHTML = notifs.length ? notifs.map(n=>{
     const urgente = n.diasRestantes <= 0;
     const diasTexto = urgente
       ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))
@@ -2556,25 +2545,6 @@ function abrirNotificacionesMant(){
       <div class="notif-line">Último mantenimiento: <b>${n.ultimoServicio}</b> — orden <b>${n.ultimoCorrelativo}</b></div>
     </div>`;
   }).join('') : '<div class="empty">Sin mantenimientos próximos por ahora</div>';
-
-  ov.innerHTML = `
-  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;display:flex;align-items:flex-end" onclick="cerrarNotificacionesMant()">
-  <div style="background:var(--surface);width:100%;border-radius:20px 20px 0 0;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
-    <div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:15px;font-weight:700;color:white">🔔 Próximos mantenimientos</div>
-      <button onclick="cerrarNotificacionesMant()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
-    </div>
-    <div style="padding:14px">${itemsHTML}</div>
-  </div>
-  </div>`;
-  ov.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function cerrarNotificacionesMant(){
-  const ov = document.getElementById('notif-mant-overlay');
-  if(ov){ ov.classList.remove('open'); ov.innerHTML=''; }
-  document.body.style.overflow = '';
 }
 
 function renderDashboard(){
@@ -6152,7 +6122,6 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
 
 <div id="viaticos-overlay" style="display:none"></div>
 <div id="vale-overlay" style="display:none"></div>
-<div id="notif-mant-overlay" style="display:none"></div>
 
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="showTab('dashboard',this)">
@@ -6172,6 +6141,9 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
   </button>
   <button class="nav-btn" onclick="showTab('personal',this)">
     <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Personal
+  </button>
+  <button class="nav-btn" onclick="showTab('notificaciones',this)">
+    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="nav-badge" id="badge-notif-mant"></span></span>Notificaciones
   </button>
 </nav>
 
