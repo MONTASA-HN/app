@@ -106,6 +106,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 .card-disp{background:#f0faf0;border-color:var(--green-border)}
 .card-renta{background:#fff5ec;border-color:var(--orange-border)}
+.card-mant{background:#f5efe0;border-color:#c9a86a}
 .card-mal{background:#fdf0f0;border-color:var(--red-border)}
 
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
@@ -203,6 +204,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 #modal-header{border-radius:18px 18px 0 0;padding:18px 18px 14px;color:white;transition:background 0.25s}
 .modal-header-disp{background:#2d6a2d}
 .modal-header-renta{background:#b85c00}
+.modal-header-mant{background:#6a4c1f}
 .modal-header-mal{background:#8b2020}
 #modal-close{background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
 #modal-body{padding:16px 18px}
@@ -281,6 +283,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <select id="det-estado" onchange="cambiarEstadoModal(this.value)">
           <option value="DISPONIBLE">✅ Disponible</option>
           <option value="EN RENTA">🟠 En renta</option>
+          <option value="EN MANTENIMIENTO">🔧 En mantenimiento</option>
           <option value="MAL ESTADO">🔴 Mal estado / Inactivo</option>
         </select>
       </div>
@@ -343,9 +346,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div style="display:flex;border-radius:8px;overflow:hidden;height:14px;margin-bottom:14px;background:var(--surface2)">
         <div id="bar-disp" style="background:#2d6a2d;height:100%;transition:width 0.5s" title="Disponibles"></div>
         <div id="bar-renta" style="background:#c97a20;height:100%;transition:width 0.5s" title="En renta"></div>
+        <div id="bar-mant" style="background:#6a4c1f;height:100%;transition:width 0.5s" title="En mantenimiento"></div>
         <div id="bar-mal" style="background:#8b2020;height:100%;transition:width 0.5s" title="Mal estado"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
         <div style="text-align:center;padding:14px 6px;background:#f0faf0;border-radius:var(--radius-sm);border:1px solid #a8d8a8">
           <div style="font-size:32px;font-weight:600;font-family:'DM Mono',monospace;color:#2d6a2d" id="st-disp">0</div>
           <div style="font-size:17px;font-weight:600;color:#2d6a2d;font-family:'DM Mono',monospace" id="pct-disp">0%</div>
@@ -355,6 +359,11 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <div style="font-size:32px;font-weight:600;font-family:'DM Mono',monospace;color:#c97a20" id="st-renta">0</div>
           <div style="font-size:17px;font-weight:600;color:#c97a20;font-family:'DM Mono',monospace" id="pct-renta">0%</div>
           <div style="font-size:14px;color:#c97a20;margin-top:3px;font-weight:500">En renta</div>
+        </div>
+        <div style="text-align:center;padding:14px 6px;background:#f5efe0;border-radius:var(--radius-sm);border:1px solid #c9a86a">
+          <div style="font-size:32px;font-weight:600;font-family:'DM Mono',monospace;color:#6a4c1f" id="st-mant">0</div>
+          <div style="font-size:17px;font-weight:600;color:#6a4c1f;font-family:'DM Mono',monospace" id="pct-mant">0%</div>
+          <div style="font-size:14px;color:#6a4c1f;margin-top:3px;font-weight:500">En mantenimiento</div>
         </div>
         <div style="text-align:center;padding:14px 6px;background:#fdf0f0;border-radius:var(--radius-sm);border:1px solid #f0a0a0">
           <div style="font-size:32px;font-weight:600;font-family:'DM Mono',monospace;color:#8b2020" id="st-mal">0</div>
@@ -417,6 +426,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <option value="">Todos los estados</option>
         <option value="DISPONIBLE">Disponible</option>
         <option value="EN RENTA">En renta</option>
+        <option value="EN MANTENIMIENTO">En mantenimiento</option>
         <option value="MAL ESTADO">Mal estado</option>
       </select>
     </div>
@@ -812,6 +822,23 @@ function saveDB(){
   }catch(e){}
 }
 
+function _syncEquipoCampoFB(equipoId, campo, valor){
+  if(!window._fbDB || !window._fbReady || !equipoId) return;
+  const idx = DB.equipos.findIndex(e => e.id===equipoId);
+  if(idx<0) return;
+  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(err=>console.error('Error sincronizando '+campo+' del equipo:', err));
+}
+
+// Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
+function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq) return;
+  eq.estado = nuevoEstado;
+  saveDB();
+  _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
+}
+
 function saveEquipo(eq){
   if(!eq || !window._fbDB || !window._fbReady) return;
   const idx = DB.equipos.findIndex(e => e.id === eq.id);
@@ -1012,6 +1039,7 @@ function aplicarColorHeader(estado){
   h.className = '';
   if(estado === 'DISPONIBLE') h.className = 'modal-header-disp';
   else if(estado === 'EN RENTA') h.className = 'modal-header-renta';
+  else if(estado === 'EN MANTENIMIENTO') h.className = 'modal-header-mant';
   else h.className = 'modal-header-mal';
 }
 
@@ -1305,12 +1333,14 @@ function bCorr(estado, prioridad){
 function bEstado(e){
   if(e==='DISPONIBLE')  return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
   if(e==='EN RENTA')    return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
+  if(e==='EN MANTENIMIENTO') return '<span class="badge" style="background:#e4d4b8;color:#6a4c1f;font-size:13px;padding:5px 11px">🔧 En mantenimiento</span>';
   return '<span class="badge" style="background:#f8c0c0;color:#7a1515;font-size:13px;padding:5px 11px">Inactivo</span>';
 }
 
 function cardClass(e){
   if(e==='DISPONIBLE') return 'card';
   if(e==='EN RENTA')   return 'card card-renta';
+  if(e==='EN MANTENIMIENTO') return 'card card-mant';
   return 'card card-mal';
 }
 
@@ -2251,24 +2281,29 @@ function renderDashboard(){
   const total = DB.equipos.length;
   const disp  = DB.equipos.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
   const renta = DB.equipos.filter(e=>e.estado==='EN RENTA').length;
+  const mant  = DB.equipos.filter(e=>e.estado==='EN MANTENIMIENTO').length;
   const mal   = DB.equipos.filter(e=>e.estado==='MAL ESTADO').length;
 
   // Flota
   document.getElementById('st-equipos-total').textContent = total + ' equipos';
   document.getElementById('st-disp').textContent  = disp;
   document.getElementById('st-renta').textContent = renta;
+  document.getElementById('st-mant').textContent  = mant;
   document.getElementById('st-mal').textContent   = mal;
 
   // Barra proporcional + porcentajes
   if(total > 0){
     const pDisp  = Math.round(disp /total*100);
     const pRenta = Math.round(renta/total*100);
+    const pMant  = Math.round(mant /total*100);
     const pMal   = Math.round(mal  /total*100);
     document.getElementById('bar-disp').style.width  = pDisp+'%';
     document.getElementById('bar-renta').style.width = pRenta+'%';
+    document.getElementById('bar-mant').style.width  = pMant+'%';
     document.getElementById('bar-mal').style.width   = pMal+'%';
     document.getElementById('pct-disp').textContent  = pDisp+'%';
     document.getElementById('pct-renta').textContent = pRenta+'%';
+    document.getElementById('pct-mant').textContent  = pMant+'%';
     document.getElementById('pct-mal').textContent   = pMal+'%';
   }
 
@@ -2387,6 +2422,7 @@ function renderEquipos(){
       const subId = 'sub-'+g.label+'-'+sub;
       const dispS  = items.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
       const rentaS = items.filter(e=>e.estado==='EN RENTA').length;
+      const mantS  = items.filter(e=>e.estado==='EN MANTENIMIENTO').length;
       const malS   = items.filter(e=>e.estado==='MAL ESTADO').length;
       const isOpen = openSubgrupos.has(subId);
       out += `
@@ -2397,6 +2433,7 @@ function renderEquipos(){
           <div style="margin-left:auto;display:flex;gap:5px;align-items:center">
             ${dispS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','DISPONIBLE')" style="background:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'#1a5c1a':'#c8edcc'};color:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'white':'#1a5c1a'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${dispS} disp.</button>`:''}
             ${rentaS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN RENTA')" style="background:${filtroSubgrupo['${subId}']==='EN RENTA'?'#8a4800':'#fde5c0'};color:${filtroSubgrupo['${subId}']==='EN RENTA'?'white':'#8a4800'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${rentaS} renta</button>`:''}
+            ${mantS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN MANTENIMIENTO')" style="background:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'#6a4c1f':'#e4d4b8'};color:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'white':'#6a4c1f'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${mantS} mant.</button>`:''}
             ${malS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','MAL ESTADO')" style="background:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'#7a1515':'#f8c0c0'};color:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'white':'#7a1515'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${malS} inact.</button>`:''}
             <span id="arr-${subId}" style="color:var(--text3);font-size:14px;transition:transform 0.2s">▼</span>
           </div>
@@ -3092,7 +3129,7 @@ function completarPreventivo(id){
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = p;
-    if(_o && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
+    if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
       var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
       if(_v.length){
         _o.vales = _v;
@@ -3272,7 +3309,7 @@ function cerrarCorrectivo(id){
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = c;
-    if(_o && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
+    if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
       var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
       if(_v.length){
         _o.vales = _v;
@@ -3347,6 +3384,7 @@ function exportarExcel(){
       ['Total equipos',DB.equipos.length],
       ['Disponibles',DB.equipos.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length],
       ['En renta',DB.equipos.filter(e=>e.estado==='EN RENTA').length],
+      ['En mantenimiento',DB.equipos.filter(e=>e.estado==='EN MANTENIMIENTO').length],
       ['Inactivos',DB.equipos.filter(e=>e.estado==='MAL ESTADO').length],
       ['Total preventivos',DB.preventivos.length],
       ['Total correctivos',DB.correctivos.length],
@@ -3630,8 +3668,10 @@ function enviarSolicitudWA(){
   const fechaISO    = new Date().toISOString().slice(0,10);
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
+  const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
@@ -3642,10 +3682,16 @@ function enviarSolicitudWA(){
       _lastLogisticaWriteTs = writeTs;
       const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
       window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
-        .then(()=>{ renderLogistica(); renderDashboard(); })
+        .then(()=>{
+          renderLogistica(); renderDashboard();
+          if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+        })
         .catch(err=>{
           window._fbDB.ref('montasa/logistica').set(lgSnapshot)
-            .then(()=>{ window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard(); })
+            .then(()=>{
+              window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard();
+              if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+            })
             .catch(err2=>{ DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB(); alert('⚠️ Error al guardar: '+err2.message); });
         });
     } else {
@@ -3653,7 +3699,8 @@ function enviarSolicitudWA(){
       alert('⚠️ Sin conexión a Firebase.'); return;
     }
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
   if(!DB.solicitudes) DB.solicitudes = [];
@@ -3764,8 +3811,10 @@ function copiarMensajeWA(){
   const fechaISO    = new Date().toISOString().slice(0,10);
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
+  const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
@@ -3776,10 +3825,16 @@ function copiarMensajeWA(){
       _lastLogisticaWriteTs = writeTs;
       const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
       window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
-        .then(()=>{ renderLogistica(); renderDashboard(); })
+        .then(()=>{
+          renderLogistica(); renderDashboard();
+          if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+        })
         .catch(err=>{
           window._fbDB.ref('montasa/logistica').set(lgSnapshot)
-            .then(()=>{ window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard(); })
+            .then(()=>{
+              window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard();
+              if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+            })
             .catch(err2=>{ DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB(); alert('⚠️ Error al guardar: '+err2.message); });
         });
     } else {
@@ -3787,7 +3842,8 @@ function copiarMensajeWA(){
       alert('⚠️ Sin conexión a Firebase.'); return;
     }
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
   if(!DB.solicitudes) DB.solicitudes = [];
