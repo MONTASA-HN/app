@@ -821,6 +821,18 @@ function _syncEquipoCampoFB(equipoId, campo, valor){
   window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(e=>console.warn('Error sincronizando '+campo+' del equipo:', e));
 }
 
+// Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
+function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq) return;
+  eq.estado = nuevoEstado;
+  if(nuevoEstado !== 'EN MANTENIMIENTO') eq.fechaSalidaTaller = '';
+  saveDB();
+  _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
+  if(nuevoEstado !== 'EN MANTENIMIENTO') _syncEquipoCampoFB(equipoId, 'fechaSalidaTaller', '');
+}
+
 function calcHorasMinutos(inicio, fin){
   if(!inicio || !fin) return 0;
   const dIni = new Date(inicio), dFin = new Date(fin);
@@ -1472,7 +1484,10 @@ function guardarPreventivo(finalizar=false){
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    const _eqAuto = DB.equipos.find(e=>e.id===entry.equipoId);
+    if(_eqAuto) entry.estadoEquipoAnterior = _eqAuto.estado || 'DISPONIBLE';
     DB.preventivos.push(entry);
+    if(_eqAuto && !finalizar) _cambiarEstadoEquipoAuto(entry.equipoId, 'EN MANTENIMIENTO');
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
@@ -1535,7 +1550,7 @@ function completarPreventivo(id){
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = p;
-    if(_o && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
+    if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
       var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin) : [];
       if(_v.length){
         _o.vales = _v;
@@ -1554,6 +1569,15 @@ function completarPreventivo(id){
     const _eq = DB.equipos.find(e=>e.id===p.equipoId);
     if(_eq) _eq.horometro = p.horometro;
     _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
+  }
+  // Restaurar el estado del equipo tras salir de mantenimiento
+  if(p.equipoId){
+    const _eqM = DB.equipos.find(e=>e.id===p.equipoId);
+    if(_eqM && _eqM.estado==='EN MANTENIMIENTO'){
+      const _anterior = p.estadoEquipoAnterior;
+      const _destino = _anterior==='EN RENTA' ? 'EN RENTA' : 'DISPONIBLE';
+      _cambiarEstadoEquipoAuto(p.equipoId, _destino);
+    }
   }
   registrarOrdenCerrada(p, 'Preventivo');
   saveDB();
@@ -1864,7 +1888,10 @@ function guardarCorrectivo(finalizar=false){
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.estado='Completado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
+    const _eqAuto = DB.equipos.find(e=>e.id===entry.equipoId);
+    if(_eqAuto) entry.estadoEquipoAnterior = _eqAuto.estado || 'DISPONIBLE';
     DB.correctivos.push(entry);
+    if(_eqAuto && !finalizar) _cambiarEstadoEquipoAuto(entry.equipoId, 'EN MANTENIMIENTO');
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
@@ -1932,10 +1959,19 @@ function cerrarCorrectivo(id){
     if(_eq) _eq.horometro = c.horometro;
     _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
   }
+  // Restaurar el estado del equipo tras salir de mantenimiento
+  if(c.equipoId){
+    const _eqM = DB.equipos.find(e=>e.id===c.equipoId);
+    if(_eqM && _eqM.estado==='EN MANTENIMIENTO'){
+      const _anterior = c.estadoEquipoAnterior;
+      const _destino = _anterior==='EN RENTA' ? 'EN RENTA' : 'DISPONIBLE';
+      _cambiarEstadoEquipoAuto(c.equipoId, _destino);
+    }
+  }
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = c;
-    if(_o && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
+    if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
       var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin) : [];
       if(_v.length){
         _o.vales = _v;
