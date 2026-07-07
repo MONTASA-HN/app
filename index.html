@@ -63,6 +63,7 @@ document.addEventListener('click', function(e){
 <title>MONTASA Gerencia</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root{
   --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;--border2:#cccac0;
@@ -1004,6 +1005,146 @@ function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
   eq.estado = nuevoEstado;
   saveDB();
   _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COMPARTIR ORDEN — genera una imagen con los datos completos y la copia
+// al portapapeles. Funciona para todos los tipos de orden de la app.
+// ══════════════════════════════════════════════════════════════════════
+function _campoRow(label, valor){
+  if(valor===undefined || valor===null || valor==='') return '';
+  return `<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #e2e0d8">
+    <span style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0">${label}</span>
+    <span style="color:#1a1a18;font-size:13.5px;font-weight:600;text-align:right">${valor}</span>
+  </div>`;
+}
+
+function _construirCamposOrden(tipo, o, eq){
+  const campos = [];
+  const eqLabel = eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.equipoCompra || o.clienteNombre || '—');
+  campos.push(['Correlativo', o.correlativo||'—']);
+  campos.push(['Equipo', eqLabel]);
+
+  if(tipo==='preventivo'){
+    campos.push(['Servicio', o.servicio||'—']);
+    campos.push(['Técnico(s)', o.tecnico||'—']);
+    campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
+    campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
+    campos.push(['Horas trabajadas', typeof calcHoras==='function' ? calcHoras(o.fechaInicio,o.fechaFin) : '—']);
+    campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
+    campos.push(['Trabajo realizado', o.notas||'—']);
+    if(o.sugerencias) campos.push(['Sugerencias', o.sugerencias]);
+  } else if(tipo==='correctivo'){
+    campos.push(['Sistema afectado', o.sistema||'—']);
+    campos.push(['Técnico(s)', o.tecnico||'—']);
+    campos.push(['Falla reportada', o.falla||'—']);
+    campos.push(['Diagnóstico', o.diagnostico||'—']);
+    campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
+    campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
+    campos.push(['Horas trabajadas', typeof calcHoras==='function' ? calcHoras(o.fechaInicio,o.fechaFin) : '—']);
+    campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
+  } else if(tipo==='revision'){
+    campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
+    campos.push(['Fecha', o.fecha||'—']);
+    campos.push(['Horario', (o.horaIni||'—')+' – '+(o.horaFin||'—')]);
+    campos.push(['Placa', o.placa||'—']);
+    campos.push(['Tipo de vehículo', o.tipoVehiculo||'—']);
+    campos.push(['Largo × Ancho × Alto', (o.largo||'—')+' × '+(o.ancho||'—')+' × '+(o.alto||'—')+' mts']);
+    campos.push(['Dist. eje 1-2', o.ejeUnoDos?o.ejeUnoDos+' mts':'—']);
+    if(o.ejeDosTres) campos.push(['Dist. eje 2-3', o.ejeDosTres+' mts']);
+    if(o.ejeTresCuatro) campos.push(['Dist. eje 3-4', o.ejeTresCuatro+' mts']);
+    campos.push(['Notas', o.notas||'—']);
+  } else if(tipo==='evaluacion'){
+    campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
+    campos.push(['Fecha', o.fecha||'—']);
+    campos.push(['Horario', (o.horaIni||'—')+' – '+(o.horaFin||'—')]);
+    campos.push(['Modelo', o.modelo||'—']);
+    campos.push(['Marca', o.marca||'—']);
+    campos.push(['Serie', o.serie||'—']);
+    campos.push(['Diagnóstico', o.diagnostico||'—']);
+  } else {
+    // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
+    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
+    campos.push(['Tipo de orden', tipoLbl]);
+    campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ')||'—']);
+    if(o.motorista) campos.push(['Motorista', o.motorista]);
+    campos.push(['Descripción', o.descripcion||'—']);
+    campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
+    campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
+    if(o.kmSalida) campos.push(['Km salida', o.kmSalida]);
+    if(o.kmRetorno) campos.push(['Km retorno', o.kmRetorno]);
+    if(o.horometro) campos.push(['Horómetro', o.horometro+' hrs']);
+  }
+  return campos;
+}
+
+async function copiarImagenOrden(tipo, id){
+  try{
+    const arr = tipo==='preventivo' ? DB.preventivos
+              : tipo==='correctivo' ? DB.correctivos
+              : tipo==='revision'   ? DB.revisiones
+              : tipo==='evaluacion' ? DB.evaluaciones
+              : (DB.logistica||[]);
+    const o = arr.find(x=>x.id===id);
+    if(!o){ toast('Orden no encontrada', true); return; }
+    const eq = DB.equipos.find(e=>e.id===o.equipoId);
+    const campos = _construirCamposOrden(tipo, o, eq);
+    const tipoTitulo = {
+      preventivo:'Orden de Preventivo', correctivo:'Orden de Correctivo',
+      revision:'Revisión Físico-Técnica', evaluacion:'Evaluación de Equipo',
+      renta:'Orden de Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
+      apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
+    }[tipo] || (o.tipoLogistica ? 'Orden de Logística' : 'Orden');
+
+    toast('Generando imagen…');
+
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
+    cont.innerHTML = `
+      <div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:#8fd4f5;text-transform:uppercase">Montasa Handling Co.</div>
+        <div style="font-size:20px;font-weight:700;margin-top:4px">${tipoTitulo}</div>
+        <div style="font-size:13px;color:#a9c8de;margin-top:2px">${o.correlativo||''}</div>
+      </div>
+      <div style="padding:18px 22px 6px">
+        ${campos.map(([l,v])=>_campoRow(l,v)).join('')}
+      </div>
+      ${o.firma ? `<div style="padding:14px 22px 6px">
+        <div style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px">Firma del cliente</div>
+        <img src="${o.firma}" style="width:100%;max-height:110px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff">
+      </div>` : ''}
+      <div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">
+        Documento generado desde el sistema interno de Montasa Handling Co. — ${new Date().toLocaleDateString('es-HN')}
+      </div>
+    `;
+    document.body.appendChild(cont);
+
+    const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+
+    canvas.toBlob(async (blob)=>{
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      try{
+        if(navigator.clipboard && window.ClipboardItem){
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
+        } else {
+          throw new Error('Clipboard API no disponible');
+        }
+      }catch(err){
+        // Respaldo: descargar la imagen si no se pudo copiar al portapapeles
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = (o.correlativo||'orden')+'.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('No se pudo copiar automáticamente — se descargó la imagen');
+      }
+    }, 'image/png');
+  }catch(err){
+    console.error('Error generando imagen de orden:', err);
+    toast('Error al generar la imagen: '+err.message, true);
+  }
 }
 
 function saveEquipo(eq){
@@ -2403,6 +2544,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.checklistPdf) h += '<button onclick="event.stopPropagation();verChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">👁 Ver Checklist</button><button onclick="event.stopPropagation();descargarChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📄 Descargar</button>';
   if(!o.viaticos) h += '<button onclick="event.stopPropagation();abrirValeGerencia(\''+o.id+'\')" style="font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer">'+(o.vales&&o.vales.length?'Vale':'Generar Vale')+'</button>';
   h += '<button onclick="event.stopPropagation();_reabrirOrdenLogGer(\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">✏️ Editar (PIN)</button>';
+  h += '<button onclick="event.stopPropagation();copiarImagenOrden(\''+(o.tipoLogistica||'')+'\',\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📋 Copiar imagen</button>';
   h += '<button onclick="event.stopPropagation();_elimLG(this.getAttribute(\'data-eid\'))" data-eid=\"'+ o.id +'\"' + ' style="font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">🗑 Eliminar</button>';
   h += '</div>';
   return h;
@@ -3185,6 +3327,7 @@ function renderHistorial(){
         cRV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
         if(estRV==='Completado'){
           cRV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+          cRV+=`<button onclick="event.stopPropagation();copiarImagenOrden('revision','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
         }
         cRV+=`<button onclick="event.stopPropagation();_elimRV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
         cRV+=`</div>`;
@@ -3225,6 +3368,7 @@ function renderHistorial(){
         cEV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
         if(estEV==='Completado'){
           cEV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+          cEV+=`<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
         }
         cEV+=`<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
         cEV+=`</div>`;
@@ -3308,6 +3452,7 @@ function renderHistorial(){
       }
       if(estRaw==='Completado'){
         card += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+        card += `<button onclick="event.stopPropagation();copiarImagenOrden('${x._t==='P'?'preventivo':'correctivo'}','${x.id}')" style="padding:6px 14px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
       }
       card += `<button onclick="event.stopPropagation();eliminarDelHistorial('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:6px;font-size:12px;cursor:pointer">✕ Eliminar</button>`;
       card += `</div>`;
