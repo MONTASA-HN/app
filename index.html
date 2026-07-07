@@ -1109,11 +1109,11 @@ async function copiarImagenOrden(tipo, id){
     const cont = document.createElement('div');
     cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
     cont.innerHTML = `
-      <div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:18px 22px">
-        <div style="background:#fff;border-radius:10px;padding:10px 16px;display:inline-block;margin-bottom:14px">
-          <img src="${_LOGO_MONTASA_B64}" style="height:34px;display:block">
-        </div>
-        <div style="font-size:20px;font-weight:700;color:#fff">${tipoTitulo}</div>
+      <div style="background:#fff;padding:16px 22px 14px;border-bottom:3px solid #1f5488">
+        <img src="${_LOGO_MONTASA_B64}" style="height:38px;display:block">
+      </div>
+      <div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 22px;color:#fff">
+        <div style="font-size:20px;font-weight:700">${tipoTitulo}</div>
         <div style="font-size:13px;color:#a9c8de;margin-top:2px">${o.correlativo||''}</div>
       </div>
       <div style="padding:18px 22px 6px">
@@ -1128,6 +1128,17 @@ async function copiarImagenOrden(tipo, id){
       </div>
     `;
     document.body.appendChild(cont);
+
+    // Esperar a que todas las imágenes (logo, firma) terminen de cargar antes de capturar
+    const imgs = cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(img=>{
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(resolve=>{
+        img.onload = resolve;
+        img.onerror = resolve;
+        setTimeout(resolve, 3000); // seguridad por si alguna imagen nunca dispara load
+      });
+    }));
 
     const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
     document.body.removeChild(cont);
