@@ -558,14 +558,6 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
     </div>
 
-    <div class="card" id="notif-preview-card" style="margin-bottom:14px;padding:16px 16px;display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-weight:700;font-size:16px">🔔 Próximos mantenimientos</div>
-        <button onclick="document.querySelector('.nav-btn:nth-child(7)').click()" style="background:none;border:none;color:#2d6a9f;font-size:13px;font-weight:600;cursor:pointer">Ver todos</button>
-      </div>
-      <div id="notif-preview-list"></div>
-    </div>
-
   </div>
 
   <!-- EQUIPOS -->
@@ -2499,15 +2491,15 @@ function calcularNotificacionesMant(){
   const notifs = [];
   DB.equipos.forEach(eq=>{
     // Último preventivo COMPLETADO de este equipo
-    const prevsCompletados = DB.preventivos.filter(p=>p.equipoId===eq.id && p.completado && (p.fechaCompletado||p.fechaFin));
+    const prevsCompletados = DB.preventivos.filter(p=>p.equipoId===eq.id && p.completado && (p.fechaFin||p.fechaCompletado));
     if(!prevsCompletados.length) return; // sin historial, no se puede proyectar
     prevsCompletados.sort((a,b)=>{
-      const fa = parseFechaLocalNotif(a.fechaCompletado||a.fechaFin);
-      const fb = parseFechaLocalNotif(b.fechaCompletado||b.fechaFin);
+      const fa = parseFechaLocalNotif(a.fechaFin||a.fechaCompletado);
+      const fb = parseFechaLocalNotif(b.fechaFin||b.fechaCompletado);
       return fb-fa;
     });
     const ultimo = prevsCompletados[0];
-    const fechaUltimo = parseFechaLocalNotif(ultimo.fechaCompletado||ultimo.fechaFin);
+    const fechaUltimo = parseFechaLocalNotif(ultimo.fechaFin||ultimo.fechaCompletado);
     if(isNaN(fechaUltimo)) return;
     const meses = eq.intervaloMantMeses || 3;
     const fechaProxima = new Date(fechaUltimo);
@@ -2537,34 +2529,6 @@ function actualizarBadgeNotifMant(){
     } else {
       badge.textContent = '';
       badge.classList.remove('visible');
-    }
-  }
-
-  const previewCard = document.getElementById('notif-preview-card');
-  const previewList = document.getElementById('notif-preview-list');
-  if(previewCard && previewList){
-    if(notifs.length){
-      previewCard.style.display = 'block';
-      previewList.innerHTML = notifs.slice(0,3).map(n=>{
-        const urgente = n.diasRestantes <= 0;
-        const diasTexto = urgente
-          ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))
-          : 'En '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s');
-        const badgeStyle = urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800';
-        return `<div class="notif-item ${urgente?'notif-urgent':''}" style="cursor:pointer" onclick="document.querySelector('.nav-btn:nth-child(7)').click()">
-          <div class="notif-item-top">
-            <span class="notif-codigo">🔧 ${n.codigo}</span>
-            <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${diasTexto}</span>
-          </div>
-          <div class="notif-line">Último mantenimiento: <b>${n.ultimoServicio}</b> — orden <b>${n.ultimoCorrelativo}</b></div>
-        </div>`;
-      }).join('');
-      if(notifs.length>3){
-        previewList.innerHTML += `<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:2px">y ${notifs.length-3} más…</div>`;
-      }
-    } else {
-      previewCard.style.display = 'none';
-      previewList.innerHTML = '';
     }
   }
 }
