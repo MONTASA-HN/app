@@ -1912,6 +1912,13 @@ function renderPersonal(){
   const statsTec = {};
   TECNICOS_LIST.forEach(t => { statsTec[t] = { ordenes:0, minutos:0 }; });
 
+  // PERSONAL_LOG se define aquí (antes) porque el personal de logística a veces
+  // también participa como "técnico" en órdenes de preventivo/correctivo, y sus
+  // horas deben repartirse a Logística, no quedar separadas en Técnicos.
+  const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
+  const statsLog = {};
+  PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
+
   const ordenesDelMes = [
     ...DB.preventivos.filter(p => {
       if(!p.completado) return false;
@@ -1930,18 +1937,21 @@ function renderPersonal(){
     const fin  = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre);
     const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
     tecs.forEach(t => {
-      if(!statsTec[t]) statsTec[t] = {ordenes:0, minutos:0};
-      statsTec[t].ordenes++;
-      statsTec[t].minutos += mins;
+      if(PERSONAL_LOG.includes(t)){
+        if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
+        statsLog[t].ordenes++;
+        statsLog[t].minutos += mins;
+      } else {
+        if(!statsTec[t]) statsTec[t] = {ordenes:0, minutos:0};
+        statsTec[t].ordenes++;
+        statsTec[t].minutos += mins;
+      }
     });
   });
 
   // ══════════════════════════════════════════════════════════════════════
   // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
   // ══════════════════════════════════════════════════════════════════════
-  const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
-  const statsLog = {};
-  PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
   const logCerradasMes = (DB.logistica||[]).filter(o => {
     if(!o.cerrado || o.estado==='Cancelado') return false;
     const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
