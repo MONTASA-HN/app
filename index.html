@@ -49,6 +49,7 @@ document.addEventListener('click', function(e){
 <style>
 .notif-item{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
 .notif-item.notif-urgent{ border-color:#f0a0a0; background:#fdf5f5; }
+.notif-item.notif-completada{ border-color:#a8d8a8; background:#f0faf0; }
 .notif-item-top{ display:flex; align-items:center; gap:8px; margin-bottom:6px }
 .notif-days-badge{ font-family:'DM Mono',monospace; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; }
 .notif-codigo{ font-weight:700; font-size:14px; color:var(--text) }
@@ -979,6 +980,7 @@ function saveDB(){
         solicitudes:    DB.solicitudes||[],
         vendidos:       DB.vendidos||[],
         ordenesCerradas:DB.ordenesCerradas||[],
+        notifCompletadas: DB.notifCompletadas||{},
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
@@ -2506,12 +2508,15 @@ function calcularNotificacionesMant(){
     fechaProxima.setMonth(fechaProxima.getMonth()+meses);
     const diasRestantes = Math.round((fechaProxima - hoy)/86400000);
     if(diasRestantes <= 7){
+      const notifKey = eq.id + '_' + (ultimo.correlativo||'sin-orden');
       notifs.push({
         equipoId: eq.id,
         codigo: eq.codigo,
         diasRestantes,
         ultimoServicio: ultimo.servicio||'—',
-        ultimoCorrelativo: ultimo.correlativo||'—'
+        ultimoCorrelativo: ultimo.correlativo||'—',
+        notifKey,
+        completada: !!(DB.notifCompletadas && DB.notifCompletadas[notifKey])
       });
     }
   });
@@ -2520,7 +2525,7 @@ function calcularNotificacionesMant(){
 }
 
 function actualizarBadgeNotifMant(){
-  const notifs = calcularNotificacionesMant();
+  const notifs = calcularNotificacionesMant().filter(n=>!n.completada);
   const badge = document.getElementById('badge-notif-mant');
   if(badge){
     if(notifs.length){
@@ -2542,16 +2547,29 @@ function renderNotificacionesTab(){
     const diasTexto = urgente
       ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))
       : 'En '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s');
-    const badgeStyle = urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800';
-    return `<div class="notif-item ${urgente?'notif-urgent':''}">
+    const badgeStyle = n.completada ? 'background:#c8edcc;color:#1a5c1a' : (urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800');
+    const claseItem = n.completada ? 'notif-completada' : (urgente ? 'notif-urgent' : '');
+    return `<div class="notif-item ${claseItem}">
       <div class="notif-item-top">
         <span class="notif-codigo">🔧 ${n.codigo}</span>
-        <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${diasTexto}</span>
+        <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${n.completada ? '✅ Completado' : diasTexto}</span>
       </div>
       <div class="notif-line">Próximo mantenimiento del equipo <b>${n.codigo}</b>${urgente?'':' en '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s')}</div>
       <div class="notif-line">Último mantenimiento: <b>${n.ultimoServicio}</b> — orden <b>${n.ultimoCorrelativo}</b></div>
+      ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
     </div>`;
   }).join('') : '<div class="empty">Sin mantenimientos próximos por ahora</div>';
+}
+
+function marcarNotifCompletada(notifKey){
+  solicitarPINAccion(()=>{
+    if(!DB.notifCompletadas) DB.notifCompletadas = {};
+    DB.notifCompletadas[notifKey] = true;
+    saveDB();
+    renderNotificacionesTab();
+    actualizarBadgeNotifMant();
+    toast('Notificación marcada como completada ✓');
+  }, '✅ Completar notificación', 'Ingresa tu PIN para marcar este mantenimiento como completado');
 }
 
 function renderActividadReciente(){
@@ -4554,6 +4572,7 @@ function cerrarExito(){
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
+        if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
         if(remote.logistica){
           DB.logistica = _mergeLogistica(remote.logistica);
@@ -4628,6 +4647,7 @@ function cerrarExito(){
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
+      if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
       if(d.logistica){
         // Merge preservando vales y otros campos locales que Firebase puede no incluir
