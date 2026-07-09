@@ -1012,6 +1012,40 @@ function _esperarFirebaseListo(maxMs){
   });
 }
 
+// Guarda DB.logistica de forma resiliente: nunca bloquea al usuario ni le hace
+// perder la orden. Guarda local de inmediato y reintenta en Firebase en
+// segundo plano hasta lograrlo, sin importar cuánto tarde la conexión.
+let _logisticaSyncEnCurso = false;
+function _guardarLogisticaResiliente(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+  renderLogistica(); renderDashboard();
+  toast('Orden guardada ✓');
+  _sincronizarLogisticaConReintento();
+}
+
+function _sincronizarLogisticaConReintento(){
+  if(_logisticaSyncEnCurso) return; // ya hay un intento en curso, no duplicar
+  if(!window._fbDB || !window._fbReady){
+    setTimeout(_sincronizarLogisticaConReintento, 5000);
+    return;
+  }
+  _logisticaSyncEnCurso = true;
+  const writeTs = Date.now();
+  _lastLogisticaWriteTs = writeTs;
+  window._fbDB.ref('montasa').update({
+    logistica: _cleanLogistica(DB.logistica),
+    lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
+    _ts: writeTs, _sid: _SESSION_ID
+  }).then(()=>{
+    _logisticaSyncEnCurso = false;
+  }).catch(()=>{
+    _logisticaSyncEnCurso = false;
+    console.warn('No se pudo sincronizar logística, reintentando en 5s...');
+    setTimeout(_sincronizarLogisticaConReintento, 5000);
+  });
+}
+
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
   if(!equipoId) return;
   const eq = DB.equipos.find(e=>e.id===equipoId);
@@ -4220,11 +4254,6 @@ async function enviarSolicitudWA(){
       }
     }
   }
-  if(!(window._fbDB && window._fbReady)){
-    toast('Conectando…');
-    const listo = await _esperarFirebaseListo(8000);
-    if(!listo){ alert('⚠️ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.'); return; }
-  }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
@@ -4239,27 +4268,8 @@ async function enviarSolicitudWA(){
     const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
-    if(window._fbDB && window._fbReady){
-      const writeTs = Date.now();
-      _lastLogisticaWriteTs = writeTs;
-      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
-      window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
-        .then(()=>{
-          renderLogistica(); renderDashboard();
-          if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-        })
-        .catch(err=>{
-          window._fbDB.ref('montasa/logistica').set(lgSnapshot)
-            .then(()=>{
-              window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard();
-              if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-            })
-            .catch(err2=>{ DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB(); alert('⚠️ Error al guardar: '+err2.message); });
-        });
-    } else {
-      DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB();
-      alert('⚠️ Sin conexión a Firebase.'); return;
-    }
+    if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+    _guardarLogisticaResiliente();
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
@@ -4368,11 +4378,6 @@ async function copiarMensajeWA(){
       }
     }
   }
-  if(!(window._fbDB && window._fbReady)){
-    toast('Conectando…');
-    const listo = await _esperarFirebaseListo(8000);
-    if(!listo){ alert('⚠️ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.'); return; }
-  }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
@@ -4387,27 +4392,8 @@ async function copiarMensajeWA(){
     const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
-    if(window._fbDB && window._fbReady){
-      const writeTs = Date.now();
-      _lastLogisticaWriteTs = writeTs;
-      const lgSnapshot = JSON.parse(JSON.stringify(DB.logistica));
-      window._fbDB.ref('montasa').update({logistica:_cleanLogistica(DB.logistica),lastCorrelativo_LG:DB['lastCorrelativo_LG']||0,_ts:writeTs,_sid:_SESSION_ID})
-        .then(()=>{
-          renderLogistica(); renderDashboard();
-          if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-        })
-        .catch(err=>{
-          window._fbDB.ref('montasa/logistica').set(lgSnapshot)
-            .then(()=>{
-              window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0); renderLogistica(); renderDashboard();
-              if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-            })
-            .catch(err2=>{ DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB(); alert('⚠️ Error al guardar: '+err2.message); });
-        });
-    } else {
-      DB.logistica=DB.logistica.filter(o=>o.id!==entry.id); DB['lastCorrelativo_LG']=(DB['lastCorrelativo_LG']||1)-1; saveDB();
-      alert('⚠️ Sin conexión a Firebase.'); return;
-    }
+    if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
+    _guardarLogisticaResiliente();
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
