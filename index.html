@@ -998,6 +998,20 @@ function _syncEquipoCampoFB(equipoId, campo, valor){
 }
 
 // Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
+// Espera hasta maxMs a que Firebase termine de conectar (evita el error
+// "Sin conexión a Firebase" cuando el usuario actúa apenas se abre la app)
+function _esperarFirebaseListo(maxMs){
+  return new Promise(resolve=>{
+    if(window._fbDB && window._fbReady){ resolve(true); return; }
+    const inicio = Date.now();
+    (function check(){
+      if(window._fbDB && window._fbReady){ resolve(true); return; }
+      if(Date.now()-inicio >= maxMs){ resolve(false); return; }
+      setTimeout(check, 300);
+    })();
+  });
+}
+
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
   if(!equipoId) return;
   const eq = DB.equipos.find(e=>e.id===equipoId);
@@ -4130,7 +4144,7 @@ function actualizarBtnWA(){
   // handled by checkbox selection
 }
 
-function enviarSolicitudWA(){
+async function enviarSolicitudWA(){
   const tipo      = document.getElementById('sol-tipo').value;
   const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
 
@@ -4206,6 +4220,11 @@ function enviarSolicitudWA(){
       }
     }
   }
+  if(!(window._fbDB && window._fbReady)){
+    toast('Conectando…');
+    const listo = await _esperarFirebaseListo(8000);
+    if(!listo){ alert('⚠️ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.'); return; }
+  }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
@@ -4273,7 +4292,7 @@ function enviarSolicitudWA(){
 }
 
 
-function copiarMensajeWA(){
+async function copiarMensajeWA(){
   const tipo      = document.getElementById('sol-tipo').value;
   const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
 
@@ -4348,6 +4367,11 @@ function copiarMensajeWA(){
         if(entregaAbierta){ alert('⚠️ El equipo '+eq_check.codigo+' ya tiene una orden de ENTREGA abierta ('+entregaAbierta.correlativo+').'); return; }
       }
     }
+  }
+  if(!(window._fbDB && window._fbReady)){
+    toast('Conectando…');
+    const listo = await _esperarFirebaseListo(8000);
+    if(!listo){ alert('⚠️ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.'); return; }
   }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
