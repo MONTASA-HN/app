@@ -857,6 +857,15 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </select>
       </div>
 
+      <!-- 4e. Ubicación del trabajo (solo mantenimiento) -->
+      <div id="sol-ubicacion-wrap" class="form-group" style="display:none">
+        <label>📍 Ubicación del trabajo</label>
+        <select id="sol-ubicacion">
+          <option value="campo">🚗 Fuera del plantel (técnico se desplaza)</option>
+          <option value="plantel">🏭 En plantel (el equipo viene al taller)</option>
+        </select>
+      </div>
+
       <!-- 5. Fecha -->
       <div class="form-group">
         <label>Fecha de reporte</label>
@@ -1076,22 +1085,32 @@ function _construirCamposOrden(tipo, o, eq){
   campos.push(['Equipo', eqLabel]);
 
   if(tipo==='preventivo'){
+    const t = calcTiemposOrden(o);
     campos.push(['Servicio', o.servicio||'—']);
     campos.push(['Técnico(s)', o.tecnico||'—']);
-    campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
-    campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
-    campos.push(['Horas trabajadas', typeof calcHoras==='function' ? calcHoras(o.fechaInicio,o.fechaFin) : '—']);
+    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
+    campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
+    campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
+    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
+    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
+    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
+    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
     campos.push(['Trabajo realizado', o.notas||'—']);
     if(o.sugerencias) campos.push(['Sugerencias', o.sugerencias]);
   } else if(tipo==='correctivo'){
+    const t = calcTiemposOrden(o);
     campos.push(['Sistema afectado', o.sistema||'—']);
     campos.push(['Técnico(s)', o.tecnico||'—']);
     campos.push(['Falla reportada', o.falla||'—']);
     campos.push(['Diagnóstico', o.diagnostico||'—']);
-    campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
-    campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
-    campos.push(['Horas trabajadas', typeof calcHoras==='function' ? calcHoras(o.fechaInicio,o.fechaFin) : '—']);
+    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
+    campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
+    campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
+    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
+    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
+    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
+    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
   } else if(tipo==='revision'){
     campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
@@ -1756,6 +1775,33 @@ function calcHoras(inicio, fin){
   } catch(e){ return '—'; }
 }
 
+// Calcula los tres tiempos de una orden de técnico.
+// Usa los campos nuevos (inicioTrabajo/finTrabajo/salidaPlantel/retornoPlantel)
+// con fallback a los campos antiguos (fechaInicio/fechaFin) para compatibilidad.
+function calcTiemposOrden(o){
+  const esNuevo = !!(o.inicioTrabajo || o.finTrabajo);
+  const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
+  const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
+  const sal  = new Date(o.salidaPlantel  || '');
+  const ret  = new Date(o.retornoPlantel || '');
+  const hayRep     = ini && fin && !isNaN(ini) && !isNaN(fin) && fin > ini;
+  const hayTraslado = sal && ret && !isNaN(sal) && !isNaN(ret) && ret > sal;
+  const minsRep  = hayRep     ? Math.floor((fin - ini)  / 60000) : 0;
+  const minsTotal= hayTraslado? Math.floor((ret - sal)  / 60000) : minsRep;
+  const minsTras = hayTraslado? minsTotal - minsRep : 0;
+  const fmt = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
+  return {
+    minsReparacion: minsRep,
+    minsTraslado:   minsTras,
+    minsTotal:      minsTotal,
+    reparacion:     hayRep     ? fmt(minsRep)   : '—',
+    traslado:       hayTraslado? fmt(minsTras)   : '—',
+    total:          minsTotal   ? fmt(minsTotal) : '—',
+    hayTraslado,
+    hayRep
+  };
+}
+
 function fmt(s){
   if(!s) return '—';
   try{
@@ -1929,8 +1975,8 @@ function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId)
     if(o.id === excluirId) return false;
     const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
     if(!tecs.includes(nombre)) return false;
-    const oInicio = new Date(o.fechaInicio||o.fecha).getTime();
-    const oFin    = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre).getTime();
+    const oInicio = new Date(o.inicioTrabajo||o.fechaInicio||o.fecha).getTime();
+    const oFin    = new Date(o.finTrabajo||o.fechaFin||o.fechaCompletado||o.fechaCierre).getTime();
     if(isNaN(oInicio) || isNaN(oFin)) return false;
     // Solapamiento: inicio < oFin && fin > oInicio
     return inicio < oFin && fin > oInicio;
@@ -2139,9 +2185,9 @@ function renderPersonal(){
   ];
   ordenesDelMes.forEach(o => {
     const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
-    const ini  = new Date(o.fechaInicio||o.fecha);
-    const fin  = new Date(o.fechaFin||o.fechaCompletado||o.fechaCierre);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    // Usar tiempo total (incluye traslado si aplica) para las horas del personal
+    const t = calcTiemposOrden(o);
+    const mins = t.minsTotal || 0;
     tecs.forEach(t => {
       if(PERSONAL_LOG.includes(t)){
         if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
@@ -3183,9 +3229,19 @@ function renderPreventivos(){
         <option value="Cambio de aceite y filtros" ${p.servicio==='Cambio de aceite y filtros'?'selected':''}>🛢 Aceite y filtros</option>
         <option value="Otro mantenimiento preventivo" ${p.servicio==='Otro mantenimiento preventivo'?'selected':''}>Otro preventivo</option>
       </select></div>
-      <div class="form-group"><label>Fecha inicio</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaInicio',this.previousElementSibling.value+'T'+this.value)"></div></div>
-      <div class="form-group"><label>Fecha fin</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','fechaFin',this.previousElementSibling.value+'T'+this.value)"></div></div>
-      ${(p.fechaInicio&&p.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${calcHoras(p.fechaInicio,p.fechaFin)}</span></div>`:''}
+      ${(p.ubicacion||'campo')==='campo'?`
+      <div class="form-group"><label>🚗 Salida del plantel</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','salidaPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      `:''}
+      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.inicioTrabajo||p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.inicioTrabajo||p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.finTrabajo||p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.finTrabajo||p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      ${(p.ubicacion||'campo')==='campo'?`
+      <div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(p.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      `:''}
+      ${(()=>{const t=calcTiemposOrden(p);return t.hayRep?`<div style="background:var(--blue-bg);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--blue);font-weight:600">🔧 Tiempo de reparación</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.reparacion}</span></div>
+        ${t.hayTraslado?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--blue);font-weight:600">🚗 Tiempo de traslado</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.traslado}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;font-size:14px;border-top:1px solid rgba(0,0,0,0.08);margin-top:4px;padding-top:6px"><span style="color:var(--blue);font-weight:700">⏱ Tiempo total</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.total}</span></div>
+      </div>`:'';})()}
       <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
       <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
@@ -3288,9 +3344,19 @@ function renderCorrectivos(){
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
-      <div class="form-group"><label>Fecha inicio</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaInicio',this.previousElementSibling.value+'T'+this.value)"></div></div>
-      <div class="form-group"><label>Fecha fin</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','fechaFin',this.previousElementSibling.value+'T'+this.value)"></div></div>
-      ${(c.fechaInicio&&c.fechaFin)?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between"><span style="font-weight:600;color:var(--blue);font-size:13px">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${calcHoras(c.fechaInicio,c.fechaFin)}</span></div>`:''}
+      ${(c.ubicacion||'campo')==='campo'?`
+      <div class="form-group"><label>🚗 Salida del plantel</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','salidaPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      `:''}
+      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.inicioTrabajo||c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.inicioTrabajo||c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.finTrabajo||c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.finTrabajo||c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      ${(c.ubicacion||'campo')==='campo'?`
+      <div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><input type="date" value="${(c.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>
+      `:''}
+      ${(()=>{const t=calcTiemposOrden(c);return t.hayRep?`<div style="background:var(--blue-bg);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--blue);font-weight:600">🔧 Tiempo de reparación</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.reparacion}</span></div>
+        ${t.hayTraslado?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--blue);font-weight:600">🚗 Tiempo de traslado</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.traslado}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;font-size:14px;border-top:1px solid rgba(0,0,0,0.08);margin-top:4px;padding-top:6px"><span style="color:var(--blue);font-weight:700">⏱ Tiempo total</span><span style="font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">${t.total}</span></div>
+      </div>`:'';})()}
       <div class="form-group"><label>Técnico(s)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
         <div class="tec-btn" data-n="Marvin Torres" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Marvin Torres',this)">Marvin Torres</div>
@@ -3367,7 +3433,8 @@ function renderHistorial(){
    try{
     const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
     const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
-    const horas = calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
+    const tiempos = calcTiemposOrden(x);
+    const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
 
     // ── REVISIÓN FÍSICO-TÉCNICA ──────────────────────────────────────────
     if(x._t==='RV'){
@@ -3471,7 +3538,15 @@ function renderHistorial(){
     card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
     // Equipo + horas + técnicos
     card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
-    if(x.fechaInicio) card += `<div style="font-size:11px;color:var(--text3)">📅 ${fmtDT(x.fechaInicio)||'—'} ${x.fechaFin||x.fechaCompletado?'→ '+(fmtDT(x.fechaFin||x.fechaCompletado)||''):''}${horas&&horas!=='—'?' · ⏱ '+horas:''}</div>`;
+    if(x.inicioTrabajo||x.fechaInicio){
+      const t = tiempos;
+      let horaLine = `📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`;
+      if(t.total !== '—') horaLine += ` · ⏱ ${t.total}`;
+      card += `<div style="font-size:11px;color:var(--text3)">${horaLine}</div>`;
+    }
+    if(tiempos.hayRep && (tiempos.hayTraslado || tiempos.reparacion !== tiempos.total)){
+      card += `<div style="font-size:11px;color:var(--text3)">🔧 Rep: ${tiempos.reparacion}${tiempos.hayTraslado?' · 🚗 Trasl: '+tiempos.traslado:''}</div>`;
+    }
     if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
     if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
     if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
@@ -3489,10 +3564,16 @@ function renderHistorial(){
         ['Estado', estRaw],
         ['Equipo', eqLabel],
         ['Técnicos', tecnicos],
-        ['Inicio', fmtDT(x.fechaInicio)||'—'],
-        ['Fin', fmtDT(x.fechaFin||x.fechaCompletado)||'—'],
-        ['Horas trabajadas', horas&&horas!=='—'?horas:'—'],
       ];
+      if(x.ubicacion==='plantel') campos.push(['Ubicación', '🏭 En plantel']);
+      else campos.push(['Ubicación', '🚗 Fuera del plantel']);
+      if(x.salidaPlantel) campos.push(['Salida del plantel', fmtDT(x.salidaPlantel)]);
+      campos.push(['Inicio de trabajo', fmtDT(x.inicioTrabajo||x.fechaInicio)||'—']);
+      campos.push(['Fin de trabajo', fmtDT(x.finTrabajo||x.fechaFin||x.fechaCompletado)||'—']);
+      if(x.retornoPlantel) campos.push(['Retorno al plantel', fmtDT(x.retornoPlantel)]);
+      if(tiempos.hayRep) campos.push(['⏱ Tiempo de reparación', tiempos.reparacion]);
+      if(tiempos.hayTraslado) campos.push(['🚗 Tiempo de traslado', tiempos.traslado]);
+      campos.push(['🕐 Tiempo total', tiempos.total !== '—' ? tiempos.total : horas]);
       if(x._t==='P' && x.servicio) campos.push(['Servicio', x.servicio]);
       if(x._t==='C' && x.falla) campos.push(['Falla reportada', x.falla]);
       if(x.notas||x.diagnostico) campos.push(['Notas / Diagnóstico', x.notas||x.diagnostico]);
@@ -3704,16 +3785,6 @@ function completarPreventivo(id){
   // ── VALIDACIÓN 3: fechas lógicas ──
   const errFecha = validarFechasOrden(p.fechaInicio, p.fechaFin);
   if(errFecha){ alert('⚠️ ' + errFecha); return; }
-  // ── VALIDACIÓN 2: solapamiento de horario (excluye supervisor) ──
-  const tecs = (p.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
-  for(const nombre of tecs){
-    if(nombre === 'Miguel Orellana') continue;
-    const conflicto = hayConflictoHorario(nombre, p.fechaInicio, p.fechaFin, p.id);
-    if(conflicto){
-      alert('⚠️ Conflicto de horario para ' + nombre + ':\n\nYa tiene registrada la orden ' + (conflicto.correlativo||'') + ' en ese mismo horario.\n\nVerifica las fechas antes de cerrar.');
-      return;
-    }
-  }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   p.firma = getFirmaData(id);
 
@@ -3734,6 +3805,8 @@ function completarPreventivo(id){
   })();
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
+  if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
+  if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
   registrarOrdenCerrada(p, 'Preventivo');
   equipoADisponible(p.equipoId);
   saveDB();
@@ -3883,16 +3956,6 @@ function cerrarCorrectivo(id){
   // ── VALIDACIÓN 3: fechas lógicas ──
   const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin);
   if(errFechaC){ alert('⚠️ ' + errFechaC); return; }
-  // ── VALIDACIÓN 2: solapamiento de horario (excluye supervisor) ──
-  const tecsC = (c.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
-  for(const nombre of tecsC){
-    if(nombre === 'Miguel Orellana') continue;
-    const conflictoC = hayConflictoHorario(nombre, c.fechaInicio, c.fechaFin, c.id);
-    if(conflictoC){
-      alert('⚠️ Conflicto de horario para ' + nombre + ':\n\nYa tiene registrada la orden ' + (conflictoC.correlativo||'') + ' en ese mismo horario.\n\nVerifica las fechas antes de cerrar.');
-      return;
-    }
-  }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   c.firma = getFirmaData(id);
   c.estado = 'Completado';
@@ -4141,18 +4204,19 @@ function solTipoChange(){
   const opGrp=document.getElementById('sol-operador-group');
   const tecGrp=document.getElementById('sol-tecnicos-grid')?.closest('.form-group');
   const logGrp=document.getElementById('sol-logistica-personal');
-  [eqGroup,eqManual,eq2,descWrap,mantWrap,prioGrp,opGrp,tecGrp,logGrp].forEach(el=>visEl(el,false));
+  const ubicWrap=document.getElementById('sol-ubicacion-wrap');
+  [eqGroup,eqManual,eq2,descWrap,mantWrap,prioGrp,opGrp,tecGrp,logGrp,ubicWrap].forEach(el=>visEl(el,false));
   if(tipo==='revision_fisica'||tipo==='evaluacion'){
     visEl(descWrap,true);
     if(descLbl) descLbl.textContent=tipo==='revision_fisica'?'Descripción de la revisión':'Descripción de la evaluación';
-    visEl(tecGrp,true); return;
+    visEl(tecGrp,true); visEl(ubicWrap,true); return;
   }
   if(tipo==='renta'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción'; visEl(logGrp,true); return; }
   if(tipo==='entrega'||tipo==='retiro'){ visEl(eqGroup,true); visEl(eq2,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
   if(tipo==='apoyo_mantenimiento'||tipo==='atencion_compras'){ visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
-  if(tipo==='correctivo'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción de la falla'; visEl(prioGrp,true); visEl(tecGrp,true); return; }
-  if(tipo==='preventivo'){ visEl(eqGroup,true); visEl(mantWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); return; }
-  visEl(eqGroup,true); visEl(descWrap,true); visEl(prioGrp,true); visEl(tecGrp,true);
+  if(tipo==='correctivo'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción de la falla'; visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true); return; }
+  if(tipo==='preventivo'){ visEl(eqGroup,true); visEl(mantWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true); return; }
+  visEl(eqGroup,true); visEl(descWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true);
 }
 function solEquipoChange(){
   const val = document.getElementById('sol-equipo')?.value || '';
@@ -4260,8 +4324,9 @@ async function enviarSolicitudWA(){
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
+  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'campo';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -4271,7 +4336,7 @@ async function enviarSolicitudWA(){
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
     _guardarLogisticaResiliente();
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
@@ -4384,8 +4449,9 @@ async function copiarMensajeWA(){
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
+  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'campo';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -4395,7 +4461,7 @@ async function copiarMensajeWA(){
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
     _guardarLogisticaResiliente();
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
