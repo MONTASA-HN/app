@@ -39,6 +39,43 @@ function _imprimirHTML(htmlContent){
 #viaticos-overlay.open{display:block!important}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea,#viaticos-overlay input[type=number]~*{text-transform:uppercase}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea{text-transform:uppercase}
+
+/* ══ DASHBOARD ORDENES ══ */
+.dash-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 18px 16px;background:linear-gradient(135deg,#0f2438 0%,#173a5c 45%,#1f5488 100%);margin-bottom:14px;box-shadow:0 8px 24px -6px rgba(15,36,56,0.45)}
+.dash-hero::before{content:"";position:absolute;inset:0;opacity:0.08;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,0.7) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.7) 1px,transparent 1px);background-size:24px 24px}
+.dash-hero-label{font-size:11px;font-weight:700;letter-spacing:1.4px;color:#8fd4f5;text-transform:uppercase;position:relative;z-index:1}
+.dash-hero-row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-top:8px}
+.dash-hero-num{font-family:"DM Mono",monospace;font-size:42px;font-weight:700;color:#fff;line-height:1;text-shadow:0 0 18px rgba(95,203,239,0.45)}
+.dash-hero-sub{font-size:12px;color:#a9c8de;margin-top:6px;display:flex;align-items:center;gap:6px;position:relative;z-index:1}
+.dash-pulse{width:7px;height:7px;border-radius:50%;background:#39e07a;flex-shrink:0;animation:dPulse 2s infinite}
+@keyframes dPulse{0%{box-shadow:0 0 0 0 rgba(57,224,122,.55)}70%{box-shadow:0 0 0 7px rgba(57,224,122,0)}100%{box-shadow:0 0 0 0 rgba(57,224,122,0)}}
+.dash-donut-wrap{position:relative;width:84px;height:84px;flex-shrink:0}
+.dash-donut{width:100%;height:100%;transform:rotate(-90deg)}
+.dash-donut circle{fill:none;stroke-width:9}
+.dash-donut-bg{stroke:rgba(255,255,255,0.13)}
+.dash-donut-seg{stroke-linecap:round;transition:stroke-dasharray 0.8s ease,stroke-dashoffset 0.8s ease}
+.dash-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dash-donut-pct{font-family:"DM Mono",monospace;font-size:17px;font-weight:700;color:#fff}
+.dash-donut-cap{font-size:8px;color:#a9c8de;text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+.dash-type-card{position:relative;border-radius:16px;padding:12px 12px 10px;overflow:hidden;border:1px solid var(--border);background:linear-gradient(160deg,var(--surface) 0%,var(--dtc-bg) 220%);box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .15s,box-shadow .2s,border-color .2s;cursor:pointer}
+.dash-type-card:active{transform:scale(.97)}
+.dash-type-card:hover{border-color:var(--dtc-color);box-shadow:0 5px 16px -5px var(--dtc-color)}
+.dash-type-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--dtc-color),transparent)}
+.dash-type-card::after{content:"";position:absolute;inset:0;opacity:.4;pointer-events:none;mix-blend-mode:overlay;background-image:radial-gradient(rgba(255,255,255,.5) .5px,transparent .5px);background-size:9px 9px}
+.dtc-glow{position:absolute;width:100px;height:100px;border-radius:50%;background:radial-gradient(circle,var(--dtc-color) 0%,transparent 70%);opacity:.15;top:-38px;right:-36px;pointer-events:none}
+.dtc-corner{position:absolute;bottom:7px;left:7px;width:11px;height:11px;border-left:2px solid var(--dtc-color);border-bottom:2px solid var(--dtc-color);border-radius:0 0 0 4px;opacity:.4;pointer-events:none}
+.dtc-header{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:10px}
+.dtc-title{font-size:14px;font-weight:700;color:var(--text)}
+.dtc-total{font-family:"DM Mono",monospace;font-size:13px;font-weight:700;color:var(--dtc-color);background:var(--dtc-bg);padding:3px 10px;border-radius:20px;box-shadow:inset 0 0 0 1px var(--dtc-color)}
+.dtc-states{display:flex;flex-direction:column;gap:5px;position:relative;z-index:1}
+.dtc-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface2)}
+.dtc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dtc-lbl{font-size:12px;color:var(--text2);flex:1}
+.dtc-cnt{font-family:"DM Mono",monospace;font-size:13px;font-weight:700}
+.dash-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;position:relative;z-index:1}
+.dash-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.dash-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
 </style>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -430,70 +467,142 @@ function calcDuracionLog(ini, fin){
 function renderDashboardLog(){
   const el = document.getElementById('dashboard-log-content');
   if(!el) return;
-  const now    = new Date();
-  const mes    = now.getMonth();
-  const anio   = now.getFullYear();
+  const now = new Date();
+  const mes = now.getMonth(), anio = now.getFullYear();
   const mesNom = now.toLocaleString('es-HN',{month:'long',year:'numeric'});
-  const hora   = now.getHours();
+  const hora = now.getHours();
   const saludo = hora<12?'Buenos días':hora<18?'Buenas tardes':'Buenas noches';
 
-  const frases = ["La logística es el arte de mover lo correcto al lugar correcto en el momento correcto.", "Un equipo bien coordinado mueve montañas — o montacargas.", "La puntualidad en la entrega es la primera promesa que cumplimos.", "El orden en la logística es la base de la confianza del cliente.", "Cada entrega a tiempo es un cliente satisfecho.", "La coordinación es nuestra herramienta más poderosa.", "Un retiro eficiente vale más que mil disculpas.", "La logística no es solo mover equipos — es mover negocios.", "El trabajo bien planificado se ejecuta solo.", "La excelencia logística se construye un servicio a la vez.", "Cada kilómetro recorrido con propósito hace la diferencia.", "La comunicación es la gasolina de la logística.", "Organización + compromiso = operación exitosa.", "El equipo correcto en el lugar correcto cambia todo.", "Ser puntual es una forma de respeto al cliente.", "La logística eficiente es invisible — y eso es lo mejor.", "Cada orden cumplida es un logro del equipo completo.", "La preparación antes de la salida evita problemas en ruta.", "Un operador comprometido es el corazón de la operación.", "La logística conecta el trabajo con los resultados.", "Planifica bien, ejecuta mejor, mejora siempre.", "El éxito de una entrega empieza antes de salir del plantel.", "Cada renta exitosa construye la reputación de MONTASA.", "La flexibilidad en logística es tan importante como la precisión.", "Mover equipos con cuidado es mover la confianza del cliente.", "El seguimiento de cada orden es lo que nos diferencia.", "La logística es la columna vertebral de nuestro servicio.", "Un equipo limpio y bien presentado dice mucho de quien lo maneja.", "La responsabilidad en ruta es responsabilidad con la empresa.", "Cada día es una nueva oportunidad de hacer una entrega perfecta."];
-  const diaAnio = Math.floor((now - new Date(now.getFullYear(),0,0))/86400000);
-  const fraseDia = frases[diaAnio % frases.length];
+  const frases = ["La logística es el arte de mover lo correcto al lugar correcto en el momento correcto.","Un equipo bien coordinado mueve montañas — o montacargas.","La puntualidad en la entrega es la primera promesa que cumplimos.","El orden en la logística es la base de la confianza del cliente.","Cada entrega a tiempo es un cliente satisfecho.","La coordinación es nuestra herramienta más poderosa.","Un retiro eficiente vale más que mil disculpas.","La logística no es solo mover equipos — es mover negocios.","El trabajo bien planificado se ejecuta solo.","La excelencia logística se construye un servicio a la vez.","Cada kilómetro recorrido con propósito hace la diferencia.","La comunicación es la gasolina de la logística.","Organización + compromiso = operación exitosa.","El equipo correcto en el lugar correcto cambia todo.","Ser puntual es una forma de respeto al cliente.","La logística eficiente es invisible — y eso es lo mejor.","Cada orden cumplida es un logro del equipo completo.","La preparación antes de la salida evita problemas en ruta.","Un operador comprometido es el corazón de la operación.","La logística conecta el trabajo con los resultados."];
+  const fraseDia = frases[Math.floor((now-new Date(anio,0,0))/86400000) % frases.length];
 
-  const abiertas  = (DB.logistica||[]).filter(o=>!o.cerrado && o.estado!=='Cancelado');
-  const pend      = abiertas.filter(o=>o.estado==='Pendiente').length;
-  const proc      = abiertas.filter(o=>o.estado==='En proceso').length;
-  const esp       = abiertas.filter(o=>o.estado==='Cancelado').length;
+  // ── Conteos por tipo de orden ───────────────────────────────────────────
+  const TIPOS = [
+    {key:'renta',             emoji:'🚛', label:'Renta',             color:'#2E83C3', bg:'#e8f2fb'},
+    {key:'entrega',           emoji:'📦', label:'Entrega de Equipo', color:'#18A303', bg:'#e3f5d9'},
+    {key:'retiro',            emoji:'🔙', label:'Retiro de Equipo',  color:'#E8811A', bg:'#fdead9'},
+    {key:'apoyo_mantenimiento',emoji:'🔩',label:'Apoyo Mantenimiento',color:'#9B59B6',bg:'#f3eafd'},
+    {key:'atencion_compras',  emoji:'🛒', label:'Atención de Compras',color:'#C9211E',bg:'#fbe8e8'},
+  ];
 
-  const cerradasMes = (DB.logistica||[]).filter(o=>{
-    if(!o.cerrado && o.estado!=='Cancelado') return false;
-    const fechaRef = o.fechaCierre||o.fechaCancelado||o.fechaFin||o.fecha;
-    if(!fechaRef) return false;
-    const f = new Date(fechaRef);
-    return f.getMonth()===mes && f.getFullYear()===anio;
-  }).length;
+  function contarTipo(key){
+    const arr = (DB.logistica||[]).filter(o=>o.tipoLogistica===key);
+    return {
+      pend:  arr.filter(o=>!o.cerrado && (o.estado||'Pendiente')==='Pendiente').length,
+      proc:  arr.filter(o=>!o.cerrado && o.estado==='En proceso').length,
+      paus:  arr.filter(o=>!o.cerrado && o.estado==='En pausa').length,
+      comp:  arr.filter(o=>o.cerrado  && o.estado==='Completado').length,
+      canc:  arr.filter(o=>o.estado==='Cancelado').length,
+      total: arr.filter(o=>!o.cerrado && o.estado!=='Cancelado').length
+    };
+  }
 
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
-  const porTipo = {};
-  abiertas.forEach(o=>{ const k=tipoLabels[o.tipoLogistica]||'Otro'; porTipo[k]=(porTipo[k]||0)+1; });
+  const datos = TIPOS.map(t=>({...t, d:contarTipo(t.key)}));
 
-  function statusRow(icon,label,count,color,bg){
-    if(!count) return '';
-    return `<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bg};border-radius:var(--radius-sm);margin-bottom:6px">
-      <span style="font-size:18px">${icon}</span>
-      <span style="font-size:14px;font-weight:500;color:var(--text);flex:1">${label}</span>
-      <span style="font-size:22px;font-weight:800;color:${color};font-family:'DM Mono',monospace">${count}</span>
+  // ── Completadas este mes por tipo ────────────────────────────────────────
+  function esMes(f){ const d=new Date(f); return !isNaN(d)&&d.getMonth()===mes&&d.getFullYear()===anio; }
+  const compMes = datos.map(t=>({
+    ...t,
+    mes: (DB.logistica||[]).filter(o=>o.tipoLogistica===t.key && o.cerrado && o.estado==='Completado' && esMes(o.fechaCierre||o.fechaFin||o.fecha)).length
+  }));
+  const totalMes = compMes.reduce((s,t)=>s+t.mes,0);
+
+  // ── Dona de completadas del mes ──────────────────────────────────────────
+  function donaHero(){
+    const R=38, C=2*Math.PI*R;
+    if(totalMes===0) return `<svg class="dash-donut" viewBox="0 0 84 84"><circle class="dash-donut-bg" cx="42" cy="42" r="38"/></svg>`;
+    let acc=0, paths='';
+    compMes.forEach(t=>{
+      if(!t.mes) return;
+      const len=(t.mes/totalMes)*C;
+      paths+=`<circle class="dash-donut-seg" cx="42" cy="42" r="38" stroke="${t.color}" stroke-dasharray="${len.toFixed(1)} ${(C-len).toFixed(1)}" stroke-dashoffset="${(-acc).toFixed(1)}"/>`;
+      acc+=len;
+    });
+    return `<svg class="dash-donut" viewBox="0 0 84 84"><circle class="dash-donut-bg" cx="42" cy="42" r="38"/>${paths}</svg>`;
+  }
+
+  // ── Mini dona por tarjeta ────────────────────────────────────────────────
+  function miniDonut(pend,proc,paus){
+    const total=pend+proc+paus;
+    if(total===0) return `<svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--border)" stroke-width="6"/><text x="22" y="26" text-anchor="middle" font-size="10" fill="var(--text3)">—</text></svg>`;
+    const R=18,C=2*Math.PI*R;
+    const segs=[{v:pend,c:'#E8811A'},{v:proc,c:'#2E83C3'},{v:paus,c:'#9B59B6'}];
+    let acc=0,paths='';
+    segs.forEach(s=>{
+      if(!s.v)return;
+      const len=(s.v/total)*C;
+      paths+=`<circle cx="22" cy="22" r="${R}" fill="none" stroke="${s.c}" stroke-width="6" stroke-linecap="butt" stroke-dasharray="${len.toFixed(1)} ${(C-len).toFixed(1)}" stroke-dashoffset="${(-acc).toFixed(1)}" transform="rotate(-90 22 22)"/>`;
+      acc+=len;
+    });
+    return `<svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0"><circle cx="22" cy="22" r="${R}" fill="none" stroke="var(--border2)" stroke-width="6"/>${paths}<text x="22" y="26" text-anchor="middle" font-size="11" font-weight="800" fill="var(--text)" font-family="'DM Mono',monospace">${total}</text></svg>`;
+  }
+
+  // ── Tarjeta por tipo ─────────────────────────────────────────────────────
+  function typeCard(t){
+    const {emoji,label,color,bg,d} = t;
+    const rows = [
+      d.pend>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#E8811A"></span><span class="dtc-lbl">Pendiente</span><span class="dtc-cnt" style="color:#E8811A">${d.pend}</span></div>`:'',
+      d.proc>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#2E83C3"></span><span class="dtc-lbl">En proceso</span><span class="dtc-cnt" style="color:#2E83C3">${d.proc}</span></div>`:'',
+      d.paus>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#9B59B6"></span><span class="dtc-lbl">En pausa</span><span class="dtc-cnt" style="color:#9B59B6">${d.paus}</span></div>`:'',
+      d.total===0?`<div style="text-align:center;padding:8px;color:var(--text3);font-size:12px">✅ Sin órdenes abiertas</div>`:''
+    ].join('');
+    return `<div class="dash-type-card" style="--dtc-color:${color};--dtc-bg:${bg}" onclick="document.querySelector('.nav-btn:nth-child(2)').click()">
+      <div class="dtc-glow"></div><div class="dtc-corner"></div>
+      <div class="dtc-header">
+        <span class="dtc-title">${emoji} ${label}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="dtc-total">${d.total} abiertas</span>
+          ${miniDonut(d.pend,d.proc,d.paus)}
+        </div>
+      </div>
+      <div class="dtc-states">${rows}</div>
     </div>`;
   }
 
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <img src="https://montasa-hn.github.io/app/logo.png" style="height:48px;object-fit:contain" onerror="this.style.display='none'">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <img src="https://montasa-hn.github.io/app/logo.png" style="height:40px;object-fit:contain" onerror="this.style.display='none'">
       <div>
-        <div style="font-size:20px;font-weight:700;color:var(--accent)">${saludo} 👋</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:1px">${mesNom.charAt(0).toUpperCase()+mesNom.slice(1)}</div>
+        <div style="font-size:19px;font-weight:700;color:var(--accent)">${saludo} 👋</div>
+        <div style="font-size:11px;color:var(--text2)">${mesNom.charAt(0).toUpperCase()+mesNom.slice(1)}</div>
       </div>
     </div>
-    <div style="background:var(--surface2);border-left:3px solid #2d6a9f;border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 14px;margin-bottom:16px">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);margin-bottom:4px">💬 Frase del día</div>
-      <div style="font-size:13px;color:var(--text);font-style:italic;line-height:1.5">"${fraseDia}"</div>
+    <div style="background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:8px 12px;margin-bottom:14px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:3px">💬 Frase del día</div>
+      <div style="font-size:12px;color:var(--text);font-style:italic;line-height:1.5">"${fraseDia}"</div>
     </div>
-    <div style="background:#2d6a9f;border-radius:var(--radius);padding:18px 16px;margin-bottom:14px;color:white">
-      <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.8px;opacity:0.75;margin-bottom:10px">Órdenes cerradas este mes</div>
-      <div style="font-size:52px;font-weight:800;font-family:'DM Mono',monospace;line-height:1">${cerradasMes}</div>
+
+    <!-- Hero: completadas del mes con dona -->
+    <div class="dash-hero">
+      <div class="dash-hero-label">Órdenes completadas — ${mesNom}</div>
+      <div class="dash-hero-row">
+        <div>
+          <div class="dash-hero-num">${totalMes}</div>
+          <div class="dash-hero-sub"><span class="dash-pulse"></span>Tiempo real</div>
+        </div>
+        <div class="dash-donut-wrap">
+          ${donaHero()}
+          <div class="dash-donut-center">
+            <div class="dash-donut-pct">${totalMes}</div>
+            <div class="dash-donut-cap">total</div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-legend">
+        ${compMes.map(t=>`<div class="dash-legend-item"><span class="dash-legend-dot" style="background:${t.color}"></span>${t.emoji} (${t.mes})</div>`).join('')}
+      </div>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
-      <div style="font-weight:700;font-size:16px;color:#2d6a9f;margin-bottom:12px">🚛 Órdenes activas — ${abiertas.length}</div>
-      ${statusRow('🔴','Pendientes',pend,'#e74c3c','#fdeaea')}
-      ${statusRow('🟡','En proceso',proc,'#f39c12','#fef9e7')}
-      ${statusRow('⚫','Canceladas',esp,'#888','#f0f0f0')}
-      ${!abiertas.length?'<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">✅ Sin órdenes activas</div>':''}
-      ${Object.keys(porTipo).length?'<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">'+Object.entries(porTipo).map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span style="color:var(--text2)">${k}</span><span style="font-weight:700">${v}</span></div>`).join('')+'</div>':''}
-      <button onclick="document.querySelector('.nav-btn:nth-child(2)').click()"
-        style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:#2d6a9f;cursor:pointer">
-        Ver órdenes →
-      </button>
+
+    <!-- 5 tarjetas en grid 2 columnas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    ${datos.map(t=>typeCard(t)).join('')}
+    </div>
+
+    <!-- Leyenda de estados -->
+    <div style="display:flex;gap:12px;justify-content:center;padding:4px 0 8px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#E8811A;display:inline-block"></span>Pendiente</span>
+      <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#2E83C3;display:inline-block"></span>En proceso</span>
+      <span style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#9B59B6;display:inline-block"></span>En pausa</span>
     </div>
   `;
   updateBadgesLog();
