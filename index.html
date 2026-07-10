@@ -3254,12 +3254,12 @@ function renderPreventivos(){
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
-      <div style="margin-top:12px">
-      <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje (si aplica)</div>
+      ${(p.ubicacion||'campo')!=='plantel'?`<div style="margin-top:12px">
+      <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje <span style="color:#c9211e">*</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div class="form-group" style="margin-bottom:0"><label>Km salida</label><input type="number" value="${p.kmSalida||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','kmSalida',this.value)" oninput="event.stopPropagation()"></div>
         <div class="form-group" style="margin-bottom:0"><label>Km retorno</label><input type="number" value="${p.kmRetorno||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','kmRetorno',this.value)" oninput="event.stopPropagation()"></div>
-      </div>
+      </div></div>`:''}
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -3375,11 +3375,11 @@ function renderCorrectivos(){
           <canvas id="firma-${c.id}" class="firma-canvas" width="600" height="160"
             ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
-      <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje (si aplica)</div>
+      ${(c.ubicacion||'campo')!=='plantel'?`<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje <span style="color:#c9211e">*</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div class="form-group" style="margin-bottom:0"><label>Km salida</label><input type="number" value="${c.kmSalida||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','kmSalida',this.value)" oninput="event.stopPropagation()"></div>
         <div class="form-group" style="margin-bottom:0"><label>Km retorno</label><input type="number" value="${c.kmRetorno||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','kmRetorno',this.value)" oninput="event.stopPropagation()"></div>
-      </div>
+      </div>`:''}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
             <span style="font-size:11px;color:var(--text3)">Firme con el dedo en la pantalla</span>
             <button onclick="event.stopPropagation();limpiarFirma('firma-${c.id}')" style="font-size:12px;color:var(--text2);background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
@@ -3785,6 +3785,13 @@ function completarPreventivo(id){
   // ── VALIDACIÓN 3: fechas lógicas ──
   const errFecha = validarFechasOrden(p.fechaInicio, p.fechaFin);
   if(errFecha){ alert('⚠️ ' + errFecha); return; }
+  if((p.ubicacion||'campo')!=='plantel'){
+    const faltantesGer = [];
+    if(!p.vehiculo)  faltantesGer.push('Vehículo');
+    if(!p.kmSalida)  faltantesGer.push('Km salida');
+    if(!p.kmRetorno) faltantesGer.push('Km retorno');
+    if(faltantesGer.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGer.join('\n• ')); return; }
+  }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   p.firma = getFirmaData(id);
 
@@ -3956,6 +3963,13 @@ function cerrarCorrectivo(id){
   // ── VALIDACIÓN 3: fechas lógicas ──
   const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin);
   if(errFechaC){ alert('⚠️ ' + errFechaC); return; }
+  if((c.ubicacion||'campo')!=='plantel'){
+    const faltantesGerC = [];
+    if(!c.vehiculo)  faltantesGerC.push('Vehículo');
+    if(!c.kmSalida)  faltantesGerC.push('Km salida');
+    if(!c.kmRetorno) faltantesGerC.push('Km retorno');
+    if(faltantesGerC.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGerC.join('\n• ')); return; }
+  }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   c.firma = getFirmaData(id);
   c.estado = 'Completado';
