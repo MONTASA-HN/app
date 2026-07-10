@@ -291,10 +291,10 @@ function _imprimirHTML(htmlContent){
 .dtc-title{font-size:14px;font-weight:700;color:var(--text)}
 .dtc-total{font-family:"DM Mono",monospace;font-size:13px;font-weight:700;color:var(--dtc-color);background:var(--dtc-bg);padding:3px 10px;border-radius:20px;box-shadow:inset 0 0 0 1px var(--dtc-color)}
 .dtc-states{display:flex;flex-direction:column;gap:5px;position:relative;z-index:1}
-.dtc-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface2)}
+.dtc-row{display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:6px;background:var(--surface2)}
 .dtc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dtc-lbl{font-size:12px;color:var(--text2);flex:1}
-.dtc-cnt{font-family:"DM Mono",monospace;font-size:13px;font-weight:700}
+.dtc-lbl{font-size:11px;color:var(--text2);flex:1}
+.dtc-cnt{font-family:"DM Mono",monospace;font-size:12px;font-weight:700}
 .dash-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;position:relative;z-index:1}
 .dash-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
 .dash-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -357,10 +357,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .dtc-title{font-size:14px;font-weight:700;color:var(--text)}
 .dtc-total{font-family:"DM Mono",monospace;font-size:13px;font-weight:700;color:var(--dtc-color);background:var(--dtc-bg);padding:3px 10px;border-radius:20px;box-shadow:inset 0 0 0 1px var(--dtc-color)}
 .dtc-states{display:flex;flex-direction:column;gap:5px;position:relative;z-index:1}
-.dtc-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface2)}
+.dtc-row{display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:6px;background:var(--surface2)}
 .dtc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dtc-lbl{font-size:12px;color:var(--text2);flex:1}
-.dtc-cnt{font-family:"DM Mono",monospace;font-size:13px;font-weight:700}
+.dtc-lbl{font-size:11px;color:var(--text2);flex:1}
+.dtc-cnt{font-family:"DM Mono",monospace;font-size:12px;font-weight:700}
 .dash-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;position:relative;z-index:1}
 .dash-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
 .dash-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -2473,6 +2473,7 @@ function renderDashboardTec(){
       pend: arr.filter(o=>estadoFn(o)==='Pendiente').length,
       proc: arr.filter(o=>estadoFn(o)==='En proceso').length,
       paus: arr.filter(o=>estadoFn(o)==='En pausa').length,
+      esp:  arr.filter(o=>estadoFn(o)==='En espera de repuestos').length,
       comp: arr.filter(o=>estadoFn(o)==='Completado').length,
       canc: arr.filter(o=>estadoFn(o)==='Cancelado').length,
       total: arr.length
@@ -2508,40 +2509,41 @@ function renderDashboardTec(){
   }
 
   // ── Mini dona por tarjeta ────────────────────────────────────────────────
-  function miniDonut(pend,proc,paus){
-    const total=pend+proc+paus;
-    if(total===0) return `<svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--border)" stroke-width="6"/><text x="22" y="26" text-anchor="middle" font-size="10" fill="var(--text3)">—</text></svg>`;
-    const R=18,C=2*Math.PI*R;
-    const segs=[{v:pend,c:'#E8811A'},{v:proc,c:'#2E83C3'},{v:paus,c:'#9B59B6'}];
+  function miniDonut(pend,proc,paus,esp){
+    const total=pend+proc+paus+esp;
+    if(total===0) return `<svg width="36" height="36" viewBox="0 0 36 36" style="flex-shrink:0"><circle cx="18" cy="18" r="14" fill="none" stroke="var(--border)" stroke-width="5"/><text x="18" y="22" text-anchor="middle" font-size="9" fill="var(--text3)">—</text></svg>`;
+    const R=14,C=2*Math.PI*R;
+    const segs=[{v:pend,c:'#E8811A'},{v:proc,c:'#2E83C3'},{v:paus,c:'#9B59B6'},{v:esp,c:'#27AE60'}];
     let acc=0,paths='';
     segs.forEach(s=>{
       if(!s.v)return;
       const len=(s.v/total)*C;
-      paths+=`<circle cx="22" cy="22" r="${R}" fill="none" stroke="${s.c}" stroke-width="6" stroke-linecap="butt" stroke-dasharray="${len.toFixed(1)} ${(C-len).toFixed(1)}" stroke-dashoffset="${(-acc).toFixed(1)}" transform="rotate(-90 22 22)"/>`;
+      paths+=`<circle cx="18" cy="18" r="${R}" fill="none" stroke="${s.c}" stroke-width="5" stroke-linecap="butt" stroke-dasharray="${len.toFixed(1)} ${(C-len).toFixed(1)}" stroke-dashoffset="${(-acc).toFixed(1)}" transform="rotate(-90 18 18)"/>`;
       acc+=len;
     });
-    return `<svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0;transform:rotate(0deg)"><circle cx="22" cy="22" r="${R}" fill="none" stroke="var(--border2)" stroke-width="6"/>${paths}<text x="22" y="26" text-anchor="middle" font-size="11" font-weight="800" fill="var(--text)" font-family="'DM Mono',monospace">${total}</text></svg>`;
+    return `<svg width="36" height="36" viewBox="0 0 36 36" style="flex-shrink:0"><circle cx="18" cy="18" r="${R}" fill="none" stroke="var(--border2)" stroke-width="5"/>${paths}<text x="18" y="22" text-anchor="middle" font-size="9" font-weight="800" fill="var(--text)" font-family="'DM Mono',monospace">${total}</text></svg>`;
   }
 
   // ── Tarjeta por tipo ─────────────────────────────────────────────────────
   function typeCard(emoji, title, color, bg, d, navIdx){
-    const abiertas = d.pend+d.proc+d.paus;
+    const abiertas = d.pend+d.proc+d.paus+(d.esp||0);
     const rows = [
       d.pend>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#E8811A"></span><span class="dtc-lbl">Pendiente</span><span class="dtc-cnt" style="color:#E8811A">${d.pend}</span></div>`:'',
       d.proc>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#2E83C3"></span><span class="dtc-lbl">En proceso</span><span class="dtc-cnt" style="color:#2E83C3">${d.proc}</span></div>`:'',
       d.paus>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#9B59B6"></span><span class="dtc-lbl">En pausa</span><span class="dtc-cnt" style="color:#9B59B6">${d.paus}</span></div>`:'',
-      abiertas===0?`<div style="text-align:center;padding:8px;color:var(--text3);font-size:12px">✅ Sin órdenes abiertas</div>`:''
+      (d.esp||0)>0?`<div class="dtc-row"><span class="dtc-dot" style="background:#27AE60"></span><span class="dtc-lbl">Esp. repuestos</span><span class="dtc-cnt" style="color:#27AE60">${d.esp}</span></div>`:'',
+      abiertas===0?`<div style="text-align:center;padding:4px;color:var(--text3);font-size:11px">✅ Sin órdenes abiertas</div>`:''
     ].join('');
     return `<div class="dash-type-card" style="--dtc-color:${color};--dtc-bg:${bg}" onclick="document.querySelector('.nav-btn:nth-child(${navIdx})').click()">
       <div class="dtc-glow"></div><div class="dtc-corner"></div>
-      <div class="dtc-header">
-        <span class="dtc-title">${emoji} ${title}</span>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="dtc-total">${abiertas} abiertas</span>
-          ${miniDonut(d.pend,d.proc,d.paus)}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--text);line-height:1.3">${emoji} ${title}</span>
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:4px">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:${color};background:${bg};padding:2px 7px;border-radius:20px;box-shadow:inset 0 0 0 1px ${color};white-space:nowrap">${abiertas} ab.</span>
+          ${miniDonut(d.pend,d.proc,d.paus,d.esp||0)}
         </div>
       </div>
-      <div class="dtc-states">${rows}</div>
+      <div style="display:flex;flex-direction:column;gap:3px;position:relative;z-index:1">${rows}</div>
     </div>`;
   }
 
