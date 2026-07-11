@@ -991,7 +991,10 @@ function saveDB(){
         vendidos:       DB.vendidos||[],
         ordenesCerradas:DB.ordenesCerradas||[],
         notifCompletadas: DB.notifCompletadas||{},
+        logistica:      _cleanLogistica(DB.logistica||[]),
+        equipos:        DB.equipos||[],
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
+        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
         _ts: ts,
         _sid: _SESSION_ID
       });
@@ -4350,16 +4353,7 @@ async function enviarSolicitudWA(){
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
     saveDB();
-    // Escritura directa en Firebase con _sid prefijado para que el listener de Logística no ignore la actualización
-    if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa').update({
-        logistica: _cleanLogistica(DB.logistica),
-        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-        equipos: DB.equipos,
-        _ts: Date.now(),
-        _sid: 'GER_' + _SESSION_ID
-      });
-    } else { _guardarLogisticaResiliente(); }
+    _guardarLogisticaResiliente();
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
@@ -4485,16 +4479,7 @@ async function copiarMensajeWA(){
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
     saveDB();
-    // Escritura directa en Firebase con _sid prefijado para que el listener de Logística no ignore la actualización
-    if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa').update({
-        logistica: _cleanLogistica(DB.logistica),
-        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-        equipos: DB.equipos,
-        _ts: Date.now(),
-        _sid: 'GER_' + _SESSION_ID
-      });
-    } else { _guardarLogisticaResiliente(); }
+    _guardarLogisticaResiliente();
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
