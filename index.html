@@ -4349,7 +4349,17 @@ async function enviarSolicitudWA(){
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-    _guardarLogisticaResiliente();
+    saveDB();
+    // Escritura directa en Firebase con _sid prefijado para que el listener de Logística no ignore la actualización
+    if(window._fbDB && window._fbReady){
+      window._fbDB.ref('montasa').update({
+        logistica: _cleanLogistica(DB.logistica),
+        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
+        equipos: DB.equipos,
+        _ts: Date.now(),
+        _sid: 'GER_' + _SESSION_ID
+      });
+    } else { _guardarLogisticaResiliente(); }
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
@@ -4474,7 +4484,17 @@ async function copiarMensajeWA(){
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-    _guardarLogisticaResiliente();
+    saveDB();
+    // Escritura directa en Firebase con _sid prefijado para que el listener de Logística no ignore la actualización
+    if(window._fbDB && window._fbReady){
+      window._fbDB.ref('montasa').update({
+        logistica: _cleanLogistica(DB.logistica),
+        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
+        equipos: DB.equipos,
+        _ts: Date.now(),
+        _sid: 'GER_' + _SESSION_ID
+      });
+    } else { _guardarLogisticaResiliente(); }
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
