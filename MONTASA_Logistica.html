@@ -1981,11 +1981,18 @@ renderDashboardLog();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       if(ownWrite) return;
-      if(d.logistica)   DB.logistica   = d.logistica;
+      // Solo actualizar logística si el snapshot remoto es MÁS NUEVO que nuestra última escritura
+      // Esto previene que una escritura de Gerencia (más lenta) sobreescriba datos locales más nuevos
+      const remoteTs = d._ts || 0;
+      const localWriteTs = window._localWriteTs || 0;
+      if(d.logistica && remoteTs >= localWriteTs){
+        DB.logistica = d.logistica;
+      }
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
       const active=document.querySelector('.section.active');
       if(!active) return;
       const id=active.id.replace('tab-','');
