@@ -994,12 +994,12 @@ function saveDB(){
         vendidos:       DB.vendidos||[],
         ordenesCerradas:DB.ordenesCerradas||[],
         notifCompletadas: DB.notifCompletadas||{},
-        logistica:      _cleanLogistica(DB.logistica||[]),
         equipos:        DB.equipos||[],
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
-        lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
         _ts: ts,
         _sid: _SESSION_ID
+        // NOTA: logística NO se incluye aquí — la app de Logística es la autoridad
+        // de esos datos. Gerencia escribe logística solo al crear nuevas órdenes.
       });
     }
   }catch(e){}
@@ -1040,7 +1040,7 @@ function _guardarLogisticaResiliente(){
 }
 
 function _sincronizarLogisticaConReintento(){
-  if(_logisticaSyncEnCurso) return; // ya hay un intento en curso, no duplicar
+  if(_logisticaSyncEnCurso) return;
   if(!window._fbDB || !window._fbReady){
     setTimeout(_sincronizarLogisticaConReintento, 5000);
     return;
@@ -1048,17 +1048,18 @@ function _sincronizarLogisticaConReintento(){
   _logisticaSyncEnCurso = true;
   const writeTs = Date.now();
   _lastLogisticaWriteTs = writeTs;
-  window._fbDB.ref('montasa').update({
-    logistica: _cleanLogistica(DB.logistica),
-    lastCorrelativo_LG: DB['lastCorrelativo_LG']||0,
-    _ts: writeTs, _sid: _SESSION_ID
-  }).then(()=>{
-    _logisticaSyncEnCurso = false;
-  }).catch(()=>{
-    _logisticaSyncEnCurso = false;
-    console.warn('No se pudo sincronizar logística, reintentando en 5s...');
-    setTimeout(_sincronizarLogisticaConReintento, 5000);
-  });
+  // Escribir solo en el subnodo logistica para no pisar el _ts del nodo raíz
+  // (que lo gestiona la app de Logística)
+  window._fbDB.ref('montasa/logistica').set(_cleanLogistica(DB.logistica))
+    .then(()=>{
+      _logisticaSyncEnCurso = false;
+      // También actualizar el correlativo
+      window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+    }).catch(()=>{
+      _logisticaSyncEnCurso = false;
+      console.warn('No se pudo sincronizar logística, reintentando en 5s...');
+      setTimeout(_sincronizarLogisticaConReintento, 5000);
+    });
 }
 
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
@@ -4938,19 +4939,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
-      if(d.logistica){
-        // Merge preservando vales y otros campos locales que Firebase puede no incluir
-        const incoming = d.logistica||[];
-        DB.logistica = incoming.map(remote => {
-          if(!remote) return remote;
-          const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
-          if(!local) return remote;
-          return Object.assign({}, remote, {
-            vales: remote.vales !== undefined ? remote.vales : local.vales
-          });
-        });
-        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
-      }
+      // NOTA: logística no se actualiza aquí — tiene su propio listener en montasa/logistica
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
