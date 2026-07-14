@@ -662,7 +662,7 @@ function renderOrdenesLog(){
           ${(o.tipoLogistica==='apoyo_mantenimiento'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='retiro')&&o.equipoCompra?`<div style="font-size:13px;color:var(--text2)">🚗 ${o.equipoCompra}</div>`:''}
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
-          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
+          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}${o.operador2?', '+o.operador2:''}${o.operador3?', '+o.operador3:''}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
@@ -702,14 +702,18 @@ function renderOrdenesLog(){
         </div>
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-                <!-- Operador: renta + entrega + retiro -->
+        <!-- Operador: renta + entrega + retiro -->
         ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
-        <div class="form-group"><label>Operador asignado</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
-            <option value="">— Seleccionar operador —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
-          </select>
-        </div>`:``}
+        ${(function(){
+          var eqRenta = DB.equipos.find(function(e){return e.id===o.equipoId;});
+          var esVeh = eqRenta && eqRenta.esVehiculo;
+          if(esVeh && o.tipoLogistica==='renta'){
+            return '<div class="form-group"><label>🚗 Motorista</label><select onchange="event.stopPropagation();actualizarLog(\''+o.id+'\',\'motorista\',this.value)"><option value="">— Seleccionar motorista —</option>'+MOTORISTAS_LOGISTICA.map(function(m){return '<option value="'+m+'"'+(o.motorista===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
+            +'<div class="form-group"><label>👷 Operador 1 (opcional)</label><select onchange="event.stopPropagation();actualizarLog(\''+o.id+'\',\'operador\',this.value)"><option value="">— Ninguno —</option>'+OPERADORES_LOGISTICA.map(function(op){return '<option value="'+op+'"'+(o.operador===op?' selected':'')+'>'+op+'</option>';}).join('')+'</select></div>'
+            +'<div class="form-group"><label>👷 Operador 2 (opcional)</label><select onchange="event.stopPropagation();actualizarLog(\''+o.id+'\',\'operador2\',this.value)"><option value="">— Ninguno —</option>'+OPERADORES_LOGISTICA.map(function(op){return '<option value="'+op+'"'+(o.operador2===op?' selected':'')+'>'+op+'</option>';}).join('')+'</select></div>';
+          }
+          return '<div class="form-group"><label>Operador asignado</label><select onchange="event.stopPropagation();actualizarLog(\''+o.id+'\',\'operador\',this.value)"><option value="">— Seleccionar operador —</option>'+OPERADORES_LOGISTICA.map(function(op){return '<option value="'+op+'"'+(o.operador===op?' selected':'')+'>'+op+'</option>';}).join('')+'</select></div>';
+        })()}`:``}
         <!-- Operadores: apoyo_mantenimiento (hasta 3, el 1 obligatorio) -->
         ${o.tipoLogistica==='apoyo_mantenimiento'?`
         <div class="form-group"><label>Operador 1 (obligatorio)</label>
@@ -1084,12 +1088,15 @@ function renderCamposTipo(o){
       html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroRetorno2\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     }
   } else if(isRenta){
-    html += '<div class="form-group"><label>Horómetro de salida (hrs)</label>';
-    html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
-    html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
-    html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
-    html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
-    html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    // Si el equipo es un vehículo de la flota, no se registra horómetro (solo km)
+    if(!eq1.esVehiculo){
+      html += '<div class="form-group"><label>Horómetro de salida (hrs)</label>';
+      html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+      html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
+      html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    }
   } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras') {
     html += '<div class="form-group"><label>Horómetro (hrs)</label>';
     html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
