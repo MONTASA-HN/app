@@ -1043,7 +1043,7 @@ function renderCamposTipo(o){
     html += '</select></div>';
   }
 
-  if(isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento'){
+  if(isMovimiento || isRenta || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento'){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
@@ -1477,6 +1477,17 @@ async function cerrarOrdenLog(id){
       if(!o.kmRetorno) faltantes.push('Kilometraje de retorno');
       if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)){
         faltantes.push('Km de retorno debe ser ≥ km de salida');
+      }
+    }
+    // Para renta donde el equipo es un vehículo de la flota, el km también es obligatorio
+    if(o.tipoLogistica==='renta'){
+      const eqRenta = DB.equipos.find(e=>e.id===o.equipoId);
+      if(eqRenta && eqRenta.esVehiculo){
+        if(!o.kmSalida) faltantes.push('Kilometraje de salida');
+        if(!o.kmRetorno) faltantes.push('Kilometraje de retorno');
+        if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)){
+          faltantes.push('Km de retorno debe ser ≥ km de salida');
+        }
       }
     }
     if(o.tipoLogistica==='atencion_compras' && !o.equipoCompra){
