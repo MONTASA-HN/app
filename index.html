@@ -424,7 +424,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <input id="det-cliente" placeholder="Nombre del cliente">
       </div>
       <div class="form-group">
-        <label>Horómetro (hrs)</label>
+        <label id="det-horometro-label">Horómetro (hrs)</label>
         <input id="det-horometro" type="number" placeholder="Ej: 2450" min="0">
       </div>
       <div class="form-group">
@@ -989,6 +989,38 @@ let openSubgrupos = new Set();
 let openHistGer = new Set(); // track which subgroups are open
 let modalEquipoId = null;
 
+
+// ── ACTUALIZACIÓN AUTOMÁTICA DE KILOMETRAJE EN VEHÍCULOS ──────────────────
+function _actualizarKmVehiculo(codigoVehiculo, kmRetorno){
+  if(!codigoVehiculo || !kmRetorno) return;
+  const km = parseFloat(kmRetorno);
+  if(isNaN(km) || km <= 0) return;
+  // Buscar el vehículo por código
+  const eq = DB.equipos.find(e => e.esVehiculo && e.codigo === codigoVehiculo.toUpperCase().trim());
+  if(!eq) return;
+  // Solo actualizar si el km retorno es mayor al actual (nunca retroceder)
+  const actual = parseFloat(eq.horometro || 0);
+  if(km <= actual) return;
+  eq.horometro = km.toString();
+  // Sincronizar con Firebase
+  _syncEquipoCampoFB(eq.id, 'horometro', km.toString());
+  saveDB();
+}
+
+// Busca el equipo por código (para órdenes que referencian el vehículo por código en campo vehiculo/equipoCompra)
+function _codigoVehiculoDesdeOrden(o){
+  // Campo vehiculo (órdenes de técnicos con campo vehículo)
+  if(o.vehiculo) return o.vehiculo;
+  // Campo equipoCompra (atención a compras, apoyo mantenimiento)  
+  if(o.equipoCompra) return o.equipoCompra;
+  // El equipo mismo puede ser un vehículo (preventivo/correctivo al vehículo)
+  if(o.equipoId){
+    const eq = DB.equipos.find(e => e.id === o.equipoId);
+    if(eq && eq.esVehiculo) return eq.codigo;
+  }
+  return null;
+}
+
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   try{
@@ -1387,6 +1419,16 @@ function abrirModal(id){
   document.getElementById('det-ubicacion').value = e.ubicacion || '';
   document.getElementById('det-cliente').value = e.cliente || '';
   document.getElementById('det-horometro').value = e.horometro || '';
+  // Cambiar label y placeholder para vehículos
+  const horoLabel = document.getElementById('det-horometro-label');
+  const horoInput = document.getElementById('det-horometro');
+  if(e.esVehiculo){
+    if(horoLabel) horoLabel.textContent = 'Kilometraje (km)';
+    if(horoInput) horoInput.placeholder = 'Ej: 45230';
+  } else {
+    if(horoLabel) horoLabel.textContent = 'Horómetro (hrs)';
+    if(horoInput) horoInput.placeholder = 'Ej: 2450';
+  }
   document.getElementById('det-intervalo-mant').value = e.intervaloMantMeses || (e.esVehiculo ? 3 : 3);
   document.getElementById('det-obs').value = e.observaciones || '';
 
@@ -1705,7 +1747,6 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
     orden.fechaInicio = new Date().toISOString().slice(0,16);
-    // Update only the date input in this card directly — no list re-render
     const cb = document.getElementById('cb-'+id);
     if(cb){
       const dateInputs = cb.querySelectorAll('input[type="date"]');
@@ -1713,6 +1754,17 @@ function actualizarCampoOrden(tipo, id, campo, valor){
       const timeInputs = cb.querySelectorAll('input[type="time"]');
       if(timeInputs[0]) timeInputs[0].value = orden.fechaInicio.slice(11,16);
     }
+  }
+  // Actualizar kilometraje del vehículo automáticamente cuando se llena kmRetorno
+  if(campo === 'kmRetorno' && valor){
+    const codigoVeh = _codigoVehiculoDesdeOrden(orden);
+    if(codigoVeh) _actualizarKmVehiculo(codigoVeh, valor);
+  }
+  // Si el equipo de la orden es un vehículo y se actualiza el horómetro en un preventivo,
+  // también sincronizar el kilometraje en la ficha
+  if(campo === 'horometro' && valor && orden.equipoId){
+    const eqOrd = DB.equipos.find(e=>e.id===orden.equipoId);
+    if(eqOrd && eqOrd.esVehiculo) _actualizarKmVehiculo(eqOrd.codigo, valor);
   }
   saveDB();
 }
@@ -2792,13 +2844,43 @@ function calcularNotificacionesMant(){
   DB.equipos.filter(eq=>!eq.esGenerico).forEach(eq=>{
     // Último preventivo COMPLETADO de este equipo
     const prevsCompletados = DB.preventivos.filter(p=>p.equipoId===eq.id && p.completado && (p.fechaFin||p.fechaCompletado));
-    if(!prevsCompletados.length) return; // sin historial, no se puede proyectar
+    if(!prevsCompletados.length) return;
     prevsCompletados.sort((a,b)=>{
       const fa = parseFechaLocalNotif(a.fechaFin||a.fechaCompletado);
       const fb = parseFechaLocalNotif(b.fechaFin||b.fechaCompletado);
       return fb-fa;
     });
     const ultimo = prevsCompletados[0];
+
+    // ── VEHÍCULOS: lógica por kilometraje ────────────────────────────────
+    if(eq.esVehiculo){
+      const kmUltimoPrev = parseFloat(ultimo.horometro||0);
+      if(!kmUltimoPrev) return; // sin km registrado en el preventivo, no se puede proyectar
+      const KM_INTERVALO = 7000;
+      const kmProximo = kmUltimoPrev + KM_INTERVALO;
+      const kmActual = parseFloat(eq.horometro||0);
+      const kmRestantes = kmProximo - kmActual;
+      // Alertar cuando faltan 500 km o menos (o ya pasó)
+      if(kmRestantes <= 500){
+        const notifKey = eq.id + '_' + (ultimo.correlativo||'sin-orden');
+        notifs.push({
+          equipoId: eq.id,
+          codigo: eq.codigo,
+          esVehiculo: true,
+          kmRestantes: Math.round(kmRestantes),
+          kmProximo,
+          kmActual,
+          ultimoServicio: ultimo.servicio||'—',
+          ultimoCorrelativo: ultimo.correlativo||'—',
+          ultimoKm: kmUltimoPrev,
+          notifKey,
+          completada: !!(DB.notifCompletadas && DB.notifCompletadas[notifKey])
+        });
+      }
+      return;
+    }
+
+    // ── EQUIPOS NORMALES: lógica por fecha ───────────────────────────────
     const fechaUltimo = parseFechaLocalNotif(ultimo.fechaFin||ultimo.fechaCompletado);
     if(isNaN(fechaUltimo)) return;
     const meses = eq.intervaloMantMeses || 3;
@@ -2818,7 +2900,12 @@ function calcularNotificacionesMant(){
       });
     }
   });
-  notifs.sort((a,b)=>a.diasRestantes-b.diasRestantes);
+  notifs.sort((a,b)=>{
+    // Vehículos primero si están más urgentes
+    const urgA = a.esVehiculo ? (a.kmRestantes <= 0 ? -9999 : a.kmRestantes) : (a.diasRestantes * 100);
+    const urgB = b.esVehiculo ? (b.kmRestantes <= 0 ? -9999 : b.kmRestantes) : (b.diasRestantes * 100);
+    return urgA - urgB;
+  });
   return notifs;
 }
 
@@ -2841,6 +2928,23 @@ function renderNotificacionesTab(){
   if(!el) return;
   const notifs = calcularNotificacionesMant();
   el.innerHTML = notifs.length ? notifs.map(n=>{
+    if(n.esVehiculo){
+      const urgente = n.kmRestantes <= 0;
+      const kmTexto = urgente
+        ? `Vencido hace ${Math.abs(n.kmRestantes).toLocaleString()} km`
+        : `Faltan ${n.kmRestantes.toLocaleString()} km`;
+      const badgeStyle = n.completada ? 'background:#c8edcc;color:#1a5c1a' : (urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800');
+      const claseItem = n.completada ? 'notif-completada' : (urgente ? 'notif-urgent' : '');
+      return `<div class="notif-item ${claseItem}">
+        <div class="notif-item-top">
+          <span class="notif-codigo">🚗 ${n.codigo}</span>
+          <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${n.completada ? '✅ Completado' : kmTexto}</span>
+        </div>
+        <div class="notif-line">Próximo PM a los <b>${n.kmProximo.toLocaleString()} km</b> — Km actual: <b>${n.kmActual.toLocaleString()} km</b></div>
+        <div class="notif-line">Último PM: orden <b>${n.ultimoCorrelativo}</b> a los <b>${n.ultimoKm.toLocaleString()} km</b></div>
+        ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
+      </div>`;
+    }
     const urgente = n.diasRestantes <= 0;
     const diasTexto = urgente
       ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))

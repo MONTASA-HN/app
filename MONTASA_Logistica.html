@@ -1107,6 +1107,22 @@ function actualizarLogKmRetorno(id, valor){
     return;
   }
   o.kmRetorno = valor;
+  // Actualizar kilometraje del vehículo automáticamente
+  const codigoVeh = o.vehiculo || o.equipoCompra;
+  if(codigoVeh && valor){
+    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===codigoVeh.trim().toUpperCase());
+    if(eq){
+      const km = parseFloat(valor);
+      const actual = parseFloat(eq.horometro||0);
+      if(!isNaN(km) && km > actual){
+        eq.horometro = km.toString();
+        if(window._fbDB && window._fbReady){
+          const idx = DB.equipos.findIndex(e=>e.id===eq.id);
+          if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/horometro').set(km.toString());
+        }
+      }
+    }
+  }
   saveDB();
 }
 

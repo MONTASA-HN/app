@@ -1226,13 +1226,27 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
     orden.fechaInicio = new Date().toISOString().slice(0,16);
-    // Update only the date input in this card directly — no list re-render
     const cb = document.getElementById('cb-'+id);
     if(cb){
       const dateInputs = cb.querySelectorAll('input[type="date"]');
       if(dateInputs[0]) dateInputs[0].value = orden.fechaInicio.slice(0,10);
       const timeInputs = cb.querySelectorAll('input[type="time"]');
       if(timeInputs[0]) timeInputs[0].value = orden.fechaInicio.slice(11,16);
+    }
+  }
+  // Actualizar km del vehículo cuando se llena kmRetorno
+  if(campo === 'kmRetorno' && valor && orden.vehiculo){
+    const km = parseFloat(valor);
+    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===orden.vehiculo.trim().toUpperCase());
+    if(eq && !isNaN(km)){
+      const actual = parseFloat(eq.horometro||0);
+      if(km > actual){
+        eq.horometro = km.toString();
+        if(window._fbDB && window._fbReady){
+          const idx = DB.equipos.findIndex(e=>e.id===eq.id);
+          if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/horometro').set(km.toString());
+        }
+      }
     }
   }
   saveDB();
