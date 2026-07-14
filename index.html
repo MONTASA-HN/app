@@ -1007,18 +1007,29 @@ function _actualizarKmVehiculo(codigoVehiculo, kmRetorno){
   saveDB();
 }
 
-// Busca el equipo por código (para órdenes que referencian el vehículo por código en campo vehiculo/equipoCompra)
-function _codigoVehiculoDesdeOrden(o){
-  // Campo vehiculo (órdenes de técnicos con campo vehículo)
-  if(o.vehiculo) return o.vehiculo;
-  // Campo equipoCompra (atención a compras, apoyo mantenimiento)  
-  if(o.equipoCompra) return o.equipoCompra;
-  // El equipo mismo puede ser un vehículo (preventivo/correctivo al vehículo)
+// Busca el equipo vehículo asociado a una orden (devuelve el objeto equipo o null)
+function _vehiculoDesdeOrden(o){
+  // El equipo mismo puede ser un vehículo (preventivo/correctivo/logística de renta/retiro)
   if(o.equipoId){
-    const eq = DB.equipos.find(e => e.id === o.equipoId);
-    if(eq && eq.esVehiculo) return eq.codigo;
+    const eq = DB.equipos.find(e=>e.id===o.equipoId);
+    if(eq && eq.esVehiculo) return eq;
+  }
+  // Campo vehiculo (órdenes de técnicos con campo vehículo de traslado)
+  if(o.vehiculo){
+    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===o.vehiculo.trim().toUpperCase());
+    if(eq) return eq;
+  }
+  // Campo equipoCompra (atención a compras, apoyo mantenimiento)
+  if(o.equipoCompra){
+    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===o.equipoCompra.trim().toUpperCase());
+    if(eq) return eq;
   }
   return null;
+}
+
+function _codigoVehiculoDesdeOrden(o){
+  const eq = _vehiculoDesdeOrden(o);
+  return eq ? eq.codigo : null;
 }
 
 function saveDB(){
@@ -1757,8 +1768,8 @@ function actualizarCampoOrden(tipo, id, campo, valor){
   }
   // Actualizar kilometraje del vehículo automáticamente cuando se llena kmRetorno
   if(campo === 'kmRetorno' && valor){
-    const codigoVeh = _codigoVehiculoDesdeOrden(orden);
-    if(codigoVeh) _actualizarKmVehiculo(codigoVeh, valor);
+    const eqVeh = _vehiculoDesdeOrden(orden);
+    if(eqVeh) _actualizarKmVehiculo(eqVeh.codigo, valor);
   }
   // Si el equipo de la orden es un vehículo y se actualiza el horómetro en un preventivo,
   // también sincronizar el kilometraje en la ficha
@@ -2858,7 +2869,20 @@ function calcularNotificacionesMant(){
       if(!kmUltimoPrev) return; // sin km registrado en el preventivo, no se puede proyectar
       const KM_INTERVALO = 7000;
       const kmProximo = kmUltimoPrev + KM_INTERVALO;
-      const kmActual = parseFloat(eq.horometro||0);
+      // km actual: usar ficha del equipo; si está vacío, buscar el kmRetorno más alto en órdenes de logística
+      let kmActual = parseFloat(eq.horometro||0);
+      if(!kmActual){
+        (DB.logistica||[]).forEach(o=>{
+          if(o.kmRetorno && (o.equipoId===eq.id || (o.equipoCompra||'').toUpperCase()===eq.codigo || (o.vehiculo||'').toUpperCase()===eq.codigo)){
+            const km = parseFloat(o.kmRetorno);
+            if(!isNaN(km) && km > kmActual) kmActual = km;
+          }
+        });
+        // Si encontramos km en logística, actualizar la ficha automáticamente
+        if(kmActual > 0){
+          eq.horometro = kmActual.toString();
+        }
+      }
       const kmRestantes = kmProximo - kmActual;
       // Alertar cuando faltan 500 km o menos (o ya pasó)
       if(kmRestantes <= 500){

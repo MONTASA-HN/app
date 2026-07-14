@@ -1108,19 +1108,26 @@ function actualizarLogKmRetorno(id, valor){
   }
   o.kmRetorno = valor;
   // Actualizar kilometraje del vehículo automáticamente
-  const codigoVeh = o.vehiculo || o.equipoCompra;
-  if(codigoVeh && valor){
-    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===codigoVeh.trim().toUpperCase());
-    if(eq){
-      const km = parseFloat(valor);
-      const actual = parseFloat(eq.horometro||0);
-      if(!isNaN(km) && km > actual){
-        eq.horometro = km.toString();
-        if(window._fbDB && window._fbReady){
-          const idx = DB.equipos.findIndex(e=>e.id===eq.id);
-          if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/horometro').set(km.toString());
-        }
+  // El vehículo puede estar referenciado por equipoId (renta/retiro) o por equipoCompra/vehiculo (compras/apoyo)
+  let eqVeh = null;
+  if(o.equipoId){
+    const candidato = DB.equipos.find(e=>e.id===o.equipoId);
+    if(candidato && candidato.esVehiculo) eqVeh = candidato;
+  }
+  if(!eqVeh && (o.equipoCompra||o.vehiculo)){
+    const codigoVeh = (o.equipoCompra||o.vehiculo).trim().toUpperCase();
+    eqVeh = DB.equipos.find(e=>e.esVehiculo && e.codigo===codigoVeh);
+  }
+  if(eqVeh && valor){
+    const km = parseFloat(valor);
+    const actual = parseFloat(eqVeh.horometro||0);
+    if(!isNaN(km) && km > actual){
+      eqVeh.horometro = km.toString();
+      if(window._fbDB && window._fbReady){
+        const idx = DB.equipos.findIndex(e=>e.id===eqVeh.id);
+        if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/horometro').set(km.toString());
       }
+      saveDB();
     }
   }
   saveDB();
