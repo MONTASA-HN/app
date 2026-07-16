@@ -2909,7 +2909,22 @@ function renderRevisiones(){
           <option value="">— Ninguno —</option>
           ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
-      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation()">${r.notas||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)">${r.notas||''}</textarea></div>`;
+      // Fotos de la orden
+      card += `<div class="form-group">
+        <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          ${(r.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
+            <img src="${f}" style="width:100%;height:100%;object-fit:cover">
+            <button onclick="event.stopPropagation();eliminarFotoOrden('rev','${r.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+          </div>`).join('')}
+        </div>
+        ${(r.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">
+          <input type="file" accept="image/*" capture="environment" multiple style="display:none"
+            onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">
+          📷 Agregar foto${(r.fotos||[]).length>0?' ('+(r.fotos||[]).length+'/10)':''}
+        </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+      </div>`;
       if(r.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
       card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
@@ -3087,7 +3102,7 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)" oninput="event.stopPropagation()">${v.diagnostico||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)" oninput="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
@@ -3098,6 +3113,21 @@ function renderEvaluaciones(){
           <option value="">— Ninguno —</option>
           ${['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
+      // Fotos de la orden (máx 10, no aparecen en imagen al cliente)
+      card += `<div class="form-group">
+        <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
+        <div id="fotos-eval-${v.id}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          ${(v.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
+            <img src="${f}" style="width:100%;height:100%;object-fit:cover">
+            <button onclick="event.stopPropagation();eliminarFotoOrden('eval','${v.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+          </div>`).join('')}
+        </div>
+        ${(v.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">
+          <input type="file" accept="image/*" capture="environment" multiple style="display:none"
+            onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">
+          📷 Agregar foto${(v.fotos||[]).length>0?' ('+((v.fotos||[]).length)+'/10)':''}
+        </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+      </div>`;
       // Firma del cliente
       const firmaId = 'firma-eval-'+v.id;
       card += `<div class="form-group"><label>✍️ Firma del cliente</label>
@@ -3182,6 +3212,55 @@ function actualizarEvaluacion(id, campo, valor){
   saveDB();
   if(campo==='estado') renderEvaluaciones();
 }
+
+// ── FOTOS DE ÓRDENES (Revisiones y Evaluaciones) ─────────────────────────────
+function agregarFotosOrden(tipo, id, input){
+  const arr = tipo==='rev' ? DB.revisiones : DB.evaluaciones;
+  const orden = (arr||[]).find(x=>x.id===id);
+  if(!orden) return;
+  if(!orden.fotos) orden.fotos = [];
+  const archivos = Array.from(input.files);
+  const espacio = 10 - orden.fotos.length;
+  const procesar = archivos.slice(0, espacio);
+  let pendientes = procesar.length;
+  if(!pendientes){ toast('Límite de 10 fotos alcanzado'); return; }
+  procesar.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      // Comprimir la imagen antes de guardar
+      const img = new Image();
+      img.onload = ()=>{
+        const canvas = document.createElement('canvas');
+        const MAX = 1200;
+        let w = img.width, h = img.height;
+        if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+        if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        orden.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
+        pendientes--;
+        if(pendientes === 0){
+          saveDB();
+          if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
+          toast('Foto'+(procesar.length>1?'s':'')+' agregada'+(procesar.length>1?'s':'')+'  ✓');
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function eliminarFotoOrden(tipo, id, idx){
+  if(!confirm('¿Eliminar esta foto?')) return;
+  const arr = tipo==='rev' ? DB.revisiones : DB.evaluaciones;
+  const orden = (arr||[]).find(x=>x.id===id);
+  if(!orden || !orden.fotos) return;
+  orden.fotos.splice(idx, 1);
+  saveDB();
+  if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
+}
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
@@ -3207,6 +3286,14 @@ function updateBadges(){
   set('badge-corr', corr);
   set('badge-rev',  rev);
   set('badge-eval', eval_);
+}
+
+function _verFotoGrande(src){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  overlay.innerHTML = '<img src="'+src+'" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px">';
+  overlay.onclick = ()=>overlay.remove();
+  document.body.appendChild(overlay);
 }
 </script>
 
