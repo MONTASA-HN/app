@@ -4290,6 +4290,117 @@ function _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
   return card;
 }
 
+function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, tipoPC){
+  const isPrev = tipoPC === 'P';
+  const tipoColor = isPrev ? '#2d6a2d' : '#1f3864';
+  let d = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+
+  // Grid de datos clave
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  const filas = [
+    ['Correlativo', x.correlativo||'—'],
+    ['Estado', estRaw],
+    ['Técnico(s)', tecnicos],
+    ['Equipo', eqLabel],
+    ['Servicio', x.servicio||x.falla||x.notas||'—'],
+    ['Inicio trabajo', fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'],
+    ['Fin trabajo', fmtDT(x.finTrabajo||x.fechaFin||x.fechaCompletado)||'—'],
+    ['Tiempo reparación', tiempos.reparacion||'—'],
+    ...(tiempos.hayTraslado ? [['Tiempo traslado', tiempos.traslado]] : []),
+    ['Tiempo total', horas||'—'],
+    ...(x.ubicacion ? [['Ubicación', x.ubicacion==='plantel'?'En plantel':'Fuera del plantel']] : []),
+    ...(x.vehiculo ? [['Vehículo', x.vehiculo]] : []),
+    ...(x.kmSalida ? [['Km salida', x.kmSalida+' km']] : []),
+    ...(x.kmRetorno ? [['Km retorno', x.kmRetorno+' km']] : []),
+    ...(x.horometro ? [['Horómetro', x.horometro+' hrs']] : []),
+  ];
+  filas.forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  if(x.notas||x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Notas / Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.notas||x.diagnostico||'—'}</span></div>`;
+  if(x.repuestos) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Repuestos</span><span style="font-weight:600;color:var(--text)">${x.repuestos}</span></div>`;
+  d += `</div>`;
+
+  // Vales de alimentación
+  if(x.vales&&x.vales.length){
+    const tv=x.vales.reduce((s,v)=>s+v.monto,0);
+    d += `<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`;
+  }
+
+  // Firma
+  if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+
+  // Botones de acción
+  d += `<div style="display:flex;flex-direction:column;gap:6px">`;
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${isPrev?'preventivo':'correctivo'}')" style="width:100%;padding:9px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+
+  if(estRaw==='Completado'||estRaw==='Completado'){
+    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+  } else {
+    // Orden activa: campos editables de cierre
+    d += _buildCamposEdicionPC(x, eq, tipoPC);
+  }
+
+  if(isPrev){
+    d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('prev','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  } else {
+    d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('corr','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  }
+  d += `</div></div>`;
+  return d;
+}
+
+function _buildCamposEdicionPC(x, eq, tipoPC){
+  const isPrev = tipoPC==='P';
+  const tipo = isPrev?'prev':'corr';
+  const esVeh = eq && eq.esVehiculo;
+  const ubicacion = x.ubicacion||'campo';
+  let h = `<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px">`;
+  h += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Datos de la orden</div>`;
+
+  // Estado
+  h += `<div class="form-group"><label>Estado</label><select class="estado-select" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','estado',this.value)">`;
+  ['Pendiente','En proceso','En pausa','En espera de repuestos'].forEach(e=>{
+    h += `<option value="${e}" ${x.estado===e?'selected':''}>${e}</option>`;
+  });
+  h += `</select></div>`;
+
+  // Ubicación
+  h += `<div class="form-group"><label>📍 Ubicación</label><select onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','ubicacion',this.value)">
+    <option value="campo" ${ubicacion==='campo'?'selected':''}>🚗 Fuera del plantel</option>
+    <option value="plantel" ${ubicacion==='plantel'?'selected':''}>🏭 En plantel</option>
+  </select></div>`;
+
+  // Tiempos
+  h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+  if(ubicacion!=='plantel') h += `<div class="form-group"><label>Salida plantel</label><input type="datetime-local" value="${x.salidaPlantel||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','salidaPlantel',this.value)"></div>`;
+  h += `<div class="form-group"><label>Inicio trabajo</label><input type="datetime-local" value="${x.inicioTrabajo||x.fechaInicio||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','inicioTrabajo',this.value)"></div>`;
+  h += `<div class="form-group"><label>Fin trabajo</label><input type="datetime-local" value="${x.finTrabajo||x.fechaFin||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','finTrabajo',this.value)"></div>`;
+  if(ubicacion!=='plantel') h += `<div class="form-group"><label>Retorno plantel</label><input type="datetime-local" value="${x.retornoPlantel||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','retornoPlantel',this.value)"></div>`;
+  h += `</div>`;
+
+  // Km (solo fuera del plantel)
+  if(ubicacion!=='plantel'){
+    h += `<div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label><select onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','vehiculo',this.value)"><option value="">— Seleccionar —</option>`;
+    DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').forEach(v=>{
+      h += `<option value="${v.codigo}" ${x.vehiculo===v.codigo?'selected':''}>${v.codigo}</option>`;
+    });
+    h += `</select></div>`;
+    h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>Km salida <span style="color:#c9211e">*</span></label><input type="number" value="${x.kmSalida||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','kmSalida',this.value)" oninput="event.stopPropagation()"></div>
+      <div class="form-group"><label>Km retorno <span style="color:#c9211e">*</span></label><input type="number" value="${x.kmRetorno||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','kmRetorno',this.value)" oninput="event.stopPropagation()"></div>
+    </div>`;
+  }
+
+  // Notas
+  h += `<div class="form-group"><label>${isPrev?'Servicio realizado':'Diagnóstico'}</label><textarea rows="2" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)" oninput="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)">${isPrev?(x.notas||''):(x.diagnostico||'')}</textarea></div>`;
+
+  h += `</div>`;
+  return h;
+}
 
 function guardarEquipo(){
   const codigo = document.getElementById('eq-codigo').value.trim();
