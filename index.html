@@ -86,6 +86,19 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .app-header h1{font-size:18px;font-weight:600;letter-spacing:-0.3px}
 .app-header p{font-size:11px;opacity:0.6;margin-top:2px;font-family:'DM Mono',monospace}
 
+
+/* ══ CARPETAS DE ÓRDENES ══ */
+.carpeta-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:4px 0 16px}
+.carpeta-item{position:relative;border-radius:14px;padding:18px 14px 14px;background:var(--surface);border:1.5px solid var(--border);cursor:pointer;transition:all .18s;overflow:hidden}
+.carpeta-item:active{transform:scale(.97)}
+.carpeta-item:hover{border-color:var(--carpeta-color);box-shadow:0 4px 14px -4px var(--carpeta-color)}
+.carpeta-item::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--carpeta-color)}
+.carpeta-icon{font-size:28px;display:block;margin-bottom:8px}
+.carpeta-label{font-size:13px;font-weight:700;color:var(--text);line-height:1.3}
+.carpeta-back{display:flex;align-items:center;gap:8px;padding:10px 0 14px;cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
+.carpeta-back:active{opacity:.7}
+.carpeta-titulo{font-size:17px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,0.08)}
 .bottom-nav::-webkit-scrollbar{display:none}
 .nav-btn{flex:0 0 auto;min-width:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 6px 10px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:'DM Sans',sans-serif;gap:4px;transition:color 0.15s}
@@ -2659,18 +2672,77 @@ function updateBadgeLogGer(){
   else { el.textContent = ''; el.classList.remove('visible'); }
 }
 
+// ── Estado de carpeta activa en Logística ─────────────────────────────────
+let _carpetaLog = null;
+
 function renderLogistica(){
   const el = document.getElementById('logistica-list');
   if(!el) return;
   updateBadgeLogGer();
-  const list = [...(DB.logistica||[])].sort((a,b)=>{
-    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
-    return nb - na;
-  });
-  if(!list.length){ el.innerHTML = '<div class="empty">Sin órdenes logísticas</div>'; return; }
+  if(!_carpetaLog){
+    _renderCarpetasLog(el);
+  } else {
+    _renderOrdenesLog(el, _carpetaLog);
+  }
+}
+
+function _renderCarpetasLog(el){
+  const CARPETAS = [
+    {tipo:'renta',              icon:'🚛', label:'Renta',              color:'#2E83C3'},
+    {tipo:'entrega',            icon:'📦', label:'Entrega\nde Equipo', color:'#18A303'},
+    {tipo:'retiro',             icon:'🔙', label:'Retiro\nde Equipo',  color:'#E8811A'},
+    {tipo:'apoyo_mantenimiento',icon:'🔩', label:'Apoyo\nMantenimiento',color:'#9B59B6'},
+    {tipo:'atencion_compras',   icon:'🛒', label:'Atención\nde Compras',color:'#C9211E'},
+  ];
+  el.innerHTML = `<div class="carpeta-grid">
+    ${CARPETAS.map(c=>`
+      <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaLog('${c.tipo}')">
+        <span class="carpeta-icon">${c.icon}</span>
+        <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function _abrirCarpetaLog(tipo){
+  _carpetaLog = tipo;
+  const el = document.getElementById('logistica-list');
+  if(el) _renderOrdenesLog(el, tipo);
+}
+
+function _cerrarCarpetaLog(){
+  _carpetaLog = null;
+  const el = document.getElementById('logistica-list');
+  if(el) _renderCarpetasLog(el);
+}
+
+function _renderOrdenesLog(el, tipoFiltro){
+  const INFO = {
+    renta:               {icon:'🚛', label:'Renta',               color:'#2E83C3'},
+    entrega:             {icon:'📦', label:'Entrega de Equipo',   color:'#18A303'},
+    retiro:              {icon:'🔙', label:'Retiro de Equipo',    color:'#E8811A'},
+    apoyo_mantenimiento: {icon:'🔩', label:'Apoyo Mantenimiento', color:'#9B59B6'},
+    atencion_compras:    {icon:'🛒', label:'Atención de Compras', color:'#C9211E'},
+  };
+  const info = INFO[tipoFiltro]||{icon:'📋',label:tipoFiltro,color:'#2d6a9f'};
+
+  const list = [...(DB.logistica||[])]
+    .filter(o=>o.tipoLogistica===tipoFiltro)
+    .sort((a,b)=>{
+      const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+      const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+      return nb-na;
+    });
+
   const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
-  el.innerHTML = list.map(o => {
+
+  const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaLog()">← <span>Volver a carpetas</span></div>
+  <div class="carpeta-titulo" style="border-bottom:2px solid ${info.color};padding-bottom:8px">${info.icon} ${info.label}</div>`;
+
+  if(!list.length){
+    el.innerHTML = backBtn + '<div class="empty">Sin órdenes en esta categoría</div>';
+    return;
+  }
+  el.innerHTML = backBtn + list.map(o => {
    try{
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = (o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento') ? (o.equipoCompra||'—') : (eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—'));
@@ -3597,258 +3669,267 @@ function renderCorrectivos(){
 }
 
 
+// ── Estado de carpeta activa en Mantenimiento ─────────────────────────────
+let _carpetaMant = null; // null = vista de carpetas, 'P'|'C'|'RV'|'EV' = carpeta abierta
+
 function renderHistorial(){
-  const filtEq  = document.getElementById('filt-hist-equipo')?.value || '';
-  const buscar  = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
+  const el = document.getElementById('historial-list');
+  if(!el) return;
+
+  if(!_carpetaMant){
+    _renderCarpetasMant(el);
+  } else {
+    _renderOrdenesMant(el, _carpetaMant);
+  }
+}
+
+function _renderCarpetasMant(el){
+  const CARPETAS = [
+    {tipo:'P',  icon:'📋', label:'Preventivos',               color:'#2E83C3'},
+    {tipo:'C',  icon:'🔧', label:'Correctivos',               color:'#C9211E'},
+    {tipo:'RV', icon:'✅', label:'Revisión\nFísico-Técnica',  color:'#18A303'},
+    {tipo:'EV', icon:'📄', label:'Evaluación\nde Equipo',     color:'#E8811A'},
+  ];
+  el.innerHTML = `<div class="carpeta-grid">
+    ${CARPETAS.map(c=>`
+      <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaMant('${c.tipo}')">
+        <span class="carpeta-icon">${c.icon}</span>
+        <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function _abrirCarpetaMant(tipo){
+  _carpetaMant = tipo;
+  const el = document.getElementById('historial-list');
+  if(el) _renderOrdenesMant(el, tipo);
+}
+
+function _cerrarCarpetaMant(){
+  _carpetaMant = null;
+  const el = document.getElementById('historial-list');
+  if(el) _renderCarpetasMant(el);
+}
+
+function _renderOrdenesMant(el, tipo){
+  const filtEq = document.getElementById('filt-hist-equipo')?.value || '';
+  const buscar = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
+
+  const INFO = {
+    'P':  {icon:'📋', label:'Preventivos',              color:'#2E83C3'},
+    'C':  {icon:'🔧', label:'Correctivos',              color:'#C9211E'},
+    'RV': {icon:'✅', label:'Revisión Físico-Técnica',  color:'#18A303'},
+    'EV': {icon:'📄', label:'Evaluación de Equipo',     color:'#E8811A'},
+  };
+  const info = INFO[tipo];
+
   const ESTADOS_COLOR = {
-    'Pendiente':  {bg:'#fff0f0',border:'#c00',txt:'#c00'},
-    'En proceso': {bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},
-    'En espera de repuestos': {bg:'#eff6ff',border:'#3b82f6',txt:'#1d4ed8'},
-    'Completado': {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
-    'Completado':    {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
+    'Pendiente':               {bg:'#fff0f0',border:'#c00',txt:'#c00'},
+    'En proceso':              {bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},
+    'En espera de repuestos':  {bg:'#eff6ff',border:'#3b82f6',txt:'#1d4ed8'},
+    'Completado':              {bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},
+    'Cancelado':               {bg:'#f5f5f5',border:'#888',txt:'#888'},
   };
 
-  // Todos los estados
-  let all = [
-    ...(DB.preventivos||[]).map(p=>({...p, _t:'P', _f:p.fechaCompletado||p.fechaInicio||''})),
-    ...(DB.correctivos||[]).map(c=>({...c, _t:'C', _f:c.fechaCierre||c.fechaInicio||''})),
-    ...(DB.revisiones||[]).map(r=>({...r, _t:'RV', _f:r.fechaCierre||r.fecha||''})),
-    ...(DB.evaluaciones||[]).map(v=>({...v, _t:'EV', _f:v.fechaCierre||v.fecha||''}))
-  ].sort((a,b)=>{
-    const na = parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-    const nb = parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
-    return nb - na;
+  let all = [];
+  if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
+  if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
+  if(tipo==='RV') all = (DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''}));
+  if(tipo==='EV') all = (DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}));
+
+  all.sort((a,b)=>{
+    const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb-na;
   });
 
   if(filtEq) all = all.filter(x=>x.equipoId===filtEq);
   if(buscar)  all = all.filter(x=>
     (x.correlativo||'').toLowerCase().includes(buscar)||
-    (x.falla||x.servicio||x.notas||'').toLowerCase().includes(buscar)||
+    (x.falla||x.servicio||x.notas||x.diagnostico||'').toLowerCase().includes(buscar)||
     (x.tecnico||'').toLowerCase().includes(buscar)
   );
 
-  const el = document.getElementById('historial-list');
-  if(!all.length){ el.innerHTML='<div class="empty">Sin órdenes de mantenimiento</div>'; return; }
+  const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaMant()">
+    ← <span>Volver a carpetas</span>
+  </div>
+  <div class="carpeta-titulo" style="border-bottom:2px solid ${info.color};padding-bottom:8px">
+    ${info.icon} ${info.label}
+  </div>`;
 
-  el.innerHTML = all.map(x=>{
-   try{
-    const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
-    const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
-    const tiempos = calcTiemposOrden(x);
-    const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
+  if(!all.length){
+    el.innerHTML = backBtn + '<div class="empty">Sin órdenes en esta categoría</div>';
+    return;
+  }
 
-    // ── REVISIÓN FÍSICO-TÉCNICA ──────────────────────────────────────────
-    if(x._t==='RV'){
-      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
-      const estRV=x.estado||'Pendiente';
-      const ESTADOS_COLOR_RV={'Pendiente':{bg:'#fff0f0',border:'#c00',txt:'#c00'},'En proceso':{bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},'Completado':{bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},'Cancelado':{bg:'#f5f5f5',border:'#888',txt:'#888'}};
-      const ccRV=ESTADOS_COLOR_RV[estRV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
-      const isOpenRV=openHistGer.has(x.id);
-      let cRV=`<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
-      cRV+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none"><div style="flex:1;min-width:0">`;
-      cRV+=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
-      if(x.correlativo) cRV+=`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${x.correlativo}</span>`;
-      cRV+=`<span style="font-size:11px;font-weight:700;background:${ccRV.bg};color:${ccRV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${ccRV.border}">${estRV}</span>`;
-      cRV+=`<span style="font-size:11px;background:#f0f4ff;color:#1f3864;padding:2px 7px;border-radius:10px">🚌 Revisión F/T</span></div>`;
-      cRV+=`<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">${x.notas||x.placa||'Revisión Físico-Técnica'}</div>`;
-      if(x.placa) cRV+=`<div style="font-size:11px;color:var(--text3)">🚌 ${x.placa} ${x.tipoVehiculo?'— '+x.tipoVehiculo:''}</div>`;
-      if(x.fecha) cRV+=`<div style="font-size:11px;color:var(--text3)">📅 ${x.fecha} ${x.horaIni||''}</div>`;
-      if(tecs!=='—') cRV+=`<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
-      if(x.viaticos){ const tvjRV=_calcCostoViaticos(x.viaticos); cRV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjRV.toFixed(2)}</div>`; }
-      cRV+=`</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenRV?'⌃':'⌄'}</span></div>`;
-      if(isOpenRV){
-        cRV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-        cRV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-        [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora final',x.horaFin||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—'],['Largo (mts)',x.largo||'—'],['Ancho (mts)',x.ancho||'—'],['Alto (mts)',x.alto||'—'],['Dist. eje 1-2 (mts)',x.ejeUnoDos||'—'],['Dist. eje 2-3 (mts)',x.ejeDosTres||'—'],['Dist. eje 3-4 (mts)',x.ejeTresCuatro||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
-          cRV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
-        });
-        cRV+=`</div>`;
-        // Galería de fotos internas
-        if(x.fotos && x.fotos.length){
-          cRV+=`<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length}) — solo uso interno</div>`;
-          cRV+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
-          x.fotos.forEach((f,i)=>{
-            const dataId = `rv-${x.id}-${i}`;
-            window._fotosCache = window._fotosCache||{};
-            window._fotosCache[dataId] = f;
-            cRV+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;
-          });
-          cRV+=`</div></div>`;
-        }
-        cRV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
-        if(estRV==='Completado'){
-          cRV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-          cRV+=`<button onclick="event.stopPropagation();copiarImagenOrden('revision','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
-        }
-        cRV+=`<button onclick="event.stopPropagation();_elimRV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
-        cRV+=`</div>`;
-      }
-      cRV+=`</div>`;
-      return cRV;
-    }
+  const cards = all.map(x=>{
+    try{
+      const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
+      const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
+      const tiempos = calcTiemposOrden(x);
+      const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
 
-    // ── EVALUACIÓN DE EQUIPO ─────────────────────────────────────────────
-    if(x._t==='EV'){
-      const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
-      const estEV=x.estado||'Pendiente';
-      const ESTADOS_COLOR_EV={'Pendiente':{bg:'#fff0f0',border:'#c00',txt:'#c00'},'En proceso':{bg:'#fff8e1',border:'#f59e0b',txt:'#b45309'},'Completado':{bg:'#f0fdf4',border:'#16a34a',txt:'#15803d'},'Cancelado':{bg:'#f5f5f5',border:'#888',txt:'#888'}};
-      const ccEV=ESTADOS_COLOR_EV[estEV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
-      const isOpenEV=openHistGer.has(x.id);
-      let cEV=`<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
-      cEV+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none"><div style="flex:1;min-width:0">`;
-      cEV+=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
-      if(x.correlativo) cEV+=`<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#2d6a9f;padding:2px 7px;border-radius:10px">${x.correlativo}</span>`;
-      cEV+=`<span style="font-size:11px;font-weight:700;background:${ccEV.bg};color:${ccEV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${ccEV.border}">${estEV}</span>`;
-      cEV+=`<span style="font-size:11px;background:#f0f4ff;color:#2d6a9f;padding:2px 7px;border-radius:10px">📋 Evaluación</span></div>`;
-      cEV+=`<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">${x.notas||x.modelo||'Evaluación de Equipo'}</div>`;
-      if(x.modelo) cEV+=`<div style="font-size:11px;color:var(--text3)">🔧 ${x.modelo}${x.marca?' — '+x.marca:''}${x.serie?' ('+x.serie+')':''}</div>`;
-      if(x.fecha) cEV+=`<div style="font-size:11px;color:var(--text3)">📅 ${x.fecha} ${x.horaIni||''} ${x.horaFin?'– '+x.horaFin:''}</div>`;
-      if(tecs!=='—') cEV+=`<div style="font-size:11px;color:var(--text3)">👷 ${tecs}</div>`;
-      if(x.cliente) cEV+=`<div style="font-size:11px;color:var(--text3)">👤 ${x.cliente}</div>`;
-      if(x.viaticos){ const tvjEV=_calcCostoViaticos(x.viaticos); cEV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjEV.toFixed(2)}</div>`; }
-      cEV+=`</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenEV?'⌃':'⌄'}</span></div>`;
-      if(isOpenEV){
-        cEV+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-        cEV+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
-        [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Horómetro',x.horometro?(x.horometro+' hrs'):'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
-          cEV+=`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
-        });
-        if(x.diagnostico) cEV+=`<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
-        cEV+=`</div>`;
-        if(x.firma) cEV+=`<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
-        // Galería de fotos internas (no aparecen en imagen al cliente)
-        if(x.fotos && x.fotos.length){
-          cEV+=`<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length}) — solo uso interno</div>`;
-          cEV+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
-          x.fotos.forEach((f,i)=>{
-            const dataId = `ev-${x.id}-${i}`;
-            window._fotosCache = window._fotosCache||{};
-            window._fotosCache[dataId] = f;
-            cEV+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;
-          });
-          cEV+=`</div></div>`;
-        }
-        cEV+=`<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
-        if(estEV==='Completado'){
-          cEV+=`<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-          cEV+=`<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
-        }
-        cEV+=`<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
-        cEV+=`</div>`;
-      }
-      cEV+=`</div>`;
-      return cEV;
-    }
-
-    const estRaw = x._t==='P' ? (x.completado?'Completado':(x.estado||'Pendiente')) : (x.estado||'Pendiente');
-    const estCfg = ESTADOS_COLOR[estRaw] || {bg:'#f5f5f5',border:'#888',txt:'#333'};
-    const tipo = x._t==='P' ? 'Preventivo' : 'Correctivo';
-    const tipoColor = x._t==='P' ? '#2d6a2d' : '#1f3864';
-    const trabajo = x.falla || x.servicio || x.notas || '—';
-    const tecnicos = (x.tecnicos && x.tecnicos.length) ? x.tecnicos.join(', ') : (x.tecnico||'—');
-    const isOpen = openHistGer.has(x.id);
-    const corr = x.correlativo||'';
-
-    // MINIATURA
-    let card = `<div class="card" style="padding:12px 14px;border-left:3px solid ${tipoColor};margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
-    card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
-    card += `<div style="flex:1;min-width:0">`;
-    // Badges
-    card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
-    if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
-    card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
-    card += `<span style="font-size:11px;background:#f0f4ff;color:${tipoColor};padding:2px 7px;border-radius:10px">${tipo}</span>`;
-    card += `</div>`;
-    // Trabajo
-    card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
-    // Equipo + horas + técnicos
-    card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
-    if(x.inicioTrabajo||x.fechaInicio){
-      const t = tiempos;
-      let horaLine = `📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`;
-      if(t.total !== '—') horaLine += ` · ⏱ ${t.total}`;
-      card += `<div style="font-size:11px;color:var(--text3)">${horaLine}</div>`;
-    }
-    if(tiempos.hayRep && (tiempos.hayTraslado || tiempos.reparacion !== tiempos.total)){
-      card += `<div style="font-size:11px;color:var(--text3)">🔧 Rep: ${tiempos.reparacion}${tiempos.hayTraslado?' · 🚗 Trasl: '+tiempos.traslado:''}</div>`;
-    }
-    if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
-    if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
-    if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
-    card += `</div>`;
-    card += `<span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
-    card += `</div>`;
-
-    // DETALLE EXPANDIDO
-    if(isOpen){
-      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-      // Grid de info
-      const campos = [
-        ['Correlativo', corr],
-        ['Tipo', tipo],
-        ['Estado', estRaw],
-        ['Equipo', eqLabel],
-        ['Técnicos', tecnicos],
-      ];
-      if(x.ubicacion==='plantel') campos.push(['Ubicación', '🏭 En plantel']);
-      else campos.push(['Ubicación', '🚗 Fuera del plantel']);
-      if(x.salidaPlantel) campos.push(['Salida del plantel', fmtDT(x.salidaPlantel)]);
-      campos.push(['Inicio de trabajo', fmtDT(x.inicioTrabajo||x.fechaInicio)||'—']);
-      campos.push(['Fin de trabajo', fmtDT(x.finTrabajo||x.fechaFin||x.fechaCompletado)||'—']);
-      if(x.retornoPlantel) campos.push(['Retorno al plantel', fmtDT(x.retornoPlantel)]);
-      if(tiempos.hayRep) campos.push(['⏱ Tiempo de reparación', tiempos.reparacion]);
-      if(tiempos.hayTraslado) campos.push(['🚗 Tiempo de traslado', tiempos.traslado]);
-      campos.push(['🕐 Tiempo total', tiempos.total !== '—' ? tiempos.total : horas]);
-      if(x._t==='P' && x.servicio) campos.push(['Servicio', x.servicio]);
-      if(x._t==='C' && x.falla) campos.push(['Falla reportada', x.falla]);
-      if(x.notas||x.diagnostico) campos.push(['Notas / Diagnóstico', x.notas||x.diagnostico]);
-      if(x.repuestosUsados) campos.push(['Repuestos', x.repuestosUsados]);
-      if(x.kmSalida&&x.kmRetorno) campos.push(['Km recorridos', (parseFloat(x.kmRetorno)-parseFloat(x.kmSalida)).toFixed(0)+' km']);
-      if(x.vales&&x.vales.length){
-        const vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'};
-        campos.push(['Vale alimentación', x.vales.map(v=>(vlbl[v.tipo]||v.tipo)+' L.'+v.monto).join(', ')]);
-      }
-
-      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:12px">`;
-      campos.forEach(([k,v])=>{
-        card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
-      });
-      card += `</div>`;
-
-      // Firma si existe
-      if(x.firma) card += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ FIRMA DEL CLIENTE</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
-      // Botones de acción
-      card += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">`;
-      if(x.viaticos){
-        card += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📋 Ver Viáticos</button>`;
-      } else if(x.vales&&x.vales.length){
-        card += `<button onclick="event.stopPropagation();abrirValeMant('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#856404;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🍽 Ver Vale</button>`;
-      } else {
-        card += `<button onclick="event.stopPropagation();abrirValeMant('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#b8860b;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🍽 Generar Vale</button>`;
-        card += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${x._t==='P'?'preventivo':'correctivo'}')" style="padding:6px 14px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📋 Solicitar Viáticos</button>`;
-      }
-      if(estRaw==='Completado'){
-        card += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-        card += `<button onclick="event.stopPropagation();copiarImagenOrden('${x._t==='P'?'preventivo':'correctivo'}','${x.id}')" style="padding:6px 14px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
-      }
-      card += `<button onclick="event.stopPropagation();eliminarDelHistorial('${x._t==='P'?'prev':'corr'}','${x.id}')" style="padding:6px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:6px;font-size:12px;cursor:pointer">✕ Eliminar</button>`;
-      card += `</div>`;
-      card += `</div>`;
-    }
-    card += `</div>`;
-    return card;
-   }catch(err){
-     console.error('Error renderizando orden de historial', x && x.id, err);
-     return `<div class="card" style="padding:10px 14px;margin-bottom:8px;border-left:3px solid #c00;font-size:12px;color:#c00">⚠️ No se pudo mostrar la orden ${x&&x.correlativo||x&&x.id||''} (datos incompletos)</div>`;
-   }
+      if(x._t==='RV') return _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR);
+      if(x._t==='EV') return _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR);
+      if(x._t==='P')  return _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
+      if(x._t==='C')  return _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
+    } catch(e){ return ''; }
   }).join('');
 
-  // Event delegation
-  el.onclick = function(e){
-    const card = e.target.closest('[data-hid]');
-    if(card && !e.target.closest('button,input,select,textarea')) toggleHistGer(card.dataset.hid);
-  };
+  el.innerHTML = backBtn + cards;
+  // Restaurar firmas en canvas
+  setTimeout(()=>{
+    (DB.revisiones||[]).forEach(r=>{ if(r.firma){ const c=document.getElementById('firma-rv-'+r.id); if(c){ const img=new Image(); img.onload=()=>c.getContext('2d').drawImage(img,0,0); img.src=r.firma; }}});
+    (DB.evaluaciones||[]).forEach(v=>{ if(v.firma){ const c=document.getElementById('firma-eval-'+v.id); if(c){ const img=new Image(); img.onload=()=>c.getContext('2d').drawImage(img,0,0); img.src=v.firma; }}});
+  }, 200);
 }
+
+// ── FUNCIONES AUXILIARES DE CARDS DEL HISTORIAL ────────────────────────────
+function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
+  const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+  const estRV = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfgRV = ESTADOS_COLOR[estRV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const isOpenRV = openHistGer.has(x.id);
+  let cRV = `<div class="card" style="padding:12px 14px;border-left:3px solid #18A303;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  cRV += `<div style="display:flex;justify-content:space-between;align-items:center">`;
+  cRV += `<div style="flex:1;min-width:0">`;
+  cRV += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">`;
+  cRV += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e3f5d9;color:#18A303;padding:2px 7px;border-radius:10px">${x.correlativo||'—'}</span>`;
+  cRV += `<span style="font-size:11px;font-weight:700;background:${estCfgRV.bg};color:${estCfgRV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgRV.border}">${estRV}</span>`;
+  cRV += `</div>`;
+  cRV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.notas||x.placa||'Revisión Físico-Técnica'}</div>`;
+  cRV += `<div style="font-size:11px;color:var(--text3)">✅ Revisión · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
+  if(x.viaticos){ const tvjRV=_calcCostoViaticos(x.viaticos); cRV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjRV.toFixed(2)}</div>`; }
+  cRV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenRV?'⌃':'⌄'}</span></div>`;
+  if(isOpenRV){
+    cRV += _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR);
+  }
+  cRV += `</div>`;
+  return cRV;
+}
+
+function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
+  let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—']].forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  d += `</div>`;
+  if(x.fotos&&x.fotos.length){
+    d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length})</div>`;
+    d += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    x.fotos.forEach((f,i)=>{ const dataId=`rv-${x.id}-${i}`; window._fotosCache=window._fotosCache||{}; window._fotosCache[dataId]=f; d+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;});
+    d += `</div></div>`;
+  }
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+  if(estRV==='Completado'){
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('revision_fisica','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  }
+  d += `</div>`;
+  return d;
+}
+
+function _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR){
+  const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+  const estEV = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfgEV = ESTADOS_COLOR[estEV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const isOpenEV = openHistGer.has(x.id);
+  let cEV = `<div class="card" style="padding:12px 14px;border-left:3px solid #E8811A;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  cEV += `<div style="display:flex;justify-content:space-between;align-items:center">`;
+  cEV += `<div style="flex:1;min-width:0">`;
+  cEV += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">`;
+  cEV += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#fdead9;color:#E8811A;padding:2px 7px;border-radius:10px">${x.correlativo||'—'}</span>`;
+  cEV += `<span style="font-size:11px;font-weight:700;background:${estCfgEV.bg};color:${estCfgEV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgEV.border}">${estEV}</span>`;
+  cEV += `</div>`;
+  cEV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.modelo||x.serie||'Evaluación de Equipo'}</div>`;
+  cEV += `<div style="font-size:11px;color:var(--text3)">📄 Evaluación · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
+  if(x.cliente) cEV += `<div style="font-size:11px;color:var(--text3)">👤 ${x.cliente}</div>`;
+  if(x.viaticos){ const tvjEV=_calcCostoViaticos(x.viaticos); cEV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjEV.toFixed(2)}</div>`; }
+  cEV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenEV?'⌃':'⌄'}</span></div>`;
+  if(isOpenEV){
+    cEV += _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR);
+  }
+  cEV += `</div>`;
+  return cEV;
+}
+
+function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
+  let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Horómetro',x.horometro?(x.horometro+' hrs'):'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  if(x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
+  d += `</div>`;
+  if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+  if(x.fotos&&x.fotos.length){
+    d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length}) — solo uso interno</div>`;
+    d += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    x.fotos.forEach((f,i)=>{ const dataId=`ev-${x.id}-${i}`; window._fotosCache=window._fotosCache||{}; window._fotosCache[dataId]=f; d+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;});
+    d += `</div></div>`;
+  }
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+  if(estEV==='Completado'){
+    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+  }
+  d += `<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
+  d += `</div>`;
+  return d;
+}
+
+function _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
+  const estRaw = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfg = ESTADOS_COLOR[estRaw]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const trabajo = x.falla||x.servicio||x.notas||'—';
+  const tecnicos = (x.tecnicos&&x.tecnicos.length)?x.tecnicos.join(', '):(x.tecnico||'—');
+  const isOpen = openHistGer.has(x.id);
+  const corr = x.correlativo||'';
+  let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
+  card += `<div style="flex:1;min-width:0">`;
+  card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+  if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
+  card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
+  card += `</div>`;
+  card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
+  card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
+  if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
+  if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
+  if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
+  if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'P');
+  card += `</div>`;
+  return card;
+}
+
+function _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
+  const estRaw = x.estado||'Pendiente';
+  const estCfg = ESTADOS_COLOR[estRaw]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const trabajo = x.falla||x.servicio||x.notas||'—';
+  const tecnicos = (x.tecnicos&&x.tecnicos.length)?x.tecnicos.join(', '):(x.tecnico||'—');
+  const isOpen = openHistGer.has(x.id);
+  const corr = x.correlativo||'';
+  let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
+  card += `<div style="flex:1;min-width:0">`;
+  card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+  if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
+  card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
+  card += `</div>`;
+  card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
+  card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
+  if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
+  if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
+  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
+  if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'C');
+  card += `</div>`;
+  return card;
+}
+
 
 function guardarEquipo(){
   const codigo = document.getElementById('eq-codigo').value.trim();
