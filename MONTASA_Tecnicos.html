@@ -977,12 +977,30 @@ function calcHorasMinutos(inicio, fin){
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
   try{
-    const totalMin = Math.round(calcHorasMinutos(inicio, fin));
-    if(totalMin<=0) return '—';
+    const iniD = new Date(inicio);
+    const finD = new Date(fin);
+    if(isNaN(iniD) || isNaN(finD) || finD <= iniD) return '—';
+    const totalMin = _calcMinsJornada(iniD, finD);
+    if(!totalMin) return '—';
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return h > 0 ? h + 'h ' + (m > 0 ? m + 'min' : '') : m + 'min';
   } catch(e){ return '—'; }
+}
+
+function _calcMinsJornada(iniDate, finDate){
+  if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
+  if(finDate <= iniDate) return 0;
+  const JORNADA = 480;
+  const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
+  const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
+  const diasDiff = Math.round((dFin - dIni) / 86400000);
+  if(diasDiff === 0) return Math.floor((finDate - iniDate) / 60000);
+  // Días completos × 8h + fracción del último día relativa a la hora de inicio
+  const minsIniJornada = iniDate.getHours() * 60 + iniDate.getMinutes();
+  const minsFinJornada = finDate.getHours() * 60 + finDate.getMinutes();
+  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), JORNADA);
+  return (diasDiff * JORNADA) + fraccion;
 }
 
 function calcTiemposOrden(o){
@@ -990,19 +1008,19 @@ function calcTiemposOrden(o){
   const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
   const sal  = new Date(o.salidaPlantel  || '');
   const ret  = new Date(o.retornoPlantel || '');
-  const hayRep     = ini && fin && !isNaN(ini) && !isNaN(fin) && fin > ini;
-  const hayTraslado = sal && ret && !isNaN(sal) && !isNaN(ret) && ret > sal;
-  const minsRep  = hayRep     ? Math.floor((fin - ini)  / 60000) : 0;
-  const minsTotal= hayTraslado? Math.floor((ret - sal)  / 60000) : minsRep;
-  const minsTras = hayTraslado? minsTotal - minsRep : 0;
+  const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
+  const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && !!o.salidaPlantel;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmtM = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {
     minsReparacion: minsRep,
     minsTraslado:   minsTras,
     minsTotal:      minsTotal,
-    reparacion:     hayRep     ? fmtM(minsRep)   : '—',
-    traslado:       hayTraslado? fmtM(minsTras)   : '—',
-    total:          minsTotal   ? fmtM(minsTotal) : '—',
+    reparacion:     hayRep      ? fmtM(minsRep)   : '—',
+    traslado:       hayTraslado ? fmtM(minsTras)   : '—',
+    total:          minsTotal   ? fmtM(minsTotal)  : '—',
     hayTraslado,
     hayRep
   };

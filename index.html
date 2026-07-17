@@ -2267,40 +2267,56 @@ function calcDuracion(ini, fin){
   return h>0 ? h+'h '+(m>0?m+'min':'') : m+'min';
 }
 
+// Calcula minutos de trabajo con jornada de 8h/día cuando el trabajo abarca múltiples días.
+// Regla: si inicio y fin son el mismo día → diferencia real en minutos.
+//        si son días distintos → días completos × 480 min + horas del último día.
+function _calcMinsJornada(iniDate, finDate){
+  if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
+  if(finDate <= iniDate) return 0;
+  const JORNADA = 480;
+  const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
+  const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
+  const diasDiff = Math.round((dFin - dIni) / 86400000);
+  if(diasDiff === 0) return Math.floor((finDate - iniDate) / 60000);
+  // Días completos × 8h + fracción del último día relativa a la hora de inicio
+  const minsIniJornada = iniDate.getHours() * 60 + iniDate.getMinutes();
+  const minsFinJornada = finDate.getHours() * 60 + finDate.getMinutes();
+  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), JORNADA);
+  return (diasDiff * JORNADA) + fraccion;
+}
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
   try{
-    const diff = new Date(fin) - new Date(inicio);
-    if(diff <= 0) return '—';
-    const totalMin = Math.floor(diff / 60000);
+    const iniD = new Date(inicio);
+    const finD = new Date(fin);
+    if(isNaN(iniD) || isNaN(finD) || finD <= iniD) return '—';
+    const totalMin = _calcMinsJornada(iniD, finD);
+    if(!totalMin) return '—';
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return h > 0 ? h + 'h ' + (m > 0 ? m + 'min' : '') : m + 'min';
   } catch(e){ return '—'; }
 }
 
-// Calcula los tres tiempos de una orden de técnico.
-// Usa los campos nuevos (inicioTrabajo/finTrabajo/salidaPlantel/retornoPlantel)
-// con fallback a los campos antiguos (fechaInicio/fechaFin) para compatibilidad.
+// Calcula los tres tiempos de una orden de técnico con jornada de 8h/día.
 function calcTiemposOrden(o){
-  const esNuevo = !!(o.inicioTrabajo || o.finTrabajo);
   const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
   const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
   const sal  = new Date(o.salidaPlantel  || '');
   const ret  = new Date(o.retornoPlantel || '');
-  const hayRep     = ini && fin && !isNaN(ini) && !isNaN(fin) && fin > ini;
-  const hayTraslado = sal && ret && !isNaN(sal) && !isNaN(ret) && ret > sal;
-  const minsRep  = hayRep     ? Math.floor((fin - ini)  / 60000) : 0;
-  const minsTotal= hayTraslado? Math.floor((ret - sal)  / 60000) : minsRep;
-  const minsTras = hayTraslado? minsTotal - minsRep : 0;
+  const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
+  const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmt = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {
     minsReparacion: minsRep,
     minsTraslado:   minsTras,
     minsTotal:      minsTotal,
-    reparacion:     hayRep     ? fmt(minsRep)   : '—',
-    traslado:       hayTraslado? fmt(minsTras)   : '—',
-    total:          minsTotal   ? fmt(minsTotal) : '—',
+    reparacion:     hayRep      ? fmt(minsRep)   : '—',
+    traslado:       hayTraslado ? fmt(minsTras)   : '—',
+    total:          minsTotal   ? fmt(minsTotal)  : '—',
     hayTraslado,
     hayRep
   };
@@ -4334,20 +4350,18 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   d += `<div style="display:flex;flex-direction:column;gap:6px">`;
   d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${isPrev?'preventivo':'correctivo'}')" style="width:100%;padding:9px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
 
-  if(estRaw==='Completado'||estRaw==='Completado'){
+  if(estRaw==='Completado'){
     d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
     d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   } else {
-    // Orden activa: campos editables de cierre
     d += _buildCamposEdicionPC(x, eq, tipoPC);
-  }
-
-  if(isPrev){
-    d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('prev','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
-  } else {
-    d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('corr','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+    if(isPrev){
+      d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
+    } else {
+      d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
+    }
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   }
   d += `</div></div>`;
   return d;
