@@ -661,8 +661,8 @@ function renderOrdenesLog(){
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
           ${(o.tipoLogistica==='apoyo_mantenimiento'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='retiro')&&o.equipoCompra?`<div style="font-size:13px;color:var(--text2)">🚗 ${o.equipoCompra}</div>`:''}
           ${(o.descripcion && o.tipoLogistica!=='entrega' && o.tipoLogistica!=='retiro')?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
-          ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
-          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
+          ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&o.equipoId2?`<div style="font-size:13px;color:var(--text2)">📦 ${getEq2LabelLog(o.equipoId2).replace(/<[^>]*>/g,'').trim()}</div>`:(o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '')}
+          ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')&&(o.ubicacionLog||'fuera')==='fuera'?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}${o.operador2?', '+o.operador2:''}${o.operador3?', '+o.operador3:''}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
@@ -1137,20 +1137,13 @@ function renderCamposTipo(o){
     html += '</div>';
   }
 
-  // Segundo equipo — solo lectura, solo fuera del plantel
-  if(!esPlantel && (isEntrega||isRetiro) && o.equipoId2){
-    html += '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;font-size:13px">';
-    html += '<span style="color:var(--text3)">2° Equipo: </span><strong>'+eq2Label+'</strong>';
-    html += '</div>';
-  }
-
   // Horómetro de salida — entrega (en plantel Y fuera)
   if(isEntrega){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">⏱ Horómetro de salida</div>';
     html += '<div class="form-group"><label>Horómetro salida — '+eq1Label+'</label>';
     html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
-    if(!esPlantel && eq2){
+    if(eq2){
       html += '<div class="form-group"><label>Horómetro salida — '+eq2Label+'</label>';
       html += '<input type="number" value="'+(o.horometroSalida2||'')+'" placeholder="0" ';
       html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida2\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
@@ -1163,7 +1156,7 @@ function renderCamposTipo(o){
     html += '<div class="form-group"><label>Horómetro retorno — '+eq1Label+'</label>';
     html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
-    if(!esPlantel && eq2){
+    if(eq2){
       html += '<div class="form-group"><label>Horómetro retorno — '+eq2Label+'</label>';
       html += '<input type="number" value="'+(o.horometroRetorno2||'')+'" placeholder="0" ';
       html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroRetorno2\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
