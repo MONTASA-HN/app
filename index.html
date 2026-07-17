@@ -4145,7 +4145,6 @@ function _renderOrdenesMant(el, tipo){
   }, 200);
 }
 
-// ── FUNCIONES AUXILIARES DE CARDS DEL HISTORIAL ────────────────────────────
 function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
   const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
   const estRV = x.completado?'Completado':(x.estado||'Pendiente');
@@ -6880,10 +6879,19 @@ function _cleanLogistica(arr){
 
 function toggleHistGer(id){
   if(openHistGer.has(id)) openHistGer.delete(id); else openHistGer.add(id);
-  renderHistorial();
+  // Re-renderizar solo si estamos dentro de una carpeta
+  if(_carpetaMant) _renderOrdenesMant(document.getElementById('historial-list'), _carpetaMant);
+  else renderHistorial();
 }
 
-// ── Event delegation permanente para acordeón logística en gerencia ──────────
+// ── Event delegation permanente para acordeón historial de mantenimiento ─────
+document.addEventListener('click', function(e){
+  const card = e.target.closest('#historial-list [data-hid]');
+  if(card){
+    if(e.target.closest('button,input,select,textarea,canvas,label')) return;
+    toggleHistGer(card.dataset.hid);
+  }
+});
 document.addEventListener('click', function(e){
   const card = e.target.closest('#logistica-list [data-lgid]');
   if(card){
