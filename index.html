@@ -827,6 +827,15 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
 
       <!-- 4a. Descripción (correctivo) -->
+
+      <!-- 4e. Ubicación para Entrega y Retiro/Recepción -->
+      <div id="sol-ublog-wrap" class="form-group" style="display:none">
+        <label id="sol-ublog-label">📍 Ubicación</label>
+        <select id="sol-ublog" onchange="solUbicacionLogChange()">
+          <option value="fuera">🚗 Fuera del plantel</option>
+          <option value="plantel">🏭 En el plantel</option>
+        </select>
+      </div>
       <div id="sol-desc-wrap" class="form-group">
         <label id="sol-desc-label">Descripción de la falla</label>
         <textarea id="sol-desc" placeholder="Describe brevemente la falla o trabajo..." style="min-height:80px"></textarea>
@@ -1181,6 +1190,15 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
 
       <!-- 4a. Descripción (correctivo) -->
+
+      <!-- 4e. Ubicación para Entrega y Retiro/Recepción -->
+      <div id="sol-ublog-wrap2" class="form-group" style="display:none">
+        <label id="sol-ublog-label2">📍 Ubicación</label>
+        <select id="sol-ublog2" onchange="solUbicacionLogChange()">
+          <option value="fuera">🚗 Fuera del plantel</option>
+          <option value="plantel">🏭 En el plantel</option>
+        </select>
+      </div>
       <div id="sol-desc-wrap" class="form-group">
         <label id="sol-desc-label">Descripción de la falla</label>
         <textarea id="sol-desc" placeholder="Describe brevemente la falla o trabajo..." style="min-height:80px"></textarea>
@@ -1596,7 +1614,7 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Diagnóstico', o.diagnostico||'—']);
   } else {
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
-    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
+    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
     campos.push(['Tipo de orden', tipoLbl]);
     campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ')||'—']);
     if(o.motorista) campos.push(['Motorista', o.motorista]);
@@ -1640,7 +1658,7 @@ async function copiarImagenOrden(tipo, id){
     const tipoTitulo = {
       preventivo:'Orden de Preventivo', correctivo:'Orden de Correctivo',
       revision:'Revisión Físico-Técnica', evaluacion:'Evaluación de Equipo',
-      renta:'Orden de Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
+      renta:'Orden de Renta', entrega:'Entrega de Equipo', retiro:'Retiro/Recepción de Equipo',
       apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
     }[tipo] || (o.tipoLogistica ? 'Orden de Logística' : 'Orden');
 
@@ -3096,7 +3114,7 @@ function _renderOrdenesLog(el, tipoFiltro){
   const INFO = {
     renta:               {icon:'🚛', label:'Renta',               color:'#2E83C3'},
     entrega:             {icon:'📦', label:'Entrega de Equipo',   color:'#18A303'},
-    retiro:              {icon:'🔙', label:'Retiro de Equipo',    color:'#E8811A'},
+    retiro:              {icon:'🔙', label:'Retiro / Recepción',    color:'#E8811A'},
     apoyo_mantenimiento: {icon:'🔩', label:'Apoyo Mantenimiento', color:'#9B59B6'},
     atencion_compras:    {icon:'🛒', label:'Atención de Compras', color:'#C9211E'},
   };
@@ -3110,7 +3128,7 @@ function _renderOrdenesLog(el, tipoFiltro){
       return nb-na;
     });
 
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro/Recepción',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaLog()">← <span>Volver a carpetas</span></div>
   <div class="carpeta-titulo" style="border-bottom:2px solid ${info.color};padding-bottom:8px">${info.icon} ${info.label}</div>`;
@@ -5074,11 +5092,50 @@ function solTipoChange(){
     visEl(tecGrp,true); visEl(ubicWrap,true); return;
   }
   if(tipo==='renta'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción'; visEl(logGrp,true); return; }
-  if(tipo==='entrega'||tipo==='retiro'){ visEl(eqGroup,true); visEl(eq2,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
+  if(tipo==='entrega'||tipo==='retiro'){
+    visEl(eqGroup,true); visEl(eq2,true);
+    // Sin descripción — se sobreentiende por el tipo
+    // Con campo de ubicación plantel/fuera
+    const ublogWrap = document.getElementById('sol-ublog-wrap');
+    const ublogLbl = document.getElementById('sol-ublog-label');
+    if(ublogWrap){ ublogWrap.style.display='block'; }
+    if(ublogLbl) ublogLbl.textContent = tipo==='entrega' ? 'Ubicacion de entrega' : 'Ubicacion de retiro/recepcion';
+    visEl(logGrp,true);
+    // Aplicar lógica de plantel: si es en plantel ocultar equipo/eq2
+    solUbicacionLogChange();
+    return;
+  }
   if(tipo==='apoyo_mantenimiento'||tipo==='atencion_compras'){ visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
   if(tipo==='correctivo'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción de la falla'; visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true); return; }
   if(tipo==='preventivo'){ visEl(eqGroup,true); visEl(mantWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true); return; }
   visEl(eqGroup,true); visEl(descWrap,true); visEl(prioGrp,true); visEl(tecGrp,true); visEl(ubicWrap,true);
+}
+function solUbicacionLogChange(){
+  const tipo = document.getElementById('sol-tipo')?.value||'';
+  const ublogEl = document.getElementById('sol-ublog');
+  const ublog = ublogEl?.value||'fuera';
+  const esPlantel = ublog === 'plantel';
+  const visEl = (el, show) => { if(el) el.style.display = show?'block':'none'; };
+  const eqGroup = document.getElementById('sol-equipo')?.closest('.form-group');
+  const eq2 = document.getElementById('sol-equipo2-wrap');
+  if(tipo==='entrega'||tipo==='retiro'){
+    visEl(eqGroup, !esPlantel);
+    visEl(eq2, !esPlantel);
+  }
+}
+
+
+function solUbicacionLogChange2(){
+  const tipo = document.getElementById('sol-tipo')?.value||'';
+  const ublog = document.getElementById('sol-ublog2')?.value||'fuera';
+  const esPlantel = ublog === 'plantel';
+  const visEl = (el, show) => { if(el) el.style.display = show?'block':'none'; };
+  const eqGroup = document.getElementById('sol-equipo')?.closest('.form-group');
+  const eq2 = document.getElementById('sol-equipo2-wrap');
+  if(tipo==='entrega'||tipo==='retiro'){
+    visEl(eqGroup, !esPlantel);
+    visEl(eq2, !esPlantel);
+  }
 }
 function solEquipoChange(){
   const val = document.getElementById('sol-equipo')?.value || '';
@@ -5192,7 +5249,9 @@ async function enviarSolicitudWA(){
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
-    const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const ubicacionLog = document.getElementById('sol-ublog')?.value || 'fuera';
+    const esPlantel = (tipo==='entrega'||tipo==='retiro') && ubicacionLog==='plantel';
+    const entry = {id:ordenId,correlativo,equipoId:(esPlantel?'':equipoId)||'',equipoId2:esPlantel?null:(equipoId2Val||null),tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
@@ -5209,7 +5268,7 @@ async function enviarSolicitudWA(){
   clearSolicitudForm();
   renderDashboard();
   toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
-  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
@@ -5318,7 +5377,9 @@ async function copiarMensajeWA(){
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
-    const entry = {id:ordenId,correlativo,equipoId,equipoId2:equipoId2Val||null,tipoLogistica:tipo,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const ubicacionLog = document.getElementById('sol-ublog')?.value || 'fuera';
+    const esPlantel = (tipo==='entrega'||tipo==='retiro') && ubicacionLog==='plantel';
+    const entry = {id:ordenId,correlativo,equipoId:(esPlantel?'':equipoId)||'',equipoId2:esPlantel?null:(equipoId2Val||null),tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     if(tipo==='renta' && eq) _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
@@ -5335,7 +5396,7 @@ async function copiarMensajeWA(){
   clearSolicitudForm();
   renderDashboard();
   toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
-  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
