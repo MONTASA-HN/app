@@ -1558,9 +1558,11 @@ function calcDuracion(ini, fin){
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
   try{
-    const diff = new Date(fin) - new Date(inicio);
-    if(diff <= 0) return '—';
-    const totalMin = Math.floor(diff / 60000);
+    const iniD = new Date(inicio);
+    const finD = new Date(fin);
+    if(isNaN(iniD) || isNaN(finD) || finD <= iniD) return '—';
+    const totalMin = _calcMinsJornada(iniD, finD);
+    if(!totalMin) return '—';
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return h > 0 ? h + 'h ' + (m > 0 ? m + 'min' : '') : m + 'min';
@@ -1571,24 +1573,23 @@ function calcHoras(inicio, fin){
 // Usa los campos nuevos (inicioTrabajo/finTrabajo/salidaPlantel/retornoPlantel)
 // con fallback a los campos antiguos (fechaInicio/fechaFin) para compatibilidad.
 function calcTiemposOrden(o){
-  const esNuevo = !!(o.inicioTrabajo || o.finTrabajo);
   const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
   const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
   const sal  = new Date(o.salidaPlantel  || '');
   const ret  = new Date(o.retornoPlantel || '');
-  const hayRep     = ini && fin && !isNaN(ini) && !isNaN(fin) && fin > ini;
-  const hayTraslado = sal && ret && !isNaN(sal) && !isNaN(ret) && ret > sal;
-  const minsRep  = hayRep     ? Math.floor((fin - ini)  / 60000) : 0;
-  const minsTotal= hayTraslado? Math.floor((ret - sal)  / 60000) : minsRep;
-  const minsTras = hayTraslado? minsTotal - minsRep : 0;
+  const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
+  const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmt = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {
     minsReparacion: minsRep,
     minsTraslado:   minsTras,
     minsTotal:      minsTotal,
-    reparacion:     hayRep     ? fmt(minsRep)   : '—',
-    traslado:       hayTraslado? fmt(minsTras)   : '—',
-    total:          minsTotal   ? fmt(minsTotal) : '—',
+    reparacion:     hayRep      ? fmt(minsRep)   : '—',
+    traslado:       hayTraslado ? fmt(minsTras)   : '—',
+    total:          minsTotal   ? fmt(minsTotal)  : '—',
     hayTraslado,
     hayRep
   };
@@ -3285,39 +3286,10 @@ function _renderOrdenesMantSup(el, tipo){
       const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
       const tiempos = calcTiemposOrden(x);
       const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
-      const estRaw = x._t==='P' ? (x.completado?'Completado':(x.estado||'Pendiente')) : (x.estado||'Pendiente');
-      const estCfg = ESTADOS_COLOR[estRaw]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
-      const trabajo = x.falla||x.servicio||x.notas||x.modelo||'—';
-      const tecnicos = (x.tecnicos&&x.tecnicos.length)?x.tecnicos.join(', '):(x.tecnico||'—');
-      const tipoColor = x._t==='P'?'#2d6a2d':x._t==='C'?'#1f3864':x._t==='RV'?'#18A303':'#E8811A';
-      const isOpen = openHistGer.has(x.id);
-
-      let card = `<div class="card" style="padding:12px 14px;border-left:3px solid ${tipoColor};margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
-      card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
-      card += `<div style="flex:1;min-width:0">`;
-      card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
-      if(x.correlativo) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${x.correlativo}</span>`;
-      card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
-      card += `</div>`;
-      card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
-      card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
-      if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
-      card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
-      if(isOpen){
-        card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-        card += `<div style="font-size:12px;color:var(--text2);line-height:1.8">`;
-        if(x.fecha) card += `<div>📅 Fecha: <b>${x.fecha}</b></div>`;
-        if(x.horaIni||x.fechaInicio) card += `<div>🕐 Inicio: <b>${fmtDT(x.inicioTrabajo||x.horaIni||x.fechaInicio)||'—'}</b></div>`;
-        if(horas&&horas!=='—') card += `<div>⏱ Duración: <b>${horas}</b></div>`;
-        if(x.diagnostico||x.notas) card += `<div>📝 ${x.diagnostico||x.notas}</div>`;
-        card += `</div>`;
-        if(estRaw==='Completado'){
-          card += `<button onclick="event.stopPropagation();copiarImagenOrden('${x._t==='P'?'preventivo':x._t==='C'?'correctivo':x._t==='RV'?'revision_fisica':'evaluacion'}','${x.id}')" style="width:100%;margin-top:8px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
-        }
-        card += `</div>`;
-      }
-      card += `</div>`;
-      return card;
+      if(x._t==='RV') return _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR);
+      if(x._t==='EV') return _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR);
+      if(x._t==='P')  return _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
+      if(x._t==='C')  return _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
     } catch(e){ return ''; }
   }).join('');
 
@@ -5220,12 +5192,293 @@ function _cleanLogistica(arr){
   });
 }
 
-function toggleHistGer(id){
-  if(openHistGer.has(id)) openHistGer.delete(id); else openHistGer.add(id);
-  renderHistorial();
+
+function _calcMinsJornada(iniDate, finDate){
+  if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
+  if(finDate <= iniDate) return 0;
+  const JORNADA = 480;
+  const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
+  const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
+  const diasDiff = Math.round((dFin - dIni) / 86400000);
+  if(diasDiff === 0) return Math.floor((finDate - iniDate) / 60000);
+  // Días completos × 8h + fracción del último día relativa a la hora de inicio
+  const minsIniJornada = iniDate.getHours() * 60 + iniDate.getMinutes();
+  const minsFinJornada = finDate.getHours() * 60 + finDate.getMinutes();
+  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), JORNADA);
+  return (diasDiff * JORNADA) + fraccion;
 }
 
-// ── Event delegation permanente para acordeón logística en gerencia ──────────
+function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
+  const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+  const estRV = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfgRV = ESTADOS_COLOR[estRV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const isOpenRV = openHistGer.has(x.id);
+  let cRV = `<div class="card" style="padding:12px 14px;border-left:3px solid #18A303;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  cRV += `<div style="display:flex;justify-content:space-between;align-items:center">`;
+  cRV += `<div style="flex:1;min-width:0">`;
+  cRV += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">`;
+  cRV += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e3f5d9;color:#18A303;padding:2px 7px;border-radius:10px">${x.correlativo||'—'}</span>`;
+  cRV += `<span style="font-size:11px;font-weight:700;background:${estCfgRV.bg};color:${estCfgRV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgRV.border}">${estRV}</span>`;
+  cRV += `</div>`;
+  cRV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.notas||x.placa||'Revisión Físico-Técnica'}</div>`;
+  cRV += `<div style="font-size:11px;color:var(--text3)">✅ Revisión · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
+  if(x.viaticos){ const tvjRV=_calcCostoViaticos(x.viaticos); cRV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjRV.toFixed(2)}</div>`; }
+  cRV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenRV?'⌃':'⌄'}</span></div>`;
+  if(isOpenRV){
+    cRV += _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR);
+  }
+  cRV += `</div>`;
+  return cRV;
+}
+
+function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
+  let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—']].forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  d += `</div>`;
+  if(x.fotos&&x.fotos.length){
+    d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length})</div>`;
+    d += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    x.fotos.forEach((f,i)=>{ const dataId=`rv-${x.id}-${i}`; window._fotosCache=window._fotosCache||{}; window._fotosCache[dataId]=f; d+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;});
+    d += `</div></div>`;
+  }
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+  if(estRV==='Completado'){
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('revision_fisica','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  }
+  d += `</div>`;
+  return d;
+}
+
+function _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR){
+  const tecs=(x.tecnicos||[]).filter(Boolean).join(', ')||'—';
+  const estEV = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfgEV = ESTADOS_COLOR[estEV]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const isOpenEV = openHistGer.has(x.id);
+  let cEV = `<div class="card" style="padding:12px 14px;border-left:3px solid #E8811A;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  cEV += `<div style="display:flex;justify-content:space-between;align-items:center">`;
+  cEV += `<div style="flex:1;min-width:0">`;
+  cEV += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">`;
+  cEV += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#fdead9;color:#E8811A;padding:2px 7px;border-radius:10px">${x.correlativo||'—'}</span>`;
+  cEV += `<span style="font-size:11px;font-weight:700;background:${estCfgEV.bg};color:${estCfgEV.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgEV.border}">${estEV}</span>`;
+  cEV += `</div>`;
+  cEV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.modelo||x.serie||'Evaluación de Equipo'}</div>`;
+  cEV += `<div style="font-size:11px;color:var(--text3)">📄 Evaluación · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
+  if(x.cliente) cEV += `<div style="font-size:11px;color:var(--text3)">👤 ${x.cliente}</div>`;
+  if(x.viaticos){ const tvjEV=_calcCostoViaticos(x.viaticos); cEV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjEV.toFixed(2)}</div>`; }
+  cEV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenEV?'⌃':'⌄'}</span></div>`;
+  if(isOpenEV){
+    cEV += _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR);
+  }
+  cEV += `</div>`;
+  return cEV;
+}
+
+function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
+  let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Horómetro',x.horometro?(x.horometro+' hrs'):'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  if(x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
+  d += `</div>`;
+  if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+  if(x.fotos&&x.fotos.length){
+    d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length}) — solo uso interno</div>`;
+    d += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    x.fotos.forEach((f,i)=>{ const dataId=`ev-${x.id}-${i}`; window._fotosCache=window._fotosCache||{}; window._fotosCache[dataId]=f; d+=`<img src="${f}" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache['${dataId}'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">`;});
+    d += `</div></div>`;
+  }
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+  if(estEV==='Completado'){
+    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+  }
+  d += `<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
+  d += `</div>`;
+  return d;
+}
+
+function _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
+  const estRaw = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfg = ESTADOS_COLOR[estRaw]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const trabajo = x.falla||x.servicio||x.notas||'—';
+  const tecnicos = (x.tecnicos&&x.tecnicos.length)?x.tecnicos.join(', '):(x.tecnico||'—');
+  const isOpen = openHistGer.has(x.id);
+  const corr = x.correlativo||'';
+  let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a2d;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
+  card += `<div style="flex:1;min-width:0">`;
+  card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+  if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
+  card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
+  card += `</div>`;
+  card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
+  card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
+  if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
+  if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
+  if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
+  if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'P');
+  card += `</div>`;
+  return card;
+}
+
+function _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
+  const estRaw = x.estado||'Pendiente';
+  const estCfg = ESTADOS_COLOR[estRaw]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const trabajo = x.falla||x.servicio||x.notas||'—';
+  const tecnicos = (x.tecnicos&&x.tecnicos.length)?x.tecnicos.join(', '):(x.tecnico||'—');
+  const isOpen = openHistGer.has(x.id);
+  const corr = x.correlativo||'';
+  let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  card += `<div style="display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none">`;
+  card += `<div style="flex:1;min-width:0">`;
+  card += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px">`;
+  if(corr) card += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#e8edf5;color:#1f3864;padding:2px 7px;border-radius:10px">${corr}</span>`;
+  card += `<span style="font-size:11px;font-weight:700;background:${estCfg.bg};color:${estCfg.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfg.border}">${estRaw}</span>`;
+  card += `</div>`;
+  card += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${trabajo}</div>`;
+  card += `<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;
+  if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
+  if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
+  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
+  if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'C');
+  card += `</div>`;
+  return card;
+}
+
+function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, tipoPC){
+  const isPrev = tipoPC === 'P';
+  const tipoColor = isPrev ? '#2d6a2d' : '#1f3864';
+  let d = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+
+  // Grid de datos clave
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;margin-bottom:10px">`;
+  const filas = [
+    ['Correlativo', x.correlativo||'—'],
+    ['Estado', estRaw],
+    ['Técnico(s)', tecnicos],
+    ['Equipo', eqLabel],
+    ['Servicio', x.servicio||x.falla||x.notas||'—'],
+    ['Inicio trabajo', fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'],
+    ['Fin trabajo', fmtDT(x.finTrabajo||x.fechaFin||x.fechaCompletado)||'—'],
+    ['Tiempo reparación', tiempos.reparacion||'—'],
+    ...(tiempos.hayTraslado ? [['Tiempo traslado', tiempos.traslado]] : []),
+    ['Tiempo total', horas||'—'],
+    ...(x.ubicacion ? [['Ubicación', x.ubicacion==='plantel'?'En plantel':'Fuera del plantel']] : []),
+    ...(x.vehiculo ? [['Vehículo', x.vehiculo]] : []),
+    ...(x.kmSalida ? [['Km salida', x.kmSalida+' km']] : []),
+    ...(x.kmRetorno ? [['Km retorno', x.kmRetorno+' km']] : []),
+    ...(x.horometro ? [['Horómetro', x.horometro+' hrs']] : []),
+  ];
+  filas.forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+  });
+  if(x.notas||x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Notas / Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.notas||x.diagnostico||'—'}</span></div>`;
+  if(x.repuestos) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Repuestos</span><span style="font-weight:600;color:var(--text)">${x.repuestos}</span></div>`;
+  d += `</div>`;
+
+  // Vales de alimentación
+  if(x.vales&&x.vales.length){
+    const tv=x.vales.reduce((s,v)=>s+v.monto,0);
+    d += `<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`;
+  }
+
+  // Firma
+  if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+
+  // Botones de acción
+  d += `<div style="display:flex;flex-direction:column;gap:6px">`;
+  d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','${isPrev?'preventivo':'correctivo'}')" style="width:100%;padding:9px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+
+  if(estRaw==='Completado'){
+    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  } else {
+    d += _buildCamposEdicionPC(x, eq, tipoPC);
+    if(isPrev){
+      d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
+    } else {
+      d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
+    }
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+  }
+  d += `</div></div>`;
+  return d;
+}
+
+function _buildCamposEdicionPC(x, eq, tipoPC){
+  const isPrev = tipoPC==='P';
+  const tipo = isPrev?'prev':'corr';
+  const esVeh = eq && eq.esVehiculo;
+  const ubicacion = x.ubicacion||'campo';
+  let h = `<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px">`;
+  h += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Datos de la orden</div>`;
+
+  // Estado
+  h += `<div class="form-group"><label>Estado</label><select class="estado-select" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','estado',this.value)">`;
+  ['Pendiente','En proceso','En pausa','En espera de repuestos'].forEach(e=>{
+    h += `<option value="${e}" ${x.estado===e?'selected':''}>${e}</option>`;
+  });
+  h += `</select></div>`;
+
+  // Ubicación
+  h += `<div class="form-group"><label>📍 Ubicación</label><select onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','ubicacion',this.value)">
+    <option value="campo" ${ubicacion==='campo'?'selected':''}>🚗 Fuera del plantel</option>
+    <option value="plantel" ${ubicacion==='plantel'?'selected':''}>🏭 En plantel</option>
+  </select></div>`;
+
+  // Tiempos
+  h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+  if(ubicacion!=='plantel') h += `<div class="form-group"><label>Salida plantel</label><input type="datetime-local" value="${x.salidaPlantel||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','salidaPlantel',this.value)"></div>`;
+  h += `<div class="form-group"><label>Inicio trabajo</label><input type="datetime-local" value="${x.inicioTrabajo||x.fechaInicio||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','inicioTrabajo',this.value)"></div>`;
+  h += `<div class="form-group"><label>Fin trabajo</label><input type="datetime-local" value="${x.finTrabajo||x.fechaFin||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','finTrabajo',this.value)"></div>`;
+  if(ubicacion!=='plantel') h += `<div class="form-group"><label>Retorno plantel</label><input type="datetime-local" value="${x.retornoPlantel||''}" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','retornoPlantel',this.value)"></div>`;
+  h += `</div>`;
+
+  // Km (solo fuera del plantel)
+  if(ubicacion!=='plantel'){
+    h += `<div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label><select onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','vehiculo',this.value)"><option value="">— Seleccionar —</option>`;
+    DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').forEach(v=>{
+      h += `<option value="${v.codigo}" ${x.vehiculo===v.codigo?'selected':''}>${v.codigo}</option>`;
+    });
+    h += `</select></div>`;
+    h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>Km salida <span style="color:#c9211e">*</span></label><input type="number" value="${x.kmSalida||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','kmSalida',this.value)" oninput="event.stopPropagation()"></div>
+      <div class="form-group"><label>Km retorno <span style="color:#c9211e">*</span></label><input type="number" value="${x.kmRetorno||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','kmRetorno',this.value)" oninput="event.stopPropagation()"></div>
+    </div>`;
+  }
+
+  // Notas
+  h += `<div class="form-group"><label>${isPrev?'Servicio realizado':'Diagnóstico'}</label><textarea rows="2" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)" oninput="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)">${isPrev?(x.notas||''):(x.diagnostico||'')}</textarea></div>`;
+
+  h += `</div>`;
+  return h;
+}
+function toggleHistGer(id){
+  if(openHistGer.has(id)) openHistGer.delete(id); else openHistGer.add(id);
+  // En Supervisión el historial usa _carpetaMantSup
+  if(_carpetaMantSup){
+    _renderOrdenesMantSup(document.getElementById('historial-list'), _carpetaMantSup);
+  } else {
+    renderHistorial();
+  }
+}
+
+// ── Event delegation permanente para el historial de mantenimiento ────────────
+document.addEventListener('click', function(e){
+  const card = e.target.closest('#historial-list [data-hid]');
+  if(card && !e.target.closest('button,input,select,textarea,canvas,label')){
+    toggleHistGer(card.dataset.hid);
+  }
+});
 document.addEventListener('click', function(e){
   const card = e.target.closest('#logistica-list [data-lgid]');
   if(card){
