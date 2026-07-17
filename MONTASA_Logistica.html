@@ -660,7 +660,7 @@ function renderOrdenesLog(){
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
           ${(o.tipoLogistica==='apoyo_mantenimiento'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='retiro')&&o.equipoCompra?`<div style="font-size:13px;color:var(--text2)">🚗 ${o.equipoCompra}</div>`:''}
-          ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
+          ${(o.descripcion && o.tipoLogistica!=='entrega' && o.tipoLogistica!=='retiro')?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='renta')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}${o.operador2?', '+o.operador2:''}${o.operador3?', '+o.operador3:''}</div>`:''}
@@ -684,22 +684,43 @@ function renderOrdenesLog(){
           ${(o.estado==='Pendiente'||!o.estado)?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
         </div>
         <!-- Fechas -->
-        <div class="form-group"><label>Fecha inicio</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+        ${(()=>{
+          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='plantel';
+          if(esPlantel){
+            // En plantel: una sola fecha con hora inicio y hora fin
+            const fecha = (o.fechaInicio||'').slice(0,10) || (o.fechaFin||'').slice(0,10);
+            return `<div class="form-group"><label>Fecha</label>
+              <input type="date" value="${fecha}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(document.getElementById('hi-${o.id}')?.value||'00:00'));actualizarLog('${o.id}','fechaFin',this.value+'T'+(document.getElementById('hf-${o.id}')?.value||'00:00'))">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Hora inicio</label>
+                <input id="hi-${o.id}" type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(document.querySelector('[data-logdate=\\'${o.id}\\']')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+              <div class="form-group"><label>Hora fin</label>
+                <input id="hf-${o.id}" type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(document.querySelector('[data-logdate=\\'${o.id}\\']')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+            </div>`;
+          }
+          return `<div class="form-group"><label>Fecha inicio</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
           </div>
-        </div>
-        <div class="form-group"><label>Fecha fin</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
-          </div>
-        </div>
+          <div class="form-group"><label>Fecha fin</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
+          </div>`;
+        })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
         <!-- Operador: renta + entrega + retiro -->
@@ -734,19 +755,20 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador3===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Motorista: entrega + retiro + compras (no apoyo) -->
-        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`
+        <!-- Motorista: entrega + retiro + compras — pero NO en plantel para entrega/retiro -->
+        ${(o.tipoLogistica==='atencion_compras' || ((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='fuera'))?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
             ${MOTORISTAS_LOGISTICA.map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Descripción -->
+        <!-- Descripción — NO para entrega ni retiro (se sobreentiende) -->
+        ${(o.tipoLogistica!=='entrega' && o.tipoLogistica!=='retiro')?`
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
             oninput="event.stopPropagation()">${o.descripcion||''}</textarea>
-        </div>
+        </div>`:``}
         <!-- Firma — entrega, retiro y renta -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
