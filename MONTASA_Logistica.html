@@ -565,22 +565,22 @@ function renderOrdenesLog(){
               onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
           </div>
         </div>
-        <!-- Campos según tipo de orden -->
+        <!-- Campos según tipo de orden (incluye vehículo) -->
         ${renderCamposTipo(o)}
-                <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
-        <div class="form-group"><label>Operador asignado</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
-            <option value="">— Seleccionar operador —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
-          </select>
-        </div>`:``}
         <!-- Motorista: entrega + retiro + compras + apoyo -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
             ${MOTORISTAS_LOGISTICA.map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>`:``}
+        <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
+        <div class="form-group"><label>Operador asignado</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+            <option value="">— Seleccionar operador —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
         <!-- Descripción -->
@@ -633,18 +633,18 @@ function renderOrdenesLog(){
           <span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km</span>
           <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
         </div>` : ''}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+        <div style="display:grid;grid-template-columns:${o.tipoLogistica==='renta'?'1fr 1fr 1fr':'1fr 1fr'};gap:8px;margin-top:14px">
           ${o.viaticos ? `
           <button data-oid="${o.id}" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)"
             style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
             📋 Ver Viáticos
           </button>` : `<span></span>`}
+          ${o.tipoLogistica==='renta'?`<button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)" style="padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">${o.ats?'✅ ATS':'📋 ATS'}</button>`:''}
           <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
             onclick="cerrarOrdenLog('${o.id}')">
             ${o.estado==='Cancelado'?'✅ CERRAR (Cancelada)':'✅ CERRAR'}
           </button>
         </div>
-        ${o.tipoLogistica==='renta'?`<button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)" style="width:100%;margin-top:8px;padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">${o.ats?'✅ ATS — Completo':'📋 Análisis de Trabajo Seguro (ATS)'}</button>`:''}
         <!-- Vale de alimentación — solo si ya tiene vales -->
         ${o.vales&&o.vales.length ? `
         <button data-oid="${o.id}" onclick="event.stopPropagation();abrirValeLG(this.dataset.oid)"
@@ -935,7 +935,7 @@ function renderCamposTipo(o){
     html += '</select></div>';
   }
 
-  if(isMovimiento || tipo==='atencion_compras'){
+  if(isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento'){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
