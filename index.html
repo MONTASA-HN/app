@@ -1136,7 +1136,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 0. Departamento -->
       <div class="form-group" style="margin-top:0">
         <label>Departamento</label>
-        <select id="sol-depto" onchange="solDeptoChange()">
+        <select id="sol-depto-B" onchange="solDeptoChange()">
           <option value="mantenimiento">🔧 Mantenimiento</option>
           <option value="logistica">🚛 Logística</option>
         </select>
@@ -1145,7 +1145,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 1. Tipo de orden -->
       <div class="form-group">
         <label>Tipo de orden</label>
-        <select id="sol-tipo" onchange="solTipoChange()">
+        <select id="sol-tipo-B" onchange="solTipoChange()">
           <option value="correctivo" data-depto="mantenimiento">🔧 Correctivo</option>
           <option value="preventivo" data-depto="mantenimiento">📅 Preventivo</option>
           <option value="renta" data-depto="logistica" style="display:none">🚛 Renta</option>
@@ -1161,7 +1161,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 2. Prioridad (solo mantenimiento) -->
       <div class="form-group" id="sol-prioridad-group">
         <label>Prioridad</label>
-        <select id="sol-prioridad">
+        <select id="sol-prioridad-B">
           <option value="Normal">Normal</option>
           <option value="Alta">🔴 Alta</option>
           <option value="Urgente">🚨 Urgente</option>
@@ -1171,7 +1171,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 3. Equipo -->
       <div class="form-group">
         <label>Equipo principal</label>
-        <select id="sol-equipo" onchange="solEquipoChange()">
+        <select id="sol-equipo-B" onchange="solEquipoChange()">
           <option value="">-- Seleccionar equipo --</option>
           <option value="__otro__">Otro / No está en lista</option>
         </select>
@@ -1201,7 +1201,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div id="sol-desc-wrap" class="form-group">
         <label id="sol-desc-label">Descripción de la falla</label>
-        <textarea id="sol-desc" placeholder="Describe brevemente la falla o trabajo..." style="min-height:80px"></textarea>
+        <textarea id="sol-desc-B" placeholder="Describe brevemente la falla o trabajo..." style="min-height:80px"></textarea>
       </div>
 
       <!-- 4c. Revisión Físico-Técnica -->
@@ -1279,7 +1279,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
       </div
       <!-- Grid Logística (oculto por defecto) -->
-      <div class="form-group" id="sol-logistica-personal" style="display:none">
+      <div class="form-group" id="sol-logistica-personal-B" style="display:none">
         <label>Personal logística</label>
         <div id="sol-logistica-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <label class="tecnico-check"><input type="checkbox" value="+50433863362" data-nombre="Miguel Orellana" onchange="toggleTecnico(this)"> Miguel Orellana</label>
@@ -1293,7 +1293,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- Operador asignado (logística) -->
       <div class="form-group" id="sol-operador-group" style="display:none!important;visibility:hidden">
         <label>Operador asignado</label>
-        <input type="text" id="sol-operador" placeholder="Nombre del operador...">
+        <input type="text" id="sol-operador-B" placeholder="Nombre del operador...">
       </div>
 >
 
@@ -5230,8 +5230,8 @@ async function enviarSolicitudWA(){
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
-    const ubicacionLog = document.getElementById('sol-ublog')?.value || 'fuera';
-    const esPlantel = (tipo==='entrega'||tipo==='retiro') && ubicacionLog==='plantel';
+    // Leer ubicacion del formulario activo (formulario 2 usa sol-ublog2)
+    const ubicacionLog = document.getElementById('sol-ublog2')?.value || document.getElementById('sol-ublog')?.value || 'fuera';
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
@@ -5259,7 +5259,7 @@ async function enviarSolicitudWA(){
     + '🔢 *Orden:* ' + correlativo + '\n'
     + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
     + '📋 *Equipo:* ' + equipoTxt + '\n'
-    + '🚛 *Tipo:* ' + tipoLabel + '\n'
+    + '🚛 *Tipo:* ' + tipoLabel + (ubicacionLog==='plantel'?' 🏭 En plantel':'') + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha;
@@ -5271,7 +5271,7 @@ async function enviarSolicitudWA(){
 
 
 async function copiarMensajeWA(){
-  const tipo      = document.getElementById('sol-tipo').value;
+  const tipo      = document.getElementById('sol-tipo-B').value || document.getElementById('sol-tipo').value;
   const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
 
   // ── REVISIÓN Y EVALUACIÓN ─────────────────────────────────────────────────
@@ -5358,8 +5358,8 @@ async function copiarMensajeWA(){
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
-    const ubicacionLog = document.getElementById('sol-ublog')?.value || 'fuera';
-    const esPlantel = (tipo==='entrega'||tipo==='retiro') && ubicacionLog==='plantel';
+    // Leer ubicacion del formulario activo (formulario 2 usa sol-ublog2)
+    const ubicacionLog = document.getElementById('sol-ublog2')?.value || document.getElementById('sol-ublog')?.value || 'fuera';
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
@@ -5387,7 +5387,7 @@ async function copiarMensajeWA(){
     + '🔢 *Orden:* ' + correlativo + '\n'
     + '👷 *' + (esLogistica?'Personal':'Tecnico') + ':* ' + tecnicoNombre + '\n'
     + '📋 *Equipo:* ' + equipoTxt + '\n'
-    + '🚛 *Tipo:* ' + tipoLabel + '\n'
+    + '🚛 *Tipo:* ' + tipoLabel + (ubicacionLog==='plantel'?' 🏭 En plantel':'') + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha;
