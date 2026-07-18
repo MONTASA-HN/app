@@ -2622,6 +2622,28 @@ function _atsRenderVista(o){
   document.getElementById('ats-edit-mode').style.display='none';
   document.getElementById('ats-view-mode').style.disp
 // ── FOTOS EN ÓRDENES DE LOGÍSTICA ───────────────────────────────────────────
+function _renderFotosGrid(id){
+  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const grid = document.getElementById('fotos-grid-'+id);
+  if(!grid || !o) return;
+  grid.innerHTML = '';
+  (o.fotos||[]).forEach(function(f, i){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0';
+    const img2 = document.createElement('img');
+    img2.src = f;
+    img2.style.cssText = 'width:100%;height:100%;object-fit:cover;cursor:pointer';
+    img2.onclick = function(e){ e.stopPropagation(); _verFotoGrandeLog(id, i); };
+    const btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1';
+    btn.onclick = function(e){ e.stopPropagation(); eliminarFotoLog(id, i); };
+    wrap.appendChild(img2);
+    wrap.appendChild(btn);
+    grid.appendChild(wrap);
+  });
+}
+
 function agregarFotosLog(id, input){
   const o = (DB.logistica||[]).find(x=>x.id===id);
   if(!o) return;
@@ -2631,11 +2653,11 @@ function agregarFotosLog(id, input){
   const procesar = archivos.slice(0, espacio);
   let pendientes = procesar.length;
   if(!pendientes){ toast('Límite de 10 fotos alcanzado'); return; }
-  procesar.forEach(file=>{
+  procesar.forEach(function(file){
     const reader = new FileReader();
-    reader.onload = e=>{
+    reader.onload = function(e){
       const img = new Image();
-      img.onload = ()=>{
+      img.onload = function(){
         const canvas = document.createElement('canvas');
         const MAX = 1200;
         let w = img.width, h = img.height;
@@ -2648,15 +2670,8 @@ function agregarFotosLog(id, input){
         if(pendientes === 0){
           saveDB();
           _flushFirebaseWrite();
-          // Actualizar solo el grid de fotos sin colapsar la tarjeta
-          const grid = document.getElementById('fotos-grid-'+id);
-          if(grid){
-            grid.innerHTML = o.fotos.map((f,i)=>`<div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0">
-              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrandeLog('${id}',${i})">
-              <button onclick="event.stopPropagation();eliminarFotoLog('${id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
-            </div>`).join('');
-          }
-          toast('Foto'+(procesar.length>1?'s':'')+' guardada'+(procesar.length>1?'s':'')+' ✓');
+          _renderFotosGrid(id);
+          toast('Foto guardada ✓');
         }
       };
       img.src = e.target.result;
@@ -2671,12 +2686,9 @@ function eliminarFotoLog(id, idx){
   const o = (DB.logistica||[]).find(x=>x.id===id);
   if(!o || !o.fotos) return;
   o.fotos.splice(idx, 1);
-  saveDB(); _flushFirebaseWrite();
-  const grid = document.getElementById('fotos-grid-'+id);
-  if(grid) grid.innerHTML = o.fotos.map((f,i)=>`<div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0">
-    <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrandeLog('${id}',${i})">
-    <button onclick="event.stopPropagation();eliminarFotoLog('${id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
-  </div>`).join('');
+  saveDB();
+  _flushFirebaseWrite();
+  _renderFotosGrid(id);
 }
 
 function _verFotoGrandeLog(id, idx){
