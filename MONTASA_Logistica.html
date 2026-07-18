@@ -513,12 +513,7 @@ function renderOrdenesLog(){
   el.innerHTML = list.map(o=>{
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
-    const _ublog = o.ubicacionLog||'fuera';
-    const tipoLbl = o.tipoLogistica==='retiro'
-      ? (_ublog==='plantel' ? 'Recepcion de Equipo' : 'Retiro de Equipo')
-      : o.tipoLogistica==='entrega'
-        ? (_ublog==='plantel' ? 'Alisto de Equipo' : 'Entrega de Equipo')
-        : (tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logistica');
+    const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const estadoColor = o.estado==='En proceso'?'#f39c12':o.estado==='En espera'?'#3498db':'#e74c3c';
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
@@ -554,54 +549,25 @@ function renderOrdenesLog(){
           ${o.estado==='Cancelado'?'<div style="font-size:12px;color:#e74c3c;margin-top:4px">⚠️ Orden cancelada — campos bloqueados</div>':''}
         </div>
         <!-- Fechas -->
-        ${(()=>{
-          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='plantel';
-          const esFechaUnica = esPlantel || o.tipoLogistica==='atencion_compras' || o.tipoLogistica==='apoyo_mantenimiento';
-          if(esFechaUnica){
-            const fecha = (o.fechaInicio||'').slice(0,10) || (o.fechaFin||'').slice(0,10);
-            return `<div class="form-group"><label>Fecha</label>
-              <input id="fd-${o.id}" type="date" value="${fecha}"
-                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(document.getElementById('hi-${o.id}')?.value||'00:00'));actualizarLog('${o.id}','fechaFin',this.value+'T'+(document.getElementById('hf-${o.id}')?.value||'00:00'))">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div class="form-group"><label>Hora inicio</label>
-                <input id="hi-${o.id}" type="time" value="${(o.fechaInicio||'').slice(11,16)}"
-                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
-              </div>
-              <div class="form-group"><label>Hora fin</label>
-                <input id="hf-${o.id}" type="time" value="${(o.fechaFin||'').slice(11,16)}"
-                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
-              </div>
-            </div>`;
-          }
-          return `<div class="form-group"><label>Fecha inicio</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
-                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-              <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
-                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
-            </div>
+        <div class="form-group"><label>Fecha inicio</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
+              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+            <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
           </div>
-          <div class="form-group"><label>Fecha fin</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
-                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-              <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
-                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
-            </div>
-          </div>`;
-        })()}
-        <!-- Campos según tipo de orden (incluye vehículo) -->
+        </div>
+        <div class="form-group"><label>Fecha fin</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
+              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+            <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
+              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
+          </div>
+        </div>
+        <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-        <!-- Motorista: entrega/retiro fuera + compras + apoyo -->
-        ${((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
-        <div class="form-group"><label>Motorista</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
-            <option value="">— Seleccionar motorista —</option>
-            ${MOTORISTAS_LOGISTICA.map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
-          </select>
-        </div>`:``}
-        <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
+                <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
         ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
@@ -609,27 +575,34 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
+        <!-- Motorista: entrega + retiro + compras (no apoyo) -->
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`
+        <div class="form-group"><label>Motorista</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
+            <option value="">— Seleccionar motorista —</option>
+            ${MOTORISTAS_LOGISTICA.map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>`:``}
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
             oninput="event.stopPropagation()">${o.descripcion||''}</textarea>
         </div>
-        <!-- Fotos — entrega/retiro: captura inmediata al seleccionar -->
-        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
+        <!-- Foto -->
         <div class="form-group">
-          <label>📷 Fotografías <span style="font-size:11px;color:var(--text3);font-weight:400">(máx 10 — uso interno)</span></label>
-          <div id="fotos-grid-${o.id}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-            ${(o.fotos||[]).map((f,i)=>`<div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0">
-              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrandeLog('${o.id}',${i})">
+          <label>📷 Fotografías <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            ${(o.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
+              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.logistica||[]).find(x=>x.id==='${o.id}')||{}).fotos&&((DB.logistica||[]).find(x=>x.id==='${o.id}')).fotos[${i}])">
               <button onclick="event.stopPropagation();eliminarFotoLog('${o.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
             </div>`).join('')}
           </div>
-          ${(o.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px;border:2px dashed var(--border2);border-radius:8px;font-size:13px;color:#2d6a9f;background:var(--surface2)">
+          ${(o.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">
             <input type="file" accept="image/*" capture="environment" multiple style="display:none"
               onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">
-            📷 Tomar foto / seleccionar ${(o.fotos||[]).length>0?'('+((o.fotos||[]).length)+'/10)':''}
+            📷 Agregar foto${(o.fotos||[]).length>0?' ('+((o.fotos||[]).length)+'/10)':''}
           </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
-        </div>`:``}
+        </div>
         <!-- Firma — entrega, retiro y renta -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -667,23 +640,26 @@ function renderOrdenesLog(){
           <span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(1)} km</span>
           <span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida ${o.kmSalida} → Retorno ${o.kmRetorno})</span>
         </div>` : ''}
-        <div style="display:grid;grid-template-columns:${o.tipoLogistica==='renta'?'1fr 1fr 1fr':'1fr 1fr'};gap:8px;margin-top:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
           ${o.viaticos ? `
           <button data-oid="${o.id}" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)"
             style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
             📋 Ver Viáticos
-          </button>` : `<span></span>`}
-          ${o.tipoLogistica==='renta'?`<button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)" style="padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">${o.ats?'✅ ATS':'📋 ATS'}</button>`:''}
+          </button>` : (!o.cerrado && o.estado!=='Cancelado' ? `
+          <button data-oid="${o.id}" onclick="event.stopPropagation();abrirViaticos(this.dataset.oid)"
+            style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
+            📋 Solicitar Viáticos
+          </button>` : `<span></span>`)}
           <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
             onclick="cerrarOrdenLog('${o.id}')">
             ${o.estado==='Cancelado'?'✅ CERRAR (Cancelada)':'✅ CERRAR'}
           </button>
         </div>
-        <!-- Vale de alimentación — solo si ya tiene vales -->
-        ${o.vales&&o.vales.length ? `
+        <!-- Vale de alimentación — solo si no tiene viáticos -->
+        ${o.estado!=='Cancelado' && !o.viaticos ? `
         <button data-oid="${o.id}" onclick="event.stopPropagation();abrirValeLG(this.dataset.oid)"
-          style="width:100%;margin-top:6px;padding:10px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
-          🍽 Ver Vale de Alimentación
+          style="width:100%;margin-top:6px;padding:10px;background:${o.vales&&o.vales.length?'#856404':'#b8860b'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
+          🍽 ${o.vales&&o.vales.length?'Ver Vale de Alimentación':'Generar Vale de Alimentación'}
         </button>` : ''}
       </div>
     </div>`;
@@ -870,12 +846,7 @@ function toggleCardLog(id){
       const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
       const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
       const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
-      const _ublog = o.ubicacionLog||'fuera';
-    const tipoLbl = o.tipoLogistica==='retiro'
-      ? (_ublog==='plantel' ? 'Recepcion de Equipo' : 'Retiro de Equipo')
-      : o.tipoLogistica==='entrega'
-        ? (_ublog==='plantel' ? 'Alisto de Equipo' : 'Entrega de Equipo')
-        : (tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logistica');
+      const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
       el.innerHTML = _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
     }
     el.style.display = 'block';
@@ -967,28 +938,7 @@ function renderCamposTipo(o){
   var id = o.id;
   var html = '';
 
-  var ubicLog = o.ubicacionLog || 'fuera';
-  var esPlantel = (isEntrega || isRetiro) && ubicLog === 'plantel';
-
-  // Badge de ubicación para entrega/retiro
-  if(isEntrega || isRetiro){
-    var ubBg = esPlantel ? '#e3f5d9' : '#e8f2fb';
-    var ubColor = esPlantel ? '#1a5c1a' : '#1f3864';
-    var ubLabel = esPlantel
-      ? (isRetiro ? '🏭 Recepción en plantel' : '🏭 Alisto en plantel')
-      : (isRetiro ? '🚗 Retiro fuera del plantel' : '🚗 Entrega fuera del plantel');
-    html += '<div style="display:inline-flex;align-items:center;gap:6px;background:'+ubBg+';color:'+ubColor+';padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">'+ubLabel+'</div>';
-  }
-
-  // Vehículo y km — solo fuera del plantel
-  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
-    var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
-    html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
-    VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
-    html += '</select></div>';
-  }
-
-  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
+  if(isMovimiento || tipo==='atencion_compras'){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
@@ -1105,7 +1055,7 @@ function cerrarOrdenLog(id){
   if(!esCancelado){
     if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
     if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
-    if(!o.descripcion && !['entrega','retiro','atencion_compras','apoyo_mantenimiento'].includes(o.tipoLogistica)) faltantes.push('Descripción / Trabajo realizado');
+    if(!o.descripcion)  faltantes.push('Descripción / Trabajo realizado');
   }
   if(!esCancelado){
     if(o.tipoLogistica==='renta'){
@@ -1116,15 +1066,13 @@ function cerrarOrdenLog(id){
         faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
       }
     }
-    if(((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera')||o.tipoLogistica==='atencion_compras'){
+    if(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras'){
       if(!o.kmSalida) faltantes.push('Kilometraje de salida');
       if(!o.kmRetorno) faltantes.push('Kilometraje de retorno');
       if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)){
         faltantes.push('Km de retorno debe ser ≥ km de salida');
       }
     }
-    if(o.tipoLogistica==='entrega' && !o.horometroSalida) faltantes.push('Horómetro de salida');
-    if(o.tipoLogistica==='retiro' && !o.horometroRetorno) faltantes.push('Horómetro de retorno');
   }
   // Try canvas first, then use saved firma
   const firmaCanvas = getFirmaData('firma-log-'+id);
@@ -1209,12 +1157,7 @@ function renderHistorialLog(){
   el.innerHTML = list.map(o=>{
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
-    const _ublog = o.ubicacionLog||'fuera';
-    const tipoLbl = o.tipoLogistica==='retiro'
-      ? (_ublog==='plantel' ? 'Recepcion de Equipo' : 'Retiro de Equipo')
-      : o.tipoLogistica==='entrega'
-        ? (_ublog==='plantel' ? 'Alisto de Equipo' : 'Entrega de Equipo')
-        : (tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logistica');
+    const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const horas = calcHoras(o.fechaInicio, o.fechaFin);
     const isOpen = openHistLog.has(o.id);
     // MINIATURA siempre visible
@@ -2568,88 +2511,14 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
     window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
   }
 }
-// ══ ANÁLISIS DE TRABAJO SEGURO (ATS) ════════════════════════════════════════
-const ATS_PELIGROS=['Bordes corto punzantes','Puntos de pellizcos/atrapamiento','Puestas a tierra/electrocución','Instalaciones en mal estado','Arco eléctrico','Irritantes/polvos/gases/corrosivo','Intoxicación/humos/neblinas/sólidos','Líquidos y gases inflamables','Instalaciones sobrecargadas','Ruido/vibración/iluminación','Temperaturas extremas/radiación','Presiones extremas','Caídas de un nivel a otro/mismo nivel','Desconocimiento/falta de destreza','Monotonía y rutina/trabajo bajo presión','Exceso de responsabilidades','Posiciones incomodas','Herramientas inadecuadas','Máquinas/equipos/herramientas','Partes giratorias/móviles','Derrame','Interrupción a la operación','Daños al equipo','Bacterias/hongos/virus','Desechos sanitarios','Clima severo/fuego forestal','Otros'];
-const ATS_EPP=['Casco de seguridad','Zapatos de seguridad','Gafas de seguridad','Protector facial','Guantes nitrilo','Antiparras','Protección auditiva','Faja lumbar','Guantes cuero','Guantes nitrilo/textil','EPP soldador: careta/pechera/mangas','Señalización de peligro','Respirador cartucho-gas/vap','Respirador desechable-partículas','Capote PVC','Traje Tyvek/Tychem','Delantal PVC','Botas de hule con puntera','Arnes de seguridad','Cinturón de linero','Línea de vida temporal','Medidor de gases','Iluminación portátil','Extractor','Escalera','Andamios','Extinguidor contra incendio','Otros'];
-const ATS_PERMISOS=['Chispa / flama','Ingreso a espacio confinado','Trabajo eléctrico de riesgo','Habilitación de contratista','Trabajo de altura','Análisis de proceso seguro'];
-const ATS_PERSONAL=['Cliente','Personal Interno','Contratista','Visitante'];
-let _atsOrdenId=null;
 
-function _atsChecks(cid,items,saved){
-  var c=document.getElementById(cid);if(!c)return;
-  c.innerHTML=items.map(function(it,i){return '<label style="display:flex;align-items:flex-start;gap:5px;cursor:pointer;padding:3px;font-size:12px"><input type="checkbox" id="'+cid+'-'+i+'" '+(saved&&saved[it]?'checked':'')+' style="flex-shrink:0;margin-top:1px"><span>'+it+'</span></label>';}).join('');
-}
-function _atsGetChecks(cid,items){
-  var r={};items.forEach(function(it,i){var el=document.getElementById(cid+'-'+i);if(el&&el.checked)r[it]=true;});return r;
-}
-function _atsAddPasoData(p){
-  var cont=document.getElementById('ats-proceso');
-  var row=document.createElement('div');row.className='ats-paso';
-  row.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px';
-  function mkta(v){var el=document.createElement('textarea');el.rows=2;el.style.cssText='font-size:11px;padding:4px;border:1px solid #ddd;border-radius:4px;resize:vertical;width:100%;box-sizing:border-box';el.value=v||'';return el;}
-  row.appendChild(mkta(p&&p.paso));row.appendChild(mkta(p&&p.riesgos));row.appendChild(mkta(p&&p.acciones));
-  cont.appendChild(row);
-}
-function atsAddPaso(){_atsAddPasoData({});}
-
-function abrirATS(ordenId){
-  _atsOrdenId=ordenId;
-  var o=(DB.logistica||[]).find(function(x){return x.id===ordenId;})||{};
-  if(o.ats&&(o.ats.cliente||o.ats.actividad||(o.ats.pasos&&o.ats.pasos.length))){
-    _atsRenderVista(o);
-  } else {
-    _atsRenderEdicion(o.ats||{},o);
-  }
-  document.getElementById('ats-overlay').style.display='block';
-}
-
-function _atsRenderEdicion(ats,o){
-  document.getElementById('ats-edit-mode').style.display='block';
-  document.getElementById('ats-view-mode').style.display='none';
-  document.getElementById('ats-cliente').value=ats.cliente||o.clienteNombre||'';
-  document.getElementById('ats-ubicacion').value=ats.ubicacion||'';
-  document.getElementById('ats-actividad').value=ats.actividad||'';
-  document.getElementById('ats-fecha').value=ats.fecha||(new Date().toISOString().slice(0,10));
-
-  _atsChecks('ats-peligros',ATS_PELIGROS,ats.peligros);
-  _atsChecks('ats-epp',ATS_EPP,ats.epp);
-  _atsChecks('ats-permisos',ATS_PERMISOS,ats.permisos);
-
-}
-
-function _atsRenderVista(o){
-  var ats=o.ats||{};
-  document.getElementById('ats-edit-mode').style.display='none';
-  document.getElementById('ats-view-mode').style.disp
-// ── FOTOS EN ÓRDENES DE LOGÍSTICA ───────────────────────────────────────────
-function _renderFotosGrid(id){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
-  const grid = document.getElementById('fotos-grid-'+id);
-  if(!grid || !o) return;
-  grid.innerHTML = '';
-  (o.fotos||[]).forEach(function(f, i){
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0';
-    const img2 = document.createElement('img');
-    img2.src = f;
-    img2.style.cssText = 'width:100%;height:100%;object-fit:cover;cursor:pointer';
-    img2.onclick = function(e){ e.stopPropagation(); _verFotoGrandeLog(id, i); };
-    const btn = document.createElement('button');
-    btn.textContent = '✕';
-    btn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1';
-    btn.onclick = function(e){ e.stopPropagation(); eliminarFotoLog(id, i); };
-    wrap.appendChild(img2);
-    wrap.appendChild(btn);
-    grid.appendChild(wrap);
-  });
-}
-
+// ── FOTOS LOGÍSTICA (patrón idéntico a Técnicos) ────────────────────────────
 function agregarFotosLog(id, input){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
-  if(!o) return;
-  if(!o.fotos) o.fotos = [];
+  const orden = (DB.logistica||[]).find(x=>x.id===id);
+  if(!orden) return;
+  if(!orden.fotos) orden.fotos = [];
   const archivos = Array.from(input.files);
-  const espacio = 10 - o.fotos.length;
+  const espacio = 10 - orden.fotos.length;
   const procesar = archivos.slice(0, espacio);
   let pendientes = procesar.length;
   if(!pendientes){ toast('Límite de 10 fotos alcanzado'); return; }
@@ -2665,23 +2534,13 @@ function agregarFotosLog(id, input){
         if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        o.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
+        orden.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
         pendientes--;
         if(pendientes === 0){
-          // Guardar en localStorage
-          try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
-          // Escribir fotos directamente en Firebase por índice (igual que vales/firma)
-          const idx = (DB.logistica||[]).indexOf(o);
-          if(idx >= 0 && window._fbDB){
-            window._fbDB.ref('montasa/logistica/'+idx+'/fotos').set(o.fotos)
-              .then(()=>{ toast('Foto guardada ✓'); })
-              .catch(()=>{ toast('Foto guardada localmente'); });
-          } else {
-            toast('Foto guardada ✓');
-          }
-          // Re-render manteniendo la tarjeta abierta
+          saveDB();
           openSubgrupos.add('cb-log-'+id);
           renderOrdenesLog();
+          toast('Foto'+(procesar.length>1?'s':'')+' agregada'+(procesar.length>1?'s':'')+' ✓');
         }
       };
       img.src = e.target.result;
@@ -2690,93 +2549,19 @@ function agregarFotosLog(id, input){
   });
   input.value = '';
 }
-
 function eliminarFotoLog(id, idx){
   if(!confirm('¿Eliminar esta foto?')) return;
-  const o = (DB.logistica||[]).find(x=>x.id===id);
-  if(!o || !o.fotos) return;
-  o.fotos.splice(idx, 1);
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
-  const i = (DB.logistica||[]).indexOf(o);
-  if(i >= 0 && window._fbDB) window._fbDB.ref('montasa/logistica/'+i+'/fotos').set(o.fotos);
+  const orden = (DB.logistica||[]).find(x=>x.id===id);
+  if(!orden || !orden.fotos) return;
+  orden.fotos.splice(idx, 1);
+  saveDB();
   openSubgrupos.add('cb-log-'+id);
   renderOrdenesLog();
 }
-
-function _verFotoGrandeLog(id, idx){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
-  const src = o && o.fotos && o.fotos[idx];
-  if(!src) return;
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
-  const img2 = document.createElement('img');
-  img2.src = src;
-  img2.style.cssText = 'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px';
-  overlay.appendChild(img2);
-  overlay.onclick = ()=>overlay.remove();
-  document.body.appendChild(overlay);
-}
-// ────────────────────────────────────────────────────────────────────────────
-lay='block';
-  var el=document.getElementById('ats-view-content');
-  function fila(l,v){return v?'<div style="margin-bottom:6px"><div style="font-size:10px;color:#888;text-transform:uppercase">'+l+'</div><div style="font-size:13px;font-weight:600">'+v+'</div></div>':'';}
-  var h=fila('Cliente',ats.cliente)+fila('Ubicación',ats.ubicacion)+fila('Actividad',ats.actividad)+fila('Fecha',ats.fecha);
-
-  function tags(obj,bg,col){var sel=Object.keys(obj||{}).filter(function(k){return obj[k];});return sel.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'+sel.map(function(p){return '<span style="background:'+bg+';color:'+col+';padding:2px 8px;border-radius:10px;font-size:11px">'+p+'</span>';}).join('')+'</div>':'';}
-  var pg=tags(ats.peligros,'#fdeaea','#c00');if(pg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">1. Peligros</div>'+pg;
-  var eg=tags(ats.epp,'#e3f5d9','#1a5c1a');if(eg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">2. EPP</div>'+eg;
-  var prg=tags(ats.permisos,'#e8f2fb','#1f3864');if(prg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">3. Permisos</div>'+prg;
-
-  el.innerHTML=h;
-}
-
-function atsEditarModo(){var o=(DB.logistica||[]).find(function(x){return x.id===_atsOrdenId;})||{};_atsRenderEdicion(o.ats||{},o);}
-function cerrarATS(){document.getElementById('ats-overlay').style.display='none';_atsOrdenId=null;}
-function guardarATS(){
-  var o=(DB.logistica||[]).find(function(x){return x.id===_atsOrdenId;});if(!o)return;
-  var personal={},firmas={},pasos=[];
-  o.ats={cliente:document.getElementById('ats-cliente').value,ubicacion:document.getElementById('ats-ubicacion').value,actividad:document.getElementById('ats-actividad').value,fecha:document.getElementById('ats-fecha').value,peligros:_atsGetChecks('ats-peligros',ATS_PELIGROS),epp:_atsGetChecks('ats-epp',ATS_EPP),permisos:_atsGetChecks('ats-permisos',ATS_PERMISOS)};
-  saveDB();_flushFirebaseWrite();_atsRenderVista(o);renderOrdenesLog();toast('ATS guardado');
-}
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 
-
-<div id="ats-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9000;overflow-y:auto;padding:16px 0">
-  <div style="background:white;border-radius:12px;max-width:520px;margin:0 auto;padding:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div><div style="font-size:15px;font-weight:800;color:#1f3864">Análisis de Trabajo Seguro</div><div style="font-size:10px;color:#999">GS-MA-01 | Ver. 4</div></div>
-      <button onclick="cerrarATS()" style="background:#f0f0f0;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer">✕</button>
-    </div>
-    <div id="ats-edit-mode">
-      <div class="form-group"><label>Nombre del Cliente</label><input id="ats-cliente" type="text"></div>
-      <div class="form-group"><label>Ubicación</label><input id="ats-ubicacion" type="text"></div>
-      <div class="form-group"><label>Descripción de la Actividad</label><textarea id="ats-actividad" rows="2"></textarea></div>
-      <div class="form-group"><label>Fecha de Realización</label><input id="ats-fecha" type="date"></div>
-
-      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">1. PELIGROS POTENCIALES IDENTIFICADOS</div>
-      <div id="ats-peligros" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
-      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">2. EQUIPO DE PROTECCIÓN PERSONAL/COLECTIVA</div>
-      <div id="ats-epp" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
-      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">3. PERMISOS / PROCEDIMIENTOS DE SEGURIDAD</div>
-      <div id="ats-permisos" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
-        <button onclick="cerrarATS()" style="padding:12px;background:#f0f0f0;color:#333;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancelar</button>
-        <button onclick="guardarATS()" style="padding:12px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Guardar ATS</button>
-      </div>
-    </div>
-    <div id="ats-view-mode" style="display:none">
-      <div id="ats-view-content"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
-        <button onclick="atsEditarModo()" style="padding:12px;background:#e8f2fb;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Editar</button>
-        <button onclick="cerrarATS()" style="padding:12px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cerrar</button>
-      </div>
-    </div>
-  </div>
-</div>
 <div id="viaticos-overlay" style="display:none"></div>
 
 </body>
-</html
->
+</html>
