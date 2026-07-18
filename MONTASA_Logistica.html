@@ -2668,11 +2668,20 @@ function agregarFotosLog(id, input){
         o.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
         pendientes--;
         if(pendientes === 0){
-          saveDB();
-          _flushFirebaseWrite();
+          // Guardar en localStorage
+          try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+          // Escribir fotos directamente en Firebase por índice (igual que vales/firma)
+          const idx = (DB.logistica||[]).indexOf(o);
+          if(idx >= 0 && window._fbDB){
+            window._fbDB.ref('montasa/logistica/'+idx+'/fotos').set(o.fotos)
+              .then(()=>{ toast('Foto guardada ✓'); })
+              .catch(()=>{ toast('Foto guardada localmente'); });
+          } else {
+            toast('Foto guardada ✓');
+          }
+          // Re-render manteniendo la tarjeta abierta
           openSubgrupos.add('cb-log-'+id);
           renderOrdenesLog();
-          toast('Foto'+(procesar.length>1?'s':'')+' agregada'+(procesar.length>1?'s':'')+' ✓');
         }
       };
       img.src = e.target.result;
@@ -2687,8 +2696,9 @@ function eliminarFotoLog(id, idx){
   const o = (DB.logistica||[]).find(x=>x.id===id);
   if(!o || !o.fotos) return;
   o.fotos.splice(idx, 1);
-  saveDB();
-  _flushFirebaseWrite();
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  const i = (DB.logistica||[]).indexOf(o);
+  if(i >= 0 && window._fbDB) window._fbDB.ref('montasa/logistica/'+i+'/fotos').set(o.fotos);
   openSubgrupos.add('cb-log-'+id);
   renderOrdenesLog();
 }
