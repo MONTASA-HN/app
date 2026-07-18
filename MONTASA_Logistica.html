@@ -554,22 +554,43 @@ function renderOrdenesLog(){
           ${o.estado==='Cancelado'?'<div style="font-size:12px;color:#e74c3c;margin-top:4px">⚠️ Orden cancelada — campos bloqueados</div>':''}
         </div>
         <!-- Fechas -->
-        <div class="form-group"><label>Fecha inicio</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+        ${(()=>{
+          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='plantel';
+          const esFechaUnica = esPlantel || o.tipoLogistica==='atencion_compras' || o.tipoLogistica==='apoyo_mantenimiento';
+          if(esFechaUnica){
+            const fecha = (o.fechaInicio||'').slice(0,10) || (o.fechaFin||'').slice(0,10);
+            return `<div class="form-group"><label>Fecha</label>
+              <input id="fd-${o.id}" type="date" value="${fecha}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(document.getElementById('hi-${o.id}')?.value||'00:00'));actualizarLog('${o.id}','fechaFin',this.value+'T'+(document.getElementById('hf-${o.id}')?.value||'00:00'))">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Hora inicio</label>
+                <input id="hi-${o.id}" type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+              <div class="form-group"><label>Hora fin</label>
+                <input id="hf-${o.id}" type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+            </div>`;
+          }
+          return `<div class="form-group"><label>Fecha inicio</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
           </div>
-        </div>
-        <div class="form-group"><label>Fecha fin</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
-          </div>
-        </div>
+          <div class="form-group"><label>Fecha fin</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
+          </div>`;
+        })()}
         <!-- Campos según tipo de orden (incluye vehículo) -->
         ${renderCamposTipo(o)}
         <!-- Motorista: entrega/retiro fuera + compras + apoyo -->
@@ -593,13 +614,21 @@ function renderOrdenesLog(){
           <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
             oninput="event.stopPropagation()">${o.descripcion||''}</textarea>
         </div>
-        <!-- Foto — solo entrega y retiro -->
+        <!-- Fotos — entrega/retiro: captura inmediata al seleccionar -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
-        <div class="form-group"><label>📷 Fotografía</label>
-          ${o.foto?`<div style="margin-bottom:8px"><img src="${o.foto}" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>`:''}
-          <input type="file" accept="image/*" capture="environment"
-            onchange="event.stopPropagation();subirFotoLog('${o.id}',this)"
-            style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:13px">
+        <div class="form-group">
+          <label>📷 Fotografías <span style="font-size:11px;color:var(--text3);font-weight:400">(máx 10 — uso interno)</span></label>
+          <div id="fotos-grid-${o.id}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            ${(o.fotos||[]).map((f,i)=>`<div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0">
+              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrandeLog('${o.id}',${i})">
+              <button onclick="event.stopPropagation();eliminarFotoLog('${o.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+            </div>`).join('')}
+          </div>
+          ${(o.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px;border:2px dashed var(--border2);border-radius:8px;font-size:13px;color:#2d6a9f;background:var(--surface2)">
+            <input type="file" accept="image/*" capture="environment" multiple style="display:none"
+              onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">
+            📷 Tomar foto / seleccionar ${(o.fotos||[]).length>0?'('+((o.fotos||[]).length)+'/10)':''}
+          </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
         </div>`:``}
         <!-- Firma — entrega, retiro y renta -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
@@ -2591,7 +2620,65 @@ function _atsRenderEdicion(ats,o){
 function _atsRenderVista(o){
   var ats=o.ats||{};
   document.getElementById('ats-edit-mode').style.display='none';
-  document.getElementById('ats-view-mode').style.display='block';
+  document.getElementById('ats-view-mode').style.disp
+// ── FOTOS EN ÓRDENES DE LOGÍSTICA ───────────────────────────────────────────
+function agregarFotosLog(id, input){
+  var o = (DB.logistica||[]).find(function(x){return x.id===id;});
+  if(!o) return;
+  if(!o.fotos) o.fotos = [];
+  var archivos = Array.from(input.files);
+  var espacio = 10 - o.fotos.length;
+  var procesar = archivos.slice(0, espacio);
+  var pendientes = procesar.length;
+  if(!pendientes){ toast('Límite de 10 fotos alcanzado'); return; }
+  procesar.forEach(function(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var canvas = document.createElement('canvas');
+        var MAX = 1200;
+        var w = img.width, h = img.height;
+        if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+        if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        o.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
+        pendientes--;
+        if(pendientes === 0){
+          saveDB();
+          _flushFirebaseWrite();
+          renderOrdenesLog();
+          toast('Foto'+(procesar.length>1?'s':'')+' guardada'+(procesar.length>1?'s':'')+' ✓');
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function eliminarFotoLog(id, idx){
+  if(!confirm('¿Eliminar esta foto?')) return;
+  var o = (DB.logistica||[]).find(function(x){return x.id===id;});
+  if(!o || !o.fotos) return;
+  o.fotos.splice(idx, 1);
+  saveDB(); _flushFirebaseWrite(); renderOrdenesLog();
+}
+
+function _verFotoGrandeLog(id, idx){
+  var o = (DB.logistica||[]).find(function(x){return x.id===id;});
+  var src = o && o.fotos && o.fotos[idx];
+  if(!src) return;
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  overlay.innerHTML = '<img src="'+src+'" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px">';
+  overlay.onclick = function(){ overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+// ────────────────────────────────────────────────────────────────────────────
+lay='block';
   var el=document.getElementById('ats-view-content');
   function fila(l,v){return v?'<div style="margin-bottom:6px"><div style="font-size:10px;color:#888;text-transform:uppercase">'+l+'</div><div style="font-size:13px;font-weight:600">'+v+'</div></div>':'';}
   var h=fila('Cliente',ats.cliente)+fila('Ubicación',ats.ubicacion)+fila('Actividad',ats.actividad)+fila('Fecha',ats.fecha);
