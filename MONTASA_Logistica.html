@@ -20,47 +20,6 @@ function _imprimirHTML(htmlContent){
   doc.open(); doc.write(htmlContent); doc.close();
   setTimeout(function(){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 500);
 }
-
-// ══ ANÁLISIS DE TRABAJO SEGURO (ATS) ════════════════════════════════════════
-const ATS_PELIGROS=['Bordes corto punzantes','Puntos de pellizcos/atrapamiento','Puestas a tierra/electrocución','Instalaciones en mal estado','Arco eléctrico','Irritantes/polvos/gases/corrosivo','Intoxicación/humos/neblinas/sólidos','Líquidos y gases inflamables','Instalaciones sobrecargadas','Ruido/vibración/iluminación','Temperaturas extremas/radiación','Presiones extremas','Caídas de un nivel a otro/mismo nivel','Desconocimiento/falta de destreza','Monotonía y rutina/trabajo bajo presión','Exceso de responsabilidades','Posiciones incomodas','Herramientas inadecuadas','Máquinas/equipos/herramientas','Partes giratorias/móviles','Derrame','Interrupción a la operación','Daños al equipo','Bacterias/hongos/virus','Desechos sanitarios','Clima severo/fuego forestal','Otros'];
-const ATS_EPP=['Casco de seguridad','Zapatos de seguridad','Gafas de seguridad','Protector facial','Guantes nitrilo','Antiparras','Protección auditiva','Faja lumbar','Guantes cuero','Guantes nitrilo / textil','EPP soldador: careta/pechera/mangas','Señalización de peligro','Respirador cartucho-gas/vap','Respirador desechable-partículas','Capote PVC','Traje Tyvek/Tychem','Delantal PVC','Botas de hule con puntera','Arnes de seguridad','Cinturón de linero','Línea de vida temporal','Medidor de gases','Iluminación portátil','Extractor','Escalera','Andamios','Extinguidor contra incendio','Otros'];
-const ATS_PERMISOS=['Chispa / flama','Ingreso a espacio confinado','Trabajo eléctrico de riesgo','Habilitación de contratista','Trabajo de altura','Análisis de proceso seguro'];
-const ATS_PERSONAL=['Cliente','Personal Interno','Contratista','Visitante'];
-let _atsOrdenId=null;
-function _atsChecks(cid,items,saved){const c=document.getElementById(cid);if(!c)return;c.innerHTML=items.map((it,i)=>'<label style="display:flex;align-items:flex-start;gap:5px;cursor:pointer;padding:3px;font-size:12px"><input type="checkbox" id="'+cid+'-'+i+'" '+(saved&&saved[it]?'checked':'')+' style="flex-shrink:0;margin-top:1px"><span>'+it+'</span></label>').join('');}
-function _atsGetChecks(cid,items){const r={};items.forEach((it,i)=>{const el=document.getElementById(cid+'-'+i);if(el&&el.checked)r[it]=true;});return r;}
-function _atsAddPasoData(p){const cont=document.getElementById('ats-proceso');const row=document.createElement('div');row.className='ats-paso';row.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px';const ta=v=>'<textarea rows="2" style="font-size:11px;padding:4px;border:1px solid #ddd;border-radius:4px;resize:vertical">'+(v||'')+'</textarea>';row.innerHTML=ta(p&&p.paso)+ta(p&&p.riesgos)+ta(p&&p.acciones);cont.appendChild(row);}
-function atsAddPaso(){_atsAddPasoData({});}
-function abrirATS(ordenId){
-  _atsOrdenId=ordenId;
-  const o=(DB.logistica||[]).find(x=>x.id===ordenId)||{};
-  const ats=o.ats||{};
-  document.getElementById('ats-cliente').value=ats.cliente||o.clienteNombre||'';
-  document.getElementById('ats-ubicacion').value=ats.ubicacion||'';
-  document.getElementById('ats-actividad').value=ats.actividad||'';
-  document.getElementById('ats-fecha').value=ats.fecha||(new Date().toISOString().slice(0,10));
-  const pw=document.getElementById('ats-personal-wrap');
-  if(pw)pw.innerHTML=ATS_PERSONAL.map(p=>'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px"><div class="form-group" style="margin:0"><label style="font-size:11px">'+p+'</label><input type="text" id="ats-pn-'+p.replace(/ /g,'_')+'" value="'+(ats.personal&&ats.personal[p]||'')+'"></div><div class="form-group" style="margin:0"><label style="font-size:11px">Firma</label><input type="text" id="ats-fn-'+p.replace(/ /g,'_')+'" value="'+(ats.firmas&&ats.firmas[p]||'')+'"></div></div>').join('');
-  _atsChecks('ats-peligros',ATS_PELIGROS,ats.peligros);
-  _atsChecks('ats-epp',ATS_EPP,ats.epp);
-  _atsChecks('ats-permisos',ATS_PERMISOS,ats.permisos);
-  const cont=document.getElementById('ats-proceso');
-  cont.innerHTML='';
-  (ats.pasos&&ats.pasos.length?ats.pasos:[{}]).forEach(p=>_atsAddPasoData(p));
-  document.getElementById('ats-overlay').style.display='block';
-}
-function cerrarATS(){document.getElementById('ats-overlay').style.display='none';_atsOrdenId=null;}
-function guardarATS(){
-  const o=(DB.logistica||[]).find(x=>x.id===_atsOrdenId);
-  if(!o)return;
-  const personal={},firmas={};
-  ATS_PERSONAL.forEach(p=>{personal[p]=(document.getElementById('ats-pn-'+p.replace(/ /g,'_'))||{}).value||'';firmas[p]=(document.getElementById('ats-fn-'+p.replace(/ /g,'_'))||{}).value||'';});
-  const pasos=[];
-  document.querySelectorAll('#ats-proceso .ats-paso').forEach(row=>{const ts=row.querySelectorAll('textarea');if(ts[0].value||ts[1].value||ts[2].value)pasos.push({paso:ts[0].value,riesgos:ts[1].value,acciones:ts[2].value});});
-  o.ats={cliente:document.getElementById('ats-cliente').value,ubicacion:document.getElementById('ats-ubicacion').value,actividad:document.getElementById('ats-actividad').value,fecha:document.getElementById('ats-fecha').value,personal,firmas,peligros:_atsGetChecks('ats-peligros',ATS_PELIGROS),epp:_atsGetChecks('ats-epp',ATS_EPP),permisos:_atsGetChecks('ats-permisos',ATS_PERMISOS),pasos};
-  saveDB();_flushFirebaseWrite();cerrarATS();renderOrdenesLog();toast('ATS guardado');
-}
-// ════════════════════════════════════════════════════════════════════════════
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
@@ -683,23 +642,12 @@ function renderOrdenesLog(){
             style="padding:12px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
             📋 Solicitar Viáticos
           </button>` : `<span></span>`)}
-        <!-- ATS — solo en rentas -->
-        ${o.tipoLogistica==='renta' ? `
-        <button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)"
-          style="width:100%;margin-top:8px;padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
-          ${o.ats?'✅ Análisis de Trabajo Seguro — Completo':'📋 Análisis de Trabajo Seguro (ATS)'}
-        </button>` : ''}
           <button class="btn-finalizar" style="background:${o.estado==='Cancelado'?'#888':'#1f3864'};margin-top:0"
             onclick="cerrarOrdenLog('${o.id}')">
             ${o.estado==='Cancelado'?'✅ CERRAR (Cancelada)':'✅ CERRAR'}
           </button>
         </div>
-        <!-- ATS — solo en rentas -->
-        ${o.tipoLogistica==='renta' ? `
-        <button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)"
-          style="width:100%;margin-top:8px;padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">
-          ${o.ats?'✅ ATS — Completo':'📋 Análisis de Trabajo Seguro (ATS)'}
-        </button>` : ''}
+        ${o.tipoLogistica==='renta'?`<button data-oid="${o.id}" onclick="event.stopPropagation();abrirATS(this.dataset.oid)" style="width:100%;margin-top:8px;padding:12px;background:${o.ats?'#1a5c1a':'#b85c00'};color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer">${o.ats?'✅ ATS — Completo':'📋 Análisis de Trabajo Seguro (ATS)'}</button>`:''}
         <!-- Vale de alimentación — solo si no tiene viáticos -->
         ${o.estado!=='Cancelado' && !o.viaticos ? `
         <button data-oid="${o.id}" onclick="event.stopPropagation();abrirValeLG(this.dataset.oid)"
@@ -1100,7 +1048,7 @@ function cerrarOrdenLog(id){
   if(!esCancelado){
     if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
     if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
-    if(!o.descripcion && o.tipoLogistica!=='entrega' && o.tipoLogistica!=='retiro' && o.tipoLogistica!=='atencion_compras' && o.tipoLogistica!=='apoyo_mantenimiento') faltantes.push('Descripción / Trabajo realizado');
+    if(!o.descripcion && !['entrega','retiro','atencion_compras','apoyo_mantenimiento'].includes(o.tipoLogistica)) faltantes.push('Descripción / Trabajo realizado');
   }
   if(!esCancelado){
     if(o.tipoLogistica==='renta'){
@@ -2556,9 +2504,146 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
     window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
   }
 }
+// ══ ANÁLISIS DE TRABAJO SEGURO (ATS) ════════════════════════════════════════
+const ATS_PELIGROS=['Bordes corto punzantes','Puntos de pellizcos/atrapamiento','Puestas a tierra/electrocución','Instalaciones en mal estado','Arco eléctrico','Irritantes/polvos/gases/corrosivo','Intoxicación/humos/neblinas/sólidos','Líquidos y gases inflamables','Instalaciones sobrecargadas','Ruido/vibración/iluminación','Temperaturas extremas/radiación','Presiones extremas','Caídas de un nivel a otro/mismo nivel','Desconocimiento/falta de destreza','Monotonía y rutina/trabajo bajo presión','Exceso de responsabilidades','Posiciones incomodas','Herramientas inadecuadas','Máquinas/equipos/herramientas','Partes giratorias/móviles','Derrame','Interrupción a la operación','Daños al equipo','Bacterias/hongos/virus','Desechos sanitarios','Clima severo/fuego forestal','Otros'];
+const ATS_EPP=['Casco de seguridad','Zapatos de seguridad','Gafas de seguridad','Protector facial','Guantes nitrilo','Antiparras','Protección auditiva','Faja lumbar','Guantes cuero','Guantes nitrilo/textil','EPP soldador: careta/pechera/mangas','Señalización de peligro','Respirador cartucho-gas/vap','Respirador desechable-partículas','Capote PVC','Traje Tyvek/Tychem','Delantal PVC','Botas de hule con puntera','Arnes de seguridad','Cinturón de linero','Línea de vida temporal','Medidor de gases','Iluminación portátil','Extractor','Escalera','Andamios','Extinguidor contra incendio','Otros'];
+const ATS_PERMISOS=['Chispa / flama','Ingreso a espacio confinado','Trabajo eléctrico de riesgo','Habilitación de contratista','Trabajo de altura','Análisis de proceso seguro'];
+const ATS_PERSONAL=['Cliente','Personal Interno','Contratista','Visitante'];
+let _atsOrdenId=null;
+
+function _atsChecks(cid,items,saved){
+  var c=document.getElementById(cid);if(!c)return;
+  c.innerHTML=items.map(function(it,i){return '<label style="display:flex;align-items:flex-start;gap:5px;cursor:pointer;padding:3px;font-size:12px"><input type="checkbox" id="'+cid+'-'+i+'" '+(saved&&saved[it]?'checked':'')+' style="flex-shrink:0;margin-top:1px"><span>'+it+'</span></label>';}).join('');
+}
+function _atsGetChecks(cid,items){
+  var r={};items.forEach(function(it,i){var el=document.getElementById(cid+'-'+i);if(el&&el.checked)r[it]=true;});return r;
+}
+function _atsAddPasoData(p){
+  var cont=document.getElementById('ats-proceso');
+  var row=document.createElement('div');row.className='ats-paso';
+  row.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px';
+  function mkta(v){var el=document.createElement('textarea');el.rows=2;el.style.cssText='font-size:11px;padding:4px;border:1px solid #ddd;border-radius:4px;resize:vertical;width:100%;box-sizing:border-box';el.value=v||'';return el;}
+  row.appendChild(mkta(p&&p.paso));row.appendChild(mkta(p&&p.riesgos));row.appendChild(mkta(p&&p.acciones));
+  cont.appendChild(row);
+}
+function atsAddPaso(){_atsAddPasoData({});}
+
+function abrirATS(ordenId){
+  _atsOrdenId=ordenId;
+  var o=(DB.logistica||[]).find(function(x){return x.id===ordenId;})||{};
+  if(o.ats&&(o.ats.cliente||o.ats.actividad||(o.ats.pasos&&o.ats.pasos.length))){
+    _atsRenderVista(o);
+  } else {
+    _atsRenderEdicion(o.ats||{},o);
+  }
+  document.getElementById('ats-overlay').style.display='block';
+}
+
+function _atsRenderEdicion(ats,o){
+  document.getElementById('ats-edit-mode').style.display='block';
+  document.getElementById('ats-view-mode').style.display='none';
+  document.getElementById('ats-cliente').value=ats.cliente||o.clienteNombre||'';
+  document.getElementById('ats-ubicacion').value=ats.ubicacion||'';
+  document.getElementById('ats-actividad').value=ats.actividad||'';
+  document.getElementById('ats-fecha').value=ats.fecha||(new Date().toISOString().slice(0,10));
+  var pw=document.getElementById('ats-personal-wrap');
+  if(pw){
+    pw.innerHTML='';
+    ATS_PERSONAL.forEach(function(p){
+      var div=document.createElement('div');
+      div.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px';
+      var key=p.replace(/ /g,'_');
+      div.innerHTML='<div class="form-group" style="margin:0"><label style="font-size:11px">'+p+'</label><input type="text" id="ats-pn-'+key+'" value="'+(ats.personal&&ats.personal[p]||'')+'" style="width:100%"></div>'
+        +'<div class="form-group" style="margin:0"><label style="font-size:11px">Firma</label><input type="text" id="ats-fn-'+key+'" value="'+(ats.firmas&&ats.firmas[p]||'')+'" style="width:100%"></div>';
+      pw.appendChild(div);
+    });
+  }
+  _atsChecks('ats-peligros',ATS_PELIGROS,ats.peligros);
+  _atsChecks('ats-epp',ATS_EPP,ats.epp);
+  _atsChecks('ats-permisos',ATS_PERMISOS,ats.permisos);
+  var cont=document.getElementById('ats-proceso');cont.innerHTML='';
+  (ats.pasos&&ats.pasos.length?ats.pasos:[{}]).forEach(_atsAddPasoData);
+}
+
+function _atsRenderVista(o){
+  var ats=o.ats||{};
+  document.getElementById('ats-edit-mode').style.display='none';
+  document.getElementById('ats-view-mode').style.display='block';
+  var el=document.getElementById('ats-view-content');
+  function fila(l,v){return v?'<div style="margin-bottom:6px"><div style="font-size:10px;color:#888;text-transform:uppercase">'+l+'</div><div style="font-size:13px;font-weight:600">'+v+'</div></div>':'';}
+  var h=fila('Cliente',ats.cliente)+fila('Ubicación',ats.ubicacion)+fila('Actividad',ats.actividad)+fila('Fecha',ats.fecha);
+  var pRows=ATS_PERSONAL.filter(function(p){return ats.personal&&ats.personal[p];}).map(function(p){return '<tr><td style="padding:4px 8px;font-size:12px">'+p+'</td><td style="padding:4px 8px;font-size:12px">'+(ats.personal[p]||'')+'</td><td style="padding:4px 8px;font-size:12px">'+(ats.firmas&&ats.firmas[p]||'')+'</td></tr>';}).join('');
+  if(pRows) h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">Personal / Firma</div><table style="width:100%;border-collapse:collapse"><tr style="background:#e8edf5"><th style="padding:4px;text-align:left;font-size:11px">Rol</th><th style="padding:4px;text-align:left;font-size:11px">Nombre</th><th style="padding:4px;text-align:left;font-size:11px">Firma</th></tr>'+pRows+'</table>';
+  function tags(obj,bg,col){var sel=Object.keys(obj||{}).filter(function(k){return obj[k];});return sel.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">'+sel.map(function(p){return '<span style="background:'+bg+';color:'+col+';padding:2px 8px;border-radius:10px;font-size:11px">'+p+'</span>';}).join('')+'</div>':'';}
+  var pg=tags(ats.peligros,'#fdeaea','#c00');if(pg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">1. Peligros</div>'+pg;
+  var eg=tags(ats.epp,'#e3f5d9','#1a5c1a');if(eg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">2. EPP</div>'+eg;
+  var prg=tags(ats.permisos,'#e8f2fb','#1f3864');if(prg)h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">3. Permisos</div>'+prg;
+  if(ats.pasos&&ats.pasos.length){
+    h+='<div style="background:#1f3864;color:white;padding:4px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 5px">4. Proceso Seguro</div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#e8edf5"><th style="padding:3px;text-align:left">Pasos</th><th style="padding:3px;text-align:left">Riesgos</th><th style="padding:3px;text-align:left">Acciones</th></tr>';
+    ats.pasos.forEach(function(p){h+='<tr style="border-bottom:1px solid #eee"><td style="padding:3px;vertical-align:top">'+(p.paso||'')+'</td><td style="padding:3px;vertical-align:top">'+(p.riesgos||'')+'</td><td style="padding:3px;vertical-align:top">'+(p.acciones||'')+'</td></tr>';});
+    h+='</table>';
+  }
+  el.innerHTML=h;
+}
+
+function atsEditarModo(){var o=(DB.logistica||[]).find(function(x){return x.id===_atsOrdenId;})||{};_atsRenderEdicion(o.ats||{},o);}
+function cerrarATS(){document.getElementById('ats-overlay').style.display='none';_atsOrdenId=null;}
+function guardarATS(){
+  var o=(DB.logistica||[]).find(function(x){return x.id===_atsOrdenId;});if(!o)return;
+  var personal={},firmas={};
+  ATS_PERSONAL.forEach(function(p){var k=p.replace(/ /g,'_');personal[p]=(document.getElementById('ats-pn-'+k)||{}).value||'';firmas[p]=(document.getElementById('ats-fn-'+k)||{}).value||'';});
+  var pasos=[];
+  document.querySelectorAll('#ats-proceso .ats-paso').forEach(function(row){var ts=row.querySelectorAll('textarea');if(ts[0].value||ts[1].value||ts[2].value)pasos.push({paso:ts[0].value,riesgos:ts[1].value,acciones:ts[2].value});});
+  o.ats={cliente:document.getElementById('ats-cliente').value,ubicacion:document.getElementById('ats-ubicacion').value,actividad:document.getElementById('ats-actividad').value,fecha:document.getElementById('ats-fecha').value,personal:personal,firmas:firmas,peligros:_atsGetChecks('ats-peligros',ATS_PELIGROS),epp:_atsGetChecks('ats-epp',ATS_EPP),permisos:_atsGetChecks('ats-permisos',ATS_PERMISOS),pasos:pasos};
+  saveDB();_flushFirebaseWrite();_atsRenderVista(o);renderOrdenesLog();toast('ATS guardado');
+}
+// ════════════════════════════════════════════════════════════════════════════
 </script>
 
+
+<div id="ats-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9000;overflow-y:auto;padding:16px 0">
+  <div style="background:white;border-radius:12px;max-width:520px;margin:0 auto;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div><div style="font-size:15px;font-weight:800;color:#1f3864">Análisis de Trabajo Seguro</div><div style="font-size:10px;color:#999">GS-MA-01 | Ver. 4</div></div>
+      <button onclick="cerrarATS()" style="background:#f0f0f0;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="ats-edit-mode">
+      <div class="form-group"><label>Nombre del Cliente</label><input id="ats-cliente" type="text"></div>
+      <div class="form-group"><label>Ubicación</label><input id="ats-ubicacion" type="text"></div>
+      <div class="form-group"><label>Descripción de la Actividad</label><textarea id="ats-actividad" rows="2"></textarea></div>
+      <div class="form-group"><label>Fecha de Realización</label><input id="ats-fecha" type="date"></div>
+      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px;display:grid;grid-template-columns:1fr 1fr"><span>Personal</span><span>Firma</span></div>
+      <div id="ats-personal-wrap"></div>
+      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">1. PELIGROS POTENCIALES IDENTIFICADOS</div>
+      <div id="ats-peligros" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
+      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">2. EQUIPO DE PROTECCIÓN PERSONAL/COLECTIVA</div>
+      <div id="ats-epp" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
+      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">3. PERMISOS / PROCEDIMIENTOS DE SEGURIDAD</div>
+      <div id="ats-permisos" style="display:grid;grid-template-columns:1fr 1fr;gap:2px"></div>
+      <div style="background:#1f3864;color:white;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;margin:10px 0 6px">4. ANÁLISIS DE PROCESO SEGURO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px">
+        <div style="font-size:10px;font-weight:700;text-align:center;background:#e8edf5;padding:3px;border-radius:3px">I. PASOS</div>
+        <div style="font-size:10px;font-weight:700;text-align:center;background:#e8edf5;padding:3px;border-radius:3px">II. RIESGOS</div>
+        <div style="font-size:10px;font-weight:700;text-align:center;background:#e8edf5;padding:3px;border-radius:3px">III. ACCIONES</div>
+      </div>
+      <div id="ats-proceso"></div>
+      <button onclick="atsAddPaso()" style="width:100%;margin:6px 0;padding:8px;background:#e8edf5;color:#1f3864;border:1px dashed #2d6a9f;border-radius:6px;font-size:12px;cursor:pointer">+ Agregar paso</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button onclick="cerrarATS()" style="padding:12px;background:#f0f0f0;color:#333;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancelar</button>
+        <button onclick="guardarATS()" style="padding:12px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Guardar ATS</button>
+      </div>
+    </div>
+    <div id="ats-view-mode" style="display:none">
+      <div id="ats-view-content"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+        <button onclick="atsEditarModo()" style="padding:12px;background:#e8f2fb;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Editar</button>
+        <button onclick="cerrarATS()" style="padding:12px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="viaticos-overlay" style="display:none"></div>
 
 </body>
-</html>
+</html
+>
