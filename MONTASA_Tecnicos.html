@@ -1468,6 +1468,7 @@ function renderPreventivos(){
           ${p.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${p.correlativo}</span>`:''}
         </div>
         <div class="card-sub">${getEqLabelFull(p)}</div>
+        ${p.equipoId==='__cliente__'&&p.clienteNombre?`<div style="font-size:11px;color:var(--text3);margin-top:2px">👤 ${p.clienteNombre}${p.clienteMarca?' · '+p.clienteMarca:''}${p.clienteModelo?' '+p.clienteModelo:''}</div>`:''}
         <div style="margin-top:4px;display:flex;gap:6px;align-items:center">${bPrev(est)}${diasAbierta(p.fechaInicio||p.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(p.fechaInicio||p.fecha)}</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -1496,12 +1497,28 @@ function renderPreventivos(){
       </div>
       ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${p.notas}</span></div>`:''}
       ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${p.sugerencias}</span></div>`:''}
-      ` : `
+      ${p.equipoId==='__cliente__'?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
+        ${p.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${p.clienteNombre}</span></div>`:''}
+        ${p.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${p.clienteMarca}</span></div>`:''}
+        ${p.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${p.clienteModelo}</span></div>`:''}
+        ${p.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${p.clienteSerie}</span></div>`:''}
+      </div>`:''}`
+      : `
       ${(p.estado||'Pendiente')==='Pendiente'?`<style>#cb-${p.id} input,#cb-${p.id} textarea,#cb-${p.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${p.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
+      ${p.equipoId==='__cliente__'?`
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${p.clienteNombre||''}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('prev','${p.id}','clienteNombre',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${p.clienteMarca||''}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('prev','${p.id}','clienteMarca',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${p.clienteModelo||''}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('prev','${p.id}','clienteModelo',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${p.clienteSerie||''}" placeholder="Número de serie" onchange="actualizarCampoOrden('prev','${p.id}','clienteSerie',this.value)"></div>
+        </div>
+      </div>`:``}
       <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.servicio==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
@@ -1885,6 +1902,7 @@ function renderCorrectivos(){
           ${c.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${c.correlativo}</span>`:''}
         </div>
         <div class="card-sub">${eqSub}</div>
+        ${c.equipoId==='__cliente__'&&c.clienteNombre?`<div style="font-size:11px;color:var(--text3);margin-top:2px">👤 ${c.clienteNombre}${c.clienteMarca?' · '+c.clienteMarca:''}${c.clienteModelo?' '+c.clienteModelo:''}</div>`:''}
         <div style="margin-top:4px;display:flex;gap:6px;align-items:center">
           ${bCorr(c.estado,c.prioridad)}
           ${diasAbierta(c.fechaInicio||c.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(c.fechaInicio||c.fecha)}</span>`:''}
@@ -1916,12 +1934,28 @@ function renderCorrectivos(){
       </div>
       ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${c.falla}</span></div>`:''}
       ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${c.diagnostico}</span></div>`:''}
-      ` : `
+      ${c.equipoId==='__cliente__'?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
+        ${c.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${c.clienteNombre}</span></div>`:''}
+        ${c.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${c.clienteMarca}</span></div>`:''}
+        ${c.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${c.clienteModelo}</span></div>`:''}
+        ${c.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${c.clienteSerie}</span></div>`:''}
+      </div>`:''}`
+      : `
       ${(c.estado||'Pendiente')==='Pendiente'?`<style>#cb-${c.id} input,#cb-${c.id} textarea,#cb-${c.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${c.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
+      ${c.equipoId==='__cliente__'?`
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${c.clienteNombre||''}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('corr','${c.id}','clienteNombre',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${c.clienteMarca||''}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('corr','${c.id}','clienteMarca',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${c.clienteModelo||''}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('corr','${c.id}','clienteModelo',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${c.clienteSerie||''}" placeholder="Número de serie" onchange="actualizarCampoOrden('corr','${c.id}','clienteSerie',this.value)"></div>
+        </div>
+      </div>`:``}
       <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
