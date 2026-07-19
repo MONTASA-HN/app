@@ -834,10 +834,36 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 3. Equipo -->
       <div class="form-group">
         <label>Equipo principal</label>
-        <select id="sol-equipo" onchange="solEquipoChange()">
-          <option value="">-- Seleccionar equipo --</option>
-          <option value="__otro__">Otro / No está en lista</option>
-        </select>
+        <!-- Toggle Montasa/Cliente — solo visible en correctivo y preventivo -->
+        <div id="sol-origen-toggle" style="display:none;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button id="sol-btn-montasa" onclick="solOrigenChange('montasa')" type="button" style="padding:9px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px">🏭 Montasa</button>
+            <button id="sol-btn-cliente" onclick="solOrigenChange('cliente')" type="button" style="padding:9px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px">👤 Cliente</button>
+          </div>
+        </div>
+        <!-- Selector flota Montasa -->
+        <div id="sol-equipo-montasa-wrap">
+          <select id="sol-equipo" onchange="solEquipoChange()">
+            <option value="">-- Seleccionar equipo --</option>
+            <option value="__otro__">Otro / No está en lista</option>
+          </select>
+        </div>
+        <!-- Selector equipos de cliente (solo correctivo/preventivo de cliente) -->
+        <div id="sol-equipo-cliente-wrap" style="display:none">
+          <select id="sol-equipo-cliente-sel" onchange="solEquipoClienteChange()">
+            <option value="">-- Seleccionar equipo de cliente --</option>
+            <option value="__nuevo__">➕ No está en la lista (nuevo)</option>
+          </select>
+        </div>
+      </div>
+      <!-- Campos de equipo de cliente (nuevo) -->
+      <div id="sol-cliente-fields" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group"><label>Nombre del cliente</label><input id="sol-cliente-nombre" placeholder="Ej: ELCATEX"></div>
+          <div class="form-group"><label>Marca del equipo</label><input id="sol-cliente-marca" placeholder="Ej: TOYOTA"></div>
+          <div class="form-group"><label>Modelo</label><input id="sol-cliente-modelo" placeholder="Ej: FG25S"></div>
+          <div class="form-group"><label>Número de serie</label><input id="sol-cliente-serie" placeholder="Serie"></div>
+        </div>
       </div>
       <div id="sol-equipo-manual" style="display:none">
         <div class="form-group"><label>Número de equipo (manual)</label><input id="sol-equipo-txt" placeholder="Ej: MT-39"></div>
@@ -1223,10 +1249,32 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 3. Equipo -->
       <div class="form-group">
         <label>Equipo principal</label>
-        <select id="sol-equipo-B" onchange="solEquipoChange()">
-          <option value="">-- Seleccionar equipo --</option>
-          <option value="__otro__">Otro / No está en lista</option>
-        </select>
+        <div id="sol-origen-toggle-B" style="display:none;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button id="sol-btn-montasa-B" onclick="solOrigenChange('montasa')" type="button" style="padding:9px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px">🏭 Montasa</button>
+            <button id="sol-btn-cliente-B" onclick="solOrigenChange('cliente')" type="button" style="padding:9px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px">👤 Cliente</button>
+          </div>
+        </div>
+        <div id="sol-equipo-montasa-wrap-B">
+          <select id="sol-equipo-B" onchange="solEquipoChange()">
+            <option value="">-- Seleccionar equipo --</option>
+            <option value="__otro__">Otro / No está en lista</option>
+          </select>
+        </div>
+        <div id="sol-equipo-cliente-wrap-B" style="display:none">
+          <select id="sol-equipo-cliente-sel-B" onchange="solEquipoClienteChange()">
+            <option value="">-- Seleccionar equipo de cliente --</option>
+            <option value="__nuevo__">➕ No está en la lista (nuevo)</option>
+          </select>
+        </div>
+      </div>
+      <div id="sol-cliente-fields-B" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group"><label>Nombre del cliente</label><input id="sol-cliente-nombre-B" placeholder="Ej: ELCATEX"></div>
+          <div class="form-group"><label>Marca del equipo</label><input id="sol-cliente-marca-B" placeholder="Ej: TOYOTA"></div>
+          <div class="form-group"><label>Modelo</label><input id="sol-cliente-modelo-B" placeholder="Ej: FG25S"></div>
+          <div class="form-group"><label>Número de serie</label><input id="sol-cliente-serie-B" placeholder="Serie"></div>
+        </div>
       </div>
       <div id="sol-equipo-manual" style="display:none">
         <div class="form-group"><label>Número de equipo (manual)</label><input id="sol-equipo-txt" placeholder="Ej: MT-39"></div>
@@ -5143,6 +5191,79 @@ function solDeptoChange(){
   solTipoChange(); // actualizar campos condicionales
 }
 
+
+// ── TOGGLE MONTASA/CLIENTE EN FORMULARIO DE SOLICITUDES ──────────────────────
+function solOrigenChange(origen){
+  const isCli = origen === 'cliente';
+  // Ambos formularios (A y B)
+  ['','B'].forEach(sfx => {
+    const s = sfx ? '-'+sfx : '';
+    const bM = document.getElementById('sol-btn-montasa'+s);
+    const bC = document.getElementById('sol-btn-cliente'+s);
+    const mw = document.getElementById('sol-equipo-montasa-wrap'+s);
+    const cw = document.getElementById('sol-equipo-cliente-wrap'+s);
+    const cf = document.getElementById('sol-cliente-fields'+s);
+    const activStyle = 'padding:9px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px';
+    const inactStyle = 'padding:9px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
+    if(bM) bM.style.cssText = isCli ? inactStyle : activStyle;
+    if(bC) bC.style.cssText = isCli ? activStyle : inactStyle;
+    if(mw) mw.style.display = isCli ? 'none' : 'block';
+    if(cw) cw.style.display = isCli ? 'block' : 'none';
+    if(cf) cf.style.display = isCli ? 'block' : 'none';
+  });
+  if(isCli){
+    // Llenar selector con equipos de cliente guardados
+    ['sol-equipo-cliente-sel','sol-equipo-cliente-sel-B'].forEach(selId => {
+      const sel = document.getElementById(selId);
+      if(!sel) return;
+      const equiposCliente = (DB.equipos||[]).filter(e=>e.esEquipoCliente);
+      sel.innerHTML = '<option value="">-- Seleccionar equipo de cliente --</option>';
+      equiposCliente.forEach(e=>{
+        const op = document.createElement('option');
+        op.value = e.id;
+        op.textContent = (e.clienteNombre||e.cliente||'?') + ' — ' + (e.marca||'') + ' ' + (e.modelo||e.desc||'');
+        sel.appendChild(op);
+      });
+      const nuevo = document.createElement('option');
+      nuevo.value = '__nuevo__';
+      nuevo.textContent = '➕ No está en la lista (nuevo)';
+      sel.appendChild(nuevo);
+    });
+  } else {
+    // Limpiar campos de cliente
+    ['sol-cliente-nombre','sol-cliente-marca','sol-cliente-modelo','sol-cliente-serie',
+     'sol-cliente-nombre-B','sol-cliente-marca-B','sol-cliente-modelo-B','sol-cliente-serie-B'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.value = '';
+    });
+  }
+}
+
+function solEquipoClienteChange(){
+  // Leer del selector activo
+  const sel = document.getElementById('sol-equipo-cliente-sel') || document.getElementById('sol-equipo-cliente-sel-B');
+  if(!sel) return;
+  const val = sel.value;
+  const sfx = document.getElementById('sol-equipo-cliente-sel') ? '' : '-B';
+  const cf = document.getElementById('sol-cliente-fields'+sfx);
+  if(!val || val === '__nuevo__'){
+    if(cf) cf.style.display = 'block';
+    ['nombre','marca','modelo','serie'].forEach(f=>{
+      const el = document.getElementById('sol-cliente-'+f+sfx);
+      if(el) el.value = '';
+    });
+    return;
+  }
+  const eq = (DB.equipos||[]).find(e=>e.id===val);
+  if(!eq) return;
+  if(cf) cf.style.display = 'block';
+  const setV = (f,v) => { const el=document.getElementById('sol-cliente-'+f+sfx); if(el) el.value=v||''; };
+  setV('nombre', eq.clienteNombre||eq.cliente||'');
+  setV('marca',  eq.marca||'');
+  setV('modelo', eq.modelo||eq.desc||'');
+  setV('serie',  eq.serie||'');
+}
+// ─────────────────────────────────────────────────────────────────────────────
 function solTipoChange(){
   // Leer del formulario activo (primer o segundo)
   const tipoEl = document.getElementById('sol-tipo-B')?.offsetParent !== null
@@ -5189,6 +5310,14 @@ function solTipoChange(){
     visEl(tecGrp,true); visEl(ubicWrap,true); return;
   }
   if(tipo==='renta'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción'; visEl(logGrp,true); visEl(document.getElementById('sol-ublog-wrap'),false); visEl(document.getElementById('sol-ublog-wrap2'),false); return; }
+  // Mostrar toggle Montasa/Cliente solo en correctivo y preventivo
+  const toggleEl = document.getElementById('sol-origen-toggle');
+  const toggleElB = document.getElementById('sol-origen-toggle-B');
+  const esMantCorrectPrev = tipo==='correctivo'||tipo==='preventivo';
+  if(toggleEl) toggleEl.style.display = esMantCorrectPrev?'block':'none';
+  if(toggleElB) toggleElB.style.display = esMantCorrectPrev?'block':'none';
+  if(!esMantCorrectPrev) solOrigenChange('montasa'); // resetear a Montasa si cambia a otro tipo
+
   if(tipo==='entrega'||tipo==='retiro'){
     visEl(eqGroup,true); visEl(eq2,true);
     visEl(descWrap,false); // Sin descripción — se sobreentiende por el tipo
@@ -5337,6 +5466,32 @@ async function enviarSolicitudWA(){
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
+    // Datos del equipo de cliente desde el formulario de solicitudes
+    const _origenCli = document.getElementById('sol-btn-cliente')?.style?.background?.includes('3864') ||
+                       document.getElementById('sol-btn-cliente-B')?.style?.background?.includes('3864');
+    if(_origenCli && (tipo==='correctivo'||tipo==='preventivo')){
+      const sfx = document.getElementById('sol-equipo-cliente-sel')?.offsetParent!==null ? '' : '-B';
+      const selVal = document.getElementById('sol-equipo-cliente-sel'+sfx)?.value||'';
+      const nom   = document.getElementById('sol-cliente-nombre'+sfx)?.value?.trim()||'';
+      const marca  = document.getElementById('sol-cliente-marca'+sfx)?.value?.trim()||'';
+      const modelo = document.getElementById('sol-cliente-modelo'+sfx)?.value?.trim()||'';
+      const serie  = document.getElementById('sol-cliente-serie'+sfx)?.value?.trim()||'';
+      if(!nom||!marca||!modelo){ toast('Faltan datos del equipo de cliente',true); return; }
+      // Usar equipo existente o crear nuevo
+      let equipoIdCli = selVal && selVal!=='__nuevo__' ? selVal : null;
+      if(!equipoIdCli){
+        equipoIdCli = _guardarEquipoCliente(nom,marca,modelo,serie);
+      }
+      const entry = {id:ordenId,correlativo,equipoId:equipoIdCli||'__cliente__',tipoLogistica:null,
+        clienteNombre:nom,clienteMarca:marca,clienteModelo:modelo,clienteSerie:serie,
+        descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente'};
+      if(tipo==='preventivo') DB.preventivos.push({...entry,servicio:desc,notas:desc,completado:false,fecha:fechaISO,fechaInicio:'',fechaFin:''});
+      else DB.correctivos.push({...entry,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:''});
+      if(!DB.solicitudes) DB.solicitudes=[];
+      DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt:nom+' '+marca+' '+modelo,equipoId:equipoIdCli||'__cliente__',desc,fecha,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
+      saveDB(); clearSolicitudForm(); renderDashboard(); toast('Orden '+correlativo+' creada ✓');
+      return;
+    }
     const ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
