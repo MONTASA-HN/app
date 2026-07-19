@@ -992,22 +992,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       </div>
     </div>
-    <button class="btn btn-primary btn-full" onclick="toggleForm('form-equipo')" style="font-size:16px;padding:14px">+ Agregar equipo</button>
-    <div id="form-equipo" class="form-panel">
-      <div class="form-panel-title">Nuevo equipo</div>
-      <div class="form-group"><label>Código / N° Equipo</label><input id="eq-codigo" placeholder="Ej: MT-39"></div>
-      <div class="form-group"><label>Descripción</label><input id="eq-desc" placeholder="Ej: BAOLI KBE-20 (2018)"></div>
-      <div class="form-group"><label>Tipo</label><select id="eq-tipo"><option>Montacargas</option><option>Plataforma aérea</option><option>Camión / Tracto</option><option>Otro</option></select></div>
-      <div class="form-group"><label>Marca / Modelo</label><input id="eq-marca" placeholder="Ej: BAOLI KBE-20"></div>
-      <div class="form-group"><label>N° Serie</label><input id="eq-serie-new" placeholder="Número de serie"></div>
-      <div class="form-group"><label>Combustible</label><select id="eq-combustible"><option>ELECTRICO</option><option>GAS</option><option>DIESEL</option><option>HIBRIDO</option><option>Otro</option></select></div>
-      <div class="form-group"><label>Ubicación</label><input id="eq-ubicacion-new" placeholder="Ej: CHOLOMA"></div>
-      <div class="form-group"><label>Cliente</label><input id="eq-cliente-new" placeholder="Nombre del cliente"></div>
-      <div class="btn-row">
-        <button class="btn btn-sm" onclick="toggleForm('form-equipo')">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="guardarEquipo()">Guardar</button>
-      </div>
-    </div>
+
     <div class="filter-bar">
       <input id="filt-eq-buscar" placeholder="Buscar código, serie, cliente..." oninput="renderEquipos()" style="flex:2;font-size:15px;padding:12px">
       <select id="filt-eq-estado" onchange="renderEquipos()" style="font-size:15px;padding:12px">
@@ -1936,11 +1921,22 @@ function abrirModal(id){
   }
   modalEquipoId = id;
 
-  document.getElementById('det-codigo').textContent = e.codigo;
-  document.getElementById('det-marca').textContent = e.desc || (e.marca + ' · ' + e.tipo);
-  document.getElementById('det-serie').textContent = e.esVehiculo
-    ? 'Placa: ' + (e.placa||'—') + ' · Motor: ' + (e.motor||'—')
-    : 'Serie: ' + (e.serie || '—');
+  // Para equipos de cliente: mostrar datos del cliente, ocultar estados no aplicables
+  const detEstado = document.getElementById('det-estado');
+  if(e.esEquipoCliente){
+    // Solo mostrar "En mantenimiento" como estado activo; ocultar disponible/renta/inactivo
+    detEstado.innerHTML = '<option value="EN MANTENIMIENTO">🔧 En mantenimiento</option><option value="DISPONIBLE">✅ Sin trabajo activo</option>';
+    document.getElementById('det-codigo').textContent = e.clienteNombre||e.cliente||'Equipo de cliente';
+    document.getElementById('det-marca').textContent = (e.marca||'')+(e.modelo?' '+e.modelo:'');
+    document.getElementById('det-serie').textContent = 'Serie: '+(e.serie||'—')+' · Cliente: '+(e.clienteNombre||'—');
+  } else {
+    detEstado.innerHTML = '<option value="DISPONIBLE">✅ Disponible</option><option value="EN RENTA">🟠 En renta</option><option value="EN MANTENIMIENTO">🔧 En mantenimiento</option><option value="MAL ESTADO">🔴 Mal estado / Inactivo</option>';
+    document.getElementById('det-codigo').textContent = e.codigo;
+    document.getElementById('det-marca').textContent = e.desc || (e.marca + ' · ' + e.tipo);
+    document.getElementById('det-serie').textContent = e.esVehiculo
+      ? 'Placa: ' + (e.placa||'—') + ' · Motor: ' + (e.motor||'—')
+      : 'Serie: ' + (e.serie || '—');
+  }
   document.getElementById('det-estado').value = e.estado || 'DISPONIBLE';
   document.getElementById('det-ubicacion').value = e.ubicacion || '';
   document.getElementById('det-cliente').value = e.cliente || '';
