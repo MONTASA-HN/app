@@ -1217,7 +1217,7 @@ function actualizarCampoOrden(tipo, id, campo, valor){
     const finTieneHora = valor.includes('T') && valor.split('T')[1] && valor.split('T')[1] !== '00:00';
     const iniTieneHora = orden.fechaInicio.includes('T') && orden.fechaInicio.split('T')[1] && orden.fechaInicio.split('T')[1] !== '00:00';
     if(finTieneHora || iniTieneHora){
-      const err = validarFechasOrden(orden.fechaInicio, valor);
+      const err = validarFechasOrden(orden.fechaInicio||orden.inicioTrabajo, valor);
       if(err){
         alert('⚠️ ' + err);
         const cb = document.getElementById('cb-'+id);
@@ -1233,7 +1233,7 @@ function actualizarCampoOrden(tipo, id, campo, valor){
     const finTieneHora2 = orden.fechaFin.includes('T') && orden.fechaFin.split('T')[1] && orden.fechaFin.split('T')[1] !== '00:00';
     const iniTieneHora2 = valor.includes('T') && valor.split('T')[1] && valor.split('T')[1] !== '00:00';
     if(finTieneHora2 || iniTieneHora2){
-      const err = validarFechasOrden(valor, orden.fechaFin);
+      const err = validarFechasOrden(valor, orden.fechaFin||orden.finTrabajo);
       if(err){
         alert('⚠️ ' + err);
         return;
@@ -1404,23 +1404,16 @@ function hayConflictoHorario(nombre, fechaInicioNueva, fechaFinNueva, excluirId)
 }
 
 
-function validarFechasOrden(fechaInicio, fechaFin){
-  if(!fechaInicio || !fechaFin) return null; // campos vacíos: no validar
-  // Separar fecha y hora
-  const [fechaIniStr, horaIniStr] = fechaInicio.split('T');
-  const [fechaFinStr, horaFinStr] = fechaFin.split('T');
-  if(!fechaIniStr || !fechaFinStr) return null;
-  const dIni = new Date(fechaIniStr).getTime();
-  const dFin = new Date(fechaFinStr).getTime();
+function validarFechasOrden(fechaInicio, fechaFin, inicioTrabajo, finTrabajo){
+  // Usar campos nuevos con fallback a legacy
+  const ini = inicioTrabajo || fechaInicio;
+  const fin = finTrabajo    || fechaFin;
+  if(!ini || !fin) return null; // campos vacíos: no validar
+  const dIni = new Date(ini);
+  const dFin = new Date(fin);
   if(isNaN(dIni) || isNaN(dFin)) return null;
-  // Regla 1: fecha fin no puede ser anterior a fecha inicio
-  if(dFin < dIni) return 'La fecha de finalización no puede ser anterior a la fecha de inicio';
-  // Regla 2: mismo día → hora fin debe ser ESTRICTAMENTE mayor que hora inicio
-  if(dFin === dIni){
-    const hIni = horaIniStr || '00:00';
-    const hFin = horaFinStr || '00:00';
-    if(hFin <= hIni) return 'En el mismo día, la hora de finalización debe ser mayor que la hora de inicio';
-  }
+  if(dFin < dIni) return 'La fecha/hora de finalización no puede ser anterior a la de inicio';
+  if(dFin.getTime() === dIni.getTime()) return 'La hora de finalización debe ser diferente a la de inicio';
   return null;
 }
 
@@ -1704,7 +1697,7 @@ function completarPreventivo(id){
     return;
   }
   // ── VALIDACIÓN 3: fechas lógicas ──
-  const errFecha = validarFechasOrden(p.fechaInicio, p.fechaFin);
+  const errFecha = validarFechasOrden(p.fechaInicio, p.fechaFin, p.inicioTrabajo, p.finTrabajo);
   if(errFecha){ alert('⚠️ ' + errFecha); return; }
   // ── VALIDACIÓN 2: solapamiento de horario (excluye supervisor) ──
   const tecs = (p.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
@@ -2122,7 +2115,7 @@ function cerrarCorrectivo(id){
     return;
   }
   // ── VALIDACIÓN 3: fechas lógicas ──
-  const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin);
+  const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin, c.inicioTrabajo, c.finTrabajo);
   if(errFechaC){ alert('⚠️ ' + errFechaC); return; }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
   const _nuevaFirmaC = getFirmaData(id);
