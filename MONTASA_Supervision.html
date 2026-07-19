@@ -1273,13 +1273,66 @@ document.getElementById('modal-overlay').addEventListener('click', function(e){
 });
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
+
+// ── ORIGEN PREVENTIVO/CORRECTIVO (Montasa vs Cliente) ────────────────────────
+function toggleOrigenPrev(origen){
+  const isCli = origen==='cliente';
+  const bM=document.getElementById('prev-btn-montasa'), bC=document.getElementById('prev-btn-cliente');
+  if(bM) bM.style.cssText=isCli?'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px':'padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px';
+  if(bC) bC.style.cssText=isCli?'padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px':'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
+  const mw=document.getElementById('prev-equipo-montasa-wrap'), cw=document.getElementById('prev-equipo-cliente-wrap');
+  if(mw) mw.style.display=isCli?'none':'block'; if(cw) cw.style.display=isCli?'block':'none';
+  if(isCli){ fillSelCliente('prev-equipo-cliente-sel'); document.getElementById('prev-equipo').value='__cliente__'; document.getElementById('prev-cliente-fields').style.display='block'; }
+  else { document.getElementById('prev-equipo').value=''; document.getElementById('prev-cliente-fields').style.display='none'; }
+}
+function toggleOrigenCorr(origen){
+  const isCli = origen==='cliente';
+  const bM=document.getElementById('corr-btn-montasa'), bC=document.getElementById('corr-btn-cliente');
+  if(bM) bM.style.cssText=isCli?'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px':'padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px';
+  if(bC) bC.style.cssText=isCli?'padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px':'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
+  const mw=document.getElementById('corr-equipo-montasa-wrap'), cw=document.getElementById('corr-equipo-cliente-wrap');
+  if(mw) mw.style.display=isCli?'none':'block'; if(cw) cw.style.display=isCli?'block':'none';
+  if(isCli){ fillSelCliente('corr-equipo-cliente-sel'); document.getElementById('corr-cliente-fields').style.display='block'; }
+  else { const cf=document.getElementById('corr-cliente-fields'); if(cf) cf.style.display='none'; }
+}
+function fillSelCliente(selId){
+  const sel=document.getElementById(selId); if(!sel) return;
+  const equiposCliente=(DB.equipos||[]).filter(e=>e.esEquipoCliente);
+  sel.innerHTML='<option value="">-- Seleccionar equipo guardado --</option>';
+  equiposCliente.forEach(e=>{ const op=document.createElement('option'); op.value=e.id; op.textContent=(e.clienteNombre||e.cliente||'?')+' — '+(e.marca||'')+' '+(e.modelo||e.desc||''); sel.appendChild(op); });
+  const nuevo=document.createElement('option'); nuevo.value='__nuevo__'; nuevo.textContent='➕ No está en la lista (nuevo)'; sel.appendChild(nuevo);
+}
+function onSelectEquipoCliente(tipo){
+  const sel=document.getElementById(tipo+'-equipo-cliente-sel'); if(!sel) return;
+  const val=sel.value;
+  const fields=document.getElementById(tipo+'-cliente-fields');
+  if(val===''||val==='__nuevo__'){
+    if(fields) fields.style.display='block';
+    ['nombre','marca','modelo','serie'].forEach(f=>{ const el=document.getElementById(tipo+'-cliente-'+f); if(el) el.value=''; });
+    if(tipo==='prev') document.getElementById('prev-equipo').value='__cliente__';
+    return;
+  }
+  const eq=(DB.equipos||[]).find(e=>e.id===val); if(!eq) return;
+  if(tipo==='prev') document.getElementById('prev-equipo').value=val;
+  const setVal=(f,v)=>{ const el=document.getElementById(tipo+'-cliente-'+f); if(el) el.value=v||''; };
+  setVal('nombre',eq.clienteNombre||eq.cliente||''); setVal('marca',eq.marca||''); setVal('modelo',eq.modelo||eq.desc||''); setVal('serie',eq.serie||'');
+  if(fields) fields.style.display='block';
+}
+function _guardarEquipoCliente(nombre, marca, modelo, serie){
+  if(!nombre||!marca||!modelo) return null;
+  const existe=(DB.equipos||[]).find(e=>e.esEquipoCliente&&((serie&&e.serie&&e.serie.trim()===serie.trim())||(e.clienteNombre===nombre&&e.marca===marca&&(e.modelo||e.desc)===modelo)));
+  if(existe){ existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie; return existe.id; }
+  const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
+  if(!DB.equipos) DB.equipos=[];
+  DB.equipos.push(nuevoEq);
+  saveDB();
+  return nuevoEq.id;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 function fillSel(selId){
   const sel = document.getElementById(selId); const cur = sel.value;
   sel.innerHTML = '<option value="">-- Seleccionar equipo --</option>';
-  if(selId === 'prev-equipo' || selId === 'corr-equipo'){
-    const oc = document.createElement('option'); oc.value='__cliente__'; oc.textContent='📋 Es de cliente'; sel.appendChild(oc);
-  }
-  [...DB.equipos].sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(e => {
+  [...DB.equipos].filter(e=>!e.esEquipoCliente).sort((a,b) => a.codigo.localeCompare(b.codigo)).forEach(e => {
     const o = document.createElement('option'); o.value = e.id;
     o.textContent = e.codigo + ' – ' + e.marca + (e.cliente ? ' ('+e.cliente+')' : '');
     sel.appendChild(o);
