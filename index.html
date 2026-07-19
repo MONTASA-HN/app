@@ -2138,11 +2138,22 @@ function onSelectEquipoCliente(tipo){
 function _guardarEquipoCliente(nombre, marca, modelo, serie){
   if(!nombre||!marca||!modelo) return null;
   const existe=(DB.equipos||[]).find(e=>e.esEquipoCliente&&((serie&&e.serie&&e.serie.trim()===serie.trim())||(e.clienteNombre===nombre&&e.marca===marca&&(e.modelo||e.desc)===modelo)));
-  if(existe){ existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie; return existe.id; }
+  if(existe){
+    existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie;
+    // Escribir directamente en Firebase
+    const idx = DB.equipos.indexOf(existe);
+    if(idx>=0 && window._fbDB && window._fbReady)
+      window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
+    return existe.id;
+  }
   const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
   if(!DB.equipos) DB.equipos=[];
   DB.equipos.push(nuevoEq);
-  saveDB();
+  // Escribir directamente por índice en Firebase
+  const newIdx = DB.equipos.length - 1;
+  if(window._fbDB && window._fbReady)
+    window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   return nuevoEq.id;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2333,7 +2344,7 @@ function actualizarCampoOrden(tipo, id, campo, valor){
     const mod = orden.clienteModelo||''; const ser = orden.clienteSerie||'';
     if(nom && marc && mod){
       const nuevoId = _guardarEquipoCliente(nom, marc, mod, ser);
-      if(nuevoId && orden.equipoId === '__cliente__') orden.equipoId = nuevoId;
+      if(nuevoId && (orden.equipoId === '__cliente__' || !orden.equipoId)) orden.equipoId = nuevoId;
     }
   }
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
