@@ -2327,6 +2327,15 @@ function actualizarCampoOrden(tipo, id, campo, valor){
     }
   }
   orden[campo] = valor;
+  // Si se actualizan datos del equipo de cliente, crear/actualizar en DB.equipos
+  if(['clienteNombre','clienteMarca','clienteModelo','clienteSerie'].includes(campo)){
+    const nom = orden.clienteNombre||''; const marc = orden.clienteMarca||'';
+    const mod = orden.clienteModelo||''; const ser = orden.clienteSerie||'';
+    if(nom && marc && mod){
+      const nuevoId = _guardarEquipoCliente(nom, marc, mod, ser);
+      if(nuevoId && orden.equipoId === '__cliente__') orden.equipoId = nuevoId;
+    }
+  }
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
     orden.fechaInicio = new Date().toISOString().slice(0,16);
@@ -5458,11 +5467,13 @@ async function enviarSolicitudWA(){
   // ── Equipo de cliente — procesar ANTES de buscar en flota ────────────────
   if(_esCli && (tipo==='correctivo'||tipo==='preventivo')){
     const selVal = document.getElementById('sol-equipo-cliente-sel')?.value||'';
-    const eqCli = selVal && selVal!=='__nuevo__' ? DB.equipos.find(e=>e.id===selVal) : null;
-    let equipoIdCli = eqCli ? eqCli.id : null;
-    let nomCli='', marcaCli='', modeloCli='', serieCli='';
-    if(eqCli){ nomCli=eqCli.clienteNombre||eqCli.cliente||''; marcaCli=eqCli.marca||''; modeloCli=eqCli.modelo||eqCli.desc||''; serieCli=eqCli.serie||''; }
-    if(!equipoIdCli){ equipoIdCli = _guardarEquipoCliente('Equipo de cliente','—','—',''); }
+    const eqCli = (selVal && selVal!=='__nuevo__') ? DB.equipos.find(e=>e.id===selVal) : null;
+    // Si hay equipo guardado, usar sus datos; si es nuevo, la orden queda con __cliente__ y se completa desde la tarjeta
+    const equipoIdCli = eqCli ? eqCli.id : '__cliente__';
+    const nomCli   = eqCli ? (eqCli.clienteNombre||eqCli.cliente||'') : '';
+    const marcaCli = eqCli ? (eqCli.marca||'') : '';
+    const modeloCli= eqCli ? (eqCli.modelo||eqCli.desc||'') : '';
+    const serieCli = eqCli ? (eqCli.serie||'') : '';
     const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion};
     if(tipo==='preventivo') DB.preventivos.push({...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
     else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
