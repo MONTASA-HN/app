@@ -5453,25 +5453,16 @@ async function enviarSolicitudWA(){
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
-  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
-  const equipoId = eq ? eq.id : '__cliente__';
-  const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   const ubicacion = document.getElementById('sol-ubicacion')?.value || 'campo';
-  // ── Equipo de cliente ─────────────────────────────────────────────────────
-  const _cliWrap = document.getElementById('sol-equipo-cliente-wrap');
-  const _esCli2 = _cliWrap && _cliWrap.style.display !== 'none';
-  if(_esCli2 && (tipo==='correctivo'||tipo==='preventivo')){
+
+  // ── Equipo de cliente — procesar ANTES de buscar en flota ────────────────
+  if(_esCli && (tipo==='correctivo'||tipo==='preventivo')){
     const selVal = document.getElementById('sol-equipo-cliente-sel')?.value||'';
     const eqCli = selVal && selVal!=='__nuevo__' ? DB.equipos.find(e=>e.id===selVal) : null;
     let equipoIdCli = eqCli ? eqCli.id : null;
     let nomCli='', marcaCli='', modeloCli='', serieCli='';
-    if(eqCli){
-      nomCli=eqCli.clienteNombre||eqCli.cliente||''; marcaCli=eqCli.marca||''; modeloCli=eqCli.modelo||eqCli.desc||''; serieCli=eqCli.serie||'';
-    }
-    if(!equipoIdCli){
-      // Equipo nuevo — pedir datos mínimos no es necesario, se editarán en la orden
-      equipoIdCli = _guardarEquipoCliente('Equipo de cliente','—','—','');
-    }
+    if(eqCli){ nomCli=eqCli.clienteNombre||eqCli.cliente||''; marcaCli=eqCli.marca||''; modeloCli=eqCli.modelo||eqCli.desc||''; serieCli=eqCli.serie||''; }
+    if(!equipoIdCli){ equipoIdCli = _guardarEquipoCliente('Equipo de cliente','—','—',''); }
     const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion};
     if(tipo==='preventivo') DB.preventivos.push({...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
     else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
@@ -5480,7 +5471,11 @@ async function enviarSolicitudWA(){
     saveDB(); clearSolicitudForm(); renderDashboard(); toast('Orden '+correlativo+' creada ✓');
     return;
   }
-  // ── Equipo Montasa ─────────────────────────────────────────────────────────
+
+  // ── Equipo Montasa ────────────────────────────────────────────────────────
+  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  const equipoId = eq ? eq.id : '__cliente__';
+  const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   if(tipo === 'preventivo'){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
