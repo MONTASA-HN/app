@@ -1813,6 +1813,13 @@ function completarPreventivo(id){
     }
   }
   registrarOrdenCerrada(p, 'Preventivo');
+  // Write directo en Firebase para sync inmediato con Gerencia/Supervisión
+  if(window._fbDB && window._fbReady){
+    const _idxP = DB.preventivos.findIndex(x=>x.id===p.id);
+    if(_idxP>=0) window._fbDB.ref('montasa/preventivos/'+_idxP).update({
+      completado: true, estado: 'Completado', fechaCompletado: p.fechaCompletado
+    });
+  }
   saveDB();
   renderPreventivos();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
@@ -2248,6 +2255,13 @@ function cerrarCorrectivo(id){
     }
   })();
   registrarOrdenCerrada(c, 'Correctivo');
+  // Write directo en Firebase para sync inmediato con Gerencia/Supervisión
+  if(window._fbDB && window._fbReady){
+    const _idxC = DB.correctivos.findIndex(x=>x.id===c.id);
+    if(_idxC>=0) window._fbDB.ref('montasa/correctivos/'+_idxC).update({
+      estado: 'Completado', fechaCompletado: c.fechaCompletado||new Date().toISOString().slice(0,10)
+    });
+  }
   saveDB();
   renderCorrectivos(); renderDashboard();
   toast('Orden ' + (c.correlativo||'') + ' cerrada y guardada en Excel');

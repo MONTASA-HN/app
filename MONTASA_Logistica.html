@@ -1233,14 +1233,20 @@ function cerrarOrdenLog(id){
       }
     }
   })();
-  saveDB();
-  // Escritura directa en Firebase para sync inmediato con Gerencia
-  if(window._fbDB && window._fbReady){
-    const idx = DB.logistica.findIndex(x=>x.id===id);
-    if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({
-      cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
-    });
+  // Escritura directa en Firebase — primero el estado de cierre para sync inmediato con Gerencia
+  const _idxClose = DB.logistica.findIndex(x=>x.id===id);
+  if(window._fbDB && window._fbReady && _idxClose>=0){
+    // Escribir la orden completa directamente al nodo específico
+    window._fbDB.ref('montasa/logistica/'+_idxClose).set(o)
+      .catch(()=>{
+        // Fallback: solo los campos críticos
+        window._fbDB.ref('montasa/logistica/'+_idxClose).update({
+          cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
+        });
+      });
   }
+  // Guardar en localStorage
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();
