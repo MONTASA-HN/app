@@ -513,7 +513,12 @@ function renderOrdenesLog(){
   el.innerHTML = list.map(o=>{
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
-    const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
+    const _ublog = o.ubicacionLog||'fuera';
+    const tipoLbl = o.tipoLogistica==='retiro'
+      ? (_ublog==='plantel' ? 'Recepcion de Equipo' : 'Retiro de Equipo')
+      : o.tipoLogistica==='entrega'
+        ? (_ublog==='plantel' ? 'Alisto de Equipo' : 'Entrega de Equipo')
+        : (tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística');
     const estadoColor = o.estado==='En proceso'?'#f39c12':o.estado==='En espera'?'#3498db':'#e74c3c';
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
@@ -549,22 +554,41 @@ function renderOrdenesLog(){
           ${o.estado==='Cancelado'?'<div style="font-size:12px;color:#e74c3c;margin-top:4px">⚠️ Orden cancelada — campos bloqueados</div>':''}
         </div>
         <!-- Fechas -->
-        <div class="form-group"><label>Fecha inicio</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+        ${(()=>{
+          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='plantel';
+          const esFechaUnica = esPlantel || o.tipoLogistica==='atencion_compras' || o.tipoLogistica==='apoyo_mantenimiento';
+          const fecha = (o.fechaInicio||'').slice(0,10) || (o.fechaFin||'').slice(0,10);
+          if(esFechaUnica) return `<div class="form-group"><label>Fecha</label>
+              <input id="fd-${o.id}" type="date" value="${fecha}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(document.getElementById('hi-${o.id}')?.value||'00:00'));actualizarLog('${o.id}','fechaFin',this.value+'T'+(document.getElementById('hf-${o.id}')?.value||'00:00'))">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Hora inicio</label>
+                <input id="hi-${o.id}" type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+              <div class="form-group"><label>Hora fin</label>
+                <input id="hf-${o.id}" type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                  onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(document.getElementById('fd-${o.id}')?.value||'${fecha}')+'T'+this.value)">
+              </div>
+            </div>`;
+          return `<div class="form-group"><label>Fecha inicio</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaInicio||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaInicio||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaInicio',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
           </div>
-        </div>
-        <div class="form-group"><label>Fecha fin</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
-            <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
-              onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
-          </div>
-        </div>
+          <div class="form-group"><label>Fecha fin</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input type="date" value="${(o.fechaFin||'').slice(0,10)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',this.value+'T'+(this.nextElementSibling.value||'00:00'))">
+              <input type="time" value="${(o.fechaFin||'').slice(11,16)}"
+                onchange="event.stopPropagation();actualizarLog('${o.id}','fechaFin',(this.previousElementSibling.value||'')+'T'+this.value)">
+            </div>
+          </div>`;
+        })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
                 <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
@@ -931,6 +955,8 @@ function renderCamposTipo(o){
   var isRetiro  = tipo==='retiro';
   var isRenta   = tipo==='renta';
   var isMovimiento = isEntrega||isRetiro;
+  var ubicLog = o.ubicacionLog || 'fuera';
+  var esPlantel = isMovimiento && ubicLog === 'plantel';
   var eq1 = DB.equipos.find(function(e){return e.id===o.equipoId;})||{};
   var eq2 = o.equipoId2 ? (DB.equipos.find(function(e){return e.id===o.equipoId2;})||{}) : null;
   var eq1Label = eq1.codigo||(o.clienteNombre||'Equipo 1');
@@ -938,7 +964,22 @@ function renderCamposTipo(o){
   var id = o.id;
   var html = '';
 
-  if(isMovimiento || tipo==='atencion_compras'){
+  // Badge de ubicación para entrega/retiro
+  if(isMovimiento){
+    var ubBg    = esPlantel ? '#e3f5d9' : '#e8f2fb';
+    var ubColor = esPlantel ? '#1a5c1a' : '#1f3864';
+    var ubLabel = esPlantel
+      ? (isRetiro ? '🏭 Recepción en plantel' : '🏭 Alisto en plantel')
+      : (isRetiro ? '🚗 Retiro fuera del plantel' : '🚗 Entrega fuera del plantel');
+    html += '<div style="display:inline-flex;align-items:center;gap:6px;background:'+ubBg+';color:'+ubColor+';padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">'+ubLabel+'</div>';
+  }
+
+  // Vehículo y km — solo fuera del plantel (y compras/apoyo)
+  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
+    var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
+    html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
+    VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
+    html += '</select></div>';
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
@@ -950,14 +991,13 @@ function renderCamposTipo(o){
     html += '</div>';
   }
 
-  // Segundo equipo — solo lectura (se define desde solicitud)
-  if((isEntrega||isRetiro) && o.equipoId2){
+  // Segundo equipo — solo lectura
+  if(isMovimiento && o.equipoId2){
     html += '<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;font-size:13px">';
-    html += '<span style="color:var(--text3)">2° Equipo: </span>';
-    html += '<strong>'+eq2Label+'</strong>';
-    html += '</div>';
+    html += '<span style="color:var(--text3)">2° Equipo: </span><strong>'+eq2Label+'</strong></div>';
   }
 
+  // Horómetro — siempre para entrega/retiro (plantel y fuera)
   if(isEntrega){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">⏱ Horómetro de salida</div>';
     html += '<div class="form-group"><label>Horómetro salida — '+eq1Label+'</label>';
@@ -985,7 +1025,7 @@ function renderCamposTipo(o){
     html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
     html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
-  } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras') {
+  } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras'){
     html += '<div class="form-group"><label>Horómetro (hrs)</label>';
     html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometro\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
