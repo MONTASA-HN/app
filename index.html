@@ -5486,7 +5486,13 @@ async function enviarSolicitudWA(){
     else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
     if(!DB.solicitudes) DB.solicitudes=[];
     DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt:nomCli||'Equipo de cliente',equipoId:equipoIdCli,desc,fecha,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
-    saveDB(); clearSolicitudForm(); renderDashboard(); toast('Orden '+correlativo+' creada ✓');
+    saveDB(); clearSolicitudForm(); renderDashboard();
+    // ── Enviar por WhatsApp ──────────────────────────────────────────────────
+    const _tipoLblCli = tipo==='preventivo'?'Preventivo':'Correctivo';
+    const _eqTxtCli = nomCli ? (nomCli+(marcaCli?' — '+marcaCli:'')+(modeloCli?' '+modeloCli:'')) : 'Equipo de cliente';
+    const _msgCli = ['🔧 *ASIGNACION DE TRABAJO - MONTASA*','🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html','','🔢 *Orden:* '+correlativo,'👷 *Tecnico:* '+tecnicoNombre,'📋 *Equipo:* '+_eqTxtCli,'🚛 *Tipo:* '+_tipoLblCli,'📝 *Detalle:* '+desc,'⚡ *Prioridad:* '+prioridad,'📅 *Fecha:* '+fecha].join('\n');
+    tecnicosData.forEach((t,i)=>{ setTimeout(()=>window.open('https://wa.me/'+t.num.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(_msgCli),'_blank'),i*800); });
+    toast('Orden '+correlativo+' creada ✓');
     return;
   }
 
