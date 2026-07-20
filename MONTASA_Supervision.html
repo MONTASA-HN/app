@@ -582,10 +582,17 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <!-- 4e. Ubicación del trabajo (solo mantenimiento) -->
       <div id="sol-ubicacion-wrap" class="form-group" style="display:none">
         <label>📍 Ubicación del trabajo</label>
-        <select id="sol-ubicacion">
-          <option value="campo">🚗 Fuera del plantel (técnico se desplaza)</option>
-          <option value="plantel">🏭 En plantel (el equipo viene al taller)</option>
-        </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="sol-ub-plantel" type="button" onclick="solUbicacionClick('plantel')"
+            style="padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px">
+            🏭 En plantel
+          </button>
+          <button id="sol-ub-fuera" type="button" onclick="solUbicacionClick('fuera')"
+            style="padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px">
+            🚗 Fuera del plantel
+          </button>
+        </div>
+        <input type="hidden" id="sol-ubicacion" value="plantel">
       </div>
 
       <!-- 5. Fecha -->
@@ -4010,6 +4017,19 @@ function solEquipoClienteChange(){
   setV('serie',eq.serie||'');
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+function solUbicacionClick(val, sfx){
+  sfx = sfx||'';
+  var s = sfx?'-B':'';
+  var bP = document.getElementById('sol-ub-plantel'+(sfx?'-B':''));
+  var bF = document.getElementById('sol-ub-fuera'+(sfx?'-B':''));
+  var inp = document.getElementById('sol-ubicacion'+(sfx?'2b':''));
+  if(!bP||!bF||!inp) return;
+  var activ = 'padding:10px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px';
+  var inact = 'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
+  if(val==='plantel'){ bP.style.cssText=activ; bF.style.cssText=inact; inp.value='plantel'; }
+  else { bP.style.cssText=inact; bF.style.cssText=activ; inp.value='campo'; }
+}
 function solTipoChange(){
   const tipo  = document.getElementById('sol-tipo').value;
   const depto = document.getElementById('sol-depto')?.value||'mantenimiento';
@@ -4174,7 +4194,7 @@ async function enviarSolicitudWA(){
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
-  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'campo';
+  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
 
   // ── Equipo de cliente — procesar ANTES de buscar en flota ────────────────
   if(_esCli && (tipo==='correctivo'||tipo==='preventivo')){
@@ -4329,7 +4349,7 @@ async function copiarMensajeWA(){
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
-  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'campo';
+  const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
