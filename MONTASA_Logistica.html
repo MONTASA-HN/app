@@ -935,6 +935,38 @@ function actualizarLog(id, campo, valor){
     o.fechaInicio = new Date().toISOString().slice(0,16);
   }
   o[campo] = valor;
+  // Al cambiar estado: actualizar solo el CSS de bloqueo en el DOM, sin re-renderizar
+  if(campo==='estado'){
+    const cbId = 'cb-log-'+id;
+    const card = document.getElementById(cbId);
+    if(card){
+      // Quitar todos los <style> de bloqueo anteriores
+      card.querySelectorAll('style').forEach(s=>s.remove());
+      if(valor==='Cancelado'){
+        const s=document.createElement('style');
+        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
+        card.insertBefore(s, card.firstChild);
+      } else if(valor==='Pendiente'){
+        const s=document.createElement('style');
+        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas,#'+cbId+' .tec-btn{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
+        card.insertBefore(s, card.firstChild);
+      }
+      // Actualizar el aviso visible
+      const avisos = card.querySelectorAll('.estado-aviso');
+      avisos.forEach(a=>a.remove());
+      if(valor==='Pendiente'){
+        const div=document.createElement('div');
+        div.className='estado-aviso';
+        div.style.cssText='font-size:12px;color:#f39c12;margin-top:4px';
+        div.innerHTML='🔒 Cambia a <b>En proceso</b> para editar los campos';
+        const sel=card.querySelector('.estado-select');
+        if(sel&&sel.parentNode) sel.parentNode.appendChild(div);
+      }
+    }
+    openSubgrupos.add('cb-log-'+id);
+    saveDB();
+    return;
+  }
   // P5: Auto-update horometro in equipment card
   const _hf = ['horometroSalida','horometroRetorno','horometroSalida2','horometroRetorno2','horometro'];
   if(_hf.includes(campo) && valor){
