@@ -194,6 +194,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 #modal-body{padding:16px 18px}
 .modal-section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 10px;padding-top:12px;border-top:1px solid var(--border)}
 .modal-section-title:first-child{margin-top:0;padding-top:0;border-top:none}
+
+.form-group input[type=number]{max-width:160px}
+.form-group input[type=time]{max-width:130px}
+.form-group input[type=date]{max-width:160px}
+.form-group select{width:auto!important;max-width:280px}
+.form-group input.inp-full,.form-group textarea{width:100%!important;max-width:100%!important}
 </style>
 </head>
 <body>
@@ -478,6 +484,26 @@ function solicitarPINAccion(callback, titulo, subtitulo){
 }
 
 
+
+// ── EQUIPOS DE CLIENTE ───────────────────────────────────────────────────────
+function _guardarEquipoCliente(nombre, marca, modelo, serie){
+  if(!nombre||!marca||!modelo) return null;
+  const existe=(DB.equipos||[]).find(e=>e.esEquipoCliente&&((serie&&e.serie&&e.serie.trim()===serie.trim())||(e.clienteNombre===nombre&&e.marca===marca&&(e.modelo||e.desc)===modelo)));
+  if(existe){
+    existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie;
+    const idx=DB.equipos.indexOf(existe);
+    if(idx>=0&&window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
+    return existe.id;
+  }
+  const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
+  if(!DB.equipos) DB.equipos=[];
+  DB.equipos.push(nuevoEq);
+  const newIdx=DB.equipos.length-1;
+  if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }catch(e){}
+  return nuevoEq.id;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 function renderEquipos(){
   const buscar  = (document.getElementById('filt-eq-buscar').value||'').toLowerCase();
   const filtEst = document.getElementById('filt-eq-estado').value;
@@ -510,6 +536,7 @@ function renderEquipos(){
   // Clasificar
   function getTipoGrupo(e){
     if(!e || !e.codigo) return {grupo:'otros', sub:'Otros'};
+    if(e.esEquipoCliente) return {grupo:'clientes', sub:'Equipos de cliente'};
     const tipo = (e.tipo||'').toLowerCase();
     const serie = (e.serie||'').toLowerCase();
     if(tipo.includes('plataforma') || tipo.includes('elevadora') || (e.codigo||'').startsWith('E-')){
@@ -530,6 +557,7 @@ function renderEquipos(){
 
   // Build grouped structure
   const grupos = {
+    clientes:    {label:'Equipos de cliente', icon:'<span style="font-size:20px">👤</span>', subs:{}, order:0},
     montacargas: {label:'Montacargas', icon:'<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA0OCcgd2lkdGg9JzMyJyBoZWlnaHQ9JzI0Jz4KICA8IS0tIE1hc3QgLS0+CiAgPHJlY3QgeD0nOCcgeT0nOCcgd2lkdGg9JzUnIGhlaWdodD0nMjgnIHJ4PScxJyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8IS0tIEZvcmtzIC0tPgogIDxyZWN0IHg9JzInIHk9JzM0JyB3aWR0aD0nMTQnIGhlaWdodD0nMycgcng9JzEnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDxyZWN0IHg9JzInIHk9JzM4JyB3aWR0aD0nMTQnIGhlaWdodD0nMycgcng9JzEnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDwhLS0gQ2FycmlhZ2UgLS0+CiAgPHJlY3QgeD0nOCcgeT0nMjQnIHdpZHRoPSc4JyBoZWlnaHQ9JzEwJyByeD0nMScgZmlsbD0nY3VycmVudENvbG9yJyBvcGFjaXR5PScwLjcnLz4KICA8IS0tIEJvZHkgLS0+CiAgPHJlY3QgeD0nMTMnIHk9JzIwJyB3aWR0aD0nMzInIGhlaWdodD0nMTgnIHJ4PSczJyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8IS0tIENhYiAtLT4KICA8cmVjdCB4PSczMicgeT0nMTInIHdpZHRoPScxNCcgaGVpZ2h0PScxMicgcng9JzInIGZpbGw9J2N1cnJlbnRDb2xvcicgb3BhY2l0eT0nMC44NScvPgogIDwhLS0gQ291bnRlcndlaWdodCAtLT4KICA8cmVjdCB4PSc0NCcgeT0nMjQnIHdpZHRoPSc4JyBoZWlnaHQ9JzE0JyByeD0nMicgZmlsbD0nY3VycmVudENvbG9yJyBvcGFjaXR5PScwLjcnLz4KICA8IS0tIFdoZWVscyAtLT4KICA8Y2lyY2xlIGN4PScyMCcgY3k9JzQwJyByPSc2JyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8Y2lyY2xlIGN4PScyMCcgY3k9JzQwJyByPSczJyBmaWxsPSd3aGl0ZScgb3BhY2l0eT0nMC40Jy8+CiAgPGNpcmNsZSBjeD0nNDInIGN5PSc0MCcgcj0nNicgZmlsbD0nY3VycmVudENvbG9yJy8+CiAgPGNpcmNsZSBjeD0nNDInIGN5PSc0MCcgcj0nMycgZmlsbD0nd2hpdGUnIG9wYWNpdHk9JzAuNCcvPgo8L3N2Zz4=" style="width:32px;height:24px;object-fit:contain;opacity:0.9" alt="Montacargas">', subs:{}, order:1},
     elevadoras:  {label:'Elevadoras',  icon:'<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA3MiA1Micgd2lkdGg9JzM2JyBoZWlnaHQ9JzI2Jz4KICA8IS0tIENoYXNzaXMgLS0+CiAgPHJlY3QgeD0nNCcgeT0nMzAnIHdpZHRoPSczOCcgaGVpZ2h0PScxMicgcng9JzMnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDwhLS0gV2hlZWxzIC0tPgogIDxjaXJjbGUgY3g9JzE0JyBjeT0nNDQnIHI9JzcnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDxjaXJjbGUgY3g9JzE0JyBjeT0nNDQnIHI9JzMuNScgZmlsbD0nd2hpdGUnIG9wYWNpdHk9JzAuMzUnLz4KICA8Y2lyY2xlIGN4PSczNCcgY3k9JzQ0JyByPSc3JyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8Y2lyY2xlIGN4PSczNCcgY3k9JzQ0JyByPSczLjUnIGZpbGw9J3doaXRlJyBvcGFjaXR5PScwLjM1Jy8+CiAgPCEtLSBUdXJyZXQgLS0+CiAgPHJlY3QgeD0nMTgnIHk9JzIyJyB3aWR0aD0nMTQnIGhlaWdodD0nMTAnIHJ4PScyJyBmaWxsPSdjdXJyZW50Q29sb3InIG9wYWNpdHk9JzAuODUnLz4KICA8IS0tIExvd2VyIGJvb20gLS0+CiAgPGxpbmUgeDE9JzI0JyB5MT0nMjgnIHgyPSc0MicgeTI9JzEwJyBzdHJva2U9J2N1cnJlbnRDb2xvcicgc3Ryb2tlLXdpZHRoPSc1JyBzdHJva2UtbGluZWNhcD0ncm91bmQnLz4KICA8IS0tIFVwcGVyIGJvb20gLS0+CiAgPGxpbmUgeDE9JzQyJyB5MT0nMTAnIHgyPSc2MicgeTI9JzYnIHN0cm9rZT0nY3VycmVudENvbG9yJyBzdHJva2Utd2lkdGg9JzQnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcvPgogIDwhLS0gUGxhdGZvcm0gLS0+CiAgPHJlY3QgeD0nNTgnIHk9JzInIHdpZHRoPScxMicgaGVpZ2h0PSc4JyByeD0nMicgZmlsbD0nY3VycmVudENvbG9yJy8+CiAgPCEtLSBQZXJzb24gLS0+CiAgPGNpcmNsZSBjeD0nNjQnIGN5PScyJyByPScyLjUnIGZpbGw9J3doaXRlJyBvcGFjaXR5PScwLjcnLz4KPC9zdmc+" style="width:36px;height:26px;object-fit:contain;opacity:0.9" alt="Elevadora">', subs:{}, order:2},
     otros:       {label:'Otros',       icon:'<span style="font-size:20px">🔧</span>', subs:{}, order:3},
@@ -583,11 +611,14 @@ function renderEquipos(){
       const itemsFiltrados = filtroActivo ? items.filter(e=>(e.estado||'DISPONIBLE')===filtroActivo) : items;
       itemsFiltrados.forEach(e=>{
         const est = e.estado||'DISPONIBLE';
+        const _esCli = e.esEquipoCliente;
+        const _titulo = _esCli ? (e.clienteNombre||e.cliente||'Cliente') : e.codigo;
+        const _subtit  = _esCli ? ((e.marca||'')+(e.modelo?' '+e.modelo:'')) : e.marca;
         out += `<div class="${cardClass(est)}" onclick="abrirModal('${e.id}')" style="padding:14px 16px;margin-top:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
             <div>
-              <div style="font-weight:600;font-size:18px;line-height:1.2">${e.codigo}</div>
-              <div style="font-size:14px;color:var(--text2);margin-top:4px">${e.marca}</div>
+              <div style="font-weight:600;font-size:18px;line-height:1.2">${_titulo}</div>
+              <div style="font-size:14px;color:var(--text2);margin-top:4px">${_subtit}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               ${bEstado(est)}
@@ -737,14 +768,18 @@ function abrirModal(id){
   }[e.estado||'DISPONIBLE'] || e.estado;
 
   // Build read-only modal content
+  const esCli = e.esEquipoCliente;
+  const tituloModal = esCli ? (e.clienteNombre||e.cliente||'Equipo de cliente') : e.codigo;
+  const subtitModal = esCli ? ((e.marca||'')+(e.modelo?' '+e.modelo:'')) : (e.desc||(e.marca+' · '+e.tipo));
+  const serieModal  = esCli ? ('Serie: '+(e.serie||'—')) : (e.serie||'Sin serie');
   const box = document.getElementById('modal-box');
   box.innerHTML = `
     <div style="background:${estadoBg};padding:16px 16px 12px;border-radius:var(--radius) var(--radius) 0 0">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:26px;font-weight:800;color:${estadoColor}">${e.codigo}</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:2px">${e.desc||(e.marca+' · '+e.tipo)}</div>
-          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${e.serie||'Sin serie'}</div>
+          <div style="font-size:26px;font-weight:800;color:${estadoColor}">${tituloModal}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${subtitModal}</div>
+          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${serieModal}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <button onclick="cerrarModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text2);line-height:1">×</button>
@@ -755,15 +790,17 @@ function abrirModal(id){
     <div style="padding:14px 16px;overflow-y:auto;max-height:60vh">
       <!-- Info operativa -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-        ${e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
-        ${e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
+        ${esCli&&e.clienteNombre?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.clienteNombre}</div></div>`:''}
+        ${esCli&&e.clienteMarca?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">🏷️ Marca</div><div style="font-size:13px;font-weight:600">${e.clienteMarca}${e.clienteModelo?' '+e.clienteModelo:''}</div></div>`:''}
+        ${!esCli&&e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
+        ${!esCli&&e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
         ${e.horometro?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⏱ Horómetro</div><div style="font-size:13px;font-weight:600">${e.horometro} hrs</div></div>`:''}
-        ${e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
+        ${!esCli&&e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
       </div>
       ${e.observaciones?`<div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📝 Observaciones</div><div style="font-size:13px;color:var(--text)">${e.observaciones}</div></div>`:''}
       ${e.foto?`<div style="margin-bottom:14px"><img src="${e.foto}" onclick="verFotoCompleta('${e.foto}')" style="width:100%;border-radius:var(--radius-sm);object-fit:cover;max-height:180px;cursor:zoom-in"></div>`:''}
       <!-- Especificaciones técnicas -->
-      ${specsFields.length?`
+      ${!esCli&&specsFields.length?`
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);margin-bottom:8px">Especificaciones técnicas</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${specsFields.map(([label,val])=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px"><div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div><div style="font-size:13px;font-weight:500;color:var(--text)">${val}</div></div>`).join('')}
