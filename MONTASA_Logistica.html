@@ -1227,13 +1227,18 @@ function cerrarOrdenLog(id){
     }
   })();
   saveDB();
+  // Escritura directa en Firebase para sync inmediato con Gerencia
+  if(window._fbDB && window._fbReady){
+    const idx = DB.logistica.findIndex(x=>x.id===id);
+    if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({
+      cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
+    });
+  }
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();
   toast('Orden '+o.correlativo+' cerrada ✓');
 }
-
-// ── HISTORIAL LOGÍSTICA ───────────────────────────────────────────────────
 function renderHistorialLog(){
   const el = document.getElementById('historial-log-list');
   if(!el) return;
