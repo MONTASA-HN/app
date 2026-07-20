@@ -339,13 +339,15 @@ function saveDB(){
 function renderFlota(){
   const el = document.getElementById('com-flota');
   if(!el) return;
-  const equs = DB.equipos||[];
+  const equs = (DB.equipos||[]).filter(e=>!e.esEquipoCliente);
   const total = equs.length;
   const disp  = equs.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
   const renta = equs.filter(e=>e.estado==='EN RENTA').length;
+  const mant  = equs.filter(e=>e.estado==='EN MANTENIMIENTO').length;
   const inact = equs.filter(e=>e.estado==='MAL ESTADO').length;
   const pctDisp  = total ? Math.round(disp/total*100)  : 0;
   const pctRenta = total ? Math.round(renta/total*100) : 0;
+  const pctMant  = total ? Math.round(mant/total*100)  : 0;
   const pctInact = total ? Math.round(inact/total*100) : 0;
 
   el.innerHTML = `
@@ -356,24 +358,30 @@ function renderFlota(){
       </div>
       <!-- Barra de estado -->
       <div style="height:10px;border-radius:5px;overflow:hidden;display:flex;margin-bottom:14px;background:var(--border)">
-        ${disp  ?`<div style="width:${pctDisp}%;background:#2ecc71"></div>`  :''}
-        ${renta ?`<div style="width:${pctRenta}%;background:#f39c12"></div>` :''}
-        ${inact ?`<div style="width:${pctInact}%;background:#e74c3c"></div>` :''}
+        ${disp  ?`<div style="width:${pctDisp}%;background:#2ecc71;transition:width 0.4s"></div>`  :''}
+        ${renta ?`<div style="width:${pctRenta}%;background:#f39c12;transition:width 0.4s"></div>` :''}
+        ${mant  ?`<div style="width:${pctMant}%;background:#a67c52;transition:width 0.4s"></div>`  :''}
+        ${inact ?`<div style="width:${pctInact}%;background:#e74c3c;transition:width 0.4s"></div>` :''}
       </div>
       <!-- Cards -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
         <div style="background:var(--green-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--green);font-family:'DM Mono',monospace">${disp}</div>
+          <div style="font-size:26px;font-weight:800;color:var(--green);font-family:'DM Mono',monospace">${disp}</div>
           <div style="font-size:11px;color:var(--green);margin-top:2px;font-weight:600">${pctDisp}%</div>
           <div style="font-size:11px;color:var(--text2);margin-top:2px">Disponibles</div>
         </div>
         <div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--amber);font-family:'DM Mono',monospace">${renta}</div>
+          <div style="font-size:26px;font-weight:800;color:var(--amber);font-family:'DM Mono',monospace">${renta}</div>
           <div style="font-size:11px;color:var(--amber);margin-top:2px;font-weight:600">${pctRenta}%</div>
           <div style="font-size:11px;color:var(--text2);margin-top:2px">En renta</div>
         </div>
+        <div style="background:#f5ede0;border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
+          <div style="font-size:26px;font-weight:800;color:#a67c52;font-family:'DM Mono',monospace">${mant}</div>
+          <div style="font-size:11px;color:#a67c52;margin-top:2px;font-weight:600">${pctMant}%</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">Mantenimiento</div>
+        </div>
         <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--red);font-family:'DM Mono',monospace">${inact}</div>
+          <div style="font-size:26px;font-weight:800;color:var(--red);font-family:'DM Mono',monospace">${inact}</div>
           <div style="font-size:11px;color:var(--red);margin-top:2px;font-weight:600">${pctInact}%</div>
           <div style="font-size:11px;color:var(--text2);margin-top:2px">Inactivos</div>
         </div>
@@ -712,15 +720,17 @@ function filtrarSubgrupo(subId, estado){
 
 
 function cardClass(e){
-  if(e==='DISPONIBLE') return 'card';
-  if(e==='EN RENTA')   return 'card card-renta';
+  if(e==='DISPONIBLE')      return 'card';
+  if(e==='EN RENTA')        return 'card card-renta';
+  if(e==='EN MANTENIMIENTO') return 'card card-mant';
   return 'card card-mal';
 }
 
 
 function bEstado(e){
-  if(e==='DISPONIBLE')  return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
-  if(e==='EN RENTA')    return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
+  if(e==='DISPONIBLE')       return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
+  if(e==='EN RENTA')         return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
+  if(e==='EN MANTENIMIENTO') return '<span class="badge" style="background:#e4d4b8;color:#6a4c1f;font-size:13px;padding:5px 11px">🔧 En mantenimiento</span>';
   return '<span class="badge" style="background:#f8c0c0;color:#7a1515;font-size:13px;padding:5px 11px">Inactivo</span>';
 }
 
