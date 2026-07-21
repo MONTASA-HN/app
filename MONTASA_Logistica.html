@@ -323,6 +323,13 @@ function calcularVales(fechaInicio, fechaFin){
   return vales.filter(function(v){ acum+=v.monto; return acum<=1500; });
 }
 
+function _costoViaticosHtml(o){
+  var cv = _calcCostoViaticos(o.viaticos);
+  if(cv>0) return "<div style=\"font-size:11px;font-weight:700;color:#1f3864;margin-top:2px\">\ud83d\udcb0 Costo viaje: L. "+cv.toFixed(2)+"</div>";
+  if(o.viaticos) return "<div style=\"font-size:11px;color:#2d6a9f;margin-top:2px\">\ud83d\udccb Vi\u00e1ticos solicitados</div>";
+  return "";
+}
+
 function _calcCostoViaticos(v){
   if(!v) return 0;
   var personas = v.personas||[];
@@ -383,13 +390,16 @@ function saveDB(){
 
 function _writeToFirebase(){
   try{
-    if(window._fbDB && window._fbReady){
+    if(window._fbDB){
       const ts = Date.now();
       window._localWriteTs = ts;
-      const payload = { _ts: ts, _sid: _SESSION_ID };
+      const payload = {
+        logistica: DB.logistica||[],
+        _ts: ts,
+        _sid: _SESSION_ID
+      };
+      // Persist correlativo counter so other devices stay in sync
       if(DB['lastCorrelativo_LG']) payload['lastCorrelativo_LG'] = DB['lastCorrelativo_LG'];
-      // NUNCA escribir logistica como array completo — solo se escribe por índice
-      // para evitar race conditions con cerrarOrdenLog
       window._fbDB.ref('montasa').update(payload)
         .catch(e=>console.warn('FB write error:',e));
     } else {
@@ -550,7 +560,7 @@ function renderOrdenesLog(){
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
-      ${(()=>{ const cv=_calcCostoViaticos(o.viaticos); return cv>0?`<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:2px">💰 Costo viaje: L. ${cv.toFixed(2)}</div>`:(o.viaticos?`<div style="font-size:11px;color:#2d6a9f;margin-top:2px">📋 Viáticos solicitados</div>`:''); })()}
+      ${_costoViaticosHtml(o)}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
@@ -1666,22 +1676,11 @@ renderDashboardLog();
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       if(remote._ts >= (local._ts||0)){
-        // Merge logistica — preservar cierres locales
-        if(remote.logistica && Array.isArray(remote.logistica)){
-          const remArr = remote.logistica.filter(Boolean);
-          const locArr = (DB.logistica||[]).filter(Boolean);
-          DB.logistica = remArr.map(r=>{
-            const l = locArr.find(x=>x&&x.id===r.id);
-            if(!l) return r;
-            if(l.cerrado && !r.cerrado) return l;
-            if(l.estado==='Completado' && r.estado!=='Completado') return l;
-            return r;
-          });
-          locArr.forEach(l=>{ if(!DB.logistica.find(x=>x&&x.id===l.id)) DB.logistica.push(l); });
-        }
+        if(remote.logistica)   DB.logistica   = remote.logistica;
         if(remote.preventivos) DB.preventivos = remote.preventivos;
         if(remote.correctivos) DB.correctivos = remote.correctivos;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
+        // Sync correlativo counter — always take the highest
         if(remote.lastCorrelativo_LG){
           const localCorr = DB['lastCorrelativo_LG']||0;
           DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
@@ -1696,32 +1695,11 @@ renderDashboardLog();
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
-      // Merge logistica por id — nunca reemplazar ciegamente
-      if(d.logistica && Array.isArray(d.logistica)){
-        const remoteArr = d.logistica.filter(Boolean);
-        const localArr  = (DB.logistica || []).filter(Boolean);
-        const merged = remoteArr.map(remoto => {
-          if(!remoto) return remoto;
-          const local = localArr.find(l=>l&&l.id===remoto.id);
-          if(!local) return remoto;
-          // Si la copia local está cerrada y la remota no, conservar local
-          if(local.cerrado && !remoto.cerrado) return local;
-          // Si la copia local tiene estado Completado y remota no, conservar local
-          if(local.estado==='Completado' && remoto.estado!=='Completado') return local;
-          // Si remota está más actualizada (tiene cerrado), usar remota
-          return remoto;
-        });
-        // Agregar órdenes locales que no existan en remota
-        localArr.forEach(l=>{
-          if(l && !merged.find(m=>m&&m.id===l.id)) merged.push(l);
-        });
-        DB.logistica = merged;
-      }
+      if(d.logistica)   DB.logistica   = d.logistica;
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
       if(ownWrite) return;
       const active=document.querySelector('.section.active');
       if(!active) return;
