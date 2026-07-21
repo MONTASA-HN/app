@@ -6145,34 +6145,24 @@ function _iniciarConexionFirebase(esReintento){
       DB.logistica = _mergeLogistica(snap.val().logistica);
       try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
-    // ── Migración: limpiar equipos de cliente falsos y crear solo los válidos ──
+    // ── Migración: limpiar TODOS equipos de cliente y recrear solo los válidos ──
     (function(){
-      // Limpiar equipos de cliente sin datos completos
-      DB.equipos = DB.equipos.filter(e=>{
-        if(!e.esEquipoCliente) return true;
-        return e.clienteNombre && e.marca && e.modelo && e.serie;
-      });
-      let creados=0;
+      DB.equipos = DB.equipos.filter(e=>!e.esEquipoCliente);
       [...(DB.preventivos||[]).filter(p=>p.completado&&p.equipoId==='__cliente__'&&p.clienteNombre&&p.clienteMarca&&p.clienteModelo&&p.clienteSerie),
        ...(DB.correctivos||[]).filter(c=>c.estado==='Completado'&&c.equipoId==='__cliente__'&&c.clienteNombre&&c.clienteMarca&&c.clienteModelo&&c.clienteSerie)
       ].forEach(o=>{
         const clave=o.clienteNombre.trim()+'|'+o.clienteSerie.trim();
-        const ya=DB.equipos.find(e=>e.esEquipoCliente&&((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
-        if(!ya){
-          const eq={id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
-            codigo:o.clienteMarca+'-'+o.clienteModelo.slice(0,8),
-            desc:o.clienteMarca+' '+o.clienteModelo,
-            tipo:'Equipo de cliente',marca:o.clienteMarca,modelo:o.clienteModelo,
-            serie:o.clienteSerie,cliente:o.clienteNombre,clienteNombre:o.clienteNombre,
-            combustible:'',ubicacion:o.clienteNombre,estado:'DISPONIBLE',
-            horometro:o.horometro||'',observaciones:'Ingresado desde '+(o.correlativo||'orden'),
-            esEquipoCliente:true};
-          DB.equipos.push(eq);
-          if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+(DB.equipos.length-1)).set(eq);
-          creados++;
-        }
+        if(DB.equipos.find(e=>e.esEquipoCliente&&((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave)) return;
+        DB.equipos.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
+          codigo:o.clienteMarca+'-'+o.clienteModelo.slice(0,8),
+          desc:o.clienteMarca+' '+o.clienteModelo,
+          tipo:'Equipo de cliente',marca:o.clienteMarca,modelo:o.clienteModelo,
+          serie:o.clienteSerie,cliente:o.clienteNombre,clienteNombre:o.clienteNombre,
+          combustible:'',ubicacion:o.clienteNombre,estado:'DISPONIBLE',
+          horometro:o.horometro||'',observaciones:'Ingresado desde '+(o.correlativo||'orden'),
+          esEquipoCliente:true});
       });
-      if(creados) console.log('Migración: '+creados+' equipos de cliente creados');
+      if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
     })();
     renderDashboard();
 
