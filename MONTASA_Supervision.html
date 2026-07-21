@@ -1431,12 +1431,25 @@ function editarOrden(tipo, id){
   const list = tipo==='prev' ? DB.preventivos : DB.correctivos;
   const orden = list.find(x=>x.id===id);
   if(!orden) return;
-  // Re-open the form pre-filled for editing
   const formId = tipo==='prev' ? 'form-prev' : 'form-corr';
   toggleForm(formId);
   if(tipo==='prev'){
-    fillSel('prev-equipo');
-    document.getElementById('prev-equipo').value = orden.equipoId||'';
+    const esCli = orden.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    if(esCli){
+      toggleOrigenPrev('cliente');
+      fillSelCliente('prev-equipo-cliente-sel');
+      document.getElementById('prev-equipo-cliente-sel').value = orden.equipoId!=='__cliente__' ? orden.equipoId : '__nuevo__';
+      onSelectEquipoCliente('prev');
+      const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+      setV('prev-cliente-nombre', orden.clienteNombre);
+      setV('prev-cliente-marca',  orden.clienteMarca);
+      setV('prev-cliente-modelo', orden.clienteModelo);
+      setV('prev-cliente-serie',  orden.clienteSerie);
+    } else {
+      toggleOrigenPrev('montasa');
+      fillSel('prev-equipo');
+      document.getElementById('prev-equipo').value = orden.equipoId||'';
+    }
     document.getElementById('prev-servicio').value = orden.servicio||'';
     const [fd, ft] = splitDT(orden.fechaInicio);
     const [fd2,ft2] = splitDT(orden.fechaFin);
@@ -1448,13 +1461,26 @@ function editarOrden(tipo, id){
     document.getElementById('prev-notas').value = orden.notas||'';
     document.getElementById('prev-sugerencias').value = orden.sugerencias||'';
     preseleccionarTecnico('prev-tecnicos-grid', orden.tecnico);
-    // Remove old entry and save on re-submit
     DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
     saveDB();
     toast('Orden abierta para edición');
   } else {
-    fillSel('corr-equipo');
-    document.getElementById('corr-equipo').value = orden.equipoId||'';
+    const esCliC = orden.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    if(esCliC){
+      toggleOrigenCorr('cliente');
+      fillSelCliente('corr-equipo-cliente-sel');
+      document.getElementById('corr-equipo-cliente-sel').value = orden.equipoId!=='__cliente__' ? orden.equipoId : '__nuevo__';
+      onSelectEquipoCliente('corr');
+      const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+      setV('corr-cliente-nombre', orden.clienteNombre);
+      setV('corr-cliente-marca',  orden.clienteMarca);
+      setV('corr-cliente-modelo', orden.clienteModelo);
+      setV('corr-cliente-serie',  orden.clienteSerie);
+    } else {
+      toggleOrigenCorr('montasa');
+      fillSel('corr-equipo');
+      document.getElementById('corr-equipo').value = orden.equipoId||'';
+    }
     document.getElementById('corr-sistema').value = orden.sistema||'';
     document.getElementById('corr-falla').value = orden.falla||'';
     document.getElementById('corr-prioridad').value = orden.prioridad||'Alta';
