@@ -796,6 +796,7 @@ let DB = {equipos:[], preventivos:[], correctivos:[], vendidos:[], logistica:[]}
 let filtroSubgrupo = {}; // subId -> estado filter
 let openSubgrupos = new Set();
 let openHistGer = new Set(); // track which subgroups are open
+let _openMant = new Set(); // tarjetas activas de mantenimiento abiertas
 let modalEquipoId = null;
 
 function saveDB(){
@@ -1537,9 +1538,11 @@ function toggleCard(id){
   body.classList.toggle('open', !isOpen);
   if(btn) btn.classList.toggle('open', !isOpen);
   if(!isOpen){
-    // Initialize tec-btn visual state when opening
+    _openMant.add(id);
     const orden = [...DB.preventivos, ...DB.correctivos, ...(DB.logistica||[])].find(o=>o.id===id);
     if(orden) initTecBtns('cb-'+id, orden.tecnico);
+  } else {
+    _openMant.delete(id);
   }
 }
 
@@ -3123,10 +3126,10 @@ function renderPreventivos(){
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
         <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button>
-        <button id="ct-${p.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
+        <button id="ct-${p.id}" class="card-toggle${_openMant.has(p.id)?' open':''}" onclick="event.stopPropagation();toggleCard('${p.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${p.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+    <div id="cb-${p.id}" class="card-body${_openMant.has(p.id)?' open':''}" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
@@ -3250,10 +3253,10 @@ function renderCorrectivos(){
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
         <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('corr','${c.id}')">✕</button>
-        <button id="ct-${c.id}" class="card-toggle" onclick="event.stopPropagation();toggleCard('${c.id}')">▼</button>
+        <button id="ct-${c.id}" class="card-toggle${_openMant.has(c.id)?' open':''}" onclick="event.stopPropagation();toggleCard('${c.id}')">▼</button>
       </div>
     </div>
-    <div id="cb-${c.id}" class="card-body" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
+    <div id="cb-${c.id}" class="card-body${_openMant.has(c.id)?' open':''}" onclick="event.stopPropagation()" onchange="event.stopPropagation()" oninput="event.stopPropagation()" onmousedown="event.stopPropagation()" onpointerdown="event.stopPropagation()">
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
       <div class="form-group"><label>Estado</label><select onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option></select></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
@@ -3415,10 +3418,6 @@ function _renderOrdenesMantSup(el, tipo){
     } catch(e){ return ''; }
   }).join('');
 
-  el.onclick = function(ev){
-    const card = ev.target.closest('[data-hid]');
-    if(card && !ev.target.closest('button,input,select,textarea')) toggleHistGer(card.dataset.hid);
-  };
 }
 
 
