@@ -1056,6 +1056,16 @@ function _calcMinsJornada(iniDate, finDate){
   return (diasDiff * JORNADA) + fraccion;
 }
 
+
+function _tiemposHtml(o){
+  var t = calcTiemposOrden(o);
+  if(!t.hayRep) return "";
+  return "<div style=\"background:var(--blue-bg);border-radius:8px;padding:10px 14px;margin-bottom:10px\">"
+    +"<div style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px\"><span style=\"color:var(--blue);font-weight:600\">🔧 Tiempo de reparaci\u00f3n</span><span style=\"font-weight:700;font-family:DM Mono,monospace;color:var(--blue)\">"+t.reparacion+"</span></div>"
+    +(t.hayTraslado?"<div style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px\"><span style=\"color:var(--blue);font-weight:600\">🚗 Tiempo de traslado</span><span style=\"font-weight:700;font-family:DM Mono,monospace;color:var(--blue)\">"+t.traslado+"</span></div>":"")
+    +"<div style=\"display:flex;justify-content:space-between;font-size:14px;border-top:1px solid rgba(0,0,0,0.08);margin-top:4px;padding-top:6px\"><span style=\"color:var(--blue);font-weight:700\">⏱ Tiempo total</span><span style=\"font-weight:700;font-family:DM Mono,monospace;color:var(--blue)\">"+t.total+"</span></div>"
+    +"</div>";
+}
 function calcTiemposOrden(o){
   const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
   const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
@@ -1607,11 +1617,7 @@ function renderPreventivos(){
       <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.inicioTrabajo||p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.inicioTrabajo||p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
       <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.finTrabajo||p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.finTrabajo||p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
       ${(p.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>`:''}
-      ${(()=>{const t=calcTiemposOrden(p);return t.hayRep?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600;color:var(--blue)">🔧 Tiempo de reparación</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.reparacion}</span></div>
-        ${t.hayTraslado?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600;color:var(--blue)">🚗 Tiempo de traslado</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.traslado}</span></div>`:''}
-        <div style="display:flex;justify-content:space-between;font-size:13px;border-top:1px solid rgba(0,0,0,0.08);margin-top:4px;padding-top:4px"><span style="font-weight:700;color:var(--blue)">⏱ Tiempo total</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.total}</span></div>
-      </div>`:'';})()}
+      ${_tiemposHtml(p)}
       <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
@@ -2027,11 +2033,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.inicioTrabajo||c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.inicioTrabajo||c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
       <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.finTrabajo||c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.finTrabajo||c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',this.previousElementSibling.value+'T'+this.value)"></div></div>
       ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>`:''}
-      ${(()=>{const t=calcTiemposOrden(c);return t.hayRep?`<div style="background:var(--blue-bg);border-radius:6px;padding:8px 12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600;color:var(--blue)">🔧 Tiempo de reparación</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.reparacion}</span></div>
-        ${t.hayTraslado?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="font-weight:600;color:var(--blue)">🚗 Tiempo de traslado</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.traslado}</span></div>`:''}
-        <div style="display:flex;justify-content:space-between;font-size:13px;border-top:1px solid rgba(0,0,0,0.08);margin-top:4px;padding-top:4px"><span style="font-weight:700;color:var(--blue)">⏱ Tiempo total</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${t.total}</span></div>
-      </div>`:'';})()}
+      ${_tiemposHtml(c)}
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
         <div class="tec-btn" data-n="Marvin Torres" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Marvin Torres',this)">Marvin Torres</div>
