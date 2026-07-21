@@ -1795,6 +1795,28 @@ function completarPreventivo(id){
   })();
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
+  // ── Guardar equipo de cliente en la flota ──
+  if(p.equipoId==='__cliente__' && p.clienteNombre){
+    const yaExiste = DB.equipos.find(e=>e.esEquipoCliente && e.clienteNombre===p.clienteNombre && e.serie===(p.clienteSerie||''));
+    if(!yaExiste){
+      const nuevoEqCli = {
+        id: 'cli_'+Date.now().toString(36),
+        codigo: (p.clienteMarca||'CLI')+'-'+(p.clienteModelo||'').slice(0,6),
+        desc: (p.clienteMarca||'')+(p.clienteModelo?' '+p.clienteModelo:''),
+        tipo: 'Equipo de cliente', marca: p.clienteMarca||'', modelo: p.clienteModelo||'',
+        serie: p.clienteSerie||'', cliente: p.clienteNombre, clienteNombre: p.clienteNombre,
+        combustible: '', ubicacion: '', estado: 'DISPONIBLE', horometro: p.horometro||'',
+        observaciones: 'Ingresado desde '+p.correlativo, esEquipoCliente: true
+      };
+      DB.equipos.push(nuevoEqCli);
+      // Actualizar la orden para que apunte al nuevo equipo
+      p.equipoId = nuevoEqCli.id;
+      if(window._fbDB && window._fbReady){
+        const newIdx = DB.equipos.length - 1;
+        window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEqCli);
+      }
+    } else { p.equipoId = yaExiste.id; }
+  }
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
@@ -2202,6 +2224,27 @@ function cerrarCorrectivo(id){
   if(_nuevaFirmaC) c.firma = _nuevaFirmaC;
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
+  // ── Guardar equipo de cliente en la flota ──
+  if(c.equipoId==='__cliente__' && c.clienteNombre){
+    const yaExiste = DB.equipos.find(e=>e.esEquipoCliente && e.clienteNombre===c.clienteNombre && e.serie===(c.clienteSerie||''));
+    if(!yaExiste){
+      const nuevoEqCli = {
+        id: 'cli_'+Date.now().toString(36),
+        codigo: (c.clienteMarca||'CLI')+'-'+(c.clienteModelo||'').slice(0,6),
+        desc: (c.clienteMarca||'')+(c.clienteModelo?' '+c.clienteModelo:''),
+        tipo: 'Equipo de cliente', marca: c.clienteMarca||'', modelo: c.clienteModelo||'',
+        serie: c.clienteSerie||'', cliente: c.clienteNombre, clienteNombre: c.clienteNombre,
+        combustible: '', ubicacion: '', estado: 'DISPONIBLE', horometro: c.horometro||'',
+        observaciones: 'Ingresado desde '+c.correlativo, esEquipoCliente: true
+      };
+      DB.equipos.push(nuevoEqCli);
+      c.equipoId = nuevoEqCli.id;
+      if(window._fbDB && window._fbReady){
+        const newIdx = DB.equipos.length - 1;
+        window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEqCli);
+      }
+    } else { c.equipoId = yaExiste.id; }
+  }
   if(c.inicioTrabajo && !c.fechaInicio) c.fechaInicio = c.inicioTrabajo;
   if(c.finTrabajo && !c.fechaFin) c.fechaFin = c.finTrabajo;
   // Sincronizar horómetro con la ficha del equipo al finalizar
