@@ -881,7 +881,6 @@ function saveDB(){
 
 // ── Guardar equipo de cliente en flota al cerrar orden ──
 function _guardarEquipoClienteEnFlota(orden){
-  // Solo crear si tiene los 4 campos del bloque completos
   if(orden.equipoId!=='__cliente__') return;
   if(!orden.clienteNombre || !orden.clienteMarca || !orden.clienteModelo || !orden.clienteSerie) return;
   const clave = orden.clienteNombre.trim()+'|'+orden.clienteSerie.trim();
@@ -899,33 +898,24 @@ function _guardarEquipoClienteEnFlota(orden){
     esEquipoCliente: true
   };
   DB.equipos.push(nuevoEq);
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa/equipos/'+(DB.equipos.length-1)).set(nuevoEq);
-  }
 }
 
-// ── Migración: crear equipos de cliente para órdenes ya cerradas que no lo tienen ──
 function _migrarEquiposCliente(){
-  // Primero: limpiar equipos falsos (sin marca+modelo+serie reales)
-  DB.equipos = DB.equipos.filter(e=>{
-    if(!e.esEquipoCliente) return true; // mantener todo lo que no sea equipo de cliente
-    return e.clienteNombre && e.marca && e.modelo && e.serie; // solo mantener los que tengan datos completos
-  });
-  let creados = 0;
+  // Paso 1: eliminar TODOS los equipos de cliente existentes
+  const antes = DB.equipos.length;
+  DB.equipos = DB.equipos.filter(e=>!e.esEquipoCliente);
+  // Paso 2: recrear SOLO desde órdenes con los 4 campos completos
   const ordenes = [
     ...(DB.preventivos||[]).filter(p=>p.completado && p.equipoId==='__cliente__' && p.clienteNombre && p.clienteMarca && p.clienteModelo && p.clienteSerie),
     ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.equipoId==='__cliente__' && c.clienteNombre && c.clienteMarca && c.clienteModelo && c.clienteSerie)
   ];
-  ordenes.forEach(o=>{
-    const clave = o.clienteNombre.trim()+'|'+o.clienteSerie.trim();
-    const ya = DB.equipos.find(e=>e.esEquipoCliente && 
-      ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
-    if(!ya){
-      _guardarEquipoClienteEnFlota(o);
-      creados++;
-    }
-  });
-  if(creados>0) console.log('Migración: '+creados+' equipos de cliente creados en flota');
+  ordenes.forEach(o=>_guardarEquipoClienteEnFlota(o));
+  // Paso 3: escribir a Firebase para que los falsos no vuelvan
+  if(window._fbDB && window._fbReady){
+    window._fbDB.ref('montasa/equipos').set(DB.equipos);
+  }
+  const creados = DB.equipos.filter(e=>e.esEquipoCliente).length;
+  if(antes !== DB.equipos.length || creados) console.log('Migración equipos cliente: '+creados+' válidos, '+(antes-DB.equipos.length+creados)+' eliminados');
 }
 
 function showTab(id, el){
