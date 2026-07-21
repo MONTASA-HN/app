@@ -3326,12 +3326,17 @@ function _renderCarpetasLog(el){
     {tipo:'apoyo_mantenimiento',icon:'🔩', label:'Apoyo\nMantenimiento',color:'#9B59B6'},
     {tipo:'atencion_compras',   icon:'🛒', label:'Atención\nde Compras',color:'#C9211E'},
   ];
+  const logActivas = (DB.logistica||[]).filter(o=>!o.cerrado&&o.estado!=='Cancelado');
   el.innerHTML = `<div class="carpeta-grid">
-    ${CARPETAS.map(c=>`
+    ${CARPETAS.map(c=>{
+      const cnt = logActivas.filter(o=>o.tipoLogistica===c.tipo).length;
+      return `
       <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaLog('${c.tipo}')">
         <span class="carpeta-icon">${c.icon}</span>
         <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
-      </div>`).join('')}
+        ${cnt?`<span style="position:absolute;top:10px;right:12px;background:${c.color};color:white;font-size:12px;font-weight:700;min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px">${cnt}</span>`:''}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -4337,12 +4342,21 @@ function _renderCarpetasMant(el){
     {tipo:'RV', icon:'✅', label:'Revisión\nFísico-Técnica',  color:'#18A303'},
     {tipo:'EV', icon:'📄', label:'Evaluación\nde Equipo',     color:'#E8811A'},
   ];
+  const cntP  = (DB.preventivos||[]).length;
+  const cntC  = (DB.correctivos||[]).length;
+  const cntRV = (DB.revisiones||[]).length;
+  const cntEV = (DB.evaluaciones||[]).length;
+  const CNTS = {P:cntP, C:cntC, RV:cntRV, EV:cntEV};
   el.innerHTML = `<div class="carpeta-grid">
-    ${CARPETAS.map(c=>`
+    ${CARPETAS.map(c=>{
+      const cnt = CNTS[c.tipo]||0;
+      return `
       <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaMant('${c.tipo}')">
         <span class="carpeta-icon">${c.icon}</span>
         <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
-      </div>`).join('')}
+        ${cnt?`<span style="position:absolute;top:10px;right:12px;background:${c.color};color:white;font-size:12px;font-weight:700;min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px">${cnt}</span>`:''}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
