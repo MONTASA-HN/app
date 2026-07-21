@@ -1070,7 +1070,7 @@ function renderCamposTipo(o){
 
   // Vehículo y km — solo fuera del plantel (y compras/apoyo)
   if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
-    var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
+    var VEHICULOS = DB.equipos.filter(function(e){return (e.esVehiculo||(e.id||'').startsWith('veh_'))&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
     html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
     VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
     html += '</select></div>';
@@ -1138,7 +1138,7 @@ function actualizarLogKmRetorno(id, valor){
   o.kmRetorno = valor;
   // Actualizar kilometraje en la ficha del vehículo
   if(valor && o.equipoCompra){
-    const vehiculo = DB.equipos.find(e=>e.codigo===o.equipoCompra && e.esVehiculo);
+    const vehiculo = DB.equipos.find(e=>e.codigo===o.equipoCompra && (e.esVehiculo||(e.id||'').startsWith('veh_')));
     if(vehiculo){
       vehiculo.kilometraje = valor;
       const idx = DB.equipos.indexOf(vehiculo);
