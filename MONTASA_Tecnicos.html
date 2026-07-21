@@ -2781,15 +2781,17 @@ renderDashboardTec();
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       if(remote._ts >= (local._ts||0)){
-        if(remote.preventivos)     DB.preventivos     = remote.preventivos;
-        if(remote.correctivos)     DB.correctivos     = remote.correctivos;
-        if(remote.revisiones)      DB.revisiones      = remote.revisiones||[];
-        if(remote.evaluaciones)    DB.evaluaciones    = remote.evaluaciones||[];
-        if(remote.ordenesCerradas) DB.ordenesCerradas = remote.ordenesCerradas;
+        // Cargar de Firebase, pero si Firebase está vacío y local tiene datos, preferir local
+        DB.preventivos     = (remote.preventivos && remote.preventivos.length)  ? remote.preventivos  : (local.preventivos||DB.preventivos||[]);
+        DB.correctivos     = (remote.correctivos && remote.correctivos.length)  ? remote.correctivos  : (local.correctivos||DB.correctivos||[]);
+        DB.revisiones      = (remote.revisiones && remote.revisiones.length)    ? remote.revisiones   : (local.revisiones||DB.revisiones||[]);
+        DB.evaluaciones    = (remote.evaluaciones && remote.evaluaciones.length) ? remote.evaluaciones : (local.evaluaciones||DB.evaluaciones||[]);
+        DB.ordenesCerradas = (remote.ordenesCerradas && remote.ordenesCerradas.length) ? remote.ordenesCerradas : (local.ordenesCerradas||DB.ordenesCerradas||[]);
         if(remote.solicitudes)     DB.solicitudes     = remote.solicitudes;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
+        else if(local.equipos && local.equipos.length) DB.equipos = local.equipos;
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
-      } else { loadDB(); saveDB(); }
+      } else { loadDB(); }
     } else { loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     window._fbReady = true;
