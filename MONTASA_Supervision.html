@@ -1534,15 +1534,17 @@ function toggleCard(id){
   const body = document.getElementById('cb-'+id);
   const btn  = document.getElementById('ct-'+id);
   if(!body) return;
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  if(btn) btn.classList.toggle('open', !isOpen);
-  if(!isOpen){
-    _openMant.add(id);
-    const orden = [...DB.preventivos, ...DB.correctivos, ...(DB.logistica||[])].find(o=>o.id===id);
-    if(orden) initTecBtns('cb-'+id, orden.tecnico);
-  } else {
+  const isOpen = _openMant.has(id);
+  if(isOpen){
     _openMant.delete(id);
+    body.classList.remove('open');
+    if(btn) btn.classList.remove('open');
+  } else {
+    _openMant.add(id);
+    body.classList.add('open');
+    if(btn) btn.classList.add('open');
+    const orden = [...(DB.preventivos||[]), ...(DB.correctivos||[]), ...(DB.logistica||[])].find(o=>o.id===id);
+    if(orden && typeof initTecBtns==='function') initTecBtns('cb-'+id, orden.tecnico);
   }
 }
 
