@@ -1242,6 +1242,18 @@ function bCorr(estado, prioridad){
 }
 
 
+function _miniClientePrev(p){
+  const isCli = p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente);
+  if(isCli) return (p.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+p.clienteNombre+'</div>':'')+(p.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+p.clienteMarca+(p.clienteModelo?' '+p.clienteModelo:'')+(p.clienteSerie?' · '+p.clienteSerie:'')+'</div>':'');
+  return '<div class="card-sub">'+getEqLabelFull(p)+'</div>';
+}
+function _miniClienteCorr(c){
+  const isCli = c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente);
+  const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
+  const eqSub = eq.codigo ? eq.codigo+' \u2013 '+(eq.marca||'') : (c.clienteNombre?'Cliente: '+c.clienteNombre:'\u2014');
+  if(isCli) return (c.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+c.clienteNombre+'</div>':'')+(c.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+c.clienteMarca+(c.clienteModelo?' '+c.clienteModelo:'')+(c.clienteSerie?' · '+c.clienteSerie:'')+'</div>':'');
+  return '<div class="card-sub">'+eqSub+'</div>';
+}
 function toggleCard(id){
   const body = document.getElementById('cb-'+id);
   const btn  = document.getElementById('ct-'+id);
@@ -1525,9 +1537,7 @@ function renderPreventivos(){
               ${p.kmSalida&&p.kmRetorno&&parseFloat(p.kmRetorno)>parseFloat(p.kmSalida)?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(p.kmRetorno)-parseFloat(p.kmSalida)).toFixed(0)} km recorridos</div>`:''}
           ${p.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${p.correlativo}</span>`:''}
         </div>
-        ${(()=>{const _isCliP=p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente);
-          if(_isCliP) return (p.clienteNombre?`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 ${p.clienteNombre}</div>`:'')+(p.clienteMarca?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${p.clienteMarca}${p.clienteModelo?' '+p.clienteModelo:''}${p.clienteSerie?' · '+p.clienteSerie:''}</div>`:'');
-          return `<div class="card-sub">${getEqLabelFull(p)}</div>`;})()}
+        ${_miniClientePrev(p)}
         <div style="margin-top:4px;display:flex;gap:6px;align-items:center">${bPrev(est)}${diasAbierta(p.fechaInicio||p.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(p.fechaInicio||p.fecha)}</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -1955,9 +1965,7 @@ function renderCorrectivos(){
               ${c.kmSalida&&c.kmRetorno&&parseFloat(c.kmRetorno)>parseFloat(c.kmSalida)?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(c.kmRetorno)-parseFloat(c.kmSalida)).toFixed(0)} km recorridos</div>`:''}
           ${c.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${c.correlativo}</span>`:''}
         </div>
-        ${(()=>{const _isCli=c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente);
-          if(_isCli) return (c.clienteNombre?`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 ${c.clienteNombre}</div>`:'')+(c.clienteMarca?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${c.clienteMarca}${c.clienteModelo?' '+c.clienteModelo:''}${c.clienteSerie?' · '+c.clienteSerie:''}</div>`:'');
-          return `<div class="card-sub">${eqSub}</div>`;})()}
+        ${_miniClienteCorr(c)}
         <div style="margin-top:4px;display:flex;gap:6px;align-items:center">
           ${bCorr(c.estado,c.prioridad)}
           ${diasAbierta(c.fechaInicio||c.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(c.fechaInicio||c.fecha)}</span>`:''}
