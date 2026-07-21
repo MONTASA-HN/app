@@ -1523,22 +1523,23 @@ function saveDB(){
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      window._fbDB.ref('montasa').update({
-        preventivos:    DB.preventivos||[],
-        correctivos:    DB.correctivos||[],
-        revisiones:     DB.revisiones||[],
-        evaluaciones:   DB.evaluaciones||[],
-        solicitudes:    DB.solicitudes||[],
-        vendidos:       DB.vendidos||[],
-        ordenesCerradas:DB.ordenesCerradas||[],
+      // Solo escribir campos que tengan datos — nunca sobreescribir con arrays vacíos
+      const payload = {
         notifCompletadas: DB.notifCompletadas||{},
         equipos:        DB.equipos||[],
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
         // NOTA: logística NO se incluye aquí — la app de Logística es la autoridad
-        // de esos datos. Gerencia escribe logística solo al crear nuevas órdenes.
-      });
+      };
+      if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
+      if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
+      if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
+      if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
+      if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
+      if(DB.vendidos && DB.vendidos.length)               payload.vendidos        = DB.vendidos;
+      if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
+      window._fbDB.ref('montasa').update(payload);
     }
   }catch(e){}
 }
@@ -6119,13 +6120,14 @@ function _iniciarConexionFirebase(esReintento){
       }
       window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
-        if(remote.preventivos)    DB.preventivos    = remote.preventivos;
+        // Si Firebase tiene datos, usarlos. Si están vacíos, preservar los de localStorage (loadDB ya cargó)
+        if(remote.preventivos && remote.preventivos.length)    DB.preventivos    = remote.preventivos;
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
-        if(remote.correctivos)    DB.correctivos    = remote.correctivos;
-        if(remote.revisiones)     DB.revisiones     = remote.revisiones||[];
-        if(remote.evaluaciones)   DB.evaluaciones   = remote.evaluaciones||[];
-        if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
+        if(remote.correctivos && remote.correctivos.length)    DB.correctivos    = remote.correctivos;
+        if(remote.revisiones && remote.revisiones.length)      DB.revisiones     = remote.revisiones;
+        if(remote.evaluaciones && remote.evaluaciones.length)  DB.evaluaciones   = remote.evaluaciones;
+        if(remote.ordenesCerradas && remote.ordenesCerradas.length) DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
         if(remote.logistica){
@@ -6136,11 +6138,9 @@ function _iniciarConexionFirebase(esReintento){
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else {
         loadDB();
-        saveDB();
       }
     } else {
       loadDB();
-      saveDB();
     }
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));

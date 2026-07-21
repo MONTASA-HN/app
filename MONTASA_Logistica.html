@@ -1242,15 +1242,24 @@ function cerrarOrdenLog(id){
   })();
   // Escritura directa en Firebase — primero el estado de cierre para sync inmediato con Gerencia
   const _idxClose = DB.logistica.findIndex(x=>x.id===id);
+  // Flag para que el on('value') no revierta mientras escribimos
+  window._skipLogOverwrite = Date.now();
   if(window._fbDB && window._fbReady && _idxClose>=0){
     // Escribir la orden completa directamente al nodo específico
     window._fbDB.ref('montasa/logistica/'+_idxClose).set(o)
+      .then(()=>{
+        // Éxito: ahora escribir el array completo como respaldo
+        _writeToFirebase();
+      })
       .catch(()=>{
         // Fallback: solo los campos críticos
         window._fbDB.ref('montasa/logistica/'+_idxClose).update({
           cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
-        });
+        }).then(()=>{ _writeToFirebase(); }).catch(()=>{ _writeToFirebase(); });
       });
+  } else {
+    // Si Firebase no está listo, escribir el array completo cuando se pueda
+    _writeToFirebase();
   }
   // Guardar en localStorage
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
@@ -1696,7 +1705,9 @@ renderDashboardLog();
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
-      if(d.logistica)   DB.logistica   = d.logistica;
+      // No sobreescribir logística si acabamos de cerrar/modificar una orden (ventana de 8s)
+      const skipLog = window._skipLogOverwrite && (Date.now() - window._skipLogOverwrite) < 8000;
+      if(d.logistica && !skipLog)   DB.logistica   = d.logistica;
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
