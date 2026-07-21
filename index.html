@@ -6145,20 +6145,25 @@ function _iniciarConexionFirebase(esReintento){
       DB.logistica = _mergeLogistica(snap.val().logistica);
       try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
-    // ── Migración: crear equipos de cliente para órdenes cerradas que no lo tienen ──
+    // ── Migración: limpiar equipos de cliente falsos y crear solo los válidos ──
     (function(){
+      // Limpiar equipos de cliente sin datos completos
+      DB.equipos = DB.equipos.filter(e=>{
+        if(!e.esEquipoCliente) return true;
+        return e.clienteNombre && e.marca && e.modelo && e.serie;
+      });
       let creados=0;
-      [...(DB.preventivos||[]).filter(p=>p.completado&&(p.equipoId==='__cliente__'||p.clienteNombre)&&p.clienteNombre),
-       ...(DB.correctivos||[]).filter(c=>c.estado==='Completado'&&(c.equipoId==='__cliente__'||c.clienteNombre)&&c.clienteNombre)
+      [...(DB.preventivos||[]).filter(p=>p.completado&&p.equipoId==='__cliente__'&&p.clienteNombre&&p.clienteMarca&&p.clienteModelo&&p.clienteSerie),
+       ...(DB.correctivos||[]).filter(c=>c.estado==='Completado'&&c.equipoId==='__cliente__'&&c.clienteNombre&&c.clienteMarca&&c.clienteModelo&&c.clienteSerie)
       ].forEach(o=>{
-        const clave=(o.clienteNombre||'').trim()+'|'+(o.clienteSerie||'').trim();
+        const clave=o.clienteNombre.trim()+'|'+o.clienteSerie.trim();
         const ya=DB.equipos.find(e=>e.esEquipoCliente&&((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
         if(!ya){
           const eq={id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
-            codigo:(o.clienteMarca||'CLI')+'-'+(o.clienteModelo||'').slice(0,8),
-            desc:(o.clienteMarca||'')+(o.clienteModelo?' '+o.clienteModelo:''),
-            tipo:'Equipo de cliente',marca:o.clienteMarca||'',modelo:o.clienteModelo||'',
-            serie:o.clienteSerie||'',cliente:o.clienteNombre,clienteNombre:o.clienteNombre,
+            codigo:o.clienteMarca+'-'+o.clienteModelo.slice(0,8),
+            desc:o.clienteMarca+' '+o.clienteModelo,
+            tipo:'Equipo de cliente',marca:o.clienteMarca,modelo:o.clienteModelo,
+            serie:o.clienteSerie,cliente:o.clienteNombre,clienteNombre:o.clienteNombre,
             combustible:'',ubicacion:o.clienteNombre,estado:'DISPONIBLE',
             horometro:o.horometro||'',observaciones:'Ingresado desde '+(o.correlativo||'orden'),
             esEquipoCliente:true};

@@ -881,17 +881,19 @@ function saveDB(){
 
 // ── Guardar equipo de cliente en flota al cerrar orden ──
 function _guardarEquipoClienteEnFlota(orden){
-  if(orden.equipoId!=='__cliente__' || !orden.clienteNombre) return;
-  const clave = (orden.clienteNombre||'').trim()+'|'+(orden.clienteSerie||'').trim();
+  // Solo crear si tiene los 4 campos del bloque completos
+  if(orden.equipoId!=='__cliente__') return;
+  if(!orden.clienteNombre || !orden.clienteMarca || !orden.clienteModelo || !orden.clienteSerie) return;
+  const clave = orden.clienteNombre.trim()+'|'+orden.clienteSerie.trim();
   const yaExiste = DB.equipos.find(e=>e.esEquipoCliente && 
     ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
   if(yaExiste) return;
   const nuevoEq = {
     id: 'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
-    codigo: (orden.clienteMarca||'CLI')+'-'+(orden.clienteModelo||'').slice(0,8),
-    desc: (orden.clienteMarca||'')+(orden.clienteModelo?' '+orden.clienteModelo:''),
-    tipo: 'Equipo de cliente', marca: orden.clienteMarca||'', modelo: orden.clienteModelo||'',
-    serie: orden.clienteSerie||'', cliente: orden.clienteNombre, clienteNombre: orden.clienteNombre,
+    codigo: orden.clienteMarca+'-'+orden.clienteModelo.slice(0,8),
+    desc: orden.clienteMarca+' '+orden.clienteModelo,
+    tipo: 'Equipo de cliente', marca: orden.clienteMarca, modelo: orden.clienteModelo,
+    serie: orden.clienteSerie, cliente: orden.clienteNombre, clienteNombre: orden.clienteNombre,
     combustible: '', ubicacion: orden.clienteNombre, estado: 'DISPONIBLE',
     horometro: orden.horometro||'', observaciones: 'Ingresado desde '+(orden.correlativo||'orden'),
     esEquipoCliente: true
@@ -904,13 +906,18 @@ function _guardarEquipoClienteEnFlota(orden){
 
 // ── Migración: crear equipos de cliente para órdenes ya cerradas que no lo tienen ──
 function _migrarEquiposCliente(){
+  // Primero: limpiar equipos falsos (sin marca+modelo+serie reales)
+  DB.equipos = DB.equipos.filter(e=>{
+    if(!e.esEquipoCliente) return true; // mantener todo lo que no sea equipo de cliente
+    return e.clienteNombre && e.marca && e.modelo && e.serie; // solo mantener los que tengan datos completos
+  });
   let creados = 0;
   const ordenes = [
-    ...(DB.preventivos||[]).filter(p=>p.completado && p.equipoId==='__cliente__' && p.clienteNombre),
-    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.equipoId==='__cliente__' && c.clienteNombre)
+    ...(DB.preventivos||[]).filter(p=>p.completado && p.equipoId==='__cliente__' && p.clienteNombre && p.clienteMarca && p.clienteModelo && p.clienteSerie),
+    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.equipoId==='__cliente__' && c.clienteNombre && c.clienteMarca && c.clienteModelo && c.clienteSerie)
   ];
   ordenes.forEach(o=>{
-    const clave = (o.clienteNombre||'').trim()+'|'+(o.clienteSerie||'').trim();
+    const clave = o.clienteNombre.trim()+'|'+o.clienteSerie.trim();
     const ya = DB.equipos.find(e=>e.esEquipoCliente && 
       ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
     if(!ya){
@@ -1605,6 +1612,16 @@ function renderPreventivos(){
         <span style="font-size:11px;color:var(--text3)">${p.fechaCierre||''}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;margin-bottom:10px">
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${p.servicio||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${p.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(p.inicioTrabajo||p.fechaInicio||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fin de trabajo</span><span style="font-weight:600">${(p.finTrabajo||p.fechaFin||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de reparación</span><span style="font-weight:600">${calcTiemposOrden(p).reparacion}</span></div>
+        ${(p.ubicacion||'campo')==='campo'&&p.salidaPlantel?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de traslado</span><span style="font-weight:600">${calcTiemposOrden(p).traslado}</span></div>`:''}
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo total</span><span style="font-weight:600;color:var(--blue)">${calcTiemposOrden(p).total!=='—'?calcTiemposOrden(p).total:calcHoras(p.fechaInicio,p.fechaFin)}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${p.horometro||'—'} hrs</span></div>
+        ${p.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${p.vehiculo}</span></div>`:''}
+        ${(p.kmSalida&&p.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(p.kmRetorno)-parseFloat(p.kmSalida)).toFixed(0)} km</span></div>`:''}
       </div>
       ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${p.notas}</span></div>`:''}
       ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${p.sugerencias}</span></div>`:''}
@@ -2024,6 +2041,16 @@ function renderCorrectivos(){
         <span style="font-size:11px;color:var(--text3)">${c.fechaCierre||''}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;margin-bottom:10px">
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${c.sistema||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${c.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(c.inicioTrabajo||c.fechaInicio||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fin de trabajo</span><span style="font-weight:600">${(c.finTrabajo||c.fechaFin||'').replace('T',' ')||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de reparación</span><span style="font-weight:600">${calcTiemposOrden(c).reparacion}</span></div>
+        ${(c.ubicacion||'campo')==='campo'&&c.salidaPlantel?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de traslado</span><span style="font-weight:600">${calcTiemposOrden(c).traslado}</span></div>`:''}
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo total</span><span style="font-weight:600;color:var(--blue)">${calcTiemposOrden(c).total!=='—'?calcTiemposOrden(c).total:calcHoras(c.fechaInicio,c.fechaFin)}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${c.horometro||'—'} hrs</span></div>
+        ${c.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${c.vehiculo}</span></div>`:''}
+        ${(c.kmSalida&&c.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(c.kmRetorno)-parseFloat(c.kmSalida)).toFixed(0)} km</span></div>`:''}
       </div>
       ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${c.falla}</span></div>`:''}
       ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${c.diagnostico}</span></div>`:''}
