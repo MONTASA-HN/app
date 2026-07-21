@@ -865,15 +865,14 @@ function saveDB(){
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      window._fbDB.ref('montasa').update({
-        preventivos:     DB.preventivos,
-        correctivos:     DB.correctivos,
-        revisiones:      DB.revisiones||[],
-        evaluaciones:    DB.evaluaciones||[],
-        ordenesCerradas: DB.ordenesCerradas||[],
-        _ts: ts,
-        _sid: _SESSION_ID
-      });
+      // Solo escribir campos que tengan datos — nunca sobreescribir con arrays vacíos
+      const payload = { _ts: ts, _sid: _SESSION_ID };
+      if(DB.preventivos && DB.preventivos.length)       payload.preventivos     = DB.preventivos;
+      if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = DB.correctivos;
+      if(DB.revisiones && DB.revisiones.length)         payload.revisiones      = DB.revisiones;
+      if(DB.evaluaciones && DB.evaluaciones.length)     payload.evaluaciones    = DB.evaluaciones;
+      if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
+      window._fbDB.ref('montasa').update(payload);
     } else {
       setTimeout(saveDB, 500);
     }
