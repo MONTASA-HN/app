@@ -383,16 +383,13 @@ function saveDB(){
 
 function _writeToFirebase(){
   try{
-    if(window._fbDB){
+    if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      const payload = {
-        logistica: DB.logistica||[],
-        _ts: ts,
-        _sid: _SESSION_ID
-      };
-      // Persist correlativo counter so other devices stay in sync
+      const payload = { _ts: ts, _sid: _SESSION_ID };
       if(DB['lastCorrelativo_LG']) payload['lastCorrelativo_LG'] = DB['lastCorrelativo_LG'];
+      // NUNCA escribir logistica como array completo — solo se escribe por índice
+      // para evitar race conditions con cerrarOrdenLog
       window._fbDB.ref('montasa').update(payload)
         .catch(e=>console.warn('FB write error:',e));
     } else {
@@ -1669,11 +1666,22 @@ renderDashboardLog();
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       if(remote._ts >= (local._ts||0)){
-        if(remote.logistica)   DB.logistica   = remote.logistica;
+        // Merge logistica — preservar cierres locales
+        if(remote.logistica && Array.isArray(remote.logistica)){
+          const remArr = remote.logistica.filter(Boolean);
+          const locArr = (DB.logistica||[]).filter(Boolean);
+          DB.logistica = remArr.map(r=>{
+            const l = locArr.find(x=>x&&x.id===r.id);
+            if(!l) return r;
+            if(l.cerrado && !r.cerrado) return l;
+            if(l.estado==='Completado' && r.estado!=='Completado') return l;
+            return r;
+          });
+          locArr.forEach(l=>{ if(!DB.logistica.find(x=>x&&x.id===l.id)) DB.logistica.push(l); });
+        }
         if(remote.preventivos) DB.preventivos = remote.preventivos;
         if(remote.correctivos) DB.correctivos = remote.correctivos;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
-        // Sync correlativo counter — always take the highest
         if(remote.lastCorrelativo_LG){
           const localCorr = DB['lastCorrelativo_LG']||0;
           DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
@@ -1688,11 +1696,32 @@ renderDashboardLog();
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
-      if(d.logistica)   DB.logistica   = d.logistica;
+      // Merge logistica por id — nunca reemplazar ciegamente
+      if(d.logistica && Array.isArray(d.logistica)){
+        const remoteArr = d.logistica.filter(Boolean);
+        const localArr  = (DB.logistica || []).filter(Boolean);
+        const merged = remoteArr.map(remoto => {
+          if(!remoto) return remoto;
+          const local = localArr.find(l=>l&&l.id===remoto.id);
+          if(!local) return remoto;
+          // Si la copia local está cerrada y la remota no, conservar local
+          if(local.cerrado && !remoto.cerrado) return local;
+          // Si la copia local tiene estado Completado y remota no, conservar local
+          if(local.estado==='Completado' && remoto.estado!=='Completado') return local;
+          // Si remota está más actualizada (tiene cerrado), usar remota
+          return remoto;
+        });
+        // Agregar órdenes locales que no existan en remota
+        localArr.forEach(l=>{
+          if(l && !merged.find(m=>m&&m.id===l.id)) merged.push(l);
+        });
+        DB.logistica = merged;
+      }
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
       if(ownWrite) return;
       const active=document.querySelector('.section.active');
       if(!active) return;
