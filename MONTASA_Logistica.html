@@ -548,7 +548,7 @@ function renderOrdenesLog(){
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
             ${o.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${o.correlativo}</span>`:''}
-            <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
+            <span data-estado-badge style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
@@ -562,8 +562,7 @@ function renderOrdenesLog(){
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
-      <div id="${cbId}" style="display:${isOpen?'block':'none'}">
-        ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
+      <div id="${cbId}" style="display:${isOpen?'block':'none'}" data-lock="${(o.estado==='Pendiente'||o.estado==='Cancelado')?'1':'0'}">
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
         <!-- Estado -->
         <div class="form-group"><label>Estado</label>
@@ -710,6 +709,14 @@ function renderOrdenesLog(){
       </div>
     </div>`;
   }).join('');
+  // Aplicar bloqueo disabled en órdenes Pendiente/Cancelado
+  setTimeout(()=>{
+    el.querySelectorAll('[data-lock="1"]').forEach(card=>{
+      card.querySelectorAll('input:not([type=file]),textarea').forEach(inp=>{ inp.disabled=true; inp.style.opacity='0.5'; });
+      card.querySelectorAll('select:not(.estado-select)').forEach(sel=>{ sel.disabled=true; sel.style.opacity='0.5'; });
+      card.querySelectorAll('.tec-btn').forEach(btn=>{ btn.style.pointerEvents='none'; btn.style.opacity='0.5'; });
+    });
+  }, 20);
   setTimeout(_restoreFirmas, 50);
 }
 
@@ -968,22 +975,35 @@ function actualizarLog(id, campo, valor){
     o.fechaInicio = new Date().toISOString().slice(0,16);
   }
   o[campo] = valor;
-  // Al cambiar estado: actualizar solo el CSS de bloqueo en el DOM, sin re-renderizar
+  // Al cambiar estado: actualizar badge + CSS de bloqueo en el DOM
   if(campo==='estado'){
     const cbId = 'cb-log-'+id;
     const card = document.getElementById(cbId);
+    // Actualizar el badge en la miniatura de la tarjeta
+    const parentCard = card ? card.closest('[data-lgid]') : null;
+    if(parentCard){
+      const badge = parentCard.querySelector('[data-estado-badge]');
+      if(badge){
+        const estadoColor = valor==='En proceso'?'#f39c12':valor==='Cancelado'?'#e74c3c':'#e74c3c';
+        badge.textContent = valor;
+        badge.style.background = estadoColor+'22';
+        badge.style.color = estadoColor;
+      }
+    }
     if(card){
       // Quitar todos los <style> de bloqueo anteriores
       card.querySelectorAll('style').forEach(s=>s.remove());
-      if(valor==='Cancelado'){
-        const s=document.createElement('style');
-        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
-        card.insertBefore(s, card.firstChild);
-      } else if(valor==='Pendiente'){
-        const s=document.createElement('style');
-        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas,#'+cbId+' .tec-btn{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
-        card.insertBefore(s, card.firstChild);
-      }
+      // Actualizar disabled en inputs/textareas/selects
+      const bloquear = valor==='Pendiente'||valor==='Cancelado';
+      card.querySelectorAll('input:not([type=file]),textarea').forEach(el=>{
+        el.disabled = bloquear; el.style.opacity = bloquear?'0.5':'1';
+      });
+      card.querySelectorAll('select:not(.estado-select)').forEach(el=>{
+        el.disabled = bloquear; el.style.opacity = bloquear?'0.5':'1';
+      });
+      card.querySelectorAll('.tec-btn').forEach(el=>{
+        el.style.pointerEvents = bloquear?'none':'auto'; el.style.opacity = bloquear?'0.5':'1';
+      });
       // Actualizar el aviso visible
       const avisos = card.querySelectorAll('.estado-aviso');
       avisos.forEach(a=>a.remove());
@@ -992,6 +1012,14 @@ function actualizarLog(id, campo, valor){
         div.className='estado-aviso';
         div.style.cssText='font-size:12px;color:#f39c12;margin-top:4px';
         div.innerHTML='🔒 Cambia a <b>En proceso</b> para editar los campos';
+        const sel=card.querySelector('.estado-select');
+        if(sel&&sel.parentNode) sel.parentNode.appendChild(div);
+      }
+      if(valor==='Cancelado'){
+        const div=document.createElement('div');
+        div.className='estado-aviso';
+        div.style.cssText='font-size:12px;color:#e74c3c;margin-top:4px';
+        div.innerHTML='⚠️ Orden cancelada — campos bloqueados';
         const sel=card.querySelector('.estado-select');
         if(sel&&sel.parentNode) sel.parentNode.appendChild(div);
       }
