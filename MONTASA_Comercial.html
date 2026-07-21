@@ -195,11 +195,32 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .modal-section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.6px;margin:16px 0 10px;padding-top:12px;border-top:1px solid var(--border)}
 .modal-section-title:first-child{margin-top:0;padding-top:0;border-top:none}
 
-.form-group input[type=number]{max-width:160px}
-.form-group input[type=time]{max-width:130px}
-.form-group input[type=date]{max-width:160px}
-.form-group select{width:auto!important;max-width:280px}
-.form-group input.inp-full,.form-group textarea{width:100%!important;max-width:100%!important}
+/* Fleet tiles — mismo diseño que Gerencia */
+.fleet-tiles{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px }
+.fleet-tile{ background:var(--surface); border:1.5px solid color-mix(in srgb,var(--tile-color) 25%,var(--border)); border-radius:var(--radius); padding:14px 12px 12px; position:relative; overflow:hidden; cursor:default; transition:box-shadow 0.2s,border-color 0.2s; }
+.fleet-tile:hover{ border-color:var(--tile-color); box-shadow:0 6px 16px -6px var(--tile-color); }
+.fleet-tile::before{ content:''; position:absolute; inset:0; background:linear-gradient(135deg,var(--tile-bg) 0%,transparent 70%); pointer-events:none; }
+.fleet-tile-glow{ position:absolute; top:-30px; right:-30px; width:90px; height:90px; border-radius:50%; background:radial-gradient(circle,color-mix(in srgb,var(--tile-color) 18%,transparent),transparent 70%); pointer-events:none; }
+.fleet-tile-corner{ position:absolute; bottom:0; right:0; width:40px; height:40px; border-top:1.5px solid color-mix(in srgb,var(--tile-color) 20%,transparent); border-left:1.5px solid color-mix(in srgb,var(--tile-color) 20%,transparent); border-radius:0 0 var(--radius) 0; pointer-events:none; }
+.fleet-tile-top{ display:flex; align-items:center; justify-content:space-between; position:relative; z-index:1; margin-bottom:10px }
+.fleet-tile-ring{ position:relative; width:46px; height:46px; flex-shrink:0; filter:drop-shadow(0 0 4px var(--tile-color)); }
+.fleet-tile-ring svg{ width:100%; height:100%; transform:rotate(-90deg) }
+.fleet-tile-ring circle{ fill:none; stroke-width:4 }
+.fleet-tile-ring-bg{ stroke:var(--tile-bg) }
+.fleet-tile-ring-fg{ stroke-linecap:round; transition:stroke-dasharray 0.8s ease }
+.fleet-tile-ring-icon{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center }
+.fleet-tile-ring-icon svg{ width:18px; height:18px; stroke:var(--tile-color); position:relative; z-index:1 }
+.fleet-tile-pct{ font-family:'DM Mono',monospace; font-size:15px; font-weight:700; color:var(--tile-color); line-height:1 }
+.fleet-tile-value{ font-family:'DM Mono',monospace; font-size:24px; font-weight:700; color:var(--text); line-height:1; position:relative; z-index:1 }
+.fleet-tile-label{ font-size:11.5px; color:var(--text2); font-weight:600; margin-top:4px; position:relative; z-index:1; text-transform:uppercase; letter-spacing:0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.fleet-donut-wrap{ position:relative; width:80px; height:80px; flex-shrink:0; }
+.fleet-donut{ width:100%; height:100%; transform:rotate(-90deg); }
+.fleet-donut circle{ fill:none; stroke-width:9; }
+.fleet-donut-bg{ stroke:rgba(255,255,255,0.14); }
+.fleet-donut-seg{ stroke-linecap:round; transition:stroke-dasharray 0.8s ease; }
+.fleet-donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.fleet-donut-pct{ font-family:'DM Mono',monospace; font-size:16px; font-weight:700; color:#fff; }
+.fleet-donut-caption{ font-size:8px; color:#a9c8de; text-transform:uppercase; letter-spacing:0.4px; }
 </style>
 </head>
 <body>
@@ -340,57 +361,90 @@ function renderFlota(){
   const el = document.getElementById('com-flota');
   if(!el) return;
   const equs = (DB.equipos||[]).filter(e=>!e.esEquipoCliente && !e.esVehiculo);
-  const total = equs.length;
+  const total = equs.length || 1;
   const disp  = equs.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
   const renta = equs.filter(e=>e.estado==='EN RENTA').length;
   const mant  = equs.filter(e=>e.estado==='EN MANTENIMIENTO').length;
-  const inact = equs.filter(e=>e.estado==='MAL ESTADO').length;
-  const pctDisp  = total ? Math.round(disp/total*100)  : 0;
-  const pctRenta = total ? Math.round(renta/total*100) : 0;
-  const pctMant  = total ? Math.round(mant/total*100)  : 0;
-  const pctInact = total ? Math.round(inact/total*100) : 0;
-
+  const mal   = equs.filter(e=>e.estado==='MAL ESTADO').length;
+  const pDisp  = total?Math.round(disp/total*100):0;
+  const pRenta = total?Math.round(renta/total*100):0;
+  const pMant  = total?Math.round(mant/total*100):0;
+  const pMal   = total?Math.round(mal/total*100):0;
+  const pctOp  = total?Math.round((disp+renta+mant)/total*100):0;
   el.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-weight:700;font-size:16px;color:var(--accent)">Flota de equipos</div>
-        <div style="font-size:22px;font-weight:800;font-family:'DM Mono',monospace;color:var(--accent)">${total} <span style="font-size:13px;font-weight:400;color:var(--text3)">equipos</span></div>
+  <div style="background:linear-gradient(135deg,#1f3864 0%,#2d6a9f 100%);border-radius:var(--radius);padding:16px;margin-bottom:12px;position:relative;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:11px;color:#a9c8de;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px">Flota Montasa Handling Co.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:36px;font-weight:800;color:white;line-height:1">${equs.length}</div>
+        <div style="font-size:11px;color:#a9c8de;margin-top:4px">🟢 Monitoreo en tiempo real</div>
       </div>
-      <!-- Barra de estado -->
-      <div style="height:10px;border-radius:5px;overflow:hidden;display:flex;margin-bottom:14px;background:var(--border)">
-        ${disp  ?`<div style="width:${pctDisp}%;background:#2ecc71;transition:width 0.4s"></div>`  :''}
-        ${renta ?`<div style="width:${pctRenta}%;background:#f39c12;transition:width 0.4s"></div>` :''}
-        ${mant  ?`<div style="width:${pctMant}%;background:#a67c52;transition:width 0.4s"></div>`  :''}
-        ${inact ?`<div style="width:${pctInact}%;background:#e74c3c;transition:width 0.4s"></div>` :''}
-      </div>
-      <!-- Cards -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-        <div style="background:var(--green-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:var(--green);font-family:'DM Mono',monospace">${disp}</div>
-          <div style="font-size:11px;color:var(--green);margin-top:2px;font-weight:600">${pctDisp}%</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">Disponibles</div>
-        </div>
-        <div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:var(--amber);font-family:'DM Mono',monospace">${renta}</div>
-          <div style="font-size:11px;color:var(--amber);margin-top:2px;font-weight:600">${pctRenta}%</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">En renta</div>
-        </div>
-        <div style="background:#f5ede0;border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:#a67c52;font-family:'DM Mono',monospace">${mant}</div>
-          <div style="font-size:11px;color:#a67c52;margin-top:2px;font-weight:600">${pctMant}%</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">Mantenimiento</div>
-        </div>
-        <div style="background:var(--red-bg);border-radius:var(--radius-sm);padding:12px 8px;text-align:center">
-          <div style="font-size:26px;font-weight:800;color:var(--red);font-family:'DM Mono',monospace">${inact}</div>
-          <div style="font-size:11px;color:var(--red);margin-top:2px;font-weight:600">${pctInact}%</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:2px">Inactivos</div>
+      <div class="fleet-donut-wrap">
+        <svg class="fleet-donut" viewBox="0 0 120 120">
+          <circle class="fleet-donut-bg" cx="60" cy="60" r="52"/>
+          <circle id="com-donut-disp"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#39e07a" stroke-dasharray="0 326"/>
+          <circle id="com-donut-renta" class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF9A3D" stroke-dasharray="0 326"/>
+          <circle id="com-donut-mant"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#F0C93D" stroke-dasharray="0 326"/>
+          <circle id="com-donut-mal"   class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF5060" stroke-dasharray="0 326"/>
+        </svg>
+        <div class="fleet-donut-center">
+          <div class="fleet-donut-pct">${pctOp}%</div>
+          <div class="fleet-donut-caption">Operativa</div>
         </div>
       </div>
-    </div>`;
+    </div>
+  </div>
+  <div class="fleet-tiles">
+    <div class="fleet-tile" style="--tile-color:#18A303;--tile-bg:#e3f5d9">
+      <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+      <div class="fleet-tile-top">
+        <div class="fleet-tile-ring"><svg viewBox="0 0 56 56"><circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/><circle id="com-ring-disp" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#18A303" stroke-dasharray="0 144"/></svg><div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div></div>
+        <span class="fleet-tile-pct">${pDisp}%</span>
+      </div>
+      <div class="fleet-tile-value">${disp}</div>
+      <div class="fleet-tile-label">Disponibles</div>
+    </div>
+    <div class="fleet-tile" style="--tile-color:#E8811A;--tile-bg:#fdead9">
+      <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+      <div class="fleet-tile-top">
+        <div class="fleet-tile-ring"><svg viewBox="0 0 56 56"><circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/><circle id="com-ring-renta" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#E8811A" stroke-dasharray="0 144"/></svg><div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div></div>
+        <span class="fleet-tile-pct">${pRenta}%</span>
+      </div>
+      <div class="fleet-tile-value">${renta}</div>
+      <div class="fleet-tile-label">En renta</div>
+    </div>
+    <div class="fleet-tile" style="--tile-color:#B8860B;--tile-bg:#f5ecd2">
+      <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+      <div class="fleet-tile-top">
+        <div class="fleet-tile-ring"><svg viewBox="0 0 56 56"><circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/><circle id="com-ring-mant" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#B8860B" stroke-dasharray="0 144"/></svg><div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div></div>
+        <span class="fleet-tile-pct">${pMant}%</span>
+      </div>
+      <div class="fleet-tile-value">${mant}</div>
+      <div class="fleet-tile-label">Mantenimiento</div>
+    </div>
+    <div class="fleet-tile" style="--tile-color:#D32F2F;--tile-bg:#fbe0e0">
+      <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+      <div class="fleet-tile-top">
+        <div class="fleet-tile-ring"><svg viewBox="0 0 56 56"><circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/><circle id="com-ring-mal" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#D32F2F" stroke-dasharray="0 144"/></svg><div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div></div>
+        <span class="fleet-tile-pct">${pMal}%</span>
+      </div>
+      <div class="fleet-tile-value">${mal}</div>
+      <div class="fleet-tile-label">Inactivos</div>
+    </div>
+  </div>`;
+  // Anillos
+  function setR(id,pct){const el=document.getElementById(id);if(!el)return;const C=2*Math.PI*23;el.setAttribute('stroke-dasharray',(pct/100*C).toFixed(1)+' '+(C*(1-pct/100)).toFixed(1));}
+  setR('com-ring-disp',pDisp); setR('com-ring-renta',pRenta); setR('com-ring-mant',pMant); setR('com-ring-mal',pMal);
+  // Donut
+  const R=52,C2=2*Math.PI*R; let acc=0;
+  [{id:'com-donut-disp',val:disp},{id:'com-donut-renta',val:renta},{id:'com-donut-mant',val:mant},{id:'com-donut-mal',val:mal}].forEach(s=>{
+    const el=document.getElementById(s.id);if(!el)return;
+    const len=s.val/total*C2;
+    el.setAttribute('stroke-dasharray',len.toFixed(1)+' '+(C2-len).toFixed(1));
+    el.setAttribute('stroke-dashoffset',(-acc).toFixed(1));
+    acc+=len;
+  });
 }
-
-
-
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
 
@@ -492,26 +546,6 @@ function solicitarPINAccion(callback, titulo, subtitulo){
 }
 
 
-
-// ── EQUIPOS DE CLIENTE ───────────────────────────────────────────────────────
-function _guardarEquipoCliente(nombre, marca, modelo, serie){
-  if(!nombre||!marca||!modelo) return null;
-  const existe=(DB.equipos||[]).find(e=>e.esEquipoCliente&&((serie&&e.serie&&e.serie.trim()===serie.trim())||(e.clienteNombre===nombre&&e.marca===marca&&(e.modelo||e.desc)===modelo)));
-  if(existe){
-    existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie;
-    const idx=DB.equipos.indexOf(existe);
-    if(idx>=0&&window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
-    return existe.id;
-  }
-  const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
-  if(!DB.equipos) DB.equipos=[];
-  DB.equipos.push(nuevoEq);
-  const newIdx=DB.equipos.length-1;
-  if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }catch(e){}
-  return nuevoEq.id;
-}
-// ─────────────────────────────────────────────────────────────────────────────
 function renderEquipos(){
   const buscar  = (document.getElementById('filt-eq-buscar').value||'').toLowerCase();
   const filtEst = document.getElementById('filt-eq-estado').value;
@@ -544,7 +578,6 @@ function renderEquipos(){
   // Clasificar
   function getTipoGrupo(e){
     if(!e || !e.codigo) return {grupo:'otros', sub:'Otros'};
-    if(e.esEquipoCliente) return {grupo:'clientes', sub:'Equipos de cliente'};
     const tipo = (e.tipo||'').toLowerCase();
     const serie = (e.serie||'').toLowerCase();
     if(tipo.includes('plataforma') || tipo.includes('elevadora') || (e.codigo||'').startsWith('E-')){
@@ -565,7 +598,6 @@ function renderEquipos(){
 
   // Build grouped structure
   const grupos = {
-    clientes:    {label:'Equipos de cliente', icon:'<span style="font-size:20px">👤</span>', subs:{}, order:0},
     montacargas: {label:'Montacargas', icon:'<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA0OCcgd2lkdGg9JzMyJyBoZWlnaHQ9JzI0Jz4KICA8IS0tIE1hc3QgLS0+CiAgPHJlY3QgeD0nOCcgeT0nOCcgd2lkdGg9JzUnIGhlaWdodD0nMjgnIHJ4PScxJyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8IS0tIEZvcmtzIC0tPgogIDxyZWN0IHg9JzInIHk9JzM0JyB3aWR0aD0nMTQnIGhlaWdodD0nMycgcng9JzEnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDxyZWN0IHg9JzInIHk9JzM4JyB3aWR0aD0nMTQnIGhlaWdodD0nMycgcng9JzEnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDwhLS0gQ2FycmlhZ2UgLS0+CiAgPHJlY3QgeD0nOCcgeT0nMjQnIHdpZHRoPSc4JyBoZWlnaHQ9JzEwJyByeD0nMScgZmlsbD0nY3VycmVudENvbG9yJyBvcGFjaXR5PScwLjcnLz4KICA8IS0tIEJvZHkgLS0+CiAgPHJlY3QgeD0nMTMnIHk9JzIwJyB3aWR0aD0nMzInIGhlaWdodD0nMTgnIHJ4PSczJyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8IS0tIENhYiAtLT4KICA8cmVjdCB4PSczMicgeT0nMTInIHdpZHRoPScxNCcgaGVpZ2h0PScxMicgcng9JzInIGZpbGw9J2N1cnJlbnRDb2xvcicgb3BhY2l0eT0nMC44NScvPgogIDwhLS0gQ291bnRlcndlaWdodCAtLT4KICA8cmVjdCB4PSc0NCcgeT0nMjQnIHdpZHRoPSc4JyBoZWlnaHQ9JzE0JyByeD0nMicgZmlsbD0nY3VycmVudENvbG9yJyBvcGFjaXR5PScwLjcnLz4KICA8IS0tIFdoZWVscyAtLT4KICA8Y2lyY2xlIGN4PScyMCcgY3k9JzQwJyByPSc2JyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8Y2lyY2xlIGN4PScyMCcgY3k9JzQwJyByPSczJyBmaWxsPSd3aGl0ZScgb3BhY2l0eT0nMC40Jy8+CiAgPGNpcmNsZSBjeD0nNDInIGN5PSc0MCcgcj0nNicgZmlsbD0nY3VycmVudENvbG9yJy8+CiAgPGNpcmNsZSBjeD0nNDInIGN5PSc0MCcgcj0nMycgZmlsbD0nd2hpdGUnIG9wYWNpdHk9JzAuNCcvPgo8L3N2Zz4=" style="width:32px;height:24px;object-fit:contain;opacity:0.9" alt="Montacargas">', subs:{}, order:1},
     elevadoras:  {label:'Elevadoras',  icon:'<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA3MiA1Micgd2lkdGg9JzM2JyBoZWlnaHQ9JzI2Jz4KICA8IS0tIENoYXNzaXMgLS0+CiAgPHJlY3QgeD0nNCcgeT0nMzAnIHdpZHRoPSczOCcgaGVpZ2h0PScxMicgcng9JzMnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDwhLS0gV2hlZWxzIC0tPgogIDxjaXJjbGUgY3g9JzE0JyBjeT0nNDQnIHI9JzcnIGZpbGw9J2N1cnJlbnRDb2xvcicvPgogIDxjaXJjbGUgY3g9JzE0JyBjeT0nNDQnIHI9JzMuNScgZmlsbD0nd2hpdGUnIG9wYWNpdHk9JzAuMzUnLz4KICA8Y2lyY2xlIGN4PSczNCcgY3k9JzQ0JyByPSc3JyBmaWxsPSdjdXJyZW50Q29sb3InLz4KICA8Y2lyY2xlIGN4PSczNCcgY3k9JzQ0JyByPSczLjUnIGZpbGw9J3doaXRlJyBvcGFjaXR5PScwLjM1Jy8+CiAgPCEtLSBUdXJyZXQgLS0+CiAgPHJlY3QgeD0nMTgnIHk9JzIyJyB3aWR0aD0nMTQnIGhlaWdodD0nMTAnIHJ4PScyJyBmaWxsPSdjdXJyZW50Q29sb3InIG9wYWNpdHk9JzAuODUnLz4KICA8IS0tIExvd2VyIGJvb20gLS0+CiAgPGxpbmUgeDE9JzI0JyB5MT0nMjgnIHgyPSc0MicgeTI9JzEwJyBzdHJva2U9J2N1cnJlbnRDb2xvcicgc3Ryb2tlLXdpZHRoPSc1JyBzdHJva2UtbGluZWNhcD0ncm91bmQnLz4KICA8IS0tIFVwcGVyIGJvb20gLS0+CiAgPGxpbmUgeDE9JzQyJyB5MT0nMTAnIHgyPSc2MicgeTI9JzYnIHN0cm9rZT0nY3VycmVudENvbG9yJyBzdHJva2Utd2lkdGg9JzQnIHN0cm9rZS1saW5lY2FwPSdyb3VuZCcvPgogIDwhLS0gUGxhdGZvcm0gLS0+CiAgPHJlY3QgeD0nNTgnIHk9JzInIHdpZHRoPScxMicgaGVpZ2h0PSc4JyByeD0nMicgZmlsbD0nY3VycmVudENvbG9yJy8+CiAgPCEtLSBQZXJzb24gLS0+CiAgPGNpcmNsZSBjeD0nNjQnIGN5PScyJyByPScyLjUnIGZpbGw9J3doaXRlJyBvcGFjaXR5PScwLjcnLz4KPC9zdmc+" style="width:36px;height:26px;object-fit:contain;opacity:0.9" alt="Elevadora">', subs:{}, order:2},
     otros:       {label:'Otros',       icon:'<span style="font-size:20px">🔧</span>', subs:{}, order:3},
@@ -599,7 +631,6 @@ function renderEquipos(){
       const subId = 'sub-'+g.label+'-'+sub;
       const dispS  = items.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
       const rentaS = items.filter(e=>e.estado==='EN RENTA').length;
-      const mantS  = items.filter(e=>e.estado==='EN MANTENIMIENTO').length;
       const malS   = items.filter(e=>e.estado==='MAL ESTADO').length;
       const isOpen = openSubgrupos.has(subId);
       out += `
@@ -610,7 +641,6 @@ function renderEquipos(){
           <div style="margin-left:auto;display:flex;gap:5px;align-items:center">
             ${dispS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','DISPONIBLE')" style="background:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'#1a5c1a':'#c8edcc'};color:${filtroSubgrupo['${subId}']==='DISPONIBLE'?'white':'#1a5c1a'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${dispS} disp.</button>`:''}
             ${rentaS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN RENTA')" style="background:${filtroSubgrupo['${subId}']==='EN RENTA'?'#8a4800':'#fde5c0'};color:${filtroSubgrupo['${subId}']==='EN RENTA'?'white':'#8a4800'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${rentaS} renta</button>`:''}
-            ${mantS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN MANTENIMIENTO')" style="background:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'#6a4c1f':'#e4d4b8'};color:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'white':'#6a4c1f'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">🔧 ${mantS} mant.</button>`:''}
             ${malS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','MAL ESTADO')" style="background:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'#7a1515':'#f8c0c0'};color:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'white':'#7a1515'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${malS} inact.</button>`:''}
             <span id="arr-${subId}" style="color:var(--text3);font-size:14px;transition:transform 0.2s">▼</span>
           </div>
@@ -621,14 +651,11 @@ function renderEquipos(){
       const itemsFiltrados = filtroActivo ? items.filter(e=>(e.estado||'DISPONIBLE')===filtroActivo) : items;
       itemsFiltrados.forEach(e=>{
         const est = e.estado||'DISPONIBLE';
-        const _esCli = e.esEquipoCliente;
-        const _titulo = _esCli ? (e.clienteNombre||e.cliente||'Cliente') : e.codigo;
-        const _subtit  = _esCli ? ((e.marca||'')+(e.modelo?' '+e.modelo:'')) : e.marca;
         out += `<div class="${cardClass(est)}" onclick="abrirModal('${e.id}')" style="padding:14px 16px;margin-top:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
             <div>
-              <div style="font-weight:600;font-size:18px;line-height:1.2">${_titulo}</div>
-              <div style="font-size:14px;color:var(--text2);margin-top:4px">${_subtit}</div>
+              <div style="font-weight:600;font-size:18px;line-height:1.2">${e.codigo}</div>
+              <div style="font-size:14px;color:var(--text2);margin-top:4px">${e.marca}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               ${bEstado(est)}
@@ -722,17 +749,15 @@ function filtrarSubgrupo(subId, estado){
 
 
 function cardClass(e){
-  if(e==='DISPONIBLE')      return 'card';
-  if(e==='EN RENTA')        return 'card card-renta';
-  if(e==='EN MANTENIMIENTO') return 'card card-mant';
+  if(e==='DISPONIBLE') return 'card';
+  if(e==='EN RENTA')   return 'card card-renta';
   return 'card card-mal';
 }
 
 
 function bEstado(e){
-  if(e==='DISPONIBLE')       return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
-  if(e==='EN RENTA')         return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
-  if(e==='EN MANTENIMIENTO') return '<span class="badge" style="background:#e4d4b8;color:#6a4c1f;font-size:13px;padding:5px 11px">🔧 En mantenimiento</span>';
+  if(e==='DISPONIBLE')  return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
+  if(e==='EN RENTA')    return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
   return '<span class="badge" style="background:#f8c0c0;color:#7a1515;font-size:13px;padding:5px 11px">Inactivo</span>';
 }
 
@@ -780,18 +805,14 @@ function abrirModal(id){
   }[e.estado||'DISPONIBLE'] || e.estado;
 
   // Build read-only modal content
-  const esCli = e.esEquipoCliente;
-  const tituloModal = esCli ? (e.clienteNombre||e.cliente||'Equipo de cliente') : e.codigo;
-  const subtitModal = esCli ? ((e.marca||'')+(e.modelo?' '+e.modelo:'')) : (e.desc||(e.marca+' · '+e.tipo));
-  const serieModal  = esCli ? ('Serie: '+(e.serie||'—')) : (e.serie||'Sin serie');
   const box = document.getElementById('modal-box');
   box.innerHTML = `
     <div style="background:${estadoBg};padding:16px 16px 12px;border-radius:var(--radius) var(--radius) 0 0">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:26px;font-weight:800;color:${estadoColor}">${tituloModal}</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:2px">${subtitModal}</div>
-          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${serieModal}</div>
+          <div style="font-size:26px;font-weight:800;color:${estadoColor}">${e.codigo}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${e.desc||(e.marca+' · '+e.tipo)}</div>
+          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${e.serie||'Sin serie'}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <button onclick="cerrarModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text2);line-height:1">×</button>
@@ -802,17 +823,15 @@ function abrirModal(id){
     <div style="padding:14px 16px;overflow-y:auto;max-height:60vh">
       <!-- Info operativa -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-        ${esCli&&e.clienteNombre?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.clienteNombre}</div></div>`:''}
-        ${esCli&&e.clienteMarca?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">🏷️ Marca</div><div style="font-size:13px;font-weight:600">${e.clienteMarca}${e.clienteModelo?' '+e.clienteModelo:''}</div></div>`:''}
-        ${!esCli&&e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
-        ${!esCli&&e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
+        ${e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
+        ${e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
         ${e.horometro?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⏱ Horómetro</div><div style="font-size:13px;font-weight:600">${e.horometro} hrs</div></div>`:''}
-        ${!esCli&&e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
+        ${e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
       </div>
       ${e.observaciones?`<div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📝 Observaciones</div><div style="font-size:13px;color:var(--text)">${e.observaciones}</div></div>`:''}
       ${e.foto?`<div style="margin-bottom:14px"><img src="${e.foto}" onclick="verFotoCompleta('${e.foto}')" style="width:100%;border-radius:var(--radius-sm);object-fit:cover;max-height:180px;cursor:zoom-in"></div>`:''}
       <!-- Especificaciones técnicas -->
-      ${!esCli&&specsFields.length?`
+      ${specsFields.length?`
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);margin-bottom:8px">Especificaciones técnicas</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${specsFields.map(([label,val])=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px"><div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div><div style="font-size:13px;font-weight:500;color:var(--text)">${val}</div></div>`).join('')}
