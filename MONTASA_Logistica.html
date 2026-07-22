@@ -1236,22 +1236,67 @@ function cerrarOrdenLog(id){
   o.fechaCierre = new Date().toISOString().slice(0,10);
   // Restituir equipo a DISPONIBLE si era renta
   if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
-  // Update horometro in equipos
+
+  // ══════════════════════════════════════════════════════════════════
+  // ACTUALIZACIÓN AUTOMÁTICA DE FLOTA AL CERRAR ORDEN
+  // ══════════════════════════════════════════════════════════════════
+
+  // 1) Horómetro del equipo principal (solo si >= actual)
   const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
                     o.tipoLogistica==='retiro' ? o.horometroRetorno :
-                    o.tipoLogistica==='entrega' ? o.horometroSalida : o.horometro;
+                    o.tipoLogistica==='entrega' ? o.horometroSalida : null;
   if(horoFinal && o.equipoId){
     const eq = DB.equipos.find(e=>e.id===o.equipoId);
-    if(eq) eq.horometro = horoFinal;
+    if(eq){
+      const nuevoH = parseFloat(horoFinal)||0;
+      const actualH = parseFloat(eq.horometro)||0;
+      if(nuevoH >= actualH){
+        eq.horometro = horoFinal;
+        const eqIdx = DB.equipos.indexOf(eq);
+        if(eqIdx>=0 && window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos/'+eqIdx+'/horometro').set(horoFinal);
+        }
+      }
+    }
   }
-  // Update second equipo if exists
+
+  // 2) Horómetro del segundo equipo (solo si >= actual)
   if(o.equipoId2){
     const eq2 = DB.equipos.find(e=>e.id===o.equipoId2);
     if(eq2){
       const horo2 = o.tipoLogistica==='retiro' ? o.horometroRetorno2 : o.horometroSalida2;
-      if(horo2) eq2.horometro = horo2;
+      if(horo2){
+        const nuevoH2 = parseFloat(horo2)||0;
+        const actualH2 = parseFloat(eq2.horometro)||0;
+        if(nuevoH2 >= actualH2){
+          eq2.horometro = horo2;
+          const eq2Idx = DB.equipos.indexOf(eq2);
+          if(eq2Idx>=0 && window._fbDB && window._fbReady){
+            window._fbDB.ref('montasa/equipos/'+eq2Idx+'/horometro').set(horo2);
+          }
+        }
+      }
     }
   }
+
+  // 3) Kilometraje del vehículo usado (solo si >= actual)
+  if(o.kmRetorno && o.equipoCompra){
+    const veh = DB.equipos.find(e=>(e.esVehiculo||(e.id||'').startsWith('veh_')) && e.codigo===o.equipoCompra);
+    if(veh){
+      const nuevoKm = parseFloat(o.kmRetorno)||0;
+      const actualKm = parseFloat(veh.km||veh.ultimoKm||veh.horometro)||0;
+      if(nuevoKm >= actualKm){
+        veh.km = o.kmRetorno;
+        veh.ultimoKm = o.kmRetorno;
+        veh.horometro = o.kmRetorno; // La ficha de Gerencia lee desde horometro
+        const vehIdx = DB.equipos.indexOf(veh);
+        if(vehIdx>=0 && window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos/'+vehIdx).update({km: o.kmRetorno, ultimoKm: o.kmRetorno, horometro: o.kmRetorno});
+        }
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════
 
   // Auto-generar vale de alimentación al cerrar
   (function(){

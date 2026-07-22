@@ -1849,11 +1849,34 @@ function completarPreventivo(id){
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
-  // Sincronizar horómetro con la ficha del equipo al finalizar
-  if(p.horometro && p.equipoId){
+  // ── Actualizar horómetro en ficha del equipo (solo si >= actual) ──
+  if(p.horometro && p.equipoId && p.equipoId!=='__cliente__'){
     const _eq = DB.equipos.find(e=>e.id===p.equipoId);
-    if(_eq) _eq.horometro = p.horometro;
-    _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
+    if(_eq){
+      const nuevo = parseFloat(p.horometro)||0;
+      const actual = parseFloat(_eq.horometro)||0;
+      if(nuevo >= actual){
+        _eq.horometro = p.horometro;
+        _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
+      }
+    }
+  }
+  // ── Actualizar km del vehículo usado (solo si >= actual) ──
+  if(p.kmRetorno && p.vehiculo){
+    const _veh = DB.equipos.find(e=>(e.esVehiculo||(e.id||'').startsWith('veh_')) && e.codigo===p.vehiculo);
+    if(_veh){
+      const nuevoKm = parseFloat(p.kmRetorno)||0;
+      const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
+      if(nuevoKm >= actualKm){
+        _veh.km = p.kmRetorno;
+        _veh.ultimoKm = p.kmRetorno;
+        _veh.horometro = p.kmRetorno;
+        const vIdx = DB.equipos.indexOf(_veh);
+        if(vIdx>=0 && window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos/'+vIdx).update({km: p.kmRetorno, ultimoKm: p.kmRetorno, horometro: p.kmRetorno});
+        }
+      }
+    }
   }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(p.equipoId){
@@ -2267,11 +2290,34 @@ function cerrarCorrectivo(id){
   _guardarEquipoClienteEnFlota(c);
   if(c.inicioTrabajo && !c.fechaInicio) c.fechaInicio = c.inicioTrabajo;
   if(c.finTrabajo && !c.fechaFin) c.fechaFin = c.finTrabajo;
-  // Sincronizar horómetro con la ficha del equipo al finalizar
-  if(c.horometro && c.equipoId){
+  // ── Actualizar horómetro en ficha del equipo (solo si >= actual) ──
+  if(c.horometro && c.equipoId && c.equipoId!=='__cliente__'){
     const _eq = DB.equipos.find(e=>e.id===c.equipoId);
-    if(_eq) _eq.horometro = c.horometro;
-    _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
+    if(_eq){
+      const nuevo = parseFloat(c.horometro)||0;
+      const actual = parseFloat(_eq.horometro)||0;
+      if(nuevo >= actual){
+        _eq.horometro = c.horometro;
+        _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
+      }
+    }
+  }
+  // ── Actualizar km del vehículo usado (solo si >= actual) ──
+  if(c.kmRetorno && c.vehiculo){
+    const _veh = DB.equipos.find(e=>(e.esVehiculo||(e.id||'').startsWith('veh_')) && e.codigo===c.vehiculo);
+    if(_veh){
+      const nuevoKm = parseFloat(c.kmRetorno)||0;
+      const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
+      if(nuevoKm >= actualKm){
+        _veh.km = c.kmRetorno;
+        _veh.ultimoKm = c.kmRetorno;
+        _veh.horometro = c.kmRetorno;
+        const vIdx = DB.equipos.indexOf(_veh);
+        if(vIdx>=0 && window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos/'+vIdx).update({km: c.kmRetorno, ultimoKm: c.kmRetorno, horometro: c.kmRetorno});
+        }
+      }
+    }
   }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(c.equipoId){
