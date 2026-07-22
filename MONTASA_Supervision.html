@@ -1715,10 +1715,18 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
-  const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
-  const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
-  const sal  = new Date(o.salidaPlantel  || '');
-  const ret  = new Date(o.retornoPlantel || '');
+  function _parseD(s){
+    if(!s) return new Date(NaN);
+    if(typeof s==='string'){
+      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+      if(m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0));
+    }
+    return new Date(s);
+  }
+  const ini  = _parseD(o.inicioTrabajo  || o.fechaInicio || '');
+  const fin  = _parseD(o.finTrabajo     || o.fechaFin    || '');
+  const sal  = _parseD(o.salidaPlantel  || '');
+  const ret  = _parseD(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
   const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
@@ -3342,10 +3350,15 @@ function _renderCarpetasMantSup(el){
     {tipo:'RV', icon:'✅', label:'Revisión\nFísico-Técnica',  color:'#18A303'},
     {tipo:'EV', icon:'📄', label:'Evaluación\nde Equipo',     color:'#E8811A'},
   ];
-  const cntP  = (DB.preventivos||[]).length;
-  const cntC  = (DB.correctivos||[]).length;
-  const cntRV = (DB.revisiones||[]).length;
-  const cntEV = (DB.evaluaciones||[]).length;
+  const oc = (DB.ordenesCerradas||[]).filter(o=>o);
+  const ocC  = oc.filter(o=>o._t==='C'||o.falla||o.sistema).length;
+  const ocP  = oc.filter(o=>o._t==='P'||(o.servicio&&!o.falla&&!o.sistema)).length;
+  const ocRV = oc.filter(o=>o._t==='RV').length;
+  const ocEV = oc.filter(o=>o._t==='EV').length;
+  const cntP  = (DB.preventivos||[]).length + ocP;
+  const cntC  = (DB.correctivos||[]).length + ocC;
+  const cntRV = (DB.revisiones||[]).length + ocRV;
+  const cntEV = (DB.evaluaciones||[]).length + ocEV;
   const CNTS = {P:cntP, C:cntC, RV:cntRV, EV:cntEV};
   el.innerHTML = `<div class="carpeta-grid">
     ${CARPETAS.map(c=>{
