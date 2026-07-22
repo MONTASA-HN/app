@@ -4475,10 +4475,25 @@ function _renderOrdenesMant(el, tipo){
   };
 
   let all = [];
-  if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
-  if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
-  if(tipo==='RV') all = (DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''}));
-  if(tipo==='EV') all = (DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}));
+  if(tipo==='P')  all = [
+    ...(DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''})),
+    ...(DB.ordenesCerradas||[]).filter(o=>o&&o._t==='P').map(p=>({...p, _f:p.fechaCompletado||p.fechaInicio||''}))
+  ];
+  if(tipo==='C')  all = [
+    ...(DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''})),
+    ...(DB.ordenesCerradas||[]).filter(o=>o&&(o._t==='C'||o.falla||o.sistema)).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}))
+  ];
+  if(tipo==='RV') all = [
+    ...(DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
+    ...(DB.ordenesCerradas||[]).filter(o=>o&&o._t==='RV').map(r=>({...r, _f:r.fechaCierre||r.fecha||''}))
+  ];
+  if(tipo==='EV') all = [
+    ...(DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''})),
+    ...(DB.ordenesCerradas||[]).filter(o=>o&&o._t==='EV').map(v=>({...v, _f:v.fechaCierre||v.fecha||''}))
+  ];
+  // Deduplicar por correlativo
+  const seen = new Set();
+  all = all.filter(o=>{ if(!o||!o.correlativo) return true; if(seen.has(o.correlativo)) return false; seen.add(o.correlativo); return true; });
 
   all.sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
