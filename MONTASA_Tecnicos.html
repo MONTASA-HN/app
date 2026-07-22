@@ -906,8 +906,8 @@ function _migrarEquiposCliente(){
   DB.equipos = DB.equipos.filter(e=>!e.esEquipoCliente);
   // Paso 2: recrear SOLO desde órdenes con los 4 campos completos
   const ordenes = [
-    ...(DB.preventivos||[]).filter(p=>p.completado && p.equipoId==='__cliente__' && p.clienteNombre && p.clienteMarca && p.clienteModelo && p.clienteSerie),
-    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.equipoId==='__cliente__' && c.clienteNombre && c.clienteMarca && c.clienteModelo && c.clienteSerie)
+    ...(DB.preventivos||[]).filter(p=>p.completado && p.clienteNombre && p.clienteMarca && p.clienteModelo && p.clienteSerie),
+    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.clienteNombre && c.clienteMarca && c.clienteModelo && c.clienteSerie)
   ];
   ordenes.forEach(o=>_guardarEquipoClienteEnFlota(o));
   // Paso 3: escribir a Firebase para que los falsos no vuelvan
@@ -1010,11 +1010,10 @@ function _lunchOverlapMin(dayRefDate, segStart, segEnd){
 // cada día intermedio cuenta como 8 horas completas (jornada ordinaria).
 function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!window._fbDB || !window._fbReady || !equipoId) return;
-  window._fbDB.ref('montasa/equipos').once('value').then(snap=>{
-    const arr = snap.val()||[];
-    const idx = arr.findIndex(e=>e&&e.id===equipoId);
-    if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor);
-  }).catch(e=>console.warn('Error sincronizando '+campo+':', e));
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq) return;
+  eq[campo] = valor;
+  window._fbDB.ref('montasa/equipos').set(DB.equipos).catch(e=>console.warn('Error sincronizando equipos:', e));
 }
 
 // Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
@@ -1865,21 +1864,13 @@ function completarPreventivo(id){
   }
   // ── Actualizar km del vehículo usado (solo si >= actual) ──
   if(p.kmRetorno && p.vehiculo){
-    const _veh = DB.equipos.find(e=>(e.esVehiculo||(e.id||'').startsWith('veh_')) && e.codigo===p.vehiculo);
+    const _veh = DB.equipos.find(e=>e.codigo===p.vehiculo);
     if(_veh){
       const nuevoKm = parseFloat(p.kmRetorno)||0;
       const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
       if(nuevoKm >= actualKm){
-        _veh.km = p.kmRetorno;
-        _veh.ultimoKm = p.kmRetorno;
-        _veh.horometro = p.kmRetorno;
-        if(window._fbDB && window._fbReady){
-          window._fbDB.ref('montasa/equipos').once('value').then(snap=>{
-            const arr = snap.val()||[];
-            const fbIdx = arr.findIndex(e=>e&&e.id===_veh.id);
-            if(fbIdx>=0) window._fbDB.ref('montasa/equipos/'+fbIdx).update({km: p.kmRetorno, ultimoKm: p.kmRetorno, horometro: p.kmRetorno});
-          });
-        }
+        _veh.km = p.kmRetorno; _veh.ultimoKm = p.kmRetorno; _veh.horometro = p.kmRetorno;
+        if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
       }
     }
   }
@@ -2309,21 +2300,13 @@ function cerrarCorrectivo(id){
   }
   // ── Actualizar km del vehículo usado (solo si >= actual) ──
   if(c.kmRetorno && c.vehiculo){
-    const _veh = DB.equipos.find(e=>(e.esVehiculo||(e.id||'').startsWith('veh_')) && e.codigo===c.vehiculo);
+    const _veh = DB.equipos.find(e=>e.codigo===c.vehiculo);
     if(_veh){
       const nuevoKm = parseFloat(c.kmRetorno)||0;
       const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
       if(nuevoKm >= actualKm){
-        _veh.km = c.kmRetorno;
-        _veh.ultimoKm = c.kmRetorno;
-        _veh.horometro = c.kmRetorno;
-        if(window._fbDB && window._fbReady){
-          window._fbDB.ref('montasa/equipos').once('value').then(snap=>{
-            const arr = snap.val()||[];
-            const fbIdx = arr.findIndex(e=>e&&e.id===_veh.id);
-            if(fbIdx>=0) window._fbDB.ref('montasa/equipos/'+fbIdx).update({km: c.kmRetorno, ultimoKm: c.kmRetorno, horometro: c.kmRetorno});
-          });
-        }
+        _veh.km = c.kmRetorno; _veh.ultimoKm = c.kmRetorno; _veh.horometro = c.kmRetorno;
+        if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
       }
     }
   }
