@@ -1606,7 +1606,7 @@ function saveDB(){
       if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
       if(DB.vendidos && DB.vendidos.length)               payload.vendidos        = DB.vendidos;
       if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
-      window._fbDB.ref('montasa').update(payload);
+      window._fbDB.ref(_getFbNode()).update(payload);
     }
   }catch(e){}
 }
@@ -1615,7 +1615,7 @@ function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!window._fbDB || !window._fbReady || !equipoId) return;
   const idx = DB.equipos.findIndex(e => e.id===equipoId);
   if(idx<0) return;
-  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(err=>console.error('Error sincronizando '+campo+' del equipo:', err));
+  window._fbDB.ref(_getFbNode()+'/equipos/'+idx+'/'+campo).set(valor).catch(err=>console.error('Error sincronizando '+campo+' del equipo:', err));
 }
 
 // Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
@@ -1657,9 +1657,9 @@ function _sincronizarLogisticaConReintento(nuevaOrdenId){
     if(idx>=0){
       const clean = Object.assign({}, DB.logistica[idx]);
       Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
-      window._fbDB.ref('montasa/logistica/'+idx).set(clean)
+      window._fbDB.ref(_getFbNode()+'/logistica/'+idx).set(clean)
         .then(()=>{
-          window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+          window._fbDB.ref(_getFbNode()+'/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
         }).catch(()=>{
           console.warn('Reintentando sync logistica...');
           setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
@@ -1667,7 +1667,7 @@ function _sincronizarLogisticaConReintento(nuevaOrdenId){
     }
   } else {
     // Fallback sin ID — solo sincronizar el correlativo
-    window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+    window._fbDB.ref(_getFbNode()+'/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
   }
 }
 
@@ -1915,12 +1915,12 @@ function saveEquipo(eq){
   if(eq.esVehiculo){ payload.esVehiculo=true; payload.km=eq.horometro||eq.km||''; payload.ultimoKm=eq.horometro||eq.ultimoKm||''; }
   // Preservar campos de equipo de cliente
   if(eq.esEquipoCliente){ payload.esEquipoCliente=true; payload.clienteNombre=eq.clienteNombre||''; }
-  window._fbDB.ref('montasa/equipos/' + idx).update(payload).catch(err => console.error('saveEquipo error:', err));
+  window._fbDB.ref(_getFbNode()+'/equipos/' + idx).update(payload).catch(err => console.error('saveEquipo error:', err));
 }
 
 function saveAllEquipos(){
   if(!window._fbDB || !window._fbReady) return;
-  window._fbDB.ref('montasa/equipos').set(
+  window._fbDB.ref(_getFbNode()+'/equipos').set(
     DB.equipos.map(e=>({id:e.id,codigo:e.codigo,serie:e.serie||'',tipo:e.tipo||'',marca:e.marca||'',
       desc:e.desc||'',combustible:e.combustible||'',estado:e.estado||'DISPONIBLE',
       ubicacion:e.ubicacion||'',cliente:e.cliente||'',horometro:e.horometro||'',observaciones:e.observaciones||'',
@@ -2237,7 +2237,7 @@ function _guardarEquipoCliente(nombre, marca, modelo, serie){
     // Escribir directamente en Firebase
     const idx = DB.equipos.indexOf(existe);
     if(idx>=0 && window._fbDB && window._fbReady)
-      window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
+      window._fbDB.ref(_getFbNode()+'/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
     return existe.id;
   }
   const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
@@ -2246,7 +2246,7 @@ function _guardarEquipoCliente(nombre, marca, modelo, serie){
   // Escribir directamente por índice en Firebase
   const newIdx = DB.equipos.length - 1;
   if(window._fbDB && window._fbReady)
-    window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
+    window._fbDB.ref(_getFbNode()+'/equipos/'+newIdx).set(nuevoEq);
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   return nuevoEq.id;
 }
@@ -2699,7 +2699,7 @@ function _reabrirOrdenLogGer(id){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(x=>x.id===id);
-      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+      if(idx>=0) window._fbDB.ref(_getFbNode()+'/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
     }
     openSubgrupos.delete('ger-log-'+id);
     renderLogistica();
@@ -3352,7 +3352,7 @@ function limpiarFirma(canvasId){
       saveDB();
       if(window._fbDB && window._fbReady){
         const idx = DB.logistica.findIndex(x=>x.id===ordenId);
-        if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx+'/firma').set('');
+        if(idx>=0) window._fbDB.ref(_getFbNode()+'/logistica/'+idx+'/firma').set('');
       }
     }
   }
@@ -4966,7 +4966,7 @@ function completarPreventivo(id){
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.preventivos.findIndex(function(x){return x.id===p.id;});
-          if(_idx>=0) window._fbDB.ref('montasa/preventivos/'+_idx+'/vales').set(_v);
+          if(_idx>=0) window._fbDB.ref(_getFbNode()+'/preventivos/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -5001,8 +5001,7 @@ function eliminarDelHistorial(tipo, id){
           Object.keys(c).forEach(k=>{ if(c[k]===undefined) delete c[k]; });
           return c;
         }).filter(Boolean);
-        window._fbDB.ref('montasa').update({
-          logistica: cleanList,
+        window._fbDB.ref(_getFbNode()).update({
           equipos: DB.equipos,
           _ts: Date.now(),
           _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'ger'
@@ -5136,7 +5135,7 @@ function cerrarCorrectivo(id){
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.correctivos.findIndex(function(x){return x.id===c.id;});
-          if(_idx>=0) window._fbDB.ref('montasa/correctivos/'+_idx+'/vales').set(_v);
+          if(_idx>=0) window._fbDB.ref(_getFbNode()+'/correctivos/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -5613,7 +5612,7 @@ async function enviarSolicitudWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref(_getFbNode()+'/revisiones').set(DB.revisiones);
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
@@ -5624,7 +5623,7 @@ async function enviarSolicitudWA(){
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref(_getFbNode()+'/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
@@ -5775,7 +5774,7 @@ async function copiarMensajeWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref(_getFbNode()+'/revisiones').set(DB.revisiones);
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
@@ -5786,7 +5785,7 @@ async function copiarMensajeWA(){
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref(_getFbNode()+'/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
@@ -6333,7 +6332,7 @@ function _cargarDatosEmpresa(){
             horometro:o.horometro||'',observaciones:'Ingresado desde '+(o.correlativo||'orden'),
             esEquipoCliente:true});
         });
-        if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
+        if(window._fbDB&&window._fbReady) window._fbDB.ref(_getFbNode()+'/equipos').set(DB.equipos);
       })();
     }
     // MONHACO: seed equipos iniciales si Firebase está vacío
@@ -6347,7 +6346,7 @@ function _cargarDatosEmpresa(){
 
     // Listener dedicado para logística — solo para MT RENTAL
     if(esMTR){
-    window._fbDB.ref('montasa/logistica').on('value', snapLog => {
+    window._fbDB.ref(_getFbNode()+'/logistica').on('value', snapLog => {
       const logData = snapLog.val();
       if(Array.isArray(logData)){
         // Merge preservando campos locales que Firebase no almacena (vales, etc.)
@@ -7521,7 +7520,7 @@ function _ejecutarGuardarVale(){
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
-      window._fbDB.ref('montasa/logistica/'+idx+'/vales').set(orden.vales)
+      window._fbDB.ref(_getFbNode()+'/logistica/'+idx+'/vales').set(orden.vales)
         .then(()=>console.log('Vale guardado en Firebase path:', orden.correlativo, idx))
         .catch(err=>console.error('Error guardando vale:', err));
     }
@@ -7711,7 +7710,7 @@ function _elimRV(id){
     DB.revisiones = (DB.revisiones||[]).filter(function(x){ return x.id!==id; });
     try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa/revisiones').set(DB.revisiones)
+      window._fbDB.ref(_getFbNode()+'/revisiones').set(DB.revisiones)
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -7725,7 +7724,7 @@ function _elimEV(id){
     DB.evaluaciones = (DB.evaluaciones||[]).filter(function(x){ return x.id!==id; });
     try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones)
+      window._fbDB.ref(_getFbNode()+'/evaluaciones').set(DB.evaluaciones)
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -7770,7 +7769,7 @@ function _elimLG(id){
         Object.keys(o).forEach(function(k){ if(o[k]!==undefined) c[k]=o[k]; });
         return c;
       }).filter(Boolean);
-      window._fbDB.ref('montasa').update({logistica:clean, _ts:Date.now()})
+      window._fbDB.ref(_getFbNode()).update({logistica:clean, _ts:Date.now()})
         .then(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -7911,7 +7910,7 @@ function _ejecutarGuardarValeMant(){
     const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
     const idx = arr.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
-      window._fbDB.ref('montasa/'+fbArr+'/'+idx+'/vales').set(orden.vales)
+      window._fbDB.ref(_getFbNode()+'/'+fbArr+'/'+idx+'/vales').set(orden.vales)
         .then(()=>console.log('Vale mant guardado:', fbArr, idx))
         .catch(err=>console.error('Error guardando vale mant:', err));
     }
@@ -7968,7 +7967,7 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
   saveDB();
   if(window._fbDB && window._fbReady){
     const idx = DB.equipos.findIndex(e=>e.id===equipoId);
-    if(idx>=0) window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
+    if(idx>=0) window._fbDB.ref(_getFbNode()+'/estados/'+equipoId).set(nuevoEstado);
   }
 }
 
