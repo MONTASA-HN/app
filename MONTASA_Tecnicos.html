@@ -2385,12 +2385,28 @@ function renderHistorial(){
   const filtEq = document.getElementById('filt-hist-equipo').value;
   const buscar = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
 
+  // Incluir órdenes cerradas del historial
+  const cerradas = (DB.ordenesCerradas||[]).filter(o=>o).map(o=>{
+    let t = o._t;
+    if(!t){
+      if(o.falla || o.sistema) t = 'C';
+      else if(o.servicio && !o.falla) t = 'P';
+      else t = 'C';
+    }
+    return {...o, _t:t, estado:'Completado', completado:true};
+  });
+
   let all = [
     ...(DB.preventivos||[]).filter(p=>p.completado).map(p=>({...p,_t:'P',_f:p.fechaCompletado||p.fecha||''})),
     ...(DB.correctivos||[]).filter(c=>c.estado==='Completado').map(c=>({...c,_t:'C',_f:c.fechaCierre||c.fecha||''})),
     ...(DB.revisiones||[]).filter(r=>r.completado||r.estado==='Completado').map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
-    ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}))
-  ].sort((a,b)=>{
+    ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''})),
+    ...cerradas.map(o=>({...o, _f:o.fechaCierre||o.fechaCompletado||o.fecha||''}))
+  ];
+  // Deduplicar
+  const seen = new Set();
+  all = all.filter(o=>{ if(!o||!o.correlativo) return true; if(seen.has(o.correlativo)) return false; seen.add(o.correlativo); return true; });
+  all.sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
     const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
     return nb-na;
