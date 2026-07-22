@@ -6235,7 +6235,21 @@ function cerrarExito(){
   window.seleccionarEmpresa = function(key){
     const emp = EMPRESAS[key];
     if(!emp) return;
-    window._empresaActiva = key;
+    // Guardar empresa seleccionada y recargar para aislamiento total
+    localStorage.setItem('montasa_empresa_activa', key);
+    location.reload();
+  };
+
+  window.volverAEmpresas = function(){
+    localStorage.removeItem('montasa_empresa_activa');
+    location.reload();
+  };
+
+  // Auto-seleccionar empresa si hay una guardada
+  const _savedEmpresa = localStorage.getItem('montasa_empresa_activa');
+  if(_savedEmpresa && EMPRESAS[_savedEmpresa]){
+    window._empresaActiva = _savedEmpresa;
+    const emp = EMPRESAS[_savedEmpresa];
     document.getElementById('header-empresa-nombre').textContent = emp.nombre;
     document.getElementById('main-header').style.borderBottomColor = emp.color;
     const navBtns = document.querySelectorAll('#main-nav .nav-btn');
@@ -6246,27 +6260,13 @@ function cerrarExito(){
     document.getElementById('empresa-selector').style.display = 'none';
     document.getElementById('app-main').style.display = 'block';
     document.getElementById('main-nav').style.display = 'flex';
-    // Reconstruir checkboxes de técnicos en solicitudes
+    // Reconstruir checkboxes de técnicos
     document.querySelectorAll('.tecnicos-grid').forEach(grid=>{
-      const isWA = grid.closest('[id*="wa"]') || grid.id.includes('wa');
       grid.innerHTML = _getTecnicosEmpresa().map(nombre=>
         `<label class="tecnico-check"><input type="checkbox" value="${nombre}" onchange="toggleTecnico(this)"> ${nombre.toUpperCase()}</label>`
       ).join('');
     });
-    window._initEmpresaFB(emp.fb);
-  };
-
-  window.volverAEmpresas = function(){
-    if(window._fbDB && window._empresaActiva){
-      const emp = EMPRESAS[window._empresaActiva];
-      if(emp){ try{ window._fbDB.ref(emp.fb).off(); window._fbDB.ref(emp.fb+'/logistica').off(); }catch(e){} }
-    }
-    window._empresaActiva = null;
-    window._fbReady = false;
-    document.getElementById('empresa-selector').style.display = 'flex';
-    document.getElementById('app-main').style.display = 'none';
-    document.getElementById('main-nav').style.display = 'none';
-  };
+  }
 
   if(typeof firebase === 'undefined'){
     console.warn('Firebase SDK no disponible — modo offline');
@@ -6493,7 +6493,11 @@ function _cargarDatosEmpresa(){
     }
   });
 }
-// Firebase ya no se auto-inicia — se inicia al seleccionar empresa via seleccionarEmpresa()
+// Iniciar Firebase automáticamente si hay empresa guardada
+if(window._empresaActiva){
+  const _emp = EMPRESAS[window._empresaActiva];
+  if(_emp) window._initEmpresaFB(_emp.fb);
+}
 })();
 
 // ── SWIPE NAVIGATION ─────────────────────────────────────────────────────
