@@ -1281,9 +1281,12 @@ function cerrarOrdenLog(id){
       const actualH = parseFloat(eq.horometro)||0;
       if(nuevoH >= actualH){
         eq.horometro = horoFinal;
-        const eqIdx = DB.equipos.indexOf(eq);
-        if(eqIdx>=0 && window._fbDB && window._fbReady){
-          window._fbDB.ref('montasa/equipos/'+eqIdx+'/horometro').set(horoFinal);
+        if(window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos').once('value').then(snap=>{
+            const arr = snap.val()||[];
+            const fbIdx = arr.findIndex(e=>e&&e.id===o.equipoId);
+            if(fbIdx>=0) window._fbDB.ref('montasa/equipos/'+fbIdx+'/horometro').set(horoFinal);
+          });
         }
       }
     }
@@ -1317,10 +1320,16 @@ function cerrarOrdenLog(id){
       if(nuevoKm >= actualKm){
         veh.km = o.kmRetorno;
         veh.ultimoKm = o.kmRetorno;
-        veh.horometro = o.kmRetorno; // La ficha de Gerencia lee desde horometro
-        const vehIdx = DB.equipos.indexOf(veh);
-        if(vehIdx>=0 && window._fbDB && window._fbReady){
-          window._fbDB.ref('montasa/equipos/'+vehIdx).update({km: o.kmRetorno, ultimoKm: o.kmRetorno, horometro: o.kmRetorno});
+        veh.horometro = o.kmRetorno;
+        // Buscar índice REAL en Firebase leyendo el array
+        if(window._fbDB && window._fbReady){
+          window._fbDB.ref('montasa/equipos').once('value').then(snap=>{
+            const arr = snap.val()||[];
+            const fbIdx = arr.findIndex(e=>e&&e.id===veh.id);
+            if(fbIdx>=0){
+              window._fbDB.ref('montasa/equipos/'+fbIdx).update({km: o.kmRetorno, ultimoKm: o.kmRetorno, horometro: o.kmRetorno});
+            }
+          });
         }
       }
     }
