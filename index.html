@@ -5,8 +5,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js">
-
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script>
 function _imprimirHTML(htmlContent){
   var iframe = document.getElementById('_print_frame');
   if(!iframe){
@@ -19,7 +19,6 @@ function _imprimirHTML(htmlContent){
   doc.open(); doc.write(htmlContent); doc.close();
   setTimeout(function(){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 500);
 }
-
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
@@ -1838,12 +1837,17 @@ function saveEquipo(eq){
   if(!eq || !window._fbDB || !window._fbReady) return;
   const idx = DB.equipos.findIndex(e => e.id === eq.id);
   if(idx === -1) return;
-  window._fbDB.ref('montasa/equipos/' + idx).update({
+  const payload = {
     id:eq.id,codigo:eq.codigo,serie:eq.serie||'',tipo:eq.tipo||'',marca:eq.marca||'',
     desc:eq.desc||'',combustible:eq.combustible||'',estado:eq.estado||'DISPONIBLE',
     ubicacion:eq.ubicacion||'',cliente:eq.cliente||'',horometro:eq.horometro||'',observaciones:eq.observaciones||'',
     intervaloMantMeses:eq.intervaloMantMeses||3
-  }).catch(err => console.error('saveEquipo error:', err));
+  };
+  // Preservar campos de vehículos
+  if(eq.esVehiculo){ payload.esVehiculo=true; payload.km=eq.horometro||eq.km||''; payload.ultimoKm=eq.horometro||eq.ultimoKm||''; }
+  // Preservar campos de equipo de cliente
+  if(eq.esEquipoCliente){ payload.esEquipoCliente=true; payload.clienteNombre=eq.clienteNombre||''; }
+  window._fbDB.ref('montasa/equipos/' + idx).update(payload).catch(err => console.error('saveEquipo error:', err));
 }
 
 function saveAllEquipos(){
