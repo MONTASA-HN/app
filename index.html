@@ -2404,8 +2404,10 @@ function diasAbierta(fecha){
 function fmtDT(s){
   if(!s) return '—';
   try{
+    // Si ya viene en formato DD/MM/YYYY HH:MM, devolverlo tal cual
+    if(typeof s==='string' && /^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
     const d = new Date(s);
-    if(isNaN(d.getTime())) return '—';
+    if(isNaN(d.getTime())) return typeof s==='string'?s:'—';
     const dd = String(d.getDate()).padStart(2,'0');
     const mm = String(d.getMonth()+1).padStart(2,'0');
     const yy = d.getFullYear();
@@ -4487,7 +4489,13 @@ function _renderOrdenesMant(el, tipo){
       else if(o.tipoOrden === 'evaluacion') t = 'EV';
       else t = 'C'; // default
     }
-    return {...o, _t:t, estado:'Completado', completado:true};
+    return {...o, _t:t, estado:'Completado', completado:true,
+      notas: o.diagnostico||o.trabajo||o.notas||'',
+      servicio: o.falla||o.servicio||'',
+      inicioTrabajo: o.fechaInicio||o.inicioTrabajo||'',
+      finTrabajo: o.fechaFin||o.finTrabajo||'',
+      _eqLabel: o.equipo||''
+    };
   });
 
   if(tipo==='P')  all = [
@@ -4538,7 +4546,7 @@ function _renderOrdenesMant(el, tipo){
   const cards = all.map(x=>{
     try{
       const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
-      const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
+      const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (x._eqLabel||x.equipo||'—');
       const tiempos = calcTiemposOrden(x);
       const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
 
