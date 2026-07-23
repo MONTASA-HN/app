@@ -3333,12 +3333,17 @@ function _renderCarpetasLog(el){
     {tipo:'apoyo_mantenimiento',icon:'🔩', label:'Apoyo\nMantenimiento',color:'#9B59B6'},
     {tipo:'atencion_compras',   icon:'🛒', label:'Atención\nde Compras',color:'#C9211E'},
   ];
+  const logAll = (DB.logistica||[]).filter(o=>o);
   el.innerHTML = `<div class="carpeta-grid">
-    ${CARPETAS.map(c=>`
-      <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaLog('${c.tipo}')">
+    ${CARPETAS.map(c=>{
+      const cnt = logAll.filter(o=>o.tipoLogistica===c.tipo).length;
+      return `
+      <div class="carpeta-item" style="--carpeta-color:${c.color};position:relative" onclick="_abrirCarpetaLog('${c.tipo}')">
         <span class="carpeta-icon">${c.icon}</span>
         <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
-      </div>`).join('')}
+        ${cnt?`<span style="position:absolute;top:8px;right:10px;background:${c.color};color:white;font-size:12px;font-weight:700;min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px">${cnt}</span>`:''}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -4345,11 +4350,16 @@ function _renderCarpetasMant(el){
     {tipo:'EV', icon:'📄', label:'Evaluación\nde Equipo',     color:'#E8811A'},
   ];
   el.innerHTML = `<div class="carpeta-grid">
-    ${CARPETAS.map(c=>`
-      <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaMant('${c.tipo}')">
+    ${CARPETAS.map(c=>{
+      const CNTS = {P:(DB.preventivos||[]).length, C:(DB.correctivos||[]).length, RV:(DB.revisiones||[]).length, EV:(DB.evaluaciones||[]).length};
+      const cnt = CNTS[c.tipo]||0;
+      return `
+      <div class="carpeta-item" style="--carpeta-color:${c.color};position:relative" onclick="_abrirCarpetaMant('${c.tipo}')">
         <span class="carpeta-icon">${c.icon}</span>
         <span class="carpeta-label">${c.label.replace('\n','<br>')}</span>
-      </div>`).join('')}
+        ${cnt?`<span style="position:absolute;top:8px;right:10px;background:${c.color};color:white;font-size:12px;font-weight:700;min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px">${cnt}</span>`:''}
+      </div>`;
+    }).join('')}
   </div>`;
 }
 

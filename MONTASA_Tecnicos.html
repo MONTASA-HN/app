@@ -878,6 +878,31 @@ function saveDB(){
   }catch(e){ setTimeout(saveDB, 2000); }
 }
 
+
+// ── Guardar equipo de cliente en flota al cerrar orden ──
+function _guardarEquipoClienteEnFlota(orden){
+  if(orden.equipoId!=='__cliente__') return;
+  if(!orden.clienteNombre || !orden.clienteMarca || !orden.clienteModelo || !orden.clienteSerie) return;
+  const clave = orden.clienteNombre.trim()+'|'+orden.clienteSerie.trim();
+  const yaExiste = DB.equipos.find(e=>e.esEquipoCliente && 
+    ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
+  if(yaExiste) return;
+  const nuevoEq = {
+    id: 'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
+    codigo: orden.clienteMarca+'-'+(orden.clienteModelo||'').slice(0,8),
+    desc: orden.clienteMarca+' '+orden.clienteModelo,
+    tipo: 'Equipo de cliente', marca: orden.clienteMarca, modelo: orden.clienteModelo,
+    serie: orden.clienteSerie, cliente: orden.clienteNombre, clienteNombre: orden.clienteNombre,
+    combustible: '', ubicacion: orden.clienteNombre, estado: 'DISPONIBLE',
+    horometro: orden.horometro||'', observaciones: 'Ingresado desde '+(orden.correlativo||'orden'),
+    esEquipoCliente: true
+  };
+  DB.equipos.push(nuevoEq);
+  if(window._fbDB && window._fbReady){
+    window._fbDB.ref('montasa/equipos').set(DB.equipos);
+  }
+}
+
 function showTab(id, el){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -1814,6 +1839,7 @@ function completarPreventivo(id){
   })();
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
+  _guardarEquipoClienteEnFlota(p);
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
@@ -2231,6 +2257,7 @@ function cerrarCorrectivo(id){
   if(_nuevaFirmaC) c.firma = _nuevaFirmaC;
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
+  _guardarEquipoClienteEnFlota(c);
   if(c.inicioTrabajo && !c.fechaInicio) c.fechaInicio = c.inicioTrabajo;
   if(c.finTrabajo && !c.fechaFin) c.fechaFin = c.finTrabajo;
   // Sincronizar horómetro con la ficha del equipo al finalizar
