@@ -865,7 +865,6 @@ function saveDB(){
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      // Solo escribir campos que tengan datos — nunca sobreescribir con arrays vacíos
       const payload = { _ts: ts, _sid: _SESSION_ID };
       if(DB.preventivos && DB.preventivos.length)       payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = DB.correctivos;
@@ -877,45 +876,6 @@ function saveDB(){
       setTimeout(saveDB, 500);
     }
   }catch(e){ setTimeout(saveDB, 2000); }
-}
-
-// ── Guardar equipo de cliente en flota al cerrar orden ──
-function _guardarEquipoClienteEnFlota(orden){
-  if(orden.equipoId!=='__cliente__') return;
-  if(!orden.clienteNombre || !orden.clienteMarca || !orden.clienteModelo || !orden.clienteSerie) return;
-  const clave = orden.clienteNombre.trim()+'|'+orden.clienteSerie.trim();
-  const yaExiste = DB.equipos.find(e=>e.esEquipoCliente && 
-    ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave);
-  if(yaExiste) return;
-  const nuevoEq = {
-    id: 'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
-    codigo: orden.clienteMarca+'-'+orden.clienteModelo.slice(0,8),
-    desc: orden.clienteMarca+' '+orden.clienteModelo,
-    tipo: 'Equipo de cliente', marca: orden.clienteMarca, modelo: orden.clienteModelo,
-    serie: orden.clienteSerie, cliente: orden.clienteNombre, clienteNombre: orden.clienteNombre,
-    combustible: '', ubicacion: orden.clienteNombre, estado: 'DISPONIBLE',
-    horometro: orden.horometro||'', observaciones: 'Ingresado desde '+(orden.correlativo||'orden'),
-    esEquipoCliente: true
-  };
-  DB.equipos.push(nuevoEq);
-}
-
-function _migrarEquiposCliente(){
-  // Paso 1: eliminar TODOS los equipos de cliente existentes
-  const antes = DB.equipos.length;
-  DB.equipos = DB.equipos.filter(e=>!e.esEquipoCliente);
-  // Paso 2: recrear SOLO desde órdenes con los 4 campos completos
-  const ordenes = [
-    ...(DB.preventivos||[]).filter(p=>p.completado && p.clienteNombre && p.clienteMarca && p.clienteModelo && p.clienteSerie),
-    ...(DB.correctivos||[]).filter(c=>c.estado==='Completado' && c.clienteNombre && c.clienteMarca && c.clienteModelo && c.clienteSerie)
-  ];
-  ordenes.forEach(o=>_guardarEquipoClienteEnFlota(o));
-  // Paso 3: escribir a Firebase para que los falsos no vuelvan
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa/equipos').set(DB.equipos);
-  }
-  const creados = DB.equipos.filter(e=>e.esEquipoCliente).length;
-  if(antes !== DB.equipos.length || creados) console.log('Migración equipos cliente: '+creados+' válidos, '+(antes-DB.equipos.length+creados)+' eliminados');
 }
 
 function showTab(id, el){
@@ -1010,10 +970,9 @@ function _lunchOverlapMin(dayRefDate, segStart, segEnd){
 // cada día intermedio cuenta como 8 horas completas (jornada ordinaria).
 function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!window._fbDB || !window._fbReady || !equipoId) return;
-  const eq = DB.equipos.find(e=>e.id===equipoId);
-  if(!eq) return;
-  eq[campo] = valor;
-  window._fbDB.ref('montasa/equipos').set(DB.equipos).catch(e=>console.warn('Error sincronizando equipos:', e));
+  const idx = DB.equipos.findIndex(e => e.id===equipoId);
+  if(idx<0) return;
+  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(e=>console.warn('Error sincronizando '+campo+' del equipo:', e));
 }
 
 // Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
@@ -1106,18 +1065,10 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
-  function _parseD(s){
-    if(!s) return new Date(NaN);
-    if(typeof s==='string'){
-      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-      if(m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0));
-    }
-    return new Date(s);
-  }
-  const ini  = _parseD(o.inicioTrabajo  || o.fechaInicio || '');
-  const fin  = _parseD(o.finTrabajo     || o.fechaFin    || '');
-  const sal  = _parseD(o.salidaPlantel  || '');
-  const ret  = _parseD(o.retornoPlantel || '');
+  const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
+  const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
+  const sal  = new Date(o.salidaPlantel  || '');
+  const ret  = new Date(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && !!o.salidaPlantel;
   const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
@@ -1300,12 +1251,12 @@ function bCorr(estado, prioridad){
 
 
 function _miniClientePrev(p){
-  const isCli = p.equipoId==='__cliente__'||p.clienteNombre||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente);
+  const isCli = p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente);
   if(isCli) return (p.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+p.clienteNombre+'</div>':'')+(p.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+p.clienteMarca+(p.clienteModelo?' '+p.clienteModelo:'')+(p.clienteSerie?' · '+p.clienteSerie:'')+'</div>':'');
   return '<div class="card-sub">'+getEqLabelFull(p)+'</div>';
 }
 function _miniClienteCorr(c){
-  const isCli = c.equipoId==='__cliente__'||c.clienteNombre||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente);
+  const isCli = c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente);
   const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
   const eqSub = eq.codigo ? eq.codigo+' \u2013 '+(eq.marca||'') : (c.clienteNombre?'Cliente: '+c.clienteNombre:'\u2014');
   if(isCli) return (c.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+c.clienteNombre+'</div>':'')+(c.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+c.clienteMarca+(c.clienteModelo?' '+c.clienteModelo:'')+(c.clienteSerie?' · '+c.clienteSerie:'')+'</div>':'');
@@ -1610,7 +1561,7 @@ function renderPreventivos(){
         <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
         <span style="font-size:11px;color:var(--text3)">${p.fechaCierre||''}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;margin-bottom:10px">
+      <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${p.servicio||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${p.tecnico||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(p.inicioTrabajo||p.fechaInicio||'').replace('T',' ')||'—'}</span></div>
@@ -1624,7 +1575,7 @@ function renderPreventivos(){
       </div>
       ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${p.notas}</span></div>`:''}
       ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${p.sugerencias}</span></div>`:''}
-      ${(p.equipoId==='__cliente__'||p.clienteNombre||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
+      ${(p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
         ${p.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${p.clienteNombre}</span></div>`:''}
         ${p.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${p.clienteMarca}</span></div>`:''}
         ${p.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${p.clienteModelo}</span></div>`:''}
@@ -1853,34 +1804,14 @@ function completarPreventivo(id){
   })();
   p.completado = true;
   p.fechaCompletado = new Date().toISOString().slice(0,10);
-  // ── Guardar equipo de cliente en la flota (sin cambiar equipoId) ──
-  _guardarEquipoClienteEnFlota(p);
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
-  // ── Actualizar horómetro en ficha del equipo (solo si >= actual) ──
-  if(p.horometro && p.equipoId && p.equipoId!=='__cliente__'){
+  // Sincronizar horómetro con la ficha del equipo al finalizar
+  if(p.horometro && p.equipoId){
     const _eq = DB.equipos.find(e=>e.id===p.equipoId);
-    if(_eq){
-      const nuevo = parseFloat(p.horometro)||0;
-      const actual = parseFloat(_eq.horometro)||0;
-      if(nuevo >= actual){
-        _eq.horometro = p.horometro;
-        _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
-      }
-    }
-  }
-  // ── Actualizar km del vehículo usado (solo si >= actual) ──
-  if(p.kmRetorno && p.vehiculo){
-    const _veh = DB.equipos.find(e=>e.codigo===p.vehiculo);
-    if(_veh){
-      const nuevoKm = parseFloat(p.kmRetorno)||0;
-      const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
-      if(nuevoKm >= actualKm){
-        _veh.km = p.kmRetorno; _veh.ultimoKm = p.kmRetorno; _veh.horometro = p.kmRetorno;
-        if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
-      }
-    }
+    if(_eq) _eq.horometro = p.horometro;
+    _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
   }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(p.equipoId){
@@ -2057,7 +1988,7 @@ function renderCorrectivos(){
         <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
         <span style="font-size:11px;color:var(--text3)">${c.fechaCierre||''}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12px;margin-bottom:10px">
+      <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${c.sistema||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${c.tecnico||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(c.inicioTrabajo||c.fechaInicio||'').replace('T',' ')||'—'}</span></div>
@@ -2071,7 +2002,7 @@ function renderCorrectivos(){
       </div>
       ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${c.falla}</span></div>`:''}
       ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${c.diagnostico}</span></div>`:''}
-      ${(c.equipoId==='__cliente__'||c.clienteNombre||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
+      ${(c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
         ${c.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${c.clienteNombre}</span></div>`:''}
         ${c.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${c.clienteMarca}</span></div>`:''}
         ${c.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${c.clienteModelo}</span></div>`:''}
@@ -2083,7 +2014,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
-      ${(c.equipoId==='__cliente__'||c.clienteNombre||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`
+      ${(c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
@@ -2290,33 +2221,13 @@ function cerrarCorrectivo(id){
   if(_nuevaFirmaC) c.firma = _nuevaFirmaC;
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
-  // ── Guardar equipo de cliente en la flota (sin cambiar equipoId) ──
-  _guardarEquipoClienteEnFlota(c);
   if(c.inicioTrabajo && !c.fechaInicio) c.fechaInicio = c.inicioTrabajo;
   if(c.finTrabajo && !c.fechaFin) c.fechaFin = c.finTrabajo;
-  // ── Actualizar horómetro en ficha del equipo (solo si >= actual) ──
-  if(c.horometro && c.equipoId && c.equipoId!=='__cliente__'){
+  // Sincronizar horómetro con la ficha del equipo al finalizar
+  if(c.horometro && c.equipoId){
     const _eq = DB.equipos.find(e=>e.id===c.equipoId);
-    if(_eq){
-      const nuevo = parseFloat(c.horometro)||0;
-      const actual = parseFloat(_eq.horometro)||0;
-      if(nuevo >= actual){
-        _eq.horometro = c.horometro;
-        _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
-      }
-    }
-  }
-  // ── Actualizar km del vehículo usado (solo si >= actual) ──
-  if(c.kmRetorno && c.vehiculo){
-    const _veh = DB.equipos.find(e=>e.codigo===c.vehiculo);
-    if(_veh){
-      const nuevoKm = parseFloat(c.kmRetorno)||0;
-      const actualKm = parseFloat(_veh.km||_veh.ultimoKm||_veh.horometro)||0;
-      if(nuevoKm >= actualKm){
-        _veh.km = c.kmRetorno; _veh.ultimoKm = c.kmRetorno; _veh.horometro = c.kmRetorno;
-        if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/equipos').set(DB.equipos);
-      }
-    }
+    if(_eq) _eq.horometro = c.horometro;
+    _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
   }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(c.equipoId){
@@ -2393,34 +2304,12 @@ function renderHistorial(){
   const filtEq = document.getElementById('filt-hist-equipo').value;
   const buscar = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
 
-  // Incluir órdenes cerradas del historial
-  const cerradas = (DB.ordenesCerradas||[]).filter(o=>o).map(o=>{
-    let t = o._t;
-    if(!t){
-      if(o.falla || o.sistema) t = 'C';
-      else if(o.servicio && !o.falla) t = 'P';
-      else t = 'C';
-    }
-    return {...o, _t:t, estado:'Completado', completado:true,
-      notas: o.diagnostico||o.trabajo||o.notas||'',
-      servicio: o.falla||o.servicio||'',
-      inicioTrabajo: o.fechaInicio||o.inicioTrabajo||'',
-      finTrabajo: o.fechaFin||o.finTrabajo||'',
-      _eqLabel: o.equipo||''
-    };
-  });
-
   let all = [
     ...(DB.preventivos||[]).filter(p=>p.completado).map(p=>({...p,_t:'P',_f:p.fechaCompletado||p.fecha||''})),
     ...(DB.correctivos||[]).filter(c=>c.estado==='Completado').map(c=>({...c,_t:'C',_f:c.fechaCierre||c.fecha||''})),
     ...(DB.revisiones||[]).filter(r=>r.completado||r.estado==='Completado').map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
-    ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''})),
-    ...cerradas.map(o=>({...o, _f:o.fechaCierre||o.fechaCompletado||o.fecha||''}))
-  ];
-  // Deduplicar
-  const seen = new Set();
-  all = all.filter(o=>{ if(!o||!o.correlativo) return true; if(seen.has(o.correlativo)) return false; seen.add(o.correlativo); return true; });
-  all.sort((a,b)=>{
+    ...(DB.evaluaciones||[]).filter(v=>v.completado||v.estado==='Completado').map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}))
+  ].sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
     const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
     return nb-na;
@@ -2586,14 +2475,6 @@ function editarOrdenHistorial(tipo, id){
           style="width:100%;padding:13px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px">
           💾 Guardar cambios
         </button>
-        ${(orden.equipoId==='__cliente__'||orden.clienteNombre)?`
-        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-top:12px">
-          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">👤 Datos del equipo de cliente</div>
-          <div class="form-group"><label>Cliente</label><input type="text" value="${orden.clienteNombre||''}" onchange="const o=[...DB.preventivos,...DB.correctivos].find(x=>x.id==='${id}');if(o)o.clienteNombre=this.value"></div>
-          <div class="form-group"><label>Marca</label><input type="text" value="${orden.clienteMarca||''}" onchange="const o=[...DB.preventivos,...DB.correctivos].find(x=>x.id==='${id}');if(o)o.clienteMarca=this.value"></div>
-          <div class="form-group"><label>Modelo</label><input type="text" value="${orden.clienteModelo||''}" onchange="const o=[...DB.preventivos,...DB.correctivos].find(x=>x.id==='${id}');if(o)o.clienteModelo=this.value"></div>
-          <div class="form-group"><label>Serie</label><input type="text" value="${orden.clienteSerie||''}" onchange="const o=[...DB.preventivos,...DB.correctivos].find(x=>x.id==='${id}');if(o)o.clienteSerie=this.value"></div>
-        </div>`:''}
       </div>`;
     document.body.appendChild(modal);
   }, '✏️ Editar orden historial', 'Solo supervisores pueden editar órdenes cerradas');
@@ -2899,21 +2780,18 @@ renderDashboardTec();
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       if(remote._ts >= (local._ts||0)){
-        // Cargar de Firebase, pero si Firebase está vacío y local tiene datos, preferir local
-        DB.preventivos     = (remote.preventivos && remote.preventivos.length)  ? remote.preventivos  : (local.preventivos||DB.preventivos||[]);
-        DB.correctivos     = (remote.correctivos && remote.correctivos.length)  ? remote.correctivos  : (local.correctivos||DB.correctivos||[]);
-        DB.revisiones      = (remote.revisiones && remote.revisiones.length)    ? remote.revisiones   : (local.revisiones||DB.revisiones||[]);
-        DB.evaluaciones    = (remote.evaluaciones && remote.evaluaciones.length) ? remote.evaluaciones : (local.evaluaciones||DB.evaluaciones||[]);
-        DB.ordenesCerradas = (remote.ordenesCerradas && remote.ordenesCerradas.length) ? remote.ordenesCerradas : (local.ordenesCerradas||DB.ordenesCerradas||[]);
+        if(remote.preventivos)     DB.preventivos     = remote.preventivos;
+        if(remote.correctivos)     DB.correctivos     = remote.correctivos;
+        if(remote.revisiones)      DB.revisiones      = remote.revisiones||[];
+        if(remote.evaluaciones)    DB.evaluaciones    = remote.evaluaciones||[];
+        if(remote.ordenesCerradas) DB.ordenesCerradas = remote.ordenesCerradas;
         if(remote.solicitudes)     DB.solicitudes     = remote.solicitudes;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
-        else if(local.equipos && local.equipos.length) DB.equipos = local.equipos;
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
-      } else { loadDB(); }
+      } else { loadDB(); saveDB(); }
     } else { loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     window._fbReady = true;
-    _migrarEquiposCliente();
     renderDashboardTec();
 
     FB_REF.on('value', snap=>{

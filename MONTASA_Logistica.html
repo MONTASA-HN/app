@@ -548,7 +548,7 @@ function renderOrdenesLog(){
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
             ${o.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8f0fb;color:#2d6a9f;padding:2px 8px;border-radius:10px">${o.correlativo}</span>`:''}
-            <span data-estado-badge style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
+            <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
@@ -562,7 +562,8 @@ function renderOrdenesLog(){
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
-      <div id="${cbId}" style="display:${isOpen?'block':'none'}" data-lock="${(o.estado==='Pendiente'||o.estado==='Cancelado')?'1':'0'}">
+      <div id="${cbId}" style="display:${isOpen?'block':'none'}">
+        ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
         <!-- Estado -->
         <div class="form-group"><label>Estado</label>
@@ -576,8 +577,8 @@ function renderOrdenesLog(){
         </div>
         <!-- Fechas -->
         ${(()=>{
-          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento') && (o.ubicacionLog||'fuera')==='plantel';
-          const esFechaUnica = esPlantel || o.tipoLogistica==='atencion_compras' || (o.tipoLogistica==='apoyo_mantenimiento' && (o.ubicacionLog||'fuera')!=='plantel');
+          const esPlantel = (o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro') && (o.ubicacionLog||'fuera')==='plantel';
+          const esFechaUnica = esPlantel || o.tipoLogistica==='atencion_compras' || o.tipoLogistica==='apoyo_mantenimiento';
           const fecha = (o.fechaInicio||'').slice(0,10) || (o.fechaFin||'').slice(0,10);
           if(esFechaUnica) return `<div class="form-group"><label>Fecha</label>
               <input id="fd-${o.id}" type="date" value="${fecha}"
@@ -613,34 +614,15 @@ function renderOrdenesLog(){
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
                 <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        ${(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')==='plantel')?`
-        <div class="form-group"><label>Operador 1</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Operador 2</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador2',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador2===op?'selected':''}>${op}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>Operador 3</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador3',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador3===op?'selected':''}>${op}</option>`).join('')}
-          </select>
-        </div>`:``}
-        <!-- Motorista: solo fuera del plantel para entrega/retiro/apoyo -->
-        ${((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
+        <!-- Motorista: solo fuera del plantel para entrega/retiro -->
+        ${((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
@@ -728,14 +710,6 @@ function renderOrdenesLog(){
       </div>
     </div>`;
   }).join('');
-  // Aplicar bloqueo disabled en órdenes Pendiente/Cancelado
-  setTimeout(()=>{
-    el.querySelectorAll('[data-lock="1"]').forEach(card=>{
-      card.querySelectorAll('input:not([type=file]),textarea').forEach(inp=>{ inp.disabled=true; inp.style.opacity='0.5'; });
-      card.querySelectorAll('select:not(.estado-select)').forEach(sel=>{ sel.disabled=true; sel.style.opacity='0.5'; });
-      card.querySelectorAll('.tec-btn').forEach(btn=>{ btn.style.pointerEvents='none'; btn.style.opacity='0.5'; });
-    });
-  }, 20);
   setTimeout(_restoreFirmas, 50);
 }
 
@@ -994,35 +968,22 @@ function actualizarLog(id, campo, valor){
     o.fechaInicio = new Date().toISOString().slice(0,16);
   }
   o[campo] = valor;
-  // Al cambiar estado: actualizar badge + CSS de bloqueo en el DOM
+  // Al cambiar estado: actualizar solo el CSS de bloqueo en el DOM, sin re-renderizar
   if(campo==='estado'){
     const cbId = 'cb-log-'+id;
     const card = document.getElementById(cbId);
-    // Actualizar el badge en la miniatura de la tarjeta
-    const parentCard = card ? card.closest('[data-lgid]') : null;
-    if(parentCard){
-      const badge = parentCard.querySelector('[data-estado-badge]');
-      if(badge){
-        const estadoColor = valor==='En proceso'?'#f39c12':valor==='Cancelado'?'#e74c3c':'#e74c3c';
-        badge.textContent = valor;
-        badge.style.background = estadoColor+'22';
-        badge.style.color = estadoColor;
-      }
-    }
     if(card){
       // Quitar todos los <style> de bloqueo anteriores
       card.querySelectorAll('style').forEach(s=>s.remove());
-      // Actualizar disabled en inputs/textareas/selects
-      const bloquear = valor==='Pendiente'||valor==='Cancelado';
-      card.querySelectorAll('input:not([type=file]),textarea').forEach(el=>{
-        el.disabled = bloquear; el.style.opacity = bloquear?'0.5':'1';
-      });
-      card.querySelectorAll('select:not(.estado-select)').forEach(el=>{
-        el.disabled = bloquear; el.style.opacity = bloquear?'0.5':'1';
-      });
-      card.querySelectorAll('.tec-btn').forEach(el=>{
-        el.style.pointerEvents = bloquear?'none':'auto'; el.style.opacity = bloquear?'0.5':'1';
-      });
+      if(valor==='Cancelado'){
+        const s=document.createElement('style');
+        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
+        card.insertBefore(s, card.firstChild);
+      } else if(valor==='Pendiente'){
+        const s=document.createElement('style');
+        s.textContent='#'+cbId+' input:not([type=file]),#'+cbId+' textarea,#'+cbId+' canvas,#'+cbId+' .tec-btn{pointer-events:none;opacity:0.5}#'+cbId+' select:not(.estado-select){pointer-events:none;opacity:0.5}';
+        card.insertBefore(s, card.firstChild);
+      }
       // Actualizar el aviso visible
       const avisos = card.querySelectorAll('.estado-aviso');
       avisos.forEach(a=>a.remove());
@@ -1031,14 +992,6 @@ function actualizarLog(id, campo, valor){
         div.className='estado-aviso';
         div.style.cssText='font-size:12px;color:#f39c12;margin-top:4px';
         div.innerHTML='🔒 Cambia a <b>En proceso</b> para editar los campos';
-        const sel=card.querySelector('.estado-select');
-        if(sel&&sel.parentNode) sel.parentNode.appendChild(div);
-      }
-      if(valor==='Cancelado'){
-        const div=document.createElement('div');
-        div.className='estado-aviso';
-        div.style.cssText='font-size:12px;color:#e74c3c;margin-top:4px';
-        div.innerHTML='⚠️ Orden cancelada — campos bloqueados';
         const sel=card.querySelector('.estado-select');
         if(sel&&sel.parentNode) sel.parentNode.appendChild(div);
       }
@@ -1067,10 +1020,9 @@ function renderCamposTipo(o){
   var isEntrega = tipo==='entrega';
   var isRetiro  = tipo==='retiro';
   var isRenta   = tipo==='renta';
-  var isApoyo = tipo==='apoyo_mantenimiento';
   var isMovimiento = isEntrega||isRetiro;
   var ubicLog = o.ubicacionLog || 'fuera';
-  var esPlantel = (isMovimiento || isApoyo) && ubicLog === 'plantel';
+  var esPlantel = isMovimiento && ubicLog === 'plantel';
   var eq1 = DB.equipos.find(function(e){return e.id===o.equipoId;})||{};
   var eq2 = o.equipoId2 ? (DB.equipos.find(function(e){return e.id===o.equipoId2;})||{}) : null;
   var eq1Label = eq1.codigo||(o.clienteNombre||'Equipo 1');
@@ -1088,18 +1040,9 @@ function renderCamposTipo(o){
     html += '<div style="display:inline-flex;align-items:center;gap:6px;background:'+ubBg+';color:'+ubColor+';padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">'+ubLabel+'</div>';
   }
 
-  // Toggle plantel/fuera para apoyo_mantenimiento
-  if(isApoyo){
-    html += '<div class="form-group"><label>Ubicación del trabajo</label>';
-    html += '<select class="estado-select" onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'ubicacionLog\',this.value);setTimeout(function(){renderOrdenesLog()},50)">';
-    html += '<option value="fuera" '+(ubicLog==='fuera'?'selected':'')+'>🚗 Fuera del plantel</option>';
-    html += '<option value="plantel" '+(ubicLog==='plantel'?'selected':'')+'>🏭 En plantel</option>';
-    html += '</select></div>';
-  }
-
-  // Vehículo y km — solo fuera del plantel
-  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || isApoyo)){
-    var VEHICULOS = DB.equipos.filter(function(e){return (e.esVehiculo||(e.id||'').startsWith('veh_'))&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
+  // Vehículo y km — solo fuera del plantel (y compras/apoyo)
+  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
+    var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
     html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
     VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
     html += '</select></div>';
@@ -1167,7 +1110,7 @@ function actualizarLogKmRetorno(id, valor){
   o.kmRetorno = valor;
   // Actualizar kilometraje en la ficha del vehículo
   if(valor && o.equipoCompra){
-    const vehiculo = DB.equipos.find(e=>e.codigo===o.equipoCompra && (e.esVehiculo||(e.id||'').startsWith('veh_')));
+    const vehiculo = DB.equipos.find(e=>e.codigo===o.equipoCompra && e.esVehiculo);
     if(vehiculo){
       vehiculo.kilometraje = valor;
       const idx = DB.equipos.indexOf(vehiculo);
@@ -1265,56 +1208,22 @@ function cerrarOrdenLog(id){
   o.fechaCierre = new Date().toISOString().slice(0,10);
   // Restituir equipo a DISPONIBLE si era renta
   if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
-
-  // ══════════════════════════════════════════════════════════════════
-  // ACTUALIZACIÓN AUTOMÁTICA DE FLOTA AL CERRAR ORDEN
-  // ══════════════════════════════════════════════════════════════════
-  let _flotaModificada = false;
-
-  // 1) Horómetro del equipo principal (solo si >= actual)
+  // Update horometro in equipos
   const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
                     o.tipoLogistica==='retiro' ? o.horometroRetorno :
-                    o.tipoLogistica==='entrega' ? o.horometroSalida : null;
+                    o.tipoLogistica==='entrega' ? o.horometroSalida : o.horometro;
   if(horoFinal && o.equipoId){
     const eq = DB.equipos.find(e=>e.id===o.equipoId);
-    if(eq){
-      const nuevoH = parseFloat(horoFinal)||0;
-      const actualH = parseFloat(eq.horometro)||0;
-      if(nuevoH >= actualH){ eq.horometro = horoFinal; _flotaModificada = true; }
-    }
+    if(eq) eq.horometro = horoFinal;
   }
-
-  // 2) Horómetro del segundo equipo (solo si >= actual)
+  // Update second equipo if exists
   if(o.equipoId2){
     const eq2 = DB.equipos.find(e=>e.id===o.equipoId2);
     if(eq2){
       const horo2 = o.tipoLogistica==='retiro' ? o.horometroRetorno2 : o.horometroSalida2;
-      if(horo2){
-        const nuevoH2 = parseFloat(horo2)||0;
-        const actualH2 = parseFloat(eq2.horometro)||0;
-        if(nuevoH2 >= actualH2){ eq2.horometro = horo2; _flotaModificada = true; }
-      }
+      if(horo2) eq2.horometro = horo2;
     }
   }
-
-  // 3) Kilometraje del vehículo usado (solo si >= actual)
-  if(o.kmRetorno && o.equipoCompra){
-    const veh = DB.equipos.find(e=>e.codigo===o.equipoCompra);
-    if(veh){
-      const nuevoKm = parseFloat(o.kmRetorno)||0;
-      const actualKm = parseFloat(veh.km||veh.ultimoKm||veh.horometro)||0;
-      if(nuevoKm >= actualKm){
-        veh.km = o.kmRetorno; veh.ultimoKm = o.kmRetorno; veh.horometro = o.kmRetorno;
-        _flotaModificada = true;
-      }
-    }
-  }
-
-  // Escribir TODO el array de equipos a Firebase si hubo cambios
-  if(_flotaModificada && window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa/equipos').set(DB.equipos);
-  }
-  // ══════════════════════════════════════════════════════════════════
 
   // Auto-generar vale de alimentación al cerrar
   (function(){
@@ -1333,24 +1242,15 @@ function cerrarOrdenLog(id){
   })();
   // Escritura directa en Firebase — primero el estado de cierre para sync inmediato con Gerencia
   const _idxClose = DB.logistica.findIndex(x=>x.id===id);
-  // Flag para que el on('value') no revierta mientras escribimos
-  window._skipLogOverwrite = Date.now();
   if(window._fbDB && window._fbReady && _idxClose>=0){
     // Escribir la orden completa directamente al nodo específico
     window._fbDB.ref('montasa/logistica/'+_idxClose).set(o)
-      .then(()=>{
-        // Éxito: ahora escribir el array completo como respaldo
-        _writeToFirebase();
-      })
       .catch(()=>{
         // Fallback: solo los campos críticos
         window._fbDB.ref('montasa/logistica/'+_idxClose).update({
           cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
-        }).then(()=>{ _writeToFirebase(); }).catch(()=>{ _writeToFirebase(); });
+        });
       });
-  } else {
-    // Si Firebase no está listo, escribir el array completo cuando se pueda
-    _writeToFirebase();
   }
   // Guardar en localStorage
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
@@ -1789,16 +1689,14 @@ renderDashboardLog();
       } else { loadDB(); }
     } else { loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-    window._fbReady = true; // Firebase data loaded — safe to write back
+    window._fbReady = true;
     renderDashboardLog();
 
     FB_REF.on('value', snap=>{
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
-      // No sobreescribir logística si acabamos de cerrar/modificar una orden (ventana de 8s)
-      const skipLog = window._skipLogOverwrite && (Date.now() - window._skipLogOverwrite) < 8000;
-      if(d.logistica && !skipLog)   DB.logistica   = d.logistica;
+      if(d.logistica)   DB.logistica   = d.logistica;
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;

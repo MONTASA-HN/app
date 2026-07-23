@@ -244,7 +244,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .form-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;display:none}
 .form-panel-title{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--accent)}
 
-.tecnicos-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:2px}
+.tecnicos-grid{display:inline-flex;gap:10px;align-items:flex-end;margin-top:2px}
 .tecnico-check{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface);transition:all 0.15s;user-select:none;-webkit-user-select:none}
 .tecnico-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;touch-action:manipulation}
 .tecnico-check:active{transform:scale(0.97)}
@@ -805,20 +805,19 @@ function saveDB(){
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._localWriteTs = ts;
-      const payload = {
+      window._fbDB.ref('montasa').update({
+        preventivos:    DB.preventivos||[],
+        correctivos:    DB.correctivos||[],
+        revisiones:     DB.revisiones||[],
+        evaluaciones:   DB.evaluaciones||[],
+        solicitudes:    DB.solicitudes||[],
+        vendidos:       DB.vendidos||[],
+        ordenesCerradas:DB.ordenesCerradas||[],
         notifCompletadas: DB.notifCompletadas||{},
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
-      };
-      if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
-      if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
-      if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
-      if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
-      if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
-      if(DB.vendidos && DB.vendidos.length)               payload.vendidos        = DB.vendidos;
-      if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
-      window._fbDB.ref('montasa').update(payload);
+      });
     }
   }catch(e){}
 }
@@ -1524,9 +1523,7 @@ function diasAbierta(fecha){
 function fmtDT(s){
   if(!s) return '—';
   try{
-    if(typeof s==='string' && /^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
     const d = new Date(s);
-    if(isNaN(d.getTime())) return typeof s==='string'?s:'—';
     const dd = String(d.getDate()).padStart(2,'0');
     const mm = String(d.getMonth()+1).padStart(2,'0');
     const yy = d.getFullYear();
@@ -1715,18 +1712,10 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
-  function _parseD(s){
-    if(!s) return new Date(NaN);
-    if(typeof s==='string'){
-      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-      if(m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0));
-    }
-    return new Date(s);
-  }
-  const ini  = _parseD(o.inicioTrabajo  || o.fechaInicio || '');
-  const fin  = _parseD(o.finTrabajo     || o.fechaFin    || '');
-  const sal  = _parseD(o.salidaPlantel  || '');
-  const ret  = _parseD(o.retornoPlantel || '');
+  const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
+  const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
+  const sal  = new Date(o.salidaPlantel  || '');
+  const ret  = new Date(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
   const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
@@ -3350,26 +3339,12 @@ function _renderCarpetasMantSup(el){
     {tipo:'RV', icon:'✅', label:'Revisión\nFísico-Técnica',  color:'#18A303'},
     {tipo:'EV', icon:'📄', label:'Evaluación\nde Equipo',     color:'#E8811A'},
   ];
-  const oc = (DB.ordenesCerradas||[]).filter(o=>o);
-  const ocC  = oc.filter(o=>o._t==='C'||o.falla||o.sistema).length;
-  const ocP  = oc.filter(o=>o._t==='P'||(o.servicio&&!o.falla&&!o.sistema)).length;
-  const ocRV = oc.filter(o=>o._t==='RV').length;
-  const ocEV = oc.filter(o=>o._t==='EV').length;
-  const cntP  = (DB.preventivos||[]).length + ocP;
-  const cntC  = (DB.correctivos||[]).length + ocC;
-  const cntRV = (DB.revisiones||[]).length + ocRV;
-  const cntEV = (DB.evaluaciones||[]).length + ocEV;
-  const CNTS = {P:cntP, C:cntC, RV:cntRV, EV:cntEV};
   el.innerHTML = `<div class="carpeta-grid">
-    ${CARPETAS.map(c=>{
-      const cnt = CNTS[c.tipo]||0;
-      return `
+    ${CARPETAS.map(c=>`
       <div class="carpeta-item" style="--carpeta-color:${c.color}" onclick="_abrirCarpetaMantSup('${c.tipo}')">
         <span class="carpeta-icon">${c.icon}</span>
         <span class="carpeta-label">${c.label.replace('\\n','<br>')}</span>
-        ${cnt?`<span style="position:absolute;top:10px;right:12px;background:${c.color};color:white;font-size:12px;font-weight:700;min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px">${cnt}</span>`:''}
-      </div>`;
-    }).join('')}
+      </div>`).join('')}
   </div>`;
 }
 
@@ -3406,42 +3381,10 @@ function _renderOrdenesMantSup(el, tipo){
   };
 
   let all = [];
-  const cerradas = (DB.ordenesCerradas||[]).filter(o=>o).map(o=>{
-    let t = o._t;
-    if(!t){
-      if(o.falla || o.sistema) t = 'C';
-      else if(o.servicio && !o.falla) t = 'P';
-      else if(o.tipoOrden === 'revision_fisica') t = 'RV';
-      else if(o.tipoOrden === 'evaluacion') t = 'EV';
-      else t = 'C';
-    }
-    return {...o, _t:t, estado:'Completado', completado:true,
-      notas: o.diagnostico||o.trabajo||o.notas||'',
-      servicio: o.falla||o.servicio||'',
-      inicioTrabajo: o.fechaInicio||o.inicioTrabajo||'',
-      finTrabajo: o.fechaFin||o.finTrabajo||'',
-      _eqLabel: o.equipo||''
-    };
-  });
-
-  if(tipo==='P')  all = [
-    ...(DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''})),
-    ...cerradas.filter(o=>o._t==='P').map(p=>({...p, _f:p.fechaCompletado||p.fechaInicio||''}))
-  ];
-  if(tipo==='C')  all = [
-    ...(DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''})),
-    ...cerradas.filter(o=>o._t==='C').map(c=>({...c, _f:c.fechaCierre||c.fechaInicio||''}))
-  ];
-  if(tipo==='RV') all = [
-    ...(DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})),
-    ...cerradas.filter(o=>o._t==='RV').map(r=>({...r, _f:r.fechaCierre||r.fecha||''}))
-  ];
-  if(tipo==='EV') all = [
-    ...(DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''})),
-    ...cerradas.filter(o=>o._t==='EV').map(v=>({...v, _f:v.fechaCierre||v.fecha||''}))
-  ];
-  const seen = new Set();
-  all = all.filter(o=>{ if(!o||!o.correlativo) return true; if(seen.has(o.correlativo)) return false; seen.add(o.correlativo); return true; });
+  if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
+  if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
+  if(tipo==='RV') all = (DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''}));
+  if(tipo==='EV') all = (DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}));
 
   all.sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -3471,7 +3414,7 @@ function _renderOrdenesMantSup(el, tipo){
   el.innerHTML = backBtn + all.map(x=>{
     try{
       const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
-      const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : (x._eqLabel||x.equipo||'—');
+      const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
       const tiempos = calcTiemposOrden(x);
       const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
       if(x._t==='RV') return _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR);
@@ -5686,6 +5629,10 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
     ['Estado', estRaw],
     ['Técnico(s)', tecnicos],
     ...(!_esCliDet ? [['Equipo', eqLabel]] : []),
+    ...(_esCliDet&&x.clienteNombre ? [['Cliente', x.clienteNombre]] : []),
+    ...(_esCliDet&&x.clienteMarca  ? [['Marca', x.clienteMarca]]   : []),
+    ...(_esCliDet&&x.clienteModelo ? [['Modelo', x.clienteModelo]] : []),
+    ...(_esCliDet&&x.clienteSerie  ? [['Serie', x.clienteSerie]]   : []),
     ['Servicio', x.servicio||x.falla||x.notas||'—'],
     ['Inicio trabajo', fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'],
     ['Fin trabajo', fmtDT(x.finTrabajo||x.fechaFin||x.fechaCompletado)||'—'],
@@ -5701,7 +5648,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   filas.forEach(([k,v])=>{
     d += `<div style="min-width:0"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${k}</span><span style="font-weight:600;color:var(--text);word-break:break-word">${v}</span></div>`;
   });
-  if(x.notas||x.diagnostico||x.trabajo) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Notas / Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico||x.trabajo||x.notas||'—'}</span></div>`;
+  if(x.notas||x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Notas / Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.notas||x.diagnostico||'—'}</span></div>`;
   if(x.repuestos) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Repuestos</span><span style="font-weight:600;color:var(--text)">${x.repuestos}</span></div>`;
   d += `</div>`;
 
@@ -6386,13 +6333,13 @@ function _iniciarConexionFirebase(esReintento){
       }
       window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
-        if(remote.preventivos && remote.preventivos.length)    DB.preventivos    = remote.preventivos;
+        if(remote.preventivos)    DB.preventivos    = remote.preventivos;
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
-        if(remote.correctivos && remote.correctivos.length)    DB.correctivos    = remote.correctivos;
-        if(remote.revisiones && remote.revisiones.length)      DB.revisiones     = remote.revisiones;
-        if(remote.evaluaciones && remote.evaluaciones.length)  DB.evaluaciones   = remote.evaluaciones;
-        if(remote.ordenesCerradas && remote.ordenesCerradas.length) DB.ordenesCerradas= remote.ordenesCerradas;
+        if(remote.correctivos)    DB.correctivos    = remote.correctivos;
+        if(remote.revisiones)     DB.revisiones     = remote.revisiones||[];
+        if(remote.evaluaciones)   DB.evaluaciones   = remote.evaluaciones||[];
+        if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
         if(remote.logistica){
@@ -6403,9 +6350,11 @@ function _iniciarConexionFirebase(esReintento){
         localStorage.setItem(LS_KEY, JSON.stringify(DB));
       } else {
         loadDB();
+        saveDB();
       }
     } else {
       loadDB();
+      saveDB();
     }
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
