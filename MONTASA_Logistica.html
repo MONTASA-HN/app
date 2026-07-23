@@ -613,16 +613,33 @@ function renderOrdenesLog(){
         })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-                <!-- Operador: renta + entrega + retiro + apoyo_mantenimiento -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`
+                <!-- Operador: renta + entrega + retiro + apoyo fuera -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Motorista: solo fuera del plantel para entrega/retiro -->
-        ${((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento')?`
+        <!-- 3 Operadores para apoyo en plantel -->
+        ${(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')==='plantel')?`
+        <div class="form-group"><label>Operador 1</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+            <option value="">— Seleccionar —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label>Operador 2</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador2',this.value)">
+            <option value="">— Seleccionar —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador2===op?'selected':''}>${op}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label>Operador 3</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador3',this.value)">
+            <option value="">— Seleccionar —</option>
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador3===op?'selected':''}>${op}</option>`).join('')}
+          </select></div>`:``}
+        <!-- Motorista: solo fuera del plantel -->
+        ${((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
@@ -1020,9 +1037,10 @@ function renderCamposTipo(o){
   var isEntrega = tipo==='entrega';
   var isRetiro  = tipo==='retiro';
   var isRenta   = tipo==='renta';
+  var isApoyo = tipo==='apoyo_mantenimiento';
   var isMovimiento = isEntrega||isRetiro;
   var ubicLog = o.ubicacionLog || 'fuera';
-  var esPlantel = isMovimiento && ubicLog === 'plantel';
+  var esPlantel = (isMovimiento || isApoyo) && ubicLog === 'plantel';
   var eq1 = DB.equipos.find(function(e){return e.id===o.equipoId;})||{};
   var eq2 = o.equipoId2 ? (DB.equipos.find(function(e){return e.id===o.equipoId2;})||{}) : null;
   var eq1Label = eq1.codigo||(o.clienteNombre||'Equipo 1');
@@ -1040,8 +1058,17 @@ function renderCamposTipo(o){
     html += '<div style="display:inline-flex;align-items:center;gap:6px;background:'+ubBg+';color:'+ubColor+';padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">'+ubLabel+'</div>';
   }
 
+  // Toggle plantel/fuera para apoyo_mantenimiento
+  if(isApoyo){
+    html += '<div class="form-group"><label>Ubicación del trabajo</label>';
+    html += '<select class="estado-select" onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'ubicacionLog\',this.value);setTimeout(function(){renderOrdenesLog()},50)">';
+    html += '<option value="fuera" '+(ubicLog==='fuera'?'selected':'')+'>🚗 Fuera del plantel</option>';
+    html += '<option value="plantel" '+(ubicLog==='plantel'?'selected':'')+'>🏭 En plantel</option>';
+    html += '</select></div>';
+  }
+
   // Vehículo y km — solo fuera del plantel (y compras/apoyo)
-  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || tipo==='apoyo_mantenimiento')){
+  if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || isApoyo)){
     var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
     html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
     VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
