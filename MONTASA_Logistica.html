@@ -1240,23 +1240,29 @@ function cerrarOrdenLog(id){
       }
     }
   })();
-  // Escritura directa en Firebase
-  const _idxClose = DB.logistica.findIndex(x=>x.id===id);
+  // Escribir a Firebase — una sola escritura del array completo
   window._skipLogOverwrite = Date.now();
-  if(window._fbDB && window._fbReady && _idxClose>=0){
-    // Escribir la orden completa directamente al nodo específico
-    window._fbDB.ref('montasa/logistica/'+_idxClose).set(o)
-      .then(()=>{ _writeToFirebase(); })
-      .catch(()=>{
-        window._fbDB.ref('montasa/logistica/'+_idxClose).update({
-          cerrado: true, estado: 'Completado', fechaCierre: o.fechaCierre
-        }).then(()=>{ _writeToFirebase(); }).catch(()=>{ _writeToFirebase(); });
-      });
-  } else {
-    _writeToFirebase();
-  }
-  // Guardar en localStorage
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  if(window._fbDB && window._fbReady){
+    const ts = Date.now();
+    window._fbDB.ref('montasa').update({
+      logistica: DB.logistica,
+      _ts: ts,
+      _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'log'
+    }).then(()=>{
+      console.log('Orden '+o.correlativo+' cerrada en Firebase ✓');
+    }).catch(e=>{
+      console.error('Error escribiendo cierre:', e);
+      // Reintento en 2 segundos
+      setTimeout(()=>{
+        window._fbDB.ref('montasa').update({
+          logistica: DB.logistica,
+          _ts: Date.now(),
+          _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'log'
+        });
+      }, 2000);
+    });
+  }
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
   renderDashboardLog();
