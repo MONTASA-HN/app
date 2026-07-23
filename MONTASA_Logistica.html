@@ -1681,24 +1681,26 @@ renderDashboardLog();
   const FB_REF = window._fbDB.ref('montasa');
 
   FB_REF.once('value').then(snap=>{
-    const remote = snap.val();
-    if(remote && remote._ts){
-      const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
-      if(remote._ts >= (local._ts||0)){
-        if(remote.logistica)   DB.logistica   = remote.logistica;
-        if(remote.preventivos) DB.preventivos = remote.preventivos;
-        if(remote.correctivos) DB.correctivos = remote.correctivos;
-        if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
-        // Sync correlativo counter — always take the highest
-        if(remote.lastCorrelativo_LG){
-          const localCorr = DB['lastCorrelativo_LG']||0;
-          DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
-        }
-        localStorage.setItem(LS_KEY, JSON.stringify(DB));
+    try{
+      const remote = snap.val();
+      if(remote && remote._ts){
+        const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+        if(remote._ts >= (local._ts||0)){
+          if(remote.logistica)   DB.logistica   = remote.logistica;
+          if(remote.preventivos) DB.preventivos = remote.preventivos;
+          if(remote.correctivos) DB.correctivos = remote.correctivos;
+          if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
+          if(remote.lastCorrelativo_LG){
+            const localCorr = DB['lastCorrelativo_LG']||0;
+            DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
+          }
+          localStorage.setItem(LS_KEY, JSON.stringify(DB));
+        } else { loadDB(); }
       } else { loadDB(); }
-    } else { loadDB(); }
+    }catch(e){ console.warn('Error cargando datos:', e); loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     window._fbReady = true;
+    console.log('_fbReady = true SET');
     renderDashboardLog();
 
     FB_REF.on('value', snap=>{
@@ -1719,7 +1721,7 @@ renderDashboardLog();
       if(id==='ordenes')   renderOrdenesLog();
       if(id==='historial') renderHistorialLog();
     });
-  }).catch(()=>{ loadDB(); renderDashboardLog(); });
+  }).catch(e=>{ console.warn('Firebase once error:', e); loadDB(); window._fbReady = true; renderDashboardLog(); });
 })();
 
 // ── SWIPE + KEYBOARD ──────────────────────────────────────────────────────
