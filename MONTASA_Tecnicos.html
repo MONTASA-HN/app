@@ -946,7 +946,9 @@ function fmt(s){
 function fmtDT(s){
   if(!s) return '—';
   try{
+    if(typeof s==='string' && /^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
     const d = new Date(s);
+    if(isNaN(d.getTime())) return typeof s==='string'?s:'—';
     const dd = String(d.getDate()).padStart(2,'0');
     const mm = String(d.getMonth()+1).padStart(2,'0');
     const yy = d.getFullYear();
@@ -1065,10 +1067,18 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
-  const ini  = new Date(o.inicioTrabajo  || o.fechaInicio || '');
-  const fin  = new Date(o.finTrabajo     || o.fechaFin    || '');
-  const sal  = new Date(o.salidaPlantel  || '');
-  const ret  = new Date(o.retornoPlantel || '');
+  function _parseD(s){
+    if(!s) return new Date(NaN);
+    if(typeof s==='string'){
+      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+      if(m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0));
+    }
+    return new Date(s);
+  }
+  const ini  = _parseD(o.inicioTrabajo  || o.fechaInicio || '');
+  const fin  = _parseD(o.finTrabajo     || o.fechaFin    || '');
+  const sal  = _parseD(o.salidaPlantel  || '');
+  const ret  = _parseD(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && !!o.salidaPlantel;
   const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
