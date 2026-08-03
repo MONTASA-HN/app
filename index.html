@@ -475,6 +475,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   <!-- DASHBOARD -->
 
   <div id="tab-flota" class="section active">
+    <div id="loading-indicator" style="text-align:center;padding:40px 20px;color:#6b6960;font-size:14px">⏳ Cargando datos...</div>
 
     <!-- Header Flota -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -3803,6 +3804,9 @@ function renderActividadReciente(){
 }
 
 function renderDashboard(){
+  // Ocultar indicador de carga si existe
+  const _loadEl = document.getElementById('loading-indicator');
+  if(_loadEl) _loadEl.style.display = 'none';
   const flota = DB.equipos.filter(e=>!e.esGenerico);
   const total = flota.length;
   const disp  = flota.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
@@ -4670,9 +4674,9 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   } else {
     d += _buildCamposEdicionPC(x, eq, tipoPC);
     if(isPrev){
-      d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
+      // Completar: solo desde Técnicos
     } else {
-      d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
+      // Cerrar correctivo: solo desde Técnicos
     }
     d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   }
@@ -4689,14 +4693,14 @@ function _buildCamposEdicionPC(x, eq, tipoPC){
   h += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Datos de la orden</div>`;
 
   // Estado
-  h += `<div class="form-group"><label>Estado</label><select class="estado-select" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','estado',this.value)">`;
+  h += `<div class="form-group"><label>Estado</label><select class="estado-select" disabled style="opacity:0.7">`;
   ['Pendiente','En proceso','En pausa','En espera de repuestos'].forEach(e=>{
     h += `<option value="${e}" ${x.estado===e?'selected':''}>${e}</option>`;
   });
   h += `</select></div>`;
 
   // Ubicación
-  h += `<div class="form-group"><label>📍 Ubicación</label><select onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','ubicacion',this.value)">
+  h += `<div class="form-group"><label>📍 Ubicación</label><select disabled style="opacity:0.7">
     <option value="campo" ${ubicacion==='campo'?'selected':''}>🚗 Fuera del plantel</option>
     <option value="plantel" ${ubicacion==='plantel'?'selected':''}>🏭 En plantel</option>
   </select></div>`;
