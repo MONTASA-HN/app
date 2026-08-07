@@ -351,6 +351,33 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </style>
 </head>
 <body>
+<script>
+// ── Limpieza automática de Service Workers y cachés viejos (anti versión-fantasma) ──
+(function(){
+  try{
+    var work = [];
+    if('serviceWorker' in navigator){
+      work.push(navigator.serviceWorker.getRegistrations().then(function(regs){
+        return Promise.all(regs.map(function(r){ return r.unregister(); }))
+          .then(function(res){ return res.some(Boolean); });
+      }));
+    }
+    if(window.caches && caches.keys){
+      work.push(caches.keys().then(function(keys){
+        return Promise.all(keys.map(function(k){ return caches.delete(k); }))
+          .then(function(res){ return res.some(Boolean); });
+      }));
+    }
+    Promise.all(work).then(function(flags){
+      var limpio = flags.some(Boolean);
+      if(limpio && !sessionStorage.getItem('_sw_purged')){
+        sessionStorage.setItem('_sw_purged','1');
+        location.reload();
+      }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
 
 <div class="app-header" style="padding:44px 16px 10px;background:#ffffff;border-bottom:3px solid #1f3864">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
