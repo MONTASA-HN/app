@@ -516,6 +516,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </style>
 </head>
 <body>
+<div id="toast"></div>
 
 <div class="app-header" style="padding:44px 16px 10px;background:#ffffff;border-bottom:1px solid var(--border)">
   <div style="display:flex;align-items:center;gap:10px">
@@ -952,7 +953,8 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 
 
 function toast(msg, err=false){
-  const t = document.getElementById('toast');
+  let t = document.getElementById('toast');
+  if(!t){ t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
   t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
   clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 2800);
 }
@@ -1158,7 +1160,7 @@ function pinKey(num){
 function pinBorrar(){
   pinActual = pinActual.slice(0,-1);
   actualizarPinDots();
-  document.getElementById('pin-error').textContent = '';
+  (document.getElementById('pin-error')||{}).textContent = '';
 }
 
 
@@ -1184,7 +1186,7 @@ function pinConfirmar(){
     if(pinCallback) pinCallback();
     pinCallback = null;
   } else {
-    document.getElementById('pin-error').textContent = 'Clave incorrecta';
+    (document.getElementById('pin-error')||{}).textContent = 'Clave incorrecta';
     pinActual = '';
     actualizarPinDots();
   }
@@ -1206,9 +1208,9 @@ function solicitarPIN(tipo, id){
     else if(tipo==='corr') eliminarCorrectivo(id);
   };
   actualizarPinDots();
-  document.getElementById('pin-error').textContent = '';
-  document.getElementById('pin-title').textContent = 'Clave de seguridad';
-  document.getElementById('pin-sub').textContent = 'Ingresa tu clave para eliminar esta orden';
+  (document.getElementById('pin-error')||{}).textContent = '';
+  (document.getElementById('pin-title')||{}).textContent = 'Clave de seguridad';
+  (document.getElementById('pin-sub')||{}).textContent = 'Ingresa tu clave para eliminar esta orden';
   document.getElementById('pin-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -1218,9 +1220,9 @@ function solicitarPINAccion(callback, titulo, subtitulo){
   pinActual = '';
   pinCallback = callback;
   actualizarPinDots();
-  document.getElementById('pin-error').textContent = '';
-  document.getElementById('pin-title').textContent = titulo || 'Acceso restringido';
-  document.getElementById('pin-sub').textContent = subtitulo || 'Ingresa tu PIN';
+  (document.getElementById('pin-error')||{}).textContent = '';
+  (document.getElementById('pin-title')||{}).textContent = titulo || 'Acceso restringido';
+  (document.getElementById('pin-sub')||{}).textContent = subtitulo || 'Ingresa tu PIN';
   document.getElementById('pin-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -1766,8 +1768,8 @@ function guardarPreventivo(finalizar=false){
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
-  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
+  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
   if(finalizar){
@@ -1906,7 +1908,7 @@ function editarOrden(tipo, id){
   } else {
     fillSel('corr-equipo');
     document.getElementById('corr-equipo').value = orden.equipoId||'';
-    document.getElementById('corr-sistema').value = orden.sistema||'';
+    if(document.getElementById('corr-sistema')) (document.getElementById('corr-sistema')||{}).value = orden.sistema||'';
     document.getElementById('corr-falla').value = orden.falla||'';
     document.getElementById('corr-prioridad').value = orden.prioridad||'Alta';
     const [fd, ft] = splitDT(orden.fechaInicio);
@@ -1921,7 +1923,8 @@ function editarOrden(tipo, id){
     saveDB();
     toast('Orden abierta para edición');
   }
-  document.getElementById(formId).scrollIntoView({behavior:'smooth'});
+  const _formEl = document.getElementById(formId);
+  if(_formEl && _formEl.scrollIntoView) _formEl.scrollIntoView({behavior:'smooth'});
 }
 
 
@@ -2150,21 +2153,23 @@ function guardarCorrectivo(finalizar=false){
   if(!equipoId){ toast('Selecciona un equipo',true); return; }
   if(!falla){ toast('Ingresa la falla reportada',true); return; }
   const correlativoCorr = nextCorrelativo();
+  const fechaFinCorr = corrFFD ? (corrFFT ? corrFFD+'T'+corrFFT : corrFFD) : '';
   const entry = {
-    id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema').value,
+    id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema')?.value||'',
     falla, prioridad:document.getElementById('corr-prioridad').value,
-    fecha:fechaInicio, fechaInicio, fechaFin:document.getElementById('corr-fecha-fin').value,
+    fecha:fechaInicio, fechaInicio, fechaFin:fechaFinCorr,
     tecnico:getTecnicos('corr-tecnicos-grid'),
     diagnostico:document.getElementById('corr-diag').value.trim(),
     horometro:document.getElementById('corr-horometro')?.value||'',
     estado:document.getElementById('corr-estado').value
   };
   if(equipoId === '__cliente__'){
-    const nom = document.getElementById('corr-cliente-nombre').value.trim();
-    if(!nom){ toast('Ingresa el nombre del cliente',true); return; }
-    const marca   = document.getElementById('corr-cliente-marca').value.trim();
-    const modelo  = document.getElementById('corr-cliente-modelo').value.trim();
-    const serie   = document.getElementById('corr-cliente-serie').value.trim();
+    const _cliNom = document.getElementById('corr-cliente-nombre');
+    const nom = _cliNom ? _cliNom.value.trim() : '';
+    if(_cliNom && !nom){ toast('Ingresa el nombre del cliente',true); return; }
+    const marca   = document.getElementById('corr-cliente-marca')?.value.trim()||'';
+    const modelo  = document.getElementById('corr-cliente-modelo')?.value.trim()||'';
+    const serie   = document.getElementById('corr-cliente-serie')?.value.trim()||'';
     entry.clienteNombre = nom;
     entry.clienteMarca  = marca;
     entry.clienteModelo = modelo;
@@ -2204,11 +2209,11 @@ function guardarCorrectivo(finalizar=false){
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
-  ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
+  ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('corr-equipo').value='';
-  document.getElementById('corr-sistema').value='';
-  document.getElementById('corr-cliente-fields').style.display='none';
+  if(document.getElementById('corr-sistema')) (document.getElementById('corr-sistema')||{}).value='';
+  (document.getElementById('corr-cliente-fields')||{style:{}}).style.display='none';
   if(finalizar){
       try{
         entry.estado = 'Completado';
@@ -2338,7 +2343,9 @@ function finalizarOrdenCorrectivo(){
 
 
 function renderHistorial(){
-  const filtEq = document.getElementById('filt-hist-equipo').value;
+  // Técnicos no tiene pestaña de historial: si no existe el contenedor, salir sin error
+  if(!document.getElementById('historial-list')) return;
+  const filtEq = document.getElementById('filt-hist-equipo')?.value || '';
   const buscar = (document.getElementById('hist-buscar')?.value||'').toLowerCase().trim();
 
   let all = [
@@ -2638,6 +2645,51 @@ function getTecnicos(gridId){
   return Array.from(checks).map(c=>c.value).join(', ');
 }
 
+// ── Funciones restauradas (se habían perdido del archivo) ──────────────────
+function toggleForm(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+  if(el.style.display === 'block' && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function clearTecnicos(gridId){
+  document.querySelectorAll('#'+gridId+' input[type=checkbox]').forEach(c=>{
+    c.checked=false;
+    const lbl=c.closest('.tecnico-check'); if(lbl) lbl.classList.remove('selected');
+  });
+}
+function preseleccionarTecnico(gridId, tecnico){
+  clearTecnicos(gridId);
+  if(!tecnico) return;
+  const nombres = String(tecnico).split(',').map(s=>s.trim()).filter(Boolean);
+  document.querySelectorAll('#'+gridId+' input[type=checkbox]').forEach(c=>{
+    if(nombres.includes(c.value)){
+      c.checked=true;
+      const lbl=c.closest('.tecnico-check'); if(lbl) lbl.classList.add('selected');
+    }
+  });
+}
+function irACorrectivosConBuscar(buscar){
+  const btn = document.querySelector('.nav-btn:nth-child(3)');
+  showTab('correctivo', btn);
+  setTimeout(()=>{
+    const input = document.getElementById('corr-buscar');
+    if(input){ input.value = buscar; if(typeof renderCorrectivos==='function') renderCorrectivos(); }
+  }, 100);
+}
+function irAPreventivosConBuscar(buscar){
+  const btn = document.querySelector('.nav-btn:nth-child(2)');
+  showTab('preventivo', btn);
+  setTimeout(()=>{
+    const input = document.getElementById('prev-buscar');
+    if(input){ input.value = buscar; if(typeof renderPreventivos==='function') renderPreventivos(); }
+  }, 100);
+}
+function _ejecutarGuardarValeMant(){
+  // En Técnicos el vale es SOLO LECTURA (lo asigna Gerencia) — no guardar nada
+  // para no sobreescribir los vales existentes de la orden.
+}
+
 
 function renderDashboardTec(){
   const el = document.getElementById('dashboard-content');
@@ -2858,7 +2910,32 @@ renderDashboardTec();
 })();
 
 // stubs for unused functions referenced in HTML
-function previsualizarFoto(){}
+function previsualizarFoto(inputId, previewId){
+  const input=document.getElementById(inputId);
+  const preview=document.getElementById(previewId);
+  if(!input || !preview) return;
+  const file=input.files[0];
+  if(!file) return;
+  if(file.size>5*1024*1024){ toast("La foto supera 5MB",true); input.value=""; return; }
+  const reader=new FileReader();
+  reader.onload=e=>{ const img=preview.querySelector("img"); if(img) img.src=e.target.result; preview.style.display="block"; };
+  reader.readAsDataURL(file);
+}
+function borrarFoto(inputId,previewId){
+  const inp=document.getElementById(inputId); if(inp) inp.value="";
+  const p=document.getElementById(previewId);
+  if(p){ const img=p.querySelector("img"); if(img) img.src=""; p.style.display="none"; }
+}
+function getFotoBase64(inputId){
+  return new Promise(resolve=>{
+    const input=document.getElementById(inputId);
+    const file=input && input.files ? input.files[0] : null;
+    if(!file){ resolve(null); return; }
+    const reader=new FileReader();
+    reader.onload=e=>resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
 
 // ── ORIGEN PREVENTIVO/CORRECTIVO (Montasa vs Cliente) ───────────────────────
 function toggleOrigenPrev(origen){
@@ -2892,9 +2969,9 @@ function toggleOrigenCorr(origen){
   document.getElementById('corr-equipo-cliente-wrap').style.display = isCli?'block':'none';
   if(isCli){
     fillSelCliente('corr-equipo-cliente-sel');
-    document.getElementById('corr-cliente-fields').style.display='block';
+    (document.getElementById('corr-cliente-fields')||{style:{}}).style.display='block';
   } else {
-    document.getElementById('corr-cliente-fields').style.display='none';
+    (document.getElementById('corr-cliente-fields')||{style:{}}).style.display='none';
   }
 }
 
@@ -3227,10 +3304,8 @@ function finalizarRevision(id){
   if(!r.ancho) faltantes.push('Ancho (mts)');
   if(!r.alto) faltantes.push('Alto (mts)');
   if(!r.ejeUnoDos) faltantes.push('Distancia entre eje 1-2 (mts)');
-  if((r.ubicacion||'campo')!=='plantel'){
-    if(!r.kmSalida)  faltantes.push('Km salida');
-    if(!r.kmRetorno) faltantes.push('Km retorno');
-  }
+  // Km salida/retorno se capturan y validan al CREAR la revisión.
+  // La tarjeta no tiene esos campos, así que no se exigen aquí.
   if(faltantes.length){ alert('No se puede finalizar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   r.estado = 'Completado';
   r.completado = true;

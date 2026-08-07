@@ -994,7 +994,6 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <label>Operador asignado</label>
         <input type="text" id="sol-operador" placeholder="Nombre del operador...">
       </div>
->
 
       <div id="sol-wa-btn-wrap" style="margin-top:14px">
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
@@ -1011,17 +1010,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     </div>
 
     <div class="filter-bar">
-      <input id="filt-eq-buscar" placeholder="Buscar código, serie, cliente..." oninput="renderEquipos()" style="flex:2;font-size:15px;padding:12px">
-      <select id="filt-eq-estado" onchange="renderEquipos()" style="font-size:15px;padding:12px">
-        <option value="">Todos los estados</option>
-        <option value="DISPONIBLE">Disponible</option>
-        <option value="EN RENTA">En renta</option>
-        <option value="EN MANTENIMIENTO">En mantenimiento</option>
-        <option value="MAL ESTADO">Mal estado</option>
-      </select>
+      <input id="sol-buscar" placeholder="Buscar orden, equipo o técnico..." oninput="renderSolicitudes()" style="flex:2;font-size:15px;padding:12px">
     </div>
-    <div id="eq-count" class="eq-count"></div>
-    <div id="equipos-list"></div>
+    <div id="sol-count" class="eq-count"></div>
+    <div id="solicitudes-list"></div>
   </div>
 
   <!-- PREVENTIVOS -->
@@ -1390,7 +1382,6 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <label>Operador asignado</label>
         <input type="text" id="sol-operador-B" placeholder="Nombre del operador...">
       </div>
->
 
       <div id="sol-wa-btn-wrap" style="margin-top:14px">
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
@@ -2299,7 +2290,7 @@ function editarOrden(tipo, id){
       fillSel('corr-equipo');
       document.getElementById('corr-equipo').value = orden.equipoId||'';
     }
-    document.getElementById('corr-sistema').value = orden.sistema||'';
+    (document.getElementById('corr-sistema')||{}).value = orden.sistema||'';
     document.getElementById('corr-falla').value = orden.falla||'';
     document.getElementById('corr-prioridad').value = orden.prioridad||'Alta';
     const [fd, ft] = splitDT(orden.fechaInicio);
@@ -3883,15 +3874,15 @@ function renderDashboard(){
   // Órdenes en proceso — mantenimiento + logística
   const prevProc = DB.preventivos.filter(p=>!p.completado && p.estado==='En proceso').length;
   const corrProc = DB.correctivos.filter(c=>c.estado==='En proceso').length;
-  if(document.getElementById('st-dash-prev')) document.getElementById('st-dash-prev').textContent = prevProc;
-  if(document.getElementById('st-dash-corr')) document.getElementById('st-dash-corr').textContent = corrProc;
+  if(document.getElementById('st-dash-prev')) (document.getElementById('st-dash-prev')||{}).textContent = prevProc;
+  if(document.getElementById('st-dash-corr')) (document.getElementById('st-dash-corr')||{}).textContent = corrProc;
   const logProc = (DB.logistica||[]).filter(o=>o.estado==='En proceso');
   const retiroProc  = logProc.filter(o=>o.tipoLogistica==='retiro').length;
   const rentaProc   = logProc.filter(o=>o.tipoLogistica==='renta').length;
   const entregaProc = logProc.filter(o=>o.tipoLogistica==='entrega').length;
-  if(document.getElementById('st-dash-retiro'))  document.getElementById('st-dash-retiro').textContent  = retiroProc;
-  if(document.getElementById('st-dash-renta'))   document.getElementById('st-dash-renta').textContent   = rentaProc;
-  if(document.getElementById('st-dash-entrega')) document.getElementById('st-dash-entrega').textContent = entregaProc;
+  if(document.getElementById('st-dash-retiro'))  (document.getElementById('st-dash-retiro')||{}).textContent  = retiroProc;
+  if(document.getElementById('st-dash-renta'))   (document.getElementById('st-dash-renta')||{}).textContent   = rentaProc;
+  if(document.getElementById('st-dash-entrega')) (document.getElementById('st-dash-entrega')||{}).textContent = entregaProc;
 
   // Actividad reciente — últimas órdenes cerradas de cualquier tipo
   renderActividadReciente();
@@ -4936,18 +4927,18 @@ function guardarCorrectivo(finalizar=false){
   if(!falla){ toast('Ingresa la falla reportada',true); return; }
   const correlativoCorr = nextCorrelativo('MH');
   const entry = {
-    id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema').value,
+    id:uid(), correlativo:correlativoCorr, equipoId, sistema:(document.getElementById('corr-sistema')||{}).value,
     falla, prioridad:document.getElementById('corr-prioridad').value,
-    fecha:fechaInicio, fechaInicio, fechaFin:document.getElementById('corr-fecha-fin').value,
+    fecha:fechaInicio, fechaInicio, fechaFin:(document.getElementById('corr-fecha-fin')||{}).value,
     tecnico:getTecnicos('corr-tecnicos-grid'),
     diagnostico:document.getElementById('corr-diag').value.trim(),
     estado:document.getElementById('corr-estado').value
   };
   if(equipoId === '__cliente__'){
-    const nom   = document.getElementById('corr-cliente-nombre').value.trim();
-    const marca  = document.getElementById('corr-cliente-marca').value.trim();
-    const modelo = document.getElementById('corr-cliente-modelo').value.trim();
-    const serie  = document.getElementById('corr-cliente-serie').value.trim();
+    const nom   = (document.getElementById('corr-cliente-nombre')||{value:''}).value.trim();
+    const marca  = (document.getElementById('corr-cliente-marca')||{value:''}).value.trim();
+    const modelo = (document.getElementById('corr-cliente-modelo')||{value:''}).value.trim();
+    const serie  = (document.getElementById('corr-cliente-serie')||{value:''}).value.trim();
     if(!nom)   { toast('Falta: Nombre del cliente',true); return; }
     if(!marca)  { toast('Falta: Marca del equipo',true); return; }
     if(!modelo) { toast('Falta: Modelo del equipo',true); return; }
@@ -4971,7 +4962,7 @@ function guardarCorrectivo(finalizar=false){
   ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('corr-equipo').value='';
-  document.getElementById('corr-sistema').value='';
+  (document.getElementById('corr-sistema')||{}).value='';
   document.getElementById('corr-cliente-fields').style.display='none';
   if(finalizar){
       try{
