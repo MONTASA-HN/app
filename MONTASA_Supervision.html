@@ -1166,9 +1166,12 @@ function loadDB(){
 }
 
 function toast(msg, err=false){
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
-  clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 2800);
+  let t = document.getElementById('toast');
+  if(!t){ t = document.createElement('div'); t.id='toast'; t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f3864;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9999;max-width:90%;text-align:center'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.background = err ? '#c0392b' : '#1f3864';
+  t.style.opacity = '1';
+  clearTimeout(t._t); t._t = setTimeout(() => { t.style.opacity = '0'; }, 2800);
 }
 
 function showTab(id, el){
@@ -4327,7 +4330,8 @@ async function enviarSolicitudWA(){
     + '📅 *Fecha:* ' + fecha;
   tecnicosData.forEach((t, i) => {
     const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
-    setTimeout(() => window.open(url, '_blank'), i * 800);
+    if(i === 0){ window.open(url, '_blank'); }        // primero: inmediato, preserva el gesto del usuario
+    else { setTimeout(() => window.open(url, '_blank'), i * 800); }
   });
 }
 
