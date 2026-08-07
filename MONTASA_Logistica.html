@@ -543,7 +543,7 @@ function renderOrdenesLog(){
     const estadoColor = o.estado==='En proceso'?'#f39c12':o.estado==='En espera'?'#3498db':'#e74c3c';
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
-    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;cursor:pointer" data-lgid="${o.id}">
+    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;cursor:pointer" data-lgid="${o.id}" onclick="if(!event.target.closest('button,input,select,textarea,canvas,label'))toggleCardLog('${o.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
@@ -557,7 +557,7 @@ function renderOrdenesLog(){
           ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
         </div>
-        <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}"">▼</span>
+        <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
@@ -1686,13 +1686,16 @@ function validarFechasOrden(fechaInicio, fechaFin){
 }
 
 // ── RENDER INMEDIATO con datos locales ──────────────────────────────────────
-loadDB();
-renderDashboardLog();
+try{ loadDB(); }catch(e){ console.error('Error en loadDB():', e); }
+try{ renderDashboardLog(); }catch(e){ console.error('Error en renderDashboardLog():', e); }
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────
+try{
 (function(){
   if(typeof firebase==='undefined'){
-    loadDB(); renderDashboardLog(); return;
+    try{ loadDB(); renderDashboardLog(); }catch(e){}
+    window._fbReady = true;
+    return;
   }
   const firebaseConfig = {
     apiKey: "AIzaSyCDXVpqQw62z0OI9fqDrdZQhCv7V0RvhiE",
@@ -1750,6 +1753,8 @@ renderDashboardLog();
     });
   }).catch(e=>{ console.warn('Firebase once error:', e); loadDB(); window._fbReady = true; renderDashboardLog(); });
 })();
+
+}catch(e){ console.error('Error en bloque Firebase:', e); window._fbReady = true; }
 
 // ── SWIPE + KEYBOARD ──────────────────────────────────────────────────────
 (function(){
