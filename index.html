@@ -1584,25 +1584,30 @@ function _sincronizarLogisticaConReintento(nuevaOrdenId){
     setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
     return;
   }
-  // Escribir SOLO la nueva orden por índice — nunca el array completo
-  // Así no se revierte ningún cierre que Logística haya hecho
-  if(nuevaOrdenId){
-    const idx = (DB.logistica||[]).findIndex(o=>o&&o.id===nuevaOrdenId);
-    if(idx>=0){
-      const clean = Object.assign({}, DB.logistica[idx]);
-      Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
-      window._fbDB.ref('montasa/logistica/'+idx).set(clean)
-        .then(()=>{
-          window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
-        }).catch(()=>{
-          console.warn('Reintentando sync logistica...');
-          setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
-        });
+  // Leer el array real de Firebase, agregar la nueva orden, escribir de vuelta
+  window._fbDB.ref('montasa/logistica').once('value').then(snap=>{
+    const remoto = snap.val() || [];
+    const arr = Array.isArray(remoto) ? remoto.filter(o=>o) : Object.values(remoto).filter(o=>o);
+    if(nuevaOrdenId){
+      const nueva = (DB.logistica||[]).find(o=>o&&o.id===nuevaOrdenId);
+      if(nueva){
+        // Si ya existe en Firebase, actualizarla; si no, agregarla
+        const idxRemoto = arr.findIndex(o=>o&&o.id===nuevaOrdenId);
+        const clean = Object.assign({}, nueva);
+        Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
+        if(idxRemoto >= 0) arr[idxRemoto] = clean;
+        else arr.push(clean);
+      }
     }
-  } else {
-    // Fallback sin ID — solo sincronizar el correlativo
-    window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
-  }
+    return window._fbDB.ref('montasa/logistica').set(arr).then(()=>{
+      window._fbDB.ref('montasa/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
+      // Actualizar DB local con el array de Firebase para mantener índices sincronizados
+      DB.logistica = arr;
+    });
+  }).catch(e=>{
+    console.warn('Reintentando sync logistica...', e);
+    setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
+  });
 }
 
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
