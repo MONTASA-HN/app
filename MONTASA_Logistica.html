@@ -402,7 +402,7 @@ const EQUIPOS_INICIALES = [{"id":"e400n9nx","codigo":"E-01","desc":"GENIE Z-60/3
 function loadDB(){
   try{
     const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
-    if(d.logistica)   DB.logistica   = d.logistica;
+    if(d.logistica)   DB.logistica   = d.logistica.filter(o=>o&&o.id);
     if(d.preventivos) DB.preventivos = d.preventivos;
     if(d.correctivos) DB.correctivos = d.correctivos;
     if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
@@ -477,7 +477,7 @@ function renderDashboardLog(){
   const diaAnio = Math.floor((now - new Date(now.getFullYear(),0,0))/86400000);
   const fraseDia = frases[diaAnio % frases.length];
 
-  const abiertas  = (DB.logistica||[]).filter(o=>!o.cerrado && o.estado!=='Cancelado');
+  const abiertas  = (DB.logistica||[]).filter(o=>o && !o.cerrado && o.estado!=='Cancelado');
   const pend      = abiertas.filter(o=>o.estado==='Pendiente').length;
   const proc      = abiertas.filter(o=>o.estado==='En proceso').length;
   const esp       = abiertas.filter(o=>o.estado==='Cancelado').length;
@@ -943,7 +943,7 @@ function toggleCardLog(id){
   if(!el) return;
   const isOpen = el.style.display !== 'none';
   if(!isOpen){
-    const o = (DB.logistica||[]).find(x=>x.id===id);
+    const o = (DB.logistica||[]).find(x=>x&&x.id===id);
     if(o && (o.cerrado || o.estado==='Cancelado')){
       const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
       const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
@@ -1002,7 +1002,7 @@ function _eliminarOrdenLog(id){
 
 
 function actualizarLog(id, campo, valor){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   if(campo==='fechaFin' && valor && o.fechaInicio){
     const err = validarFechasOrden(o.fechaInicio, valor);
@@ -1153,7 +1153,7 @@ function renderCamposTipo(o){
   return html;
 }
 function actualizarLogKmRetorno(id, valor){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   const salida = parseFloat(o.kmSalida||0);
   const retorno = parseFloat(valor||0);
@@ -1176,7 +1176,7 @@ function actualizarLogKmRetorno(id, valor){
 }
 
 function actualizarLogHorometroRetorno(id, valor){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   const salida = parseFloat(o.horometroSalida||0);
   const retorno = parseFloat(valor||0);
@@ -1189,7 +1189,7 @@ function actualizarLogHorometroRetorno(id, valor){
 }
 
 function cancelarOrdenLog(id){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   if(!confirm('¿Cancelar la orden '+o.correlativo+'?\n\nEsta acción moverá la orden al historial.')) return;
   o.estado = 'Cancelado';
@@ -1207,7 +1207,7 @@ function subirFotoLog(id, input){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const o = (DB.logistica||[]).find(x=>x.id===id);
+    const o = (DB.logistica||[]).find(x=>x&&x.id===id);
     if(!o) return;
     o.foto = e.target.result;
     saveDB();
@@ -1218,7 +1218,7 @@ function subirFotoLog(id, input){
 }
 
 function cerrarOrdenLog(id){
-  const o = (DB.logistica||[]).find(x=>x.id===id);
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   const faltantes = [];
   const esCancelado = o.estado === 'Cancelado';
@@ -1743,7 +1743,7 @@ try{
       if(remote && remote._ts){
         const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
         if(remote._ts >= (local._ts||0)){
-          if(remote.logistica)   DB.logistica   = remote.logistica;
+          if(remote.logistica)   DB.logistica   = remote.logistica.filter(o=>o&&o.id);
           if(remote.preventivos) DB.preventivos = remote.preventivos;
           if(remote.correctivos) DB.correctivos = remote.correctivos;
           if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
@@ -1765,7 +1765,7 @@ try{
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       const skipLog = window._skipLogOverwrite && (Date.now() - window._skipLogOverwrite) < 8000;
-      if(d.logistica && !skipLog)   DB.logistica   = d.logistica;
+      if(d.logistica && !skipLog)   DB.logistica   = d.logistica.filter(o=>o&&o.id);
       if(d.preventivos) DB.preventivos = d.preventivos;
       if(d.correctivos) DB.correctivos = d.correctivos;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
@@ -2681,7 +2681,7 @@ document.addEventListener('click', function(e){
 function editarOrdenCerradaLog(id){
   solicitarPINAccion(function(){
     // Reabrir la orden: quitar cerrado, volver a En proceso
-    const o = (DB.logistica||[]).find(x=>x.id===id);
+    const o = (DB.logistica||[]).find(x=>x&&x.id===id);
     if(!o) return;
     o.cerrado = false;
     o.estado = 'En proceso';
@@ -2713,7 +2713,7 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
 
 // ── FOTOS LOGÍSTICA (patrón idéntico a Técnicos) ────────────────────────────
 function agregarFotosLog(id, input){
-  const orden = (DB.logistica||[]).find(x=>x.id===id);
+  const orden = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!orden) return;
   if(!orden.fotos) orden.fotos = [];
   const archivos = Array.from(input.files);
@@ -2750,7 +2750,7 @@ function agregarFotosLog(id, input){
 }
 function eliminarFotoLog(id, idx){
   if(!confirm('¿Eliminar esta foto?')) return;
-  const orden = (DB.logistica||[]).find(x=>x.id===id);
+  const orden = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!orden || !orden.fotos) return;
   orden.fotos.splice(idx, 1);
   saveDB();
