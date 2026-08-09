@@ -1324,6 +1324,16 @@ function _construirCamposOrden(tipo, o, eq){
     if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
     campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
+  } else if(tipo==='cortinas'){
+    const t = calcTiemposOrden(o);
+    campos.length = 0; // cortinas no usa equipo de flota
+    campos.push(['Correlativo', o.correlativo||'—']);
+    campos.push(['Cliente', o.cliente||'—']);
+    campos.push(['Técnico(s)', (o.tecnicos&&o.tecnicos.length)?o.tecnicos.filter(Boolean).join(', '):(o.tecnico||'—')]);
+    campos.push(['🔧 Inicio de trabajo', fmtDT(o.fechaInicio)|| (o.fecha?o.fecha+(o.horaIni?' '+o.horaIni:''):'—')]);
+    campos.push(['✅ Fin de trabajo', fmtDT(o.fechaFin)|| (o.fechaFinFecha?o.fechaFinFecha+(o.horaFin?' '+o.horaFin:''):'—')]);
+    if(t.total!=='—') campos.push(['🕐 Tiempo total', t.total]);
+    campos.push(['Descripción del trabajo', o.descripcion||'—']);
   } else if(tipo==='revision'){
     campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
     campos.push(['Fecha', o.fecha||'—']);
@@ -1380,6 +1390,7 @@ async function copiarImagenOrden(tipo, id){
   try{
     const arr = tipo==='preventivo' ? DB.preventivos
               : tipo==='correctivo' ? DB.correctivos
+              : tipo==='cortinas'   ? (DB.cortinas||[])
               : tipo==='revision'   ? DB.revisiones
               : tipo==='evaluacion' ? DB.evaluaciones
               : (DB.logistica||[]);
@@ -1389,6 +1400,7 @@ async function copiarImagenOrden(tipo, id){
     const campos = _construirCamposOrden(tipo, o, eq);
     const tipoTitulo = {
       preventivo:'Orden de Preventivo', correctivo:'Orden de Correctivo',
+      cortinas:'Orden de Cortinas / Niveladoras',
       revision:'Revisión Físico-Técnica', evaluacion:'Evaluación de Equipo',
       renta:'Orden de Renta', entrega:'Entrega de Equipo', retiro:'Retiro/Recepción de Equipo',
       apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
@@ -4099,6 +4111,8 @@ function _buildCardCT(x, ESTADOS_COLOR){
   const estCT = x.completado?'Completado':(x.estado||'Pendiente');
   const estCfgCT = ESTADOS_COLOR[estCT]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
   const isOpenCT = openHistGer.has(x.id);
+  const clienteCT = x.cliente||x.ubicacion||'—';
+  const tiemposCT = calcTiemposOrden(x);
   let cCT = `<div class="card" style="padding:12px 14px;border-left:3px solid #9B59B6;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
   cCT += `<div style="display:flex;justify-content:space-between;align-items:center">`;
   cCT += `<div style="flex:1;min-width:0">`;
@@ -4107,20 +4121,43 @@ function _buildCardCT(x, ESTADOS_COLOR){
   cCT += `<span style="font-size:11px;font-weight:700;background:${estCfgCT.bg};color:${estCfgCT.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgCT.border}">${estCT}</span>`;
   if(x.prioridad && x.prioridad!=='Normal') cCT += `<span style="font-size:11px;font-weight:700;background:#fff3f3;color:#c00;padding:2px 8px;border-radius:10px;border:1px solid #f5c6c6">${x.prioridad}</span>`;
   cCT += `</div>`;
-  cCT += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">📍 ${x.ubicacion||'—'}</div>`;
+  cCT += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">👤 ${clienteCT}</div>`;
   cCT += `<div style="font-size:11px;color:var(--text3)">🚪 Cortinas · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
   cCT += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenCT?'⌃':'⌄'}</span></div>`;
   if(isOpenCT){
     let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
     d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">`;
-    [['Correlativo',x.correlativo||'—'],['Estado',estCT],['Técnico(s)',tecs],['Prioridad',x.prioridad||'Normal'],['Fecha',x.fecha||'—'],['Ubicación',x.ubicacion||'—']].filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
+    const filasCT = [
+      ['Correlativo',x.correlativo||'—'],
+      ['Estado',estCT],
+      ['Cliente',x.cliente||'—'],
+      ['Técnico(s)',tecs],
+      ['Prioridad',x.prioridad||'Normal'],
+      ['Inicio trabajo', fmtDT(x.fechaInicio)|| (x.fecha?x.fecha+(x.horaIni?' '+x.horaIni:''):'—')],
+      ['Fin trabajo', fmtDT(x.fechaFin)|| (x.fechaFinFecha?x.fechaFinFecha+(x.horaFin?' '+x.horaFin:''):'—')],
+      ...(tiemposCT.total!=='—' ? [['Tiempo total', tiemposCT.total]] : [])
+    ];
+    filasCT.filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
       d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
     });
     if(x.descripcion) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Descripción del trabajo</span><span style="font-weight:600">${x.descripcion}</span></div>`;
     d += `</div>`;
-    if(estCT==='Completado'){
-      d += `<button onclick="event.stopPropagation();eliminarDelHistorial('ct','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+    // Vale de alimentación
+    if(x.vales&&x.vales.length){
+      const tv=x.vales.reduce((s,v)=>s+v.monto,0);
+      d += `<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`;
     }
+    // Firma del cliente
+    if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA DEL CLIENTE</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+    // Botones de acción
+    d += `<div style="display:flex;flex-direction:column;gap:6px">`;
+    d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','cortinas')" style="width:100%;padding:9px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+    if(estCT==='Completado'){
+      d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ct','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+      d += `<button onclick="event.stopPropagation();copiarImagenOrden('cortinas','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    }
+    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('ct','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+    d += `</div>`;
     d += `</div>`;
     cCT += d;
   }
@@ -4576,6 +4613,17 @@ function eliminarDelHistorial(tipo, id){
       } else {
         renderLogistica(); renderHistorial(); toast('Orden eliminada ✓');
       }
+    } else if(tipo==='ct'){
+      DB.cortinas = (DB.cortinas||[]).filter(x=>x.id!==id);
+      saveDB();
+      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+      fillHistSel(); renderHistorial(); toast('Orden eliminada');
+    } else if(tipo==='rv'){
+      DB.revisiones = (DB.revisiones||[]).filter(x=>x.id!==id);
+      saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
+    } else if(tipo==='ev'){
+      DB.evaluaciones = (DB.evaluaciones||[]).filter(x=>x.id!==id);
+      saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else {
       const ordenCorr = DB.correctivos.find(x=>x.id===id);
       _revertirEstadoEquipoAlEliminar(ordenCorr);
@@ -6008,6 +6056,7 @@ let _viaticosData = null;
 function _getViaticosArray(tipo){
   if(tipo==='preventivo') return DB.preventivos||[];
   if(tipo==='correctivo') return DB.correctivos||[];
+  if(tipo==='cortinas')   return DB.cortinas||[];
   if(tipo==='revision')   return DB.revisiones||[];
   if(tipo==='evaluacion') return DB.evaluaciones||[];
   return DB.logistica||[];
@@ -6018,6 +6067,7 @@ function _getViaticosOrden(){
 function _viaticosOrdenCompletada(orden, tipo){
   if(tipo==='preventivo') return !!orden.completado;
   if(tipo==='correctivo') return orden.estado==='Completado';
+  if(tipo==='cortinas') return !!orden.completado || orden.estado==='Completado';
   if(tipo==='revision'||tipo==='evaluacion') return !!orden.completado || orden.estado==='Completado';
   return !!orden.cerrado || orden.estado==='Completado'; // logistica
 }
@@ -7228,6 +7278,9 @@ function _reabrirOrdenMant(tipo, id){
       if(orden){ orden.completado = false; orden.estado = 'En proceso'; delete orden.fechaCierre; }
     } else if(tipo==='ev'){
       orden = (DB.evaluaciones||[]).find(function(x){ return x.id===id; });
+      if(orden){ orden.completado = false; orden.estado = 'En proceso'; delete orden.fechaCierre; }
+    } else if(tipo==='ct'){
+      orden = (DB.cortinas||[]).find(function(x){ return x.id===id; });
       if(orden){ orden.completado = false; orden.estado = 'En proceso'; delete orden.fechaCierre; }
     }
     if(!orden){ toast('Orden no encontrada'); return; }
