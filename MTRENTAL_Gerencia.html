@@ -3855,7 +3855,7 @@ function renderDashboard(){
   // Ocultar indicador de carga si existe
   const _loadEl = document.getElementById('loading-indicator');
   if(_loadEl) _loadEl.style.display = 'none';
-  const flota = DB.equipos.filter(e=>!e.esGenerico);
+  const flota = DB.equipos.filter(e=>!e.esGenerico && !e.esVehiculo);
   const total = flota.length;
   const disp  = flota.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
   const renta = flota.filter(e=>e.estado==='EN RENTA').length;
@@ -6193,6 +6193,19 @@ function _iniciarConexionFirebase(esReintento){
       try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
     renderDashboard();
+    // Re-renderizar la pestaña activa con los datos ya cargados (evita que la
+    // flota aparezca vacía al refrescar hasta que el usuario toca un filtro).
+    (function(){
+      const active = document.querySelector('.section.active');
+      if(active){
+        const _id = active.id.replace('tab-','');
+        if(_id==='flota')      renderEquipos();
+        else if(_id==='preventivo') renderPreventivos();
+        else if(_id==='correctivo') renderCorrectivos();
+        else if(_id==='historial')  renderHistorial();
+        else if(_id==='personal')   renderPersonal();
+      }
+    })();
 
     // Listener dedicado para logística — siempre actualizado independientemente del _ts
     window._fbDB.ref('montasa/logistica').on('value', snapLog => {
