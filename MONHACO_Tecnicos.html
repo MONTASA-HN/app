@@ -3544,34 +3544,58 @@ function renderCortinas(){
     card += `</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
     card += `</div>`;
     if(isOpen){
+      const bloqueado = o.completado || est==='Completado';
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-      card += `<div class="form-group"><label>Estado</label><select onchange="actualizarCortina('${o.id}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select></div>`;
-      card += `<div class="form-group"><label>Nombre del cliente</label><input value="${(o.cliente||'').replace(/"/g,'&quot;')}" onchange="actualizarCortina('${o.id}','cliente',this.value)"></div>`;
-      card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${o.fecha||''}" onchange="actualizarCortina('${o.id}','fecha',this.value)"></div>`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${o.horaIni||''}" onchange="actualizarCortina('${o.id}','horaIni',this.value)"></div>`;
-      card += `</div>`;
-      card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha fin</label><input type="date" value="${o.fechaFinFecha||''}" onchange="actualizarCortina('${o.id}','fechaFinFecha',this.value)"></div>`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" value="${o.horaFin||''}" onchange="actualizarCortina('${o.id}','horaFin',this.value)"></div>`;
-      card += `</div>`;
-      card += `<div class="form-group" style="margin-top:10px"><label>Descripción del trabajo</label><textarea rows="3" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
-      card += `<div class="form-group" style="margin-top:10px"><label>Técnicos asignados</label>`;
-      card += `<div class="tecnicos-grid" style="flex-wrap:wrap" id="cort-tecs-${o.id}">`;
-      ['Rances Pineda','Angel Cardona','Maynor Paz','Cristian Barrera','Jose Escoto','Ramon Moreno','Sergio Madrid'].forEach(nom=>{
-        const marcado = (o.tecnicos||[]).includes(nom);
-        card += `<label class="tecnico-check${marcado?' selected':''}"><input type="checkbox" value="${nom}" ${marcado?'checked':''} onchange="toggleTecnicoCortina('${o.id}',this)"> ${nom}</label>`;
-      });
-      card += `</div></div>`;
-      card += `<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>`;
-      card += `<canvas id="firma-cort-${o.id}" class="firma-canvas${o.firma?' firmado':''}" width="600" height="160"
-        ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
-        onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>`;
-      card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-        <button onclick="event.stopPropagation();guardarFirmaCortina('${o.id}')" style="font-size:12px;background:#9B59B6;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:600">💾 Guardar firma</button>
-        <button onclick="event.stopPropagation();limpiarFirmaCortina('${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:6px 12px;cursor:pointer">🗑 Borrar</button>
-      </div></div>`;
-      if(!o.completado){
+      if(bloqueado){
+        // ── SOLO LECTURA ──────────────────────────────────────────────
+        card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
+          <span style="font-size:11px;color:var(--text3)">${o.fechaCierre||''}</span>
+        </div>`;
+        card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:12px">`;
+        const detalles = [
+          ['Cliente', o.cliente||'—'],
+          ['Fecha inicio', (o.fecha||'—')+(o.horaIni?' '+o.horaIni:'')],
+          ['Fecha fin', (o.fechaFinFecha||'—')+(o.horaFin?' '+o.horaFin:'')]
+        ];
+        detalles.forEach(([k,v])=>{
+          card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+        });
+        card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Descripción del trabajo</span><span style="font-weight:600;color:var(--text)">${o.descripcion||'—'}</span></div>`;
+        card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Técnicos</span><span style="font-weight:600;color:var(--text)">${tecs}</span></div>`;
+        card += `</div>`;
+        if(o.firma){
+          card += `<div style="margin-top:6px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✍️ Firma del cliente</div>`;
+          card += `<img src="${o.firma}" style="width:100%;max-width:300px;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>`;
+        }
+      } else {
+        // ── EDITABLE ──────────────────────────────────────────────────
+        card += `<div class="form-group"><label>Estado</label><select onchange="actualizarCortina('${o.id}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select></div>`;
+        card += `<div class="form-group"><label>Nombre del cliente</label><input value="${(o.cliente||'').replace(/"/g,'&quot;')}" onchange="actualizarCortina('${o.id}','cliente',this.value)"></div>`;
+        card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">`;
+        card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${o.fecha||''}" onchange="actualizarCortina('${o.id}','fecha',this.value)"></div>`;
+        card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${o.horaIni||''}" onchange="actualizarCortina('${o.id}','horaIni',this.value)"></div>`;
+        card += `</div>`;
+        card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">`;
+        card += `<div class="form-group" style="margin-bottom:0"><label>Fecha fin</label><input type="date" value="${o.fechaFinFecha||''}" onchange="actualizarCortina('${o.id}','fechaFinFecha',this.value)"></div>`;
+        card += `<div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" value="${o.horaFin||''}" onchange="actualizarCortina('${o.id}','horaFin',this.value)"></div>`;
+        card += `</div>`;
+        card += `<div class="form-group" style="margin-top:10px"><label>Descripción del trabajo</label><textarea rows="3" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
+        card += `<div class="form-group" style="margin-top:10px"><label>Técnicos asignados</label>`;
+        card += `<div class="tecnicos-grid" style="flex-wrap:wrap" id="cort-tecs-${o.id}">`;
+        ['Rances Pineda','Angel Cardona','Maynor Paz','Cristian Barrera','Jose Escoto','Ramon Moreno','Sergio Madrid'].forEach(nom=>{
+          const marcado = (o.tecnicos||[]).includes(nom);
+          card += `<label class="tecnico-check${marcado?' selected':''}"><input type="checkbox" value="${nom}" ${marcado?'checked':''} onchange="toggleTecnicoCortina('${o.id}',this)"> ${nom}</label>`;
+        });
+        card += `</div></div>`;
+        card += `<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>`;
+        card += `<canvas id="firma-cort-${o.id}" class="firma-canvas${o.firma?' firmado':''}" width="600" height="160"
+          ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+          onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>`;
+        card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <button onclick="event.stopPropagation();guardarFirmaCortina('${o.id}')" style="font-size:12px;background:#9B59B6;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:600">💾 Guardar firma</button>
+          <button onclick="event.stopPropagation();limpiarFirmaCortina('${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:6px 12px;cursor:pointer">🗑 Borrar</button>
+        </div></div>`;
         card += `<button onclick="event.stopPropagation();finalizarCortina('${o.id}')" style="width:100%;padding:12px;background:#9B59B6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">✅ Finalizar orden</button>`;
       }
       card += `</div>`;
@@ -3646,6 +3670,9 @@ function actualizarCortina(id, campo, valor){
 function finalizarCortina(id){
   const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
   if(!o){ toast('Orden no encontrada'); return; }
+  // Capturar la firma actual del canvas si el técnico firmó pero no la guardó
+  const firmaActual = getFirmaData('cort-'+id);
+  if(firmaActual) o.firma = firmaActual;
   o.estado = 'Completado';
   o.completado = true;
   o.fechaCierre = new Date().toISOString().slice(0,10);
