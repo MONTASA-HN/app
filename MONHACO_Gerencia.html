@@ -5865,7 +5865,10 @@ function _iniciarConexionFirebase(esReintento){
           try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
-        localStorage.setItem(LS_KEY, JSON.stringify(DB));
+        // Guardado local best-effort protegido: si el localStorage esta lleno
+        // (QuotaExceeded) NO debe tumbar el procesamiento — Firebase manda.
+        try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+        catch(e){ console.warn('Cache local no guardado ('+(e&&e.name||'error')+'). La app sigue con datos de Firebase.'); }
       } else {
         loadDB();
         saveDB();
