@@ -244,12 +244,11 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .form-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;display:none}
 .form-panel-title{font-size:14px;font-weight:600;margin-bottom:14px;color:var(--accent)}
 
-.tecnicos-grid{display:inline-flex;gap:10px;align-items:flex-end;margin-top:2px}
-.tecnico-check{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface);transition:all 0.15s;user-select:none;-webkit-user-select:none}
+.tecnicos-grid{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin-top:2px}
+.tecnico-check{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;padding:10px 8px;border:1px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;text-align:center;background:var(--surface);transition:all 0.15s;user-select:none;-webkit-user-select:none;width:96px;box-sizing:border-box}
 .tecnico-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;touch-action:manipulation}
 .tecnico-check:active{transform:scale(0.97)}
-.tecnico-check input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
-.tecnico-check.selected{background:var(--accent-light,#e8edf5);border-color:var(--accent);font-weight:500}
+.tecnico-check.selected{background:var(--accent-light,#e8edf5);border-color:var(--accent);font-weight:600}
 .foto-upload{border:2px dashed var(--border2);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;background:var(--surface2)}
 .foto-upload-label{font-size:13px;color:var(--text2);display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
 .foto-upload-label svg{stroke:var(--text3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -4079,6 +4078,17 @@ function solTipoChange(){
   if(toggleEl) toggleEl.style.display = esMantCP?'block':'none';
   if(!esMantCP) solOrigenChange('montasa');
 
+  // Cortinas / Niveladoras: siempre es equipo de cliente → solo descripción + técnico
+  if(tipo==='cortinas'){
+    if(toggleEl) toggleEl.style.display='none';
+    visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción del trabajo';
+    visEl(tecGrp,true);
+    // ocultar todo lo relacionado con equipo, prioridad, ubicación
+    visEl(eqGroup,false); visEl(eqManual,false); visEl(prioGrp,false); visEl(ubicWrap,false);
+    visEl(document.getElementById('sol-ublog-wrap'),false); visEl(document.getElementById('sol-ublog-wrap2'),false);
+    return;
+  }
+
   if(tipo==='entrega'||tipo==='retiro'){ visEl(eqGroup,true); visEl(eq2,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true); return; }
   if(tipo==='apoyo_mantenimiento'){
     visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(logGrp,true);
@@ -4151,6 +4161,32 @@ async function enviarSolicitudWA(){
       const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
       if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
     }
+    return;
+  }
+
+  // ── CORTINAS / NIVELADORAS ────────────────────────────────────────────────
+  if(tipo === 'cortinas'){
+    const cbs = document.querySelectorAll('#sol-tecnicos-grid input[type=checkbox]:checked');
+    if(!cbs.length){ toast('Selecciona al menos un técnico', true); return; }
+    if(!descRaw){ toast('Falta: Descripción del trabajo', true); return; }
+    const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
+    const tecNombre = tecs.join(', ');
+    const tecNums = Array.from(cbs).map(c=>c.value);
+    if(!DB.cortinas) DB.cortinas = [];
+    const n = DB.cortinas.length + 1;
+    const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
+    const hoy = new Date().toISOString().slice(0,10);
+    DB.cortinas.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+    clearSolicitudForm(); renderDashboardTec();
+    toast('Orden '+corr+' creada ✓');
+    const msg = '\uD83D\uDEAA *CORTINAS / NIVELADORAS - MONHACO*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+hoy;
+    tecNums.forEach((num,i)=>{
+      const url='https://wa.me/'+num.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg);
+      if(i===0) window.open(url,'_blank');            // primero: inmediato (evita bloqueo de popups)
+      else setTimeout(()=>window.open(url,'_blank'), i*800);
+    });
     return;
   }
 
@@ -4263,7 +4299,8 @@ async function enviarSolicitudWA(){
     + '📅 *Fecha:* ' + fecha;
   tecnicosData.forEach((t, i) => {
     const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
-    setTimeout(() => window.open(url, '_blank'), i * 800);
+    if(i===0) window.open(url, '_blank');             // primero: inmediato (evita bloqueo de popups)
+    else setTimeout(() => window.open(url, '_blank'), i * 800);
   });
 }
 
@@ -4303,6 +4340,27 @@ async function copiarMensajeWA(){
       const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
       navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     }
+    return;
+  }
+
+  // ── CORTINAS / NIVELADORAS ────────────────────────────────────────────────
+  if(tipo === 'cortinas'){
+    const cbs = document.querySelectorAll('#sol-tecnicos-grid input[type=checkbox]:checked');
+    if(!cbs.length){ toast('Selecciona al menos un técnico', true); return; }
+    if(!descRaw){ toast('Falta: Descripción del trabajo', true); return; }
+    const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
+    const tecNombre = tecs.join(', ');
+    if(!DB.cortinas) DB.cortinas = [];
+    const n = DB.cortinas.length + 1;
+    const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
+    const hoy = new Date().toISOString().slice(0,10);
+    DB.cortinas.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    saveDB();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+    clearSolicitudForm(); renderDashboardTec();
+    toast('Orden '+corr+' creada ✓ — mensaje copiado');
+    const msg = '\uD83D\uDEAA *CORTINAS / NIVELADORAS - MONHACO*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+hoy;
+    navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     return;
   }
 
