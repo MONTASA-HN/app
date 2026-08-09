@@ -6164,6 +6164,10 @@ function cerrarExito(){
 
 function _iniciarConexionFirebase(esReintento){
   FB_REF.once('value').then(snap => {
+   // ── Procesamiento del snapshot: cualquier error AQUI es un bug de datos/render,
+   //    NO un problema de conexion. Se atrapa por separado para no disparar el
+   //    reintento infinito ni mostrar el mensaje enganoso "Sin conexion".
+   try {
     const remote = snap.val();
     if(remote){
       loadDB();
@@ -6232,6 +6236,18 @@ function _iniciarConexionFirebase(esReintento){
         else if(_id==='personal')   renderPersonal();
       }
     })();
+   } catch(_procErr){
+     // El error ocurrio al PROCESAR/renderizar los datos, no al conectar.
+     // Lo registramos con detalle pero NO reintentamos la conexion (los datos
+     // ya llegaron). Asi dejamos de ver el falso "Sin conexion a Firebase".
+     console.error('⛔ Error procesando datos de Firebase (la conexion SI funciona):', _procErr);
+   }
+
+   // ── Listeners en tiempo real: registrar UNA SOLA VEZ. Antes se volvian a
+   //    suscribir en cada reintento, acumulando listeners duplicados. El guard
+   //    _fbListenersRegistrados lo evita.
+   if(!window._fbListenersRegistrados){
+    window._fbListenersRegistrados = true;
 
     // Listener dedicado para logística — siempre actualizado independientemente del _ts
     window._fbDB.ref('montasa/logistica').on('value', snapLog => {
@@ -6302,7 +6318,11 @@ function _iniciarConexionFirebase(esReintento){
         if(id==='personal')    renderPersonal();
       }
     });
-  }).catch(()=>{
+   } // fin del guard _fbListenersRegistrados
+  }).catch(err=>{
+    // Este catch ahora SOLO se dispara si once('value') falla de verdad
+    // (sin internet / permisos). Los errores de procesamiento ya se atrapan arriba.
+    console.warn('Sin conexión a Firebase (once falló), reintentando en 5s...', err);
     if(!esReintento){
       // Primer intento fallido: mostrar algo de inmediato con datos locales
       loadDB();
@@ -6311,7 +6331,6 @@ function _iniciarConexionFirebase(esReintento){
       renderDashboard();
     }
     // Reintentar la conexión en segundo plano hasta que se recupere el internet
-    console.warn('Sin conexión a Firebase, reintentando en 5s...');
     setTimeout(()=>_iniciarConexionFirebase(true), 5000);
   });
 }
