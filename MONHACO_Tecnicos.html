@@ -1058,6 +1058,8 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
+  if(o && !o.fechaInicio && o.fecha && o.horaIni) o = Object.assign({}, o, {fechaInicio: o.fecha+'T'+o.horaIni});
+  if(o && !o.fechaFin && o.fechaFinFecha && o.horaFin) o = Object.assign({}, o, {fechaFin: o.fechaFinFecha+'T'+o.horaFin});
   function _parseD(s){
     if(!s) return new Date(NaN);
     if(typeof s==='string'){
@@ -3662,6 +3664,11 @@ function actualizarCortina(id, campo, valor){
   if(!o) return;
   o[campo] = valor;
   if(campo==='estado') o.completado = valor==='Completado';
+  // Reconstruir los campos combinados que usan la imagen y el cálculo de tiempos
+  if(['fecha','horaIni','fechaFinFecha','horaFin'].includes(campo)){
+    o.fechaInicio = (o.fecha && o.horaIni) ? o.fecha+'T'+o.horaIni : (o.fecha||'');
+    o.fechaFin    = (o.fechaFinFecha && o.horaFin) ? o.fechaFinFecha+'T'+o.horaFin : (o.fechaFinFecha||'');
+  }
   saveDB();
   if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
   renderCortinas();
