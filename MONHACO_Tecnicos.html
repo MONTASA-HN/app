@@ -3556,11 +3556,21 @@ function renderCortinas(){
       card += `<div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" value="${o.horaFin||''}" onchange="actualizarCortina('${o.id}','horaFin',this.value)"></div>`;
       card += `</div>`;
       card += `<div class="form-group" style="margin-top:10px"><label>Descripción del trabajo</label><textarea rows="3" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
-      card += `<div class="detail-row"><span class="detail-lbl">Técnicos</span><span class="detail-val">${tecs}</span></div>`;
-      if(o.firma){
-        card += `<div style="margin-top:10px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✍️ Firma del cliente</div>`;
-        card += `<img src="${o.firma}" style="width:100%;max-width:300px;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>`;
-      }
+      card += `<div class="form-group" style="margin-top:10px"><label>Técnicos asignados</label>`;
+      card += `<div class="tecnicos-grid" style="flex-wrap:wrap" id="cort-tecs-${o.id}">`;
+      ['Rances Pineda','Angel Cardona','Maynor Paz','Cristian Barrera','Jose Escoto','Ramon Moreno','Sergio Madrid'].forEach(nom=>{
+        const marcado = (o.tecnicos||[]).includes(nom);
+        card += `<label class="tecnico-check${marcado?' selected':''}"><input type="checkbox" value="${nom}" ${marcado?'checked':''} onchange="toggleTecnicoCortina('${o.id}',this)"> ${nom}</label>`;
+      });
+      card += `</div></div>`;
+      card += `<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>`;
+      card += `<canvas id="firma-cort-${o.id}" class="firma-canvas${o.firma?' firmado':''}" width="600" height="160"
+        ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+        onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>`;
+      card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <button onclick="event.stopPropagation();guardarFirmaCortina('${o.id}')" style="font-size:12px;background:#9B59B6;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:600">💾 Guardar firma</button>
+        <button onclick="event.stopPropagation();limpiarFirmaCortina('${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:6px 12px;cursor:pointer">🗑 Borrar</button>
+      </div></div>`;
       if(!o.completado){
         card += `<button onclick="event.stopPropagation();finalizarCortina('${o.id}')" style="width:100%;padding:12px;background:#9B59B6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">✅ Finalizar orden</button>`;
       }
@@ -3577,7 +3587,50 @@ function renderCortinas(){
       renderCortinas();
     }
   };
+  // Restaurar firmas guardadas en las tarjetas expandidas
+  setTimeout(()=>{
+    (DB.cortinas||[]).forEach(o=>{
+      if(o.firma && _openCort.has(o.id)){
+        const c = document.getElementById('firma-cort-'+o.id);
+        if(c){ const img=new Image(); img.onload=()=>{ const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); c.classList.add('firmado'); }; img.src=o.firma; }
+      }
+    });
+  }, 60);
   if(typeof updateBadges==='function') updateBadges();
+}
+
+function toggleTecnicoCortina(id, checkbox){
+  const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
+  if(!o) return;
+  if(!o.tecnicos) o.tecnicos = [];
+  const nom = checkbox.value;
+  if(checkbox.checked){
+    if(!o.tecnicos.includes(nom)) o.tecnicos.push(nom);
+    checkbox.closest('.tecnico-check')?.classList.add('selected');
+  } else {
+    o.tecnicos = o.tecnicos.filter(t=>t!==nom);
+    checkbox.closest('.tecnico-check')?.classList.remove('selected');
+  }
+  o.tecnico = o.tecnicos.join(', ');
+  saveDB();
+  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+}
+
+function guardarFirmaCortina(id){
+  const firma = getFirmaData('cort-'+id);
+  if(!firma){ toast('Primero firme en el recuadro', true); return; }
+  const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
+  if(!o) return;
+  o.firma = firma;
+  saveDB();
+  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  toast('Firma guardada ✓');
+}
+
+function limpiarFirmaCortina(id){
+  limpiarFirma('firma-cort-'+id);
+  const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
+  if(o){ o.firma=''; saveDB(); if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
 }
 
 function actualizarCortina(id, campo, valor){
