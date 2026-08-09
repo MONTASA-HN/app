@@ -1574,12 +1574,34 @@ function _dedupeVendidos(arr){
   const out = [];
   arr.forEach(v=>{
     if(!v) return;
-    const clave = (v.codigo||'').trim().toUpperCase() || ('id:'+(v.id||''));
+    // Clave por SERIE (única) para no colapsar dos equipos distintos con el
+    // mismo código reasignado. Si no hay serie, usar código; y si tampoco, el id.
+    const serie = (v.serie||'').trim().toUpperCase();
+    const clave = serie ? 'serie:'+serie
+                : (v.codigo ? 'cod:'+(v.codigo||'').trim().toUpperCase()
+                : 'id:'+(v.id||''));
     if(vistos.has(clave)) return;
     vistos.add(clave);
     out.push(v);
   });
   return out;
+}
+
+// Determina si un equipo está realmente vendido. Compara por SERIE (única) o
+// por id. NO usa solo el código, porque puede haber dos equipos distintos con
+// el mismo código reasignado (ej: MT-54 activo KBG18 vs MT-54 vendido KBG25).
+function _estaVendido(e){
+  if(!e) return false;
+  const serie = (e.serie||'').trim().toUpperCase();
+  return (DB.vendidos||[]).some(v=>{
+    if(!v) return false;
+    if(v.id && e.id && v.id===e.id) return true;
+    const vs = (v.serie||'').trim().toUpperCase();
+    if(serie && vs) return serie===vs;          // ambos tienen serie → comparar serie
+    // sin serie en alguno: caer al código solo si no hay serie que los distinga
+    if(!serie && !vs) return (v.codigo||'').trim().toUpperCase()===(e.codigo||'').trim().toUpperCase();
+    return false;
+  });
 }
 
 function _syncEquipoCampoFB(equipoId, campo, valor){
@@ -6155,12 +6177,12 @@ function _iniciarConexionFirebase(esReintento){
         // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
         // Skip if already sold (in DB.vendidos)
         EQUIPOS_INICIALES.forEach(spec => {
-          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id);
+          const isSold = _estaVendido(spec);
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
         // Quitar de la flota cualquier equipo que esté en vendidos (por si Firebase aún lo tiene)
-        DB.equipos = DB.equipos.filter(e=>!(DB.vendidos||[]).find(v=>v.codigo===e.codigo||v.id===e.id));
+        DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
       }
       window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
@@ -6248,12 +6270,12 @@ function _iniciarConexionFirebase(esReintento){
         // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
         // Skip if already sold (in DB.vendidos)
         EQUIPOS_INICIALES.forEach(spec => {
-          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id);
+          const isSold = _estaVendido(spec);
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
         // Quitar de la flota cualquier equipo que esté en vendidos
-        DB.equipos = DB.equipos.filter(e=>!(DB.vendidos||[]).find(v=>v.codigo===e.codigo||v.id===e.id));
+        DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
       if(d.revisiones)     DB.revisiones     = d.revisiones||[];
