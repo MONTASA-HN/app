@@ -1154,6 +1154,7 @@ function saveDB(){
       };
       if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
+      if(DB.cortinas && DB.cortinas.length)               payload.cortinas        = DB.cortinas;
       if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
       if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
       if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
@@ -4017,6 +4018,7 @@ function _renderOrdenesMant(el, tipo){
   const INFO = {
     'P':  {icon:'📋', label:'Preventivos',              color:'#2E83C3'},
     'C':  {icon:'🔧', label:'Correctivos',              color:'#C9211E'},
+    'CT': {icon:'🚪', label:'Cortinas / Niveladoras',   color:'#9B59B6'},
     'RV': {icon:'✅', label:'Revisión Físico-Técnica',  color:'#18A303'},
     'EV': {icon:'📄', label:'Evaluación de Equipo',     color:'#E8811A'},
   };
@@ -4033,6 +4035,7 @@ function _renderOrdenesMant(el, tipo){
   let all = [];
   if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
   if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
+  if(tipo==='CT') all = (DB.cortinas||[]).map(o=>({...o,_t:'CT',_f:o.fechaCierre||o.fecha||''}));
   if(tipo==='RV') all = (DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''}));
   if(tipo==='EV') all = (DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}));
 
@@ -4070,6 +4073,7 @@ function _renderOrdenesMant(el, tipo){
 
       if(x._t==='RV') return _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR);
       if(x._t==='EV') return _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR);
+      if(x._t==='CT') return _buildCardCT(x, ESTADOS_COLOR);
       if(x._t==='P')  return _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
       if(x._t==='C')  return _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
     } catch(e){ return ''; }
@@ -4081,6 +4085,40 @@ function _renderOrdenesMant(el, tipo){
     (DB.revisiones||[]).forEach(r=>{ if(r.firma){ const c=document.getElementById('firma-rv-'+r.id); if(c){ const img=new Image(); img.onload=()=>c.getContext('2d').drawImage(img,0,0); img.src=r.firma; }}});
     (DB.evaluaciones||[]).forEach(v=>{ if(v.firma){ const c=document.getElementById('firma-eval-'+v.id); if(c){ const img=new Image(); img.onload=()=>c.getContext('2d').drawImage(img,0,0); img.src=v.firma; }}});
   }, 200);
+}
+
+function _buildCardCT(x, ESTADOS_COLOR){
+  const tecs=(x.tecnicos&&x.tecnicos.length?x.tecnicos.filter(Boolean).join(', '):(x.tecnico||'—'));
+  const estCT = x.completado?'Completado':(x.estado||'Pendiente');
+  const estCfgCT = ESTADOS_COLOR[estCT]||{bg:'#f5f5f5',border:'#888',txt:'#333'};
+  const isOpenCT = openHistGer.has(x.id);
+  let cCT = `<div class="card" style="padding:12px 14px;border-left:3px solid #9B59B6;margin-bottom:8px;cursor:pointer" data-hid="${x.id}">`;
+  cCT += `<div style="display:flex;justify-content:space-between;align-items:center">`;
+  cCT += `<div style="flex:1;min-width:0">`;
+  cCT += `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">`;
+  cCT += `<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#f3e8f8;color:#9B59B6;padding:2px 7px;border-radius:10px">${x.correlativo||'—'}</span>`;
+  cCT += `<span style="font-size:11px;font-weight:700;background:${estCfgCT.bg};color:${estCfgCT.txt};padding:2px 8px;border-radius:10px;border:1px solid ${estCfgCT.border}">${estCT}</span>`;
+  if(x.prioridad && x.prioridad!=='Normal') cCT += `<span style="font-size:11px;font-weight:700;background:#fff3f3;color:#c00;padding:2px 8px;border-radius:10px;border:1px solid #f5c6c6">${x.prioridad}</span>`;
+  cCT += `</div>`;
+  cCT += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">📍 ${x.ubicacion||'—'}</div>`;
+  cCT += `<div style="font-size:11px;color:var(--text3)">🚪 Cortinas · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
+  cCT += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenCT?'⌃':'⌄'}</span></div>`;
+  if(isOpenCT){
+    let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+    d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">`;
+    [['Correlativo',x.correlativo||'—'],['Estado',estCT],['Técnico(s)',tecs],['Prioridad',x.prioridad||'Normal'],['Fecha',x.fecha||'—'],['Ubicación',x.ubicacion||'—']].filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
+      d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
+    });
+    if(x.descripcion) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Descripción del trabajo</span><span style="font-weight:600">${x.descripcion}</span></div>`;
+    d += `</div>`;
+    if(estCT==='Completado'){
+      d += `<button onclick="event.stopPropagation();eliminarDelHistorial('ct','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
+    }
+    d += `</div>`;
+    cCT += d;
+  }
+  cCT += `</div>`;
+  return cCT;
 }
 
 function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
@@ -5755,6 +5793,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
+        if(remote.cortinas)       DB.cortinas       = remote.cortinas||[];
         if(remote.revisiones)     DB.revisiones     = remote.revisiones||[];
         if(remote.evaluaciones)   DB.evaluaciones   = remote.evaluaciones||[];
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
@@ -5832,6 +5871,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.evaluaciones)   DB.evaluaciones   = d.evaluaciones||[];
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
+      if(d.cortinas)       DB.cortinas       = d.cortinas||[];
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
