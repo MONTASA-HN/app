@@ -1330,8 +1330,8 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Correlativo', o.correlativo||'—']);
     campos.push(['Cliente', o.cliente||'—']);
     campos.push(['Técnico(s)', (o.tecnicos&&o.tecnicos.length)?o.tecnicos.filter(Boolean).join(', '):(o.tecnico||'—')]);
-    campos.push(['🔧 Inicio de trabajo', fmtDT(o.fechaInicio)|| (o.fecha?o.fecha+(o.horaIni?' '+o.horaIni:''):'—')]);
-    campos.push(['✅ Fin de trabajo', fmtDT(o.fechaFin)|| (o.fechaFinFecha?o.fechaFinFecha+(o.horaFin?' '+o.horaFin:''):'—')]);
+    campos.push(['🔧 Inicio de trabajo', o.fechaInicio ? fmtDT(o.fechaInicio) : (o.fecha ? o.fecha+(o.horaIni?' '+o.horaIni:'') : '—')]);
+    campos.push(['✅ Fin de trabajo', o.fechaFin ? fmtDT(o.fechaFin) : (o.fechaFinFecha ? o.fechaFinFecha+(o.horaFin?' '+o.horaFin:'') : '—')]);
     if(t.total!=='—') campos.push(['🕐 Tiempo total', t.total]);
     campos.push(['Descripción del trabajo', o.descripcion||'—']);
   } else if(tipo==='revision'){
@@ -2195,6 +2195,10 @@ function _tiemposHtml(o){
 }
 
 function calcTiemposOrden(o){
+  // Reconstrucción defensiva para cortinas: si faltan fechaInicio/fechaFin
+  // pero existen los campos sueltos (fecha/horaIni/fechaFinFecha/horaFin), armarlos.
+  if(o && !o.fechaInicio && o.fecha && o.horaIni) o = Object.assign({}, o, {fechaInicio: o.fecha+'T'+o.horaIni});
+  if(o && !o.fechaFin && o.fechaFinFecha && o.horaFin) o = Object.assign({}, o, {fechaFin: o.fechaFinFecha+'T'+o.horaFin});
   function _parseD(s){
     if(!s) return new Date(NaN);
     if(typeof s==='string'){
@@ -4133,8 +4137,8 @@ function _buildCardCT(x, ESTADOS_COLOR){
       ['Cliente',x.cliente||'—'],
       ['Técnico(s)',tecs],
       ['Prioridad',x.prioridad||'Normal'],
-      ['Inicio trabajo', fmtDT(x.fechaInicio)|| (x.fecha?x.fecha+(x.horaIni?' '+x.horaIni:''):'—')],
-      ['Fin trabajo', fmtDT(x.fechaFin)|| (x.fechaFinFecha?x.fechaFinFecha+(x.horaFin?' '+x.horaFin:''):'—')],
+      ['Inicio trabajo', x.fechaInicio ? fmtDT(x.fechaInicio) : (x.fecha?x.fecha+(x.horaIni?' '+x.horaIni:''):'—')],
+      ['Fin trabajo', x.fechaFin ? fmtDT(x.fechaFin) : (x.fechaFinFecha?x.fechaFinFecha+(x.horaFin?' '+x.horaFin:''):'—')],
       ...(tiemposCT.total!=='—' ? [['Tiempo total', tiemposCT.total]] : [])
     ];
     filasCT.filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
