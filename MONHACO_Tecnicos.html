@@ -744,17 +744,37 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <button class="btn btn-primary btn-full" onclick="toggleForm('form-cortinas')">+ Nueva orden de cortinas / niveladoras</button>
     <div id="form-cortinas" style="display:none;margin-top:14px;background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)">
       <div class="form-group"><label>Estado</label><select id="cort-estado"><option>Pendiente</option><option>En proceso</option><option>Completado</option></select></div>
-      <div class="form-group"><label>📍 Ubicación del trabajo</label><input id="cort-ubicacion" placeholder="Ej: Bodega principal, portón 3..."></div>
-      <div class="form-group"><label>Técnicos asignados (máx. 2)</label>
-        <select id="cort-tec1"><option value="">— Seleccionar —</option><option>Rances Pineda</option><option>Angel Cardona</option><option>Maynor Paz</option><option>Cristian Barrera</option><option>Jose Escoto</option><option>Ramon Moreno</option><option>Sergio Madrid</option></select>
-        <select id="cort-tec2" style="margin-top:8px"><option value="">— Segundo técnico (opcional) —</option><option>Rances Pineda</option><option>Angel Cardona</option><option>Maynor Paz</option><option>Cristian Barrera</option><option>Jose Escoto</option><option>Ramon Moreno</option><option>Sergio Madrid</option></select>
-      </div>
-      <div class="form-group"><label>Descripción del trabajo</label><textarea id="cort-desc" rows="3" placeholder="Detalle del trabajo a realizar en cortinas / niveladoras..."></textarea></div>
+      <div class="form-group"><label>Nombre del cliente</label><input id="cort-cliente" placeholder="Nombre completo del cliente"></div>
       <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-        <div class="form-group" style="margin-bottom:0"><label>Fecha</label><input type="date" id="cort-fecha"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" id="cort-fecha-ini"></div>
         <div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" id="cort-hora-ini"></div>
       </div>
-      <div class="form-group"><label>Hora final</label><input type="time" id="cort-hora-fin"></div>
+      <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">
+        <div class="form-group" style="margin-bottom:0"><label>Fecha fin</label><input type="date" id="cort-fecha-fin"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" id="cort-hora-fin"></div>
+      </div>
+      <div class="form-group" style="margin-top:14px"><label>Descripción del trabajo</label><textarea id="cort-desc" rows="3" placeholder="Detalle del trabajo a realizar en cortinas / niveladoras..."></textarea></div>
+      <div class="form-group"><label>Técnicos asignados</label>
+        <div class="tecnicos-grid" id="cort-tecnicos-grid" style="flex-wrap:wrap">
+          <label class="tecnico-check"><input type="checkbox" value="Rances Pineda" onchange="toggleTecnico(this)"> Rances Pineda</label>
+          <label class="tecnico-check"><input type="checkbox" value="Angel Cardona" onchange="toggleTecnico(this)"> Angel Cardona</label>
+          <label class="tecnico-check"><input type="checkbox" value="Maynor Paz" onchange="toggleTecnico(this)"> Maynor Paz</label>
+          <label class="tecnico-check"><input type="checkbox" value="Cristian Barrera" onchange="toggleTecnico(this)"> Cristian Barrera</label>
+          <label class="tecnico-check"><input type="checkbox" value="Jose Escoto" onchange="toggleTecnico(this)"> Jose Escoto</label>
+          <label class="tecnico-check"><input type="checkbox" value="Ramon Moreno" onchange="toggleTecnico(this)"> Ramon Moreno</label>
+          <label class="tecnico-check"><input type="checkbox" value="Sergio Madrid" onchange="toggleTecnico(this)"> Sergio Madrid</label>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+        <canvas id="firma-cort-new" class="firma-canvas" width="600" height="160"
+          ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
+          onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
+          <button onclick="limpiarFirma('firma-cort-new')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+        </div>
+      </div>
       <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:14px">
         <button class="btn-finalizar" style="background:#9B59B6;margin-top:0" onclick="guardarCortina()">Guardar</button>
         <button class="btn" onclick="toggleForm('form-cortinas')">Cancelar</button>
@@ -3448,39 +3468,42 @@ let _openCort = new Set();
 
 function guardarCortina(){
   const estado    = document.getElementById('cort-estado').value;
-  const ubicacion = document.getElementById('cort-ubicacion').value.trim();
-  const tec1      = document.getElementById('cort-tec1').value;
-  const tec2      = document.getElementById('cort-tec2').value;
-  const desc      = document.getElementById('cort-desc').value.trim();
-  const fecha     = document.getElementById('cort-fecha').value;
+  const cliente   = document.getElementById('cort-cliente').value.trim();
+  const fechaIni  = document.getElementById('cort-fecha-ini').value;
   const horaIni   = document.getElementById('cort-hora-ini').value;
+  const fechaFin  = document.getElementById('cort-fecha-fin').value;
   const horaFin   = document.getElementById('cort-hora-fin').value;
+  const desc      = document.getElementById('cort-desc').value.trim();
+  const firma     = getFirmaData('cort-new');
+  const checks    = document.querySelectorAll('#cort-tecnicos-grid input[type=checkbox]:checked');
+  const tecnicos  = Array.from(checks).map(c=>c.value);
   const faltantes = [];
-  if(!ubicacion) faltantes.push('Ubicación del trabajo');
-  if(!tec1) faltantes.push('Técnico asignado');
+  if(!cliente) faltantes.push('Nombre del cliente');
+  if(!tecnicos.length) faltantes.push('Al menos un técnico');
   if(!desc) faltantes.push('Descripción del trabajo');
   if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
   if(!DB.cortinas) DB.cortinas = [];
   const nCort = (DB.cortinas.length||0)+1;
   const correlativo = 'CT-'+(nCort<10?'000':nCort<100?'00':nCort<1000?'0':'')+nCort;
   const entry = {
-    id: uid(), correlativo, estado, ubicacion,
-    tecnicos: [tec1, tec2].filter(Boolean),
-    fecha, horaIni, horaFin,
-    fechaInicio: fecha&&horaIni?fecha+'T'+horaIni:'', fechaFin: fecha&&horaFin?fecha+'T'+horaFin:'',
-    descripcion: desc,
+    id: uid(), correlativo, estado, cliente,
+    tecnicos,
+    tecnico: tecnicos.join(', '),
+    fecha: fechaIni, horaIni, fechaFinFecha: fechaFin, horaFin,
+    fechaInicio: fechaIni&&horaIni?fechaIni+'T'+horaIni:'', fechaFin: fechaFin&&horaFin?fechaFin+'T'+horaFin:'',
+    descripcion: desc, firma,
     completado: estado==='Completado'
   };
   DB.cortinas.push(entry);
   saveDB();
   if(window._fbDB && window._fbReady)
     window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
-  ['cort-ubicacion','cort-desc','cort-hora-ini','cort-hora-fin','cort-fecha'].forEach(id=>{
+  ['cort-cliente','cort-desc','cort-fecha-ini','cort-hora-ini','cort-fecha-fin','cort-hora-fin'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('cort-estado').selectedIndex=0;
-  document.getElementById('cort-tec1').selectedIndex=0;
-  document.getElementById('cort-tec2').selectedIndex=0;
+  document.querySelectorAll('#cort-tecnicos-grid input[type=checkbox]').forEach(cb=>{ cb.checked=false; cb.closest('.tecnico-check')?.classList.remove('selected'); });
+  limpiarFirma('firma-cort-new');
   toggleForm('form-cortinas');
   renderCortinas();
   toast('Orden de cortinas guardada ✓');
@@ -3505,7 +3528,8 @@ function renderCortinas(){
     const isOpen = _openCort.has(o.id);
     const est = o.estado||'Pendiente';
     const cc = COLORES[est]||{bg:'#f5f5f5',txt:'#333',border:'#ddd'};
-    const tecs = (o.tecnicos||[]).filter(Boolean).join(', ')||'—';
+    const tecs = (o.tecnicos||[]).filter(Boolean).join(', ')||(o.tecnico||'—');
+    const cliente = o.cliente||o.ubicacion||'—';
     const fechaHora = (o.fecha?o.fecha+' '+(o.horaIni||''):'—').trim();
     let card = `<div class="card" style="padding:12px 14px;border-left:3px solid #9B59B6;margin-bottom:8px;cursor:pointer" data-ctid="${o.id}">`;
     card += `<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">`;
@@ -3514,7 +3538,7 @@ function renderCortinas(){
     card += `<span style="font-size:11px;font-weight:700;font-family:monospace;background:#f3e8f8;color:#9B59B6;padding:2px 7px;border-radius:10px">${o.correlativo||'—'}</span>`;
     card += `<span style="font-size:11px;font-weight:700;background:${cc.bg};color:${cc.txt};border:1px solid ${cc.border};padding:2px 8px;border-radius:10px">${est}</span>`;
     card += `</div>`;
-    card += `<div style="font-size:13px;font-weight:600;margin-bottom:2px">📍 ${o.ubicacion||'—'}</div>`;
+    card += `<div style="font-size:13px;font-weight:600;margin-bottom:2px">👤 ${cliente}</div>`;
     card += `<div style="font-size:12px;color:var(--text2);margin-bottom:2px">👷 ${tecs}</div>`;
     card += `<div style="font-size:11px;color:var(--text3)">📅 ${fechaHora}</div>`;
     card += `</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">${isOpen?'⌃':'⌄'}</span>`;
@@ -3522,10 +3546,21 @@ function renderCortinas(){
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
       card += `<div class="form-group"><label>Estado</label><select onchange="actualizarCortina('${o.id}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select></div>`;
-      card += `<div class="detail-row"><span class="detail-lbl">Ubicación</span><span class="detail-val">${o.ubicacion||'—'}</span></div>`;
+      card += `<div class="form-group"><label>Nombre del cliente</label><input value="${(o.cliente||'').replace(/"/g,'&quot;')}" onchange="actualizarCortina('${o.id}','cliente',this.value)"></div>`;
+      card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${o.fecha||''}" onchange="actualizarCortina('${o.id}','fecha',this.value)"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${o.horaIni||''}" onchange="actualizarCortina('${o.id}','horaIni',this.value)"></div>`;
+      card += `</div>`;
+      card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha fin</label><input type="date" value="${o.fechaFinFecha||''}" onchange="actualizarCortina('${o.id}','fechaFinFecha',this.value)"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" value="${o.horaFin||''}" onchange="actualizarCortina('${o.id}','horaFin',this.value)"></div>`;
+      card += `</div>`;
+      card += `<div class="form-group" style="margin-top:10px"><label>Descripción del trabajo</label><textarea rows="3" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
       card += `<div class="detail-row"><span class="detail-lbl">Técnicos</span><span class="detail-val">${tecs}</span></div>`;
-      card += `<div class="detail-row"><span class="detail-lbl">Descripción</span><span class="detail-val" style="white-space:normal;max-width:70%">${o.descripcion||'—'}</span></div>`;
-      if(o.fecha) card += `<div class="detail-row"><span class="detail-lbl">Fecha</span><span class="detail-val">${o.fecha} ${o.horaIni||''}${o.horaFin?' - '+o.horaFin:''}</span></div>`;
+      if(o.firma){
+        card += `<div style="margin-top:10px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✍️ Firma del cliente</div>`;
+        card += `<img src="${o.firma}" style="width:100%;max-width:300px;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>`;
+      }
       if(!o.completado){
         card += `<button onclick="event.stopPropagation();finalizarCortina('${o.id}')" style="width:100%;padding:12px;background:#9B59B6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">✅ Finalizar orden</button>`;
       }
