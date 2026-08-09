@@ -1566,6 +1566,22 @@ function saveDB(){
   }catch(e){}
 }
 
+// Elimina duplicados de la lista de vendidos, quedándose con la primera
+// aparición de cada código (o id si no hay código).
+function _dedupeVendidos(arr){
+  if(!Array.isArray(arr)) return [];
+  const vistos = new Set();
+  const out = [];
+  arr.forEach(v=>{
+    if(!v) return;
+    const clave = (v.codigo||'').trim().toUpperCase() || ('id:'+(v.id||''));
+    if(vistos.has(clave)) return;
+    vistos.add(clave);
+    out.push(v);
+  });
+  return out;
+}
+
 function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!window._fbDB || !window._fbReady || !equipoId) return;
   const idx = DB.equipos.findIndex(e => e.id===equipoId);
@@ -3097,9 +3113,11 @@ function venderEquipo(){
       clienteVenta: '',
     };
     DB.vendidos.push(vnd);
+    DB.vendidos = _dedupeVendidos(DB.vendidos);
     // Remove from active fleet
     DB.equipos = DB.equipos.filter(e=>e.id!==modalEquipoId);
     saveDB(); saveAllEquipos();
+    if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/vendidos').set(DB.vendidos).catch(()=>{});
     cerrarModal();
     renderEquipos();
     toast('Equipo '+eq.codigo+' movido a Vendidos ✓');
@@ -3109,6 +3127,7 @@ function venderEquipo(){
 // ── RENDER VENDIDOS ────────────────────────────────────────────────────────
 function renderVendidos(){
   if(!DB.vendidos) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
+  DB.vendidos = _dedupeVendidos(DB.vendidos);
   const buscar = (document.getElementById('vend-buscar')?.value||'').toLowerCase();
   let list = [...DB.vendidos].sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||''));
   if(buscar){
@@ -6122,6 +6141,11 @@ function _iniciarConexionFirebase(esReintento){
     const remote = snap.val();
     if(remote){
       loadDB();
+      // Cargar vendidos ANTES de la re-siembra para que isSold funcione correctamente
+      if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
+      else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
+      // Dedupe de vendidos por código (evita duplicados por ventas repetidas)
+      DB.vendidos = _dedupeVendidos(DB.vendidos);
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
       if(remote.equipos && remote.equipos.length){
         DB.equipos = remote.equipos.map(req => {
@@ -6135,12 +6159,12 @@ function _iniciarConexionFirebase(esReintento){
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
+        // Quitar de la flota cualquier equipo que esté en vendidos (por si Firebase aún lo tiene)
+        DB.equipos = DB.equipos.filter(e=>!(DB.vendidos||[]).find(v=>v.codigo===e.codigo||v.id===e.id));
       }
       window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
         if(remote.preventivos)    DB.preventivos    = remote.preventivos;
-        if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
-        else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
         if(remote.revisiones)     DB.revisiones     = remote.revisiones||[];
         if(remote.evaluaciones)   DB.evaluaciones   = remote.evaluaciones||[];
@@ -6200,6 +6224,8 @@ function _iniciarConexionFirebase(esReintento){
       // Skip re-render if this is our own write (within 5 seconds)
       // Only skip if this write came from THIS device session
       const ownWrite = d._sid && d._sid === _SESSION_ID;
+      // Cargar vendidos ANTES de procesar equipos para que isSold funcione
+      if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);
       // Always update DB from Firebase (even our own writes)
       if(d.equipos && d.equipos.length){
         DB.equipos = d.equipos.map(req => {
@@ -6213,11 +6239,12 @@ function _iniciarConexionFirebase(esReintento){
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
+        // Quitar de la flota cualquier equipo que esté en vendidos
+        DB.equipos = DB.equipos.filter(e=>!(DB.vendidos||[]).find(v=>v.codigo===e.codigo||v.id===e.id));
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
       if(d.revisiones)     DB.revisiones     = d.revisiones||[];
       if(d.evaluaciones)   DB.evaluaciones   = d.evaluaciones||[];
-      if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
