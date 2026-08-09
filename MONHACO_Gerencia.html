@@ -5829,6 +5829,8 @@ function cerrarExito(){
 
 function _iniciarConexionFirebase(esReintento){
   FB_REF.once('value').then(snap => {
+   // Procesamiento del snapshot: un error AQUI es bug de datos/render, NO de conexion.
+   try {
     const remote = snap.val();
     if(remote){
       loadDB();
@@ -5880,6 +5882,13 @@ function _iniciarConexionFirebase(esReintento){
       try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
     renderDashboard();
+   } catch(_procErr){
+     console.error('⛔ Error procesando datos de Firebase (la conexion SI funciona):', _procErr);
+   }
+
+   // Listeners en tiempo real: registrar UNA SOLA VEZ (evita duplicados en cada reintento).
+   if(!window._fbListenersRegistrados){
+    window._fbListenersRegistrados = true;
 
     // Listener dedicado para logística — siempre actualizado independientemente del _ts
     window._fbDB.ref('monhaco/logistica').on('value', snapLog => {
@@ -5948,7 +5957,10 @@ function _iniciarConexionFirebase(esReintento){
         if(id==='personal')    renderPersonal();
       }
     });
-  }).catch(()=>{
+   } // fin del guard _fbListenersRegistrados
+  }).catch(err=>{
+    // Solo se dispara si once('value') falla de verdad (sin internet / permisos).
+    console.warn('Sin conexión a Firebase (once falló), reintentando en 5s...', err);
     if(!esReintento){
       // Primer intento fallido: mostrar algo de inmediato con datos locales
       loadDB();
@@ -5957,7 +5969,6 @@ function _iniciarConexionFirebase(esReintento){
       renderDashboard();
     }
     // Reintentar la conexión en segundo plano hasta que se recupere el internet
-    console.warn('Sin conexión a Firebase, reintentando en 5s...');
     setTimeout(()=>_iniciarConexionFirebase(true), 5000);
   });
 }
