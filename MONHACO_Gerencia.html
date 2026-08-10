@@ -37,6 +37,8 @@ function _imprimirHTML(htmlContent){
 #viaticos-overlay.open{display:block!important}
 #vale-overlay{display:none}
 #vale-overlay.open{display:block!important}
+.card-demo{background:#f5eefc;border-color:#b794e0}
+.modal-header-demo{background:#5a2d82}
 </style>
 <style>
 .notif-item{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px; }
@@ -548,6 +550,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
             <circle id="donut-renta" class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF9A3D"/>
             <circle id="donut-mant"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#F0C93D"/>
             <circle id="donut-mal"   class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF5060"/>
+            <circle id="donut-demo"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#8b5cf6"/>
           </svg>
           <div class="fleet-donut-center">
             <div class="fleet-donut-pct" id="fleet-pct-op">0%</div>
@@ -618,6 +621,21 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <div class="fleet-tile-value" id="st-mal">0</div>
         <div class="fleet-tile-label">Inactivos</div>
       </div>
+      <div class="fleet-tile" style="--tile-color:#7C3AED;--tile-bg:#efe7fb;grid-column:1/-1" onclick="document.getElementById('filt-eq-estado').value='DEMO/PRESTAMO';showTab('flota',document.querySelector('.nav-btn:nth-child(4)'));renderEquipos()">
+        <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+        <div class="fleet-tile-top">
+          <div class="fleet-tile-ring">
+            <svg viewBox="0 0 56 56">
+              <circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/>
+              <circle id="ring-demo" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#7C3AED"/>
+            </svg>
+            <div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+          </div>
+          <span class="fleet-tile-pct" id="pct-demo">0%</span>
+        </div>
+        <div class="fleet-tile-value" id="st-demo">0</div>
+        <div class="fleet-tile-label">Demo/Préstamo</div>
+      </div>
     </div>
 
     <!-- Separador visual entre KPIs y lista de equipos -->
@@ -647,7 +665,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <option value="DISPONIBLE">Disponible</option>
         <option value="EN RENTA">En renta</option>
         <option value="EN MANTENIMIENTO">En mantenimiento</option>
-        <option value="MAL ESTADO">Mal estado</option>
+        <option value="DEMO/PRESTAMO">Demo/Préstamo</option><option value="MAL ESTADO">Mal estado</option>
       </select>
     </div>
     <div id="eq-count" class="eq-count"></div>
@@ -1594,7 +1612,7 @@ function abrirModal(id){
     document.getElementById('det-marca').textContent = (e.marca||'')+(e.modelo?' '+e.modelo:'');
     document.getElementById('det-serie').textContent = 'Serie: '+(e.serie||'—')+' · Cliente: '+(e.clienteNombre||'—');
   } else {
-    detEstado.innerHTML = '<option value="DISPONIBLE">✅ Disponible</option><option value="EN RENTA">🟠 En renta</option><option value="EN MANTENIMIENTO">🔧 En mantenimiento</option><option value="MAL ESTADO">🔴 Mal estado / Inactivo</option>';
+    if(e.esVehiculo){ detEstado.innerHTML = '<option value="DISPONIBLE">✅ Disponible</option><option value="EN RENTA">🟠 En renta</option><option value="EN MANTENIMIENTO">🔧 En mantenimiento</option><option value="MAL ESTADO">🔴 Mal estado / Inactivo</option>'; } else { detEstado.innerHTML = '<option value="DISPONIBLE">✅ Disponible</option><option value="EN RENTA">🟠 En renta</option><option value="EN MANTENIMIENTO">🔧 En mantenimiento</option><option value="DEMO/PRESTAMO">🟣 Demo/Préstamo</option><option value="MAL ESTADO">🔴 Mal estado / Inactivo</option>'; }
     document.getElementById('det-codigo').textContent = e.codigo;
     document.getElementById('det-marca').textContent = e.desc || (e.marca + ' · ' + e.tipo);
     document.getElementById('det-serie').textContent = e.esVehiculo
@@ -1709,6 +1727,7 @@ function aplicarColorHeader(estado){
   if(estado === 'DISPONIBLE') h.className = 'modal-header-disp';
   else if(estado === 'EN RENTA') h.className = 'modal-header-renta';
   else if(estado === 'EN MANTENIMIENTO') h.className = 'modal-header-mant';
+  else if(estado === 'DEMO/PRESTAMO') h.className = 'modal-header-demo';
   else h.className = 'modal-header-mal';
 }
 
@@ -2126,6 +2145,7 @@ function bEstado(e){
   if(e==='DISPONIBLE')  return '<span class="badge" style="background:#c8edcc;color:#1a5c1a;font-size:13px;padding:5px 11px">Disponible</span>';
   if(e==='EN RENTA')    return '<span class="badge" style="background:#fde5c0;color:#8a4800;font-size:13px;padding:5px 11px">En renta</span>';
   if(e==='EN MANTENIMIENTO') return '<span class="badge" style="background:#e4d4b8;color:#6a4c1f;font-size:13px;padding:5px 11px">🔧 En mantenimiento</span>';
+  if(e==='DEMO/PRESTAMO') return '<span class="badge" style="background:#ede3f7;color:#5a2d82;font-size:13px;padding:5px 11px">🟣 Demo/Préstamo</span>';
   return '<span class="badge" style="background:#f8c0c0;color:#7a1515;font-size:13px;padding:5px 11px">Inactivo</span>';
 }
 
@@ -2133,6 +2153,7 @@ function cardClass(e){
   if(e==='DISPONIBLE') return 'card';
   if(e==='EN RENTA')   return 'card card-renta';
   if(e==='EN MANTENIMIENTO') return 'card card-mant';
+  if(e==='DEMO/PRESTAMO') return 'card card-demo';
   return 'card card-mal';
 }
 
@@ -3463,6 +3484,7 @@ function renderDashboard(){
   const renta = flota.filter(e=>e.estado==='EN RENTA').length;
   const mant  = flota.filter(e=>e.estado==='EN MANTENIMIENTO').length;
   const mal   = flota.filter(e=>e.estado==='MAL ESTADO').length;
+  const demo  = flota.filter(e=>e.estado==='DEMO/PRESTAMO').length;
 
   // Flota
   document.getElementById('st-equipos-total').textContent = total;
@@ -3470,6 +3492,7 @@ function renderDashboard(){
   document.getElementById('st-renta').textContent = renta;
   document.getElementById('st-mant').textContent  = mant;
   document.getElementById('st-mal').textContent   = mal;
+  document.getElementById('st-demo').textContent  = demo;
 
   // Porcentajes + anillos de progreso de cada tile
   if(total > 0){
@@ -3477,6 +3500,7 @@ function renderDashboard(){
     const pRenta = Math.round(renta/total*100);
     const pMant  = Math.round(mant /total*100);
     const pMal   = Math.round(mal  /total*100);
+    const pDemo  = Math.round(demo /total*100);
     const Rt = 23, Ct = 2*Math.PI*Rt;
     const setRing = (id, pct) => {
       const el = document.getElementById(id);
@@ -3488,10 +3512,12 @@ function renderDashboard(){
     setRing('ring-renta', pRenta);
     setRing('ring-mant', pMant);
     setRing('ring-mal', pMal);
+    setRing('ring-demo', pDemo);
     document.getElementById('pct-disp').textContent  = pDisp+'%';
     document.getElementById('pct-renta').textContent = pRenta+'%';
     document.getElementById('pct-mant').textContent  = pMant+'%';
     document.getElementById('pct-mal').textContent   = pMal+'%';
+    document.getElementById('pct-demo').textContent  = pDemo+'%';
 
     // Dona SVG — 4 segmentos proporcionales, dibujados en sentido horario desde las 12
     const R = 52, C = 2*Math.PI*R;
@@ -3499,7 +3525,8 @@ function renderDashboard(){
       {id:'donut-disp',  val:disp},
       {id:'donut-renta', val:renta},
       {id:'donut-mant',  val:mant},
-      {id:'donut-mal',   val:mal}
+      {id:'donut-mal',   val:mal},
+      {id:'donut-demo',  val:demo}
     ];
     let acc = 0;
     segs.forEach(s=>{
@@ -3512,12 +3539,12 @@ function renderDashboard(){
       }
       acc += len;
     });
-    const pctOperativa = Math.round((disp+renta+mant)/total*100);
+    const pctOperativa = Math.round((disp+renta+mant+demo)/total*100);
     const elOp = document.getElementById('fleet-pct-op');
     if(elOp) elOp.textContent = pctOperativa+'%';
   } else {
-    ['ring-disp','ring-renta','ring-mant','ring-mal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.setAttribute('stroke-dasharray','0 999'); });
-    ['pct-disp','pct-renta','pct-mant','pct-mal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='0%'; });
+    ['ring-disp','ring-renta','ring-mant','ring-mal','ring-demo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.setAttribute('stroke-dasharray','0 999'); });
+    ['pct-disp','pct-renta','pct-mant','pct-mal','pct-demo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='0%'; });
     const elOp = document.getElementById('fleet-pct-op');
     if(elOp) elOp.textContent = '0%';
   }
@@ -3657,6 +3684,7 @@ function renderEquipos(){
       const rentaS = items.filter(e=>e.estado==='EN RENTA').length;
       const mantS  = items.filter(e=>e.estado==='EN MANTENIMIENTO').length;
       const malS   = items.filter(e=>e.estado==='MAL ESTADO').length;
+      const demoS  = items.filter(e=>e.estado==='DEMO/PRESTAMO').length;
       const isOpen = openSubgrupos.has(subId);
       out += `
       <div style="margin:8px 0 4px">
@@ -3668,6 +3696,7 @@ function renderEquipos(){
             ${rentaS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN RENTA')" style="background:${filtroSubgrupo['${subId}']==='EN RENTA'?'#8a4800':'#fde5c0'};color:${filtroSubgrupo['${subId}']==='EN RENTA'?'white':'#8a4800'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${rentaS} renta</button>`:''}
             ${mantS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','EN MANTENIMIENTO')" style="background:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'#6a4c1f':'#e4d4b8'};color:${filtroSubgrupo['${subId}']==='EN MANTENIMIENTO'?'white':'#6a4c1f'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${mantS} mant.</button>`:''}
             ${malS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','MAL ESTADO')" style="background:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'#7a1515':'#f8c0c0'};color:${filtroSubgrupo['${subId}']==='MAL ESTADO'?'white':'#7a1515'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${malS} inact.</button>`:''}
+            ${demoS>0?`<button onclick="event.stopPropagation();filtrarSubgrupo('${subId}','DEMO/PRESTAMO')" style="background:${filtroSubgrupo['${subId}']==='DEMO/PRESTAMO'?'#5a2d82':'#ede3f7'};color:${filtroSubgrupo['${subId}']==='DEMO/PRESTAMO'?'white':'#5a2d82'};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:500;border:none;cursor:pointer">${demoS} demo</button>`:''}
             <span id="arr-${subId}" style="color:var(--text3);font-size:14px;transition:transform 0.2s">▼</span>
           </div>
         </div>
@@ -4826,6 +4855,7 @@ function exportarExcel(){
       ['En renta',DB.equipos.filter(e=>e.estado==='EN RENTA').length],
       ['En mantenimiento',DB.equipos.filter(e=>e.estado==='EN MANTENIMIENTO').length],
       ['Inactivos',DB.equipos.filter(e=>e.estado==='MAL ESTADO').length],
+      ['Demo/Préstamo',DB.equipos.filter(e=>e.estado==='DEMO/PRESTAMO').length],
       ['Total preventivos',DB.preventivos.length],
       ['Total correctivos',DB.correctivos.length],
       ['Órdenes cerradas',(DB.ordenesCerradas||[]).length],
