@@ -849,6 +849,39 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
 <script>
 const LS_KEY = 'montasa_tec_v1';
+/* ── Padrón unificado de técnicos (Etapa 1) — fuente única ─────────────── */
+const ROSTER_TEC = [
+  {n:'Jonathan Martinez',e:'MT Rental'},{n:'Marvin Torres',e:'MT Rental'},{n:'Elkin Perez',e:'MT Rental'},
+  {n:'Kevin Deras',e:'MT Rental'},{n:'Fernando Benavides',e:'MT Rental'},{n:'Dalton Garcia',e:'MT Rental'},
+  {n:'Eliberto Peña',e:'MT Rental'},
+  {n:'Rances Pineda',e:'MONHACO'},{n:'Angel Cardona',e:'MONHACO'},{n:'Maynor Paz',e:'MONHACO'},
+  {n:'Cristian Barrera',e:'MONHACO'},{n:'Jose Escoto',e:'MONHACO'},{n:'Ramon Moreno',e:'MONHACO'},
+  {n:'Sergio Madrid',e:'MONHACO'}
+];
+window.ROSTER_TEC = ROSTER_TEC;
+function _tecEmpresa(n){ const t=ROSTER_TEC.find(x=>x.n===n); return t?t.e:''; }
+if(typeof window.toggleTecnico!=='function'){ window.toggleTecnico=function(cb){ const l=cb.closest('.tecnico-check'); if(l) l.classList.toggle('selected', cb.checked); }; }
+function _tecChecksHTML(handler){
+  handler = handler || 'toggleTecnico(this)';
+  const emps=[...new Set(ROSTER_TEC.map(t=>t.e))];
+  return emps.map(function(emp){
+    return '<div style="flex:0 0 100%;font-size:10.5px;font-weight:700;color:#9b998e;text-transform:uppercase;letter-spacing:.6px;margin:8px 2px 0">'+emp+'</div>'+
+      ROSTER_TEC.filter(function(t){return t.e===emp;}).map(function(t){
+        return '<label class="tecnico-check"><input type="checkbox" value="'+t.n+'" onchange="'+handler+'"> '+t.n+'</label>';
+      }).join('');
+  }).join('');
+}
+function _tecBtnsHTML(tipo,id){
+  return ROSTER_TEC.map(function(t){
+    return '<div class="tec-btn" data-n="'+t.n+'" onclick="event.stopPropagation();toggleTecnicoOrden(\''+tipo+'\',\''+id+'\',\''+t.n+'\',this)">'+t.n+'</div>';
+  }).join('');
+}
+function _poblarGridsTec(){
+  ['prev-tecnicos-grid','corr-tecnicos-grid','cort-tecnicos-grid'].forEach(function(id){
+    var g=document.getElementById(id); if(g) g.innerHTML=_tecChecksHTML();
+  });
+}
+try{ _poblarGridsTec(); }catch(e){}
 const PIN_CORRECTO = '1624';
 const _SESSION_ID = Math.random().toString(36).slice(2);
 let pinActual = '';
@@ -1686,13 +1719,7 @@ function renderPreventivos(){
       ${_tiemposHtml(p)}
       <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-        <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
-        <div class="tec-btn" data-n="Marvin Torres" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Marvin Torres',this)">Marvin Torres</div>
-        <div class="tec-btn" data-n="Elkin Perez" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Elkin Perez',this)">Elkin Perez</div>
-        <div class="tec-btn" data-n="Kevin Deras" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Kevin Deras',this)">Kevin Deras</div>
-        <div class="tec-btn" data-n="Fernando Benavides" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Fernando Benavides',this)">Fernando Benavides</div>
-        <div class="tec-btn" data-n="Dalton Garcia" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Dalton Garcia',this)">Dalton Garcia</div>
-        <div class="tec-btn" data-n="Eliberto Peña" onclick="event.stopPropagation();toggleTecnicoOrden('prev','${p.id}','Eliberto Peña',this)">Eliberto Peña</div>
+        ${_tecBtnsHTML('prev', p.id)}
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
@@ -2103,13 +2130,7 @@ function renderCorrectivos(){
       ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.previousElementSibling.value+'T'+this.value)"></div></div>`:''}
       ${_tiemposHtml(c)}
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-        <div class="tec-btn" data-n="Jonathan Martinez" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Jonathan Martinez',this)">Jonathan Martinez</div>
-        <div class="tec-btn" data-n="Marvin Torres" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Marvin Torres',this)">Marvin Torres</div>
-        <div class="tec-btn" data-n="Elkin Perez" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Elkin Perez',this)">Elkin Perez</div>
-        <div class="tec-btn" data-n="Kevin Deras" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Kevin Deras',this)">Kevin Deras</div>
-        <div class="tec-btn" data-n="Fernando Benavides" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Fernando Benavides',this)">Fernando Benavides</div>
-        <div class="tec-btn" data-n="Dalton Garcia" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Dalton Garcia',this)">Dalton Garcia</div>
-        <div class="tec-btn" data-n="Eliberto Peña" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Eliberto Peña',this)">Eliberto Peña</div>
+        ${_tecBtnsHTML('corr', c.id)}
       </div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
       ${(c.ubicacion||'campo')!=='plantel'?`
@@ -2482,7 +2503,7 @@ function editarOrdenHistorial(tipo, id){
     const isPrev = orden.completado===true || tipo==='prev';
 
     // Build modal content
-    const tecs = ['Jonathan Martinez', 'Marvin Torres', 'Elkin Perez', 'Kevin Deras', 'Fernando Benavides', 'Dalton Garcia', 'Eliberto Peña'];
+    const tecs = ROSTER_TEC.map(function(t){return t.n;});
     const sistemas = ['Motor / Transmisión', 'Sistema hidráulico', 'Sistema eléctrico', 'Sistema de frenos', 'Sistema de dirección', 'Mástil / Elevación', 'Chasis / Estructura', 'Llantas / Rodos', 'Sistema de enfriamiento', 'Cabina / Tablero', 'Batería / Cargador', 'Sistema de gas / Combustible', 'Otro'];
     const mantTipos = ['Mantenimiento 250 horas', 'Mantenimiento 500 horas', 'Mantenimiento 1000 horas', 'Mantenimiento 2000 horas', 'Mantenimiento 3000 horas', 'Mantenimiento 4000 horas', 'Mantenimiento 6000 horas', 'Inspección general', 'Mantenimiento anual', 'Cambio de aceite y filtros', 'Otro mantenimiento preventivo'];
 
