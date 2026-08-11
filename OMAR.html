@@ -368,6 +368,9 @@ function setConn(ok){
   document.getElementById("conn-txt").textContent = ok ? "EN LINEA" : "SIN CONEXION";
 }
 
+let _listeners = [];
+function limpiarListeners(){ _listeners.forEach(l => l.ref.off("value", l.cb)); _listeners = []; }
+
 function cargarEmpresa(key){
   activeCompany = key;
   document.querySelectorAll(".company-pill").forEach(p=>{
@@ -375,6 +378,7 @@ function cargarEmpresa(key){
     p.classList.toggle("active", on);
     p.setAttribute("aria-selected", on ? "true":"false");
   });
+  limpiarListeners();
 
   const nodo = NODO_EMPRESA[key];
   if(!nodo){ // monhagro: aun no existe en la base
@@ -383,21 +387,43 @@ function cargarEmpresa(key){
     return;
   }
 
-  db.ref(nodo).on("value", snap => {
-    setConn(true);
-    const data = snap.val() || {};
-    pintarFlota(data.equipos || {});
-    pintarMantenimientos(data);
-  }, err => {
-    setConn(false);
-    console.error("Firebase:", err);
-    document.getElementById("mant-grid").innerHTML =
-      '<div class="nc-fill">No se pudo leer la base.<br>'+err.code+'</div>';
-  });
+  // Se leen las rutas hijas directamente (equipos / preventivos / correctivos),
+  // no el nodo padre completo. Es mas ligero y coincide con lo que la base
+  // realmente expone publico.
+  const EST = { equipos:{}, preventivos:{}, correctivos:{} };
+  let equiposListo = false;
+
+  function repintar(){
+    pintarFlota(EST.equipos);
+    if(equiposListo) pintarMantenimientos(EST);
+  }
+
+  function suscribir(sub){
+    const ref = db.ref(nodo + "/" + sub);
+    const cb = ref.on("value", snap => {
+      setConn(true);
+      EST[sub] = snap.val() || {};
+      if(sub === "equipos") equiposListo = true;
+      console.log("[Dash]", nodo + "/" + sub, "->", Object.keys(EST[sub]).length, "registros");
+      repintar();
+    }, err => {
+      setConn(false);
+      console.error("[Dash] ERROR leyendo", nodo + "/" + sub, "-", err.code, "-", err.message);
+      if(sub === "equipos"){
+        document.getElementById("mant-grid").innerHTML =
+          '<div class="nc-fill">No se pudo leer '+nodo+'/'+sub+':<br>'+err.code+'<br>(abre F12 &gt; Console)</div>';
+      }
+    });
+    _listeners.push({ ref, cb });
+  }
+
+  suscribir("equipos");
+  suscribir("preventivos");
+  suscribir("correctivos");
 }
 
 document.querySelectorAll(".company-pill").forEach(p=>{
-  p.addEventListener("click", ()=> { db.ref().off(); cargarEmpresa(p.dataset.company); });
+  p.addEventListener("click", ()=> cargarEmpresa(p.dataset.company));
 });
 
 /* reloj */
