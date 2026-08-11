@@ -21,10 +21,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<!-- Firebase SDK compat 9.23.0 (misma version que usan las apps de Miguel) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
 <style>
   :root{
     --bg:#17191a; --panel:#202325; --panel-line:#34383b;
@@ -210,17 +206,14 @@
    Es Firebase Realtime Database (proyecto "montasa-app"). Este dashboard
    solo LEE. Es el mismo origen del que RADAR de Fabri saca la flota.
    ===================================================================== */
-const firebaseConfig = {
-  apiKey: "AIzaSyCDXVpqQw62z0OI9fqDrdZQhCv7V0RvhiE",
-  authDomain: "montasa-app.firebaseapp.com",
-  databaseURL: "https://montasa-app-default-rtdb.firebaseio.com",
-  projectId: "montasa-app",
-  storageBucket: "montasa-app.firebasestorage.app",
-  messagingSenderId: "607446513526",
-  appId: "1:607446513526:web:45512e46850440e7d52c57"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Se lee por REST (.json), igual que cuando abres la URL en el navegador.
+// Sin SDK ni conexion viva: una peticion puntual y refresco cada 60s.
+const DB_BASE = "https://montasa-app-default-rtdb.firebaseio.com";
+async function getJSON(path){
+  const r = await fetch(DB_BASE + "/" + path + ".json", { cache: "no-store" });
+  if(!r.ok) throw new Error("HTTP " + r.status + " en " + path);
+  return await r.json();
+}
 
 /* Cada empresa es un nodo raiz distinto en la base. Monhagro aun no existe. */
 const NODO_EMPRESA = { montasa: "montasa", monhaco: "monhaco", monhagro: null };
@@ -368,17 +361,16 @@ function setConn(ok){
   document.getElementById("conn-txt").textContent = ok ? "EN LINEA" : "SIN CONEXION";
 }
 
-let _listeners = [];
-function limpiarListeners(){ _listeners.forEach(l => l.ref.off("value", l.cb)); _listeners = []; }
+let _timer = null;
 
-function cargarEmpresa(key){
+async function cargarEmpresa(key){
   activeCompany = key;
   document.querySelectorAll(".company-pill").forEach(p=>{
     const on = p.dataset.company === key;
     p.classList.toggle("active", on);
     p.setAttribute("aria-selected", on ? "true":"false");
   });
-  limpiarListeners();
+  if(_timer){ clearInterval(_timer); _timer = null; }
 
   const nodo = NODO_EMPRESA[key];
   if(!nodo){ // monhagro: aun no existe en la base
@@ -387,39 +379,32 @@ function cargarEmpresa(key){
     return;
   }
 
-  // Se leen las rutas hijas directamente (equipos / preventivos / correctivos),
-  // no el nodo padre completo. Es mas ligero y coincide con lo que la base
-  // realmente expone publico.
-  const EST = { equipos:{}, preventivos:{}, correctivos:{} };
-  let equiposListo = false;
-
-  function repintar(){
-    pintarFlota(EST.equipos);
-    if(equiposListo) pintarMantenimientos(EST);
-  }
-
-  function suscribir(sub){
-    const ref = db.ref(nodo + "/" + sub);
-    const cb = ref.on("value", snap => {
+  async function refrescar(){
+    try{
+      // Flota primero (nodo chico) para que pinte rapido
+      const equipos = (await getJSON(nodo + "/equipos")) || {};
       setConn(true);
-      EST[sub] = snap.val() || {};
-      if(sub === "equipos") equiposListo = true;
-      console.log("[Dash]", nodo + "/" + sub, "->", Object.keys(EST[sub]).length, "registros");
-      repintar();
-    }, err => {
+      console.log("[Dash]", nodo + "/equipos ->", Object.keys(equipos).length, "equipos");
+      pintarFlota(equipos);
+
+      // Mantenimientos: preventivos + correctivos (si alguno falla, sigue con el otro)
+      const [preventivos, correctivos] = await Promise.all([
+        getJSON(nodo + "/preventivos").catch(()=>({})),
+        getJSON(nodo + "/correctivos").catch(()=>({}))
+      ]);
+      console.log("[Dash] preventivos:", Object.keys(preventivos||{}).length,
+                  "| correctivos:", Object.keys(correctivos||{}).length);
+      pintarMantenimientos({ equipos, preventivos: preventivos||{}, correctivos: correctivos||{} });
+    }catch(e){
       setConn(false);
-      console.error("[Dash] ERROR leyendo", nodo + "/" + sub, "-", err.code, "-", err.message);
-      if(sub === "equipos"){
-        document.getElementById("mant-grid").innerHTML =
-          '<div class="nc-fill">No se pudo leer '+nodo+'/'+sub+':<br>'+err.code+'<br>(abre F12 &gt; Console)</div>';
-      }
-    });
-    _listeners.push({ ref, cb });
+      console.error("[Dash] ERROR:", e.message);
+      document.getElementById("mant-grid").innerHTML =
+        '<div class="nc-fill">No se pudo leer la base:<br>'+e.message+'<br>(abre F12 &gt; Console)</div>';
+    }
   }
 
-  suscribir("equipos");
-  suscribir("preventivos");
-  suscribir("correctivos");
+  refrescar();
+  _timer = setInterval(refrescar, 60000);   // refresca cada 60s (sin conexion viva)
 }
 
 document.querySelectorAll(".company-pill").forEach(p=>{
