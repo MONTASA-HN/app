@@ -96,6 +96,8 @@
   .mant-cell .n{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;line-height:1;}
   .mant-cell.warn .n{color:var(--amber);} .mant-cell.warn{border-color:var(--amber-dim);}
   .mant-cell.crit .n{color:var(--red);} .mant-cell.crit{border-color:var(--red);}
+  .mant-cell.ok .n{color:var(--green);} .mant-cell.ok{border-color:rgba(62,207,126,0.45);}
+  .mant-cell.nodata .n{color:var(--ink-faint);} .mant-cell.nodata{border-color:var(--panel-line);}
   .mant-cell .l{font-size:6.5px;color:var(--ink-dim);letter-spacing:0.3px;text-transform:uppercase;margin-top:1px;}
   #chart-fin{width:100%;flex:1;min-height:0;}
   @media (max-width:640px){
@@ -236,14 +238,32 @@ function bucketEstado(estadoRaw){
 }
 
 /* --- CONFIG MANTENIMIENTOS ---------------------------------------------
-   Ordena los equipos por el que lleva MAS tiempo sin mantenimiento.
-   OJO: no tengo confirmado el esquema exacto del nodo de mantenimientos,
-   asi que se intenta leer de varios posibles. Verifica en la consola de
-   Firebase como se llaman de verdad el nodo y los campos, y ajusta estas
-   dos listas. El panel de flota si esta 100% confirmado; este es best-effort. */
-const NODOS_MANT   = ["preventivos","correctivos","revisiones","mantenimientos"];
-const CAMPOS_EQUIPO = ["codigo","equipo","equipoCodigo","codigoEquipo","unidad"];
-const CAMPOS_FECHA  = ["fecha","fechaMant","fecha_mantenimiento","fechaRevision","createdAt","timestamp"];
+   Semaforo: de izquierda a derecha, el equipo MAS cerca de necesitar
+   mantenimiento primero. "Cerca" = lo que llegue primero entre:
+     - TIEMPO:    cada 90 dias  (amarillo al 75% = ~68 dias, rojo a los 90+)
+     - HOROMETRO: cada 250 h    (amarillo al 75% = ~188 h, rojo a las 250+)
+
+   OJO ESQUEMA: aun no esta confirmado como se llaman los campos en la base.
+   El codigo prueba varios nombres; cuando veas los reales (abriendo
+   equipos.json / preventivos.json) deja SOLO el correcto en cada lista. */
+const INTERVALO_DIAS   = 90;
+const INTERVALO_HORAS  = 250;
+const UMBRAL_AMARILLO  = 0.75;   // 0.75 = amarillo ; 1.0+ = rojo
+
+// horometro ACTUAL, dentro del equipo
+const CAMPOS_HOROMETRO_ACT   = ["horometro","horometroActual","horas","horometer","hrs"];
+// (opcional) si el EQUIPO guarda directo su ultimo mant, sin ir al historial:
+const CAMPOS_ULT_FECHA_EQUIPO     = ["ultimoMant","fechaUltimoMant","ultimoMantenimiento"];
+const CAMPOS_ULT_HOROMETRO_EQUIPO = ["horometroUltimoMant","horometroMant","hrsUltimoMant"];
+
+// historial de mantenimientos (CONFIRMADO: nodo "preventivos")
+const NODOS_MANT    = ["preventivos","correctivos"];
+// el mant se une al equipo por equipoId (== equipo.id), NO por codigo
+const CAMPOS_MANT_EQUIPOID = ["equipoId","equipoID","idEquipo"];
+// fecha del mant: se prefiere la de completado
+const CAMPOS_FECHA  = ["fechaCompletado","fecha","fechaFin"];
+// horometro registrado EN ESE mant (snapshot CONFIRMADO)
+const CAMPOS_HOROMETRO_SNAP = ["horometro"];
 
 function primerCampo(obj, posibles){
   for(const k of posibles){ if(obj && obj[k] != null && obj[k] !== "") return obj[k]; }
@@ -252,61 +272,95 @@ function primerCampo(obj, posibles){
 function aFecha(v){
   if(v == null) return null;
   if(typeof v === "number") return new Date(v);
-  const d = new Date(v);
-  return isNaN(d) ? null : d;
+  const d = new Date(v); return isNaN(d) ? null : d;
 }
+function aNumero(v){
+  if(v == null) return null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g,""));  // quita "KG", comas, etc.
+  return isNaN(n) ? null : n;
+}
+function diasDesde(fecha){ return (Date.now() - fecha.getTime()) / 86400000; }
 
-let activeCompany = "montasa";
+/* devuelve {codigo, urgencia, color, etiqueta} para un equipo */
+function evaluarEquipo(eq, ultimoDeHistorial){
+  const codigo = eq.codigo || eq.id || "?";
+  const horoAct = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
 
-function pintarFlota(equiposObj){
-  const c = {disp:0, renta:0, mant:0, uso:0};
-  Object.values(equiposObj||{}).forEach(eq => { c[bucketEstado(eq.estado)]++; });
-  document.getElementById("flota-disp").textContent  = c.disp;
-  document.getElementById("flota-renta").textContent = c.renta;
-  document.getElementById("flota-mant").textContent  = c.mant;
-  document.getElementById("flota-uso").textContent   = c.uso;
+  // fecha y horometro del ultimo mant: primero lo que traiga el equipo directo,
+  // si no, lo que saquemos del historial
+  const fechaUlt = aFecha(primerCampo(eq, CAMPOS_ULT_FECHA_EQUIPO)) ||
+                   (ultimoDeHistorial ? ultimoDeHistorial.fecha : null);
+  const horoUlt  = aNumero(primerCampo(eq, CAMPOS_ULT_HOROMETRO_EQUIPO)) ??
+                   (ultimoDeHistorial ? ultimoDeHistorial.horometro : null);
+
+  // ratio por tiempo
+  let rT = null, etqT = null;
+  if(fechaUlt){
+    const d = diasDesde(fechaUlt);
+    rT = d / INTERVALO_DIAS;
+    etqT = (d >= INTERVALO_DIAS) ? ("+"+Math.round(d-INTERVALO_DIAS)+"d") : (Math.round(d)+"d");
+  }
+  // ratio por horometro (solo si tenemos actual Y del ultimo mant)
+  let rH = null, etqH = null;
+  if(horoAct != null && horoUlt != null){
+    const h = horoAct - horoUlt;
+    rH = h / INTERVALO_HORAS;
+    etqH = (h >= INTERVALO_HORAS) ? ("+"+Math.round(h-INTERVALO_HORAS)+"h") : (Math.round(h)+"h");
+  }
+
+  // urgencia = la via que este mas cerca de tocar
+  let urgencia = null, etiqueta = "sin datos";
+  if(rT != null || rH != null){
+    if(rT == null){ urgencia = rH; etiqueta = etqH; }
+    else if(rH == null){ urgencia = rT; etiqueta = etqT; }
+    else if(rH >= rT){ urgencia = rH; etiqueta = etqH; }
+    else { urgencia = rT; etiqueta = etqT; }
+  }
+  let color = "nodata";
+  if(urgencia != null) color = urgencia >= 1 ? "crit" : (urgencia >= UMBRAL_AMARILLO ? "warn" : "ok");
+  return { codigo, urgencia, color, etiqueta };
 }
 
 function pintarMantenimientos(companyData){
   const grid = document.getElementById("mant-grid");
   const equipos = companyData.equipos || {};
-  // ultima fecha de mantenimiento por codigo de equipo
-  const ultima = {};
+
+  // ultimo mant por codigo, sacado del historial (fecha mas reciente = el ultimo)
+  const ultimo = {};   // equipoId -> {fecha, horometro}
+  let huboHistorial = false;
   NODOS_MANT.forEach(nodo => {
     const registros = companyData[nodo];
     if(!registros) return;
     Object.values(registros).forEach(r => {
-      const cod = primerCampo(r, CAMPOS_EQUIPO);
-      const f = aFecha(primerCampo(r, CAMPOS_FECHA));
-      if(!cod || !f) return;
-      if(!ultima[cod] || f > ultima[cod]) ultima[cod] = f;
+      if(r.completado === false) return;            // mant abierto no reinicia el reloj
+      const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
+      const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
+      if(!eqid || !f) return;
+      huboHistorial = true;
+      const snap = aNumero(primerCampo(r, CAMPOS_HOROMETRO_SNAP));
+      if(!ultimo[eqid] || f > ultimo[eqid].fecha) ultimo[eqid] = { fecha:f, horometro:snap };
     });
   });
-  // lista de equipos con su ultima fecha (los sin registro = mas atrasados)
-  const filas = Object.values(equipos).map(eq => ({
-    codigo: eq.codigo || eq.id,
-    ultima: ultima[eq.codigo] || null
-  }));
-  const conDato = Object.keys(ultima).length > 0;
-  if(!conDato){
-    grid.innerHTML = '<div class="nc-fill">No se encontro nodo de mantenimientos.<br>Revisa NODOS_MANT / CAMPOS_* en el codigo.</div>';
+
+  const filas = Object.values(equipos).map(eq =>
+    evaluarEquipo(eq, ultimo[eq.id] || null)
+  );
+
+  const conDatos = filas.filter(x => x.urgencia != null);
+  const sinDatos = filas.filter(x => x.urgencia == null);
+
+  if(conDatos.length === 0){
+    grid.innerHTML = '<div class="nc-fill">Sin datos para calcular el semaforo.<br>'
+      + (huboHistorial ? 'Revisa CAMPOS_HOROMETRO_* y CAMPOS_FECHA.' : 'No se hallo historial de mant. (NODOS_MANT).')
+      + '</div>';
     return;
   }
-  // orden: sin fecha primero (mas atrasado), luego fecha mas vieja primero
-  filas.sort((a,b) => {
-    if(!a.ultima && !b.ultima) return 0;
-    if(!a.ultima) return -1;
-    if(!b.ultima) return 1;
-    return a.ultima - b.ultima;
-  });
-  const top = filas.slice(0,6);
-  grid.innerHTML = top.map((v,i) => {
-    const tier = i === 0 ? "crit" : (i <= 2 ? "warn" : "");
-    const etq = v.ultima
-      ? v.ultima.toLocaleDateString("es-HN",{day:"2-digit",month:"2-digit"})
-      : "sin registro";
-    return '<div class="mant-cell '+tier+'"><div class="n">'+v.codigo+'</div><div class="l">'+etq+'</div></div>';
-  }).join("");
+
+  conDatos.sort((a,b) => b.urgencia - a.urgencia);   // mas urgente a la izquierda
+  const top = conDatos.concat(sinDatos).slice(0,6);
+  grid.innerHTML = top.map(v =>
+    '<div class="mant-cell '+v.color+'"><div class="n">'+v.codigo+'</div><div class="l">'+v.etiqueta+'</div></div>'
+  ).join("");
 }
 
 function setConn(ok){
