@@ -1162,8 +1162,29 @@ function _codigoVehiculoDesdeOrden(o){
   return eq ? eq.codigo : null;
 }
 
+// Copia de DB SIN fotos/firmas para el caché local (evita QuotaExceeded que borra el texto)
+function _dbSinFotos(){
+  const clone={};
+  for(const k in DB){
+    const v=DB[k];
+    if(Array.isArray(v)){
+      clone[k]=v.map(function(o){
+        if(!o||typeof o!=='object') return o;
+        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
+        if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
+        return c;
+      });
+    } else clone[k]=v;
+  }
+  return clone;
+}
+function _cacheLocal(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(_dbSinFotos())); }
+  catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
+}
+function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
 function saveDB(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
@@ -1215,7 +1236,7 @@ function _esperarFirebaseListo(maxMs){
 // segundo plano hasta lograrlo, sin importar cuánto tarde la conexión.
 let _logisticaSyncEnCurso = false;
 function _guardarLogisticaResiliente(nuevaOrdenId){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
   renderLogistica(); renderDashboard();
   toast('Orden guardada ✓');
@@ -1837,7 +1858,7 @@ function _guardarEquipoCliente(nombre, marca, modelo, serie){
   const newIdx = DB.equipos.length - 1;
   if(window._fbDB && window._fbReady)
     window._fbDB.ref('monhaco/equipos/'+newIdx).set(nuevoEq);
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   return nuevoEq.id;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4604,7 +4625,7 @@ function completarPreventivo(id){
       var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
       if(_v.length){
         _o.vales = _v;
-        try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+        try{ _cacheLocal(); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.preventivos.findIndex(function(x){return x.id===p.id;});
           if(_idx>=0) window._fbDB.ref('monhaco/preventivos/'+_idx+'/vales').set(_v);
@@ -4785,7 +4806,7 @@ function cerrarCorrectivo(id){
       var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
       if(_v.length){
         _o.vales = _v;
-        try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+        try{ _cacheLocal(); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.correctivos.findIndex(function(x){return x.id===c.id;});
           if(_idx>=0) window._fbDB.ref('monhaco/correctivos/'+_idx+'/vales').set(_v);
@@ -5903,7 +5924,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         // Guardado local best-effort protegido: si el localStorage esta lleno
         // (QuotaExceeded) NO debe tumbar el procesamiento — Firebase manda.
-        try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+        try{ _cacheLocal(); }
         catch(e){ console.warn('Cache local no guardado ('+(e&&e.name||'error')+'). La app sigue con datos de Firebase.'); }
       } else {
         loadDB();
@@ -5986,7 +6007,7 @@ function _iniciarConexionFirebase(esReintento){
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
-      if(active){
+      if(active && !_editandoCampo()){
         const id=active.id.replace('tab-','');
         if(id==='dashboard')   renderDashboard();
         if(id==='preventivo')  renderPreventivos();
@@ -7101,7 +7122,7 @@ function _ejecutarGuardarVale(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
@@ -7293,7 +7314,7 @@ function descargarChecklistPDFGer(id){
 function _elimRV(id){
   solicitarPINAccion(function(){
     DB.revisiones = (DB.revisiones||[]).filter(function(x){ return x.id!==id; });
-    try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+    try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
       window._fbDB.ref('monhaco/revisiones').set(DB.revisiones)
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
@@ -7307,7 +7328,7 @@ function _elimRV(id){
 function _elimEV(id){
   solicitarPINAccion(function(){
     DB.evaluaciones = (DB.evaluaciones||[]).filter(function(x){ return x.id!==id; });
-    try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+    try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
       window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones)
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
@@ -7349,7 +7370,7 @@ function _elimLG(id){
     const ordenAEliminar = (DB.logistica||[]).find(function(x){ return x.id===id; });
     _revertirEstadoEquipoAlEliminar(ordenAEliminar);
     DB.logistica = (DB.logistica||[]).filter(function(x){ return x.id!==id; });
-    try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+    try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
       var clean = (DB.logistica||[]).map(function(o){
         if(!o) return null;
@@ -7493,7 +7514,7 @@ function _ejecutarGuardarValeMant(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
-  try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
     const idx = arr.findIndex(o=>o.id===orden.id);

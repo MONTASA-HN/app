@@ -785,8 +785,29 @@ let openHistGer = new Set(); // track which subgroups are open
 let _openMant = new Set(); // tarjetas activas de mantenimiento abiertas
 let modalEquipoId = null;
 
+// Copia de DB SIN fotos/firmas para el caché local (evita QuotaExceeded que borra el texto)
+function _dbSinFotos(){
+  const clone={};
+  for(const k in DB){
+    const v=DB[k];
+    if(Array.isArray(v)){
+      clone[k]=v.map(function(o){
+        if(!o||typeof o!=='object') return o;
+        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
+        if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
+        return c;
+      });
+    } else clone[k]=v;
+  }
+  return clone;
+}
+function _cacheLocal(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(_dbSinFotos())); }
+  catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
+}
+function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
 function saveDB(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
@@ -835,7 +856,7 @@ function _esperarFirebaseListo(maxMs){
 // segundo plano hasta lograrlo, sin importar cuánto tarde la conexión.
 let _logisticaSyncEnCurso = false;
 function _guardarLogisticaResiliente(nuevaOrdenId){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
   renderLogistica(); renderDashboard();
   toast('Orden guardada ✓');
@@ -1097,7 +1118,7 @@ function loadDB(){
         return eq;
       });
       // Solo guardar en localStorage, NO en Firebase (Firebase es la fuente de verdad)
-      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+      try{ _cacheLocal(); }catch(e){}
     } else {
       // Primera vez: NO sobreescribir Firebase — esperar a que el listener traiga los datos
       DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
@@ -5350,7 +5371,7 @@ function _ejecutarGuardarVale(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
@@ -5815,7 +5836,7 @@ function _buildCamposEdicionPC(x, eq, tipoPC){
   }
 
   // Notas
-  h += `<div class="form-group"><label>${isPrev?'Servicio realizado':'Diagnóstico'}</label><textarea rows="2" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)" oninput="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)">${isPrev?(x.notas||''):(x.diagnostico||'')}</textarea></div>`;
+  h += `<div class="form-group"><label>${isPrev?'Servicio realizado':'Diagnóstico'}</label><textarea rows="2" onchange="event.stopPropagation();actualizarCampoOrden('${tipo}','${x.id}','${isPrev?'notas':'diagnostico'}',this.value)">${isPrev?(x.notas||''):(x.diagnostico||'')}</textarea></div>`;
 
   h += `</div>`;
   return h;
@@ -6431,7 +6452,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         // Guardado local best-effort protegido: si el localStorage esta lleno
         // (QuotaExceeded) NO debe tumbar el procesamiento — Firebase manda.
-        try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+        try{ _cacheLocal(); }
         catch(e){ console.warn('Cache local no guardado ('+(e&&e.name||'error')+'). La app sigue con datos de Firebase.'); }
       } else {
         loadDB();
@@ -6526,7 +6547,7 @@ function _iniciarConexionFirebase(esReintento){
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
       const active=document.querySelector('.section.active');
-      if(active){
+      if(active && !_editandoCampo()){
         const id=active.id.replace('tab-','');
         if(id==='dashboard')   renderDashboard();
         if(id==='preventivo')  renderPreventivos();
@@ -6574,9 +6595,9 @@ function _iniciarConexionFirebase(esReintento){
       if(d.equipos)       DB.equipos       = d.equipos;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.ordenesCerradas)  DB.ordenesCerradas  = d.ordenesCerradas;
-      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+      try{ _cacheLocal(); }catch(e){}
       const activeTab = document.querySelector('.section.active');
-      if(activeTab) {
+      if(activeTab && !_editandoCampo()) {
         const id = activeTab.id.replace('tab-','');
         if(id === 'sup-dashboard') renderDashboardTec();
         if(id === 'historial') renderHistorial();
