@@ -865,8 +865,24 @@ function loadDB(){
   }
 }
 
+// Copia de DB SIN fotos/firmas para el caché local (evita QuotaExceeded que borra el texto)
+function _dbSinFotos(){
+  const clone = {}; for(const k in DB) clone[k]=DB[k];
+  const strip = a => Array.isArray(a) ? a.map(o=>{
+    if(!o || typeof o!=='object') return o;
+    const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
+    if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
+    return c;
+  }) : a;
+  ['preventivos','correctivos','revisiones','evaluaciones','cortinas','ordenesCerradas'].forEach(k=>{ if(clone[k]) clone[k]=strip(clone[k]); });
+  return clone;
+}
+function _cacheLocal(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(_dbSinFotos())); }
+  catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
+}
 function saveDB(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  _cacheLocal();
   try{
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
@@ -874,6 +890,8 @@ function saveDB(){
       const payload = { _ts: ts, _sid: _SESSION_ID };
       if(DB.preventivos && DB.preventivos.length)       payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = DB.correctivos;
+      if(DB.revisiones && DB.revisiones.length)         payload.revisiones      = DB.revisiones;
+      if(DB.evaluaciones && DB.evaluaciones.length)     payload.evaluaciones    = DB.evaluaciones;
       if(DB.cortinas && DB.cortinas.length)             payload.cortinas        = DB.cortinas;
       if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
       window._fbDB.ref('monhaco').update(payload);
@@ -2862,11 +2880,13 @@ renderDashboardTec();
       if(remote._ts >= (local._ts||0)){
         if(remote.preventivos)     DB.preventivos     = remote.preventivos;
         if(remote.correctivos)     DB.correctivos     = remote.correctivos;
+        if(remote.revisiones)      DB.revisiones      = remote.revisiones||[];
+        if(remote.evaluaciones)    DB.evaluaciones    = remote.evaluaciones||[];
         if(remote.cortinas)        DB.cortinas        = remote.cortinas||[];
         if(remote.ordenesCerradas) DB.ordenesCerradas = remote.ordenesCerradas;
         if(remote.solicitudes)     DB.solicitudes     = remote.solicitudes;
         if(remote.equipos && remote.equipos.length) DB.equipos = remote.equipos;
-        localStorage.setItem(LS_KEY, JSON.stringify(DB));
+        _cacheLocal();
       } else { loadDB(); saveDB(); }
     } else { loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
@@ -2880,18 +2900,26 @@ renderDashboardTec();
       if(ownWrite) return; // Es el eco de nuestra propia escritura — nuestros datos en memoria ya son correctos
       if(d.preventivos)     DB.preventivos     = d.preventivos;
       if(d.correctivos)     DB.correctivos     = d.correctivos;
+      if(d.revisiones)      DB.revisiones      = d.revisiones||[];
+      if(d.evaluaciones)    DB.evaluaciones    = d.evaluaciones||[];
       if(d.cortinas)        DB.cortinas        = d.cortinas||[];
       if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
       if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
       if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
       if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      _cacheLocal();
       const active=document.querySelector('.section.active');
       if(!active) return;
+      // No reconstruir la orden mientras el técnico escribe (evita borrar su texto/fotos en progreso)
+      const _ae=document.activeElement;
+      if(_ae && /^(INPUT|TEXTAREA|SELECT)$/.test(_ae.tagName)) return;
       const id=active.id.replace('tab-','');
       if(id==='dashboard')  renderDashboardTec();
       if(id==='preventivo') renderPreventivos();
       if(id==='correctivo') renderCorrectivos();
       if(id==='cortinas')   renderCortinas();
+      if(id==='revision')   renderRevisiones();
+      if(id==='evaluacion') renderEvaluaciones();
     });
   }).catch(()=>{ loadDB(); renderPreventivos(); });
   if(typeof updateBadges==='function') updateBadges();
@@ -3243,7 +3271,7 @@ function renderRevisiones(){
           <option value="">— Ninguno —</option>
           ${['Rances Pineda','Angel Cardona','Maynor Paz','Cristian Barrera','Jose Escoto','Ramon Moreno','Sergio Madrid'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
-      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)" oninput="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)">${r.notas||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)">${r.notas||''}</textarea></div>`;
       // Fotos de la orden
       card += `<div class="form-group">
         <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
@@ -3434,7 +3462,7 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)" oninput="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
@@ -3770,41 +3798,49 @@ function actualizarEvaluacion(id, campo, valor){
 
 // ── FOTOS DE ÓRDENES (Revisiones y Evaluaciones) ─────────────────────────────
 function agregarFotosOrden(tipo, id, input){
-  const arr = tipo==='rev' ? DB.revisiones : DB.evaluaciones;
-  const orden = (arr||[]).find(x=>x.id===id);
+  const getOrden = ()=> ((tipo==='rev'?DB.revisiones:DB.evaluaciones)||[]).find(x=>x.id===id);
+  const orden = getOrden();
   if(!orden) return;
   if(!orden.fotos) orden.fotos = [];
   const archivos = Array.from(input.files);
   const espacio = 10 - orden.fotos.length;
+  input.value = '';
+  if(espacio<=0){ toast('Límite de 10 fotos alcanzado', true); return; }
   const procesar = archivos.slice(0, espacio);
-  let pendientes = procesar.length;
-  if(!pendientes){ toast('Límite de 10 fotos alcanzado'); return; }
+  if(archivos.length>espacio){ toast('Solo se agregaron '+espacio+' de '+archivos.length+' (límite 10)', true); }
+  let pendientes = procesar.length, agregadas = 0;
+  const finalizar = ()=>{
+    saveDB();
+    if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
+    if(agregadas>0) toast(agregadas+' foto'+(agregadas>1?'s':'')+' agregada'+(agregadas>1?'s':'')+' ✓');
+    else toast('No se pudo procesar ninguna foto', true);
+  };
+  const done = ()=>{ pendientes--; if(pendientes<=0) finalizar(); };
   procesar.forEach(file=>{
     const reader = new FileReader();
+    reader.onerror = ()=>{ done(); };
     reader.onload = e=>{
-      // Comprimir la imagen antes de guardar
       const img = new Image();
+      img.onerror = ()=>{ done(); };
       img.onload = ()=>{
-        const canvas = document.createElement('canvas');
-        const MAX = 1200;
-        let w = img.width, h = img.height;
-        if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
-        if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        orden.fotos.push(canvas.toDataURL('image/jpeg', 0.75));
-        pendientes--;
-        if(pendientes === 0){
-          saveDB();
-          if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
-          toast('Foto'+(procesar.length>1?'s':'')+' agregada'+(procesar.length>1?'s':'')+'  ✓');
-        }
+        try{
+          const canvas = document.createElement('canvas');
+          const MAX = 1200;
+          let w = img.width, h = img.height;
+          if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+          if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const o = getOrden(); // re-buscar por id: evita guardar en un objeto viejo si llegó un cambio remoto
+          if(o){ if(!o.fotos) o.fotos=[]; o.fotos.push(dataUrl); agregadas++; }
+        }catch(err){ /* esta foto falló: se omite, el resto continúa */ }
+        done();
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
-  input.value = '';
 }
 
 function eliminarFotoOrden(tipo, id, idx){
