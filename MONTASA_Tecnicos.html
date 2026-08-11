@@ -1544,6 +1544,25 @@ function firmaMove(e, canvas){
 
 function firmaStop(canvas){
   _firmaDrawing = false;
+  try{ _autoGuardarFirma(canvas); }catch(e){}
+}
+// Guarda la firma automáticamente al soltar el lápiz (sin botón), en la orden correspondiente.
+function _autoGuardarFirma(canvas){
+  if(!canvas || !canvas.id) return;
+  const cid = canvas.id;
+  if(cid.indexOf('firma-')!==0) return;
+  if(/-new$/.test(cid)) return;                       // lienzos de "nuevo": se guardan al crear la orden
+  if(!canvas.classList.contains('firmado')) return;   // no hay trazo
+  const data = canvas.toDataURL('image/png');
+  if(!data) return;
+  let oid, arrays;
+  if(cid.indexOf('firma-cort-')===0){ oid=cid.slice(11); arrays=[DB.cortinas]; }
+  else if(cid.indexOf('firma-eval-')===0){ oid=cid.slice(11); arrays=[DB.evaluaciones]; }
+  else if(cid.indexOf('firma-rev-')===0){ oid=cid.slice(10); arrays=[DB.revisiones]; }
+  else { oid=cid.slice(6); arrays=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.cortinas]; }
+  let o=null;
+  for(let i=0;i<arrays.length;i++){ const a=arrays[i]; if(a){ const fnd=a.find(x=>x&&x.id===oid); if(fnd){o=fnd;break;} } }
+  if(o && o.firma!==data){ o.firma=data; saveDB(); }
 }
 
 
