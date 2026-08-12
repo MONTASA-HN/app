@@ -6219,6 +6219,7 @@ function _iniciarConexionFirebase(esReintento){
    // ── Procesamiento del snapshot: cualquier error AQUI es un bug de datos/render,
    //    NO un problema de conexion. Se atrapa por separado para no disparar el
    //    reintento infinito ni mostrar el mensaje enganoso "Sin conexion".
+   window._fbReady = true; // conexión OK: habilitar escritura aunque el procesamiento del snapshot falle
    try {
     const remote = snap.val();
     if(remote){
@@ -6230,7 +6231,7 @@ function _iniciarConexionFirebase(esReintento){
       DB.vendidos = _dedupeVendidos(DB.vendidos);
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
       if(remote.equipos && remote.equipos.length){
-        DB.equipos = remote.equipos.map(req => {
+        DB.equipos = remote.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
@@ -6339,7 +6340,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);
       // Always update DB from Firebase (even our own writes)
       if(d.equipos && d.equipos.length){
-        DB.equipos = d.equipos.map(req => {
+        DB.equipos = d.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
