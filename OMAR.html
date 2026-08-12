@@ -96,6 +96,18 @@
   .mant-cell.nodata .n{color:var(--ink-faint);} .mant-cell.nodata{border-color:var(--panel-line);}
   .mant-cell .l{font-size:6.5px;color:var(--ink-dim);letter-spacing:0.3px;text-transform:uppercase;margin-top:1px;}
   #chart-fin{width:100%;flex:1;min-height:0;}
+  /* caja chica: lista de pendientes con aprobar/rechazar */
+  .caja-body{flex:1;display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0;}
+  .cc-item{border:1px solid var(--panel-line);border-left:3px solid var(--amber);padding:7px 9px;display:flex;flex-direction:column;gap:6px;}
+  .cc-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .cc-monto{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--amber);line-height:1;white-space:nowrap;}
+  .cc-sede{font-size:9px;color:var(--ink-dim);letter-spacing:0.5px;text-transform:uppercase;}
+  .cc-meta{font-size:10px;color:var(--ink-dim);line-height:1.2;}
+  .cc-acts{display:flex;gap:6px;}
+  .cc-acts .stamp{flex:1;padding:7px 0;background:transparent;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;border:1px solid var(--panel-line);color:var(--ink-dim);transition:all .15s;}
+  .cc-acts .stamp.ok:hover{border-color:var(--green);color:var(--green);background:rgba(62,207,126,0.08);}
+  .cc-acts .stamp.no:hover{border-color:var(--red);color:var(--red);background:rgba(229,83,75,0.08);}
+  .cc-acts .stamp:disabled{opacity:0.4;cursor:default;}
   @media (max-width:640px){
     .grid{grid-template-columns:1fr;grid-auto-rows:auto;}
     .panel{grid-column:auto !important;grid-row:auto !important;min-height:200px;}
@@ -187,13 +199,13 @@
     <div class="panel-body"><div class="nc-fill">Pendiente de conectar</div></div>
   </div>
 
-  <!-- 6. CAJA CHICA — sin conectar -->
-  <div class="panel p-caja disconnected">
+  <!-- 6. CAJA CHICA — CONECTADO (Apps Script de Christian, solo Monhaco) -->
+  <div class="panel p-caja" id="panel-caja">
     <div class="panel-head">
       <span class="panel-title display">Caja Chica</span>
-      <span class="nc-badge">Sin conectar</span>
+      <span class="panel-num" id="caja-num">–</span>
     </div>
-    <div class="panel-body"><div class="nc-fill">Pendiente de conectar<br>a la API de Christian</div></div>
+    <div class="panel-body"><div id="caja-body" class="caja-body"><div class="nc-fill">–</div></div></div>
   </div>
 
 </div>
@@ -217,6 +229,16 @@ async function getJSON(path){
 
 /* Cada empresa es un nodo raiz distinto en la base. Monhagro aun no existe. */
 const NODO_EMPRESA = { montasa: "montasa", monhaco: "monhaco", monhagro: null };
+
+/* A donde lleva el widget de Flota segun la empresa activa.
+   La de Montasa la confirmo Rodz (MTRENTAL_Gerencia); las otras son inferidas
+   por los archivos que ya existen en el repo — ajustar si alguna cambia. */
+const BASE_APP = "https://montasa-hn.github.io/app/";
+const PAG_FLOTA = {
+  montasa:  BASE_APP + "MTRENTAL_Gerencia.html",
+  monhaco:  BASE_APP + "MONHACO_Gerencia.html",
+  monhagro: null
+};
 
 /* --- CONFIG FLOTA -------------------------------------------------------
    Reparto por "estado" del equipo. Los valores confirmados en la base son
@@ -365,6 +387,91 @@ function pintarMantenimientos(companyData){
   ).join("");
 }
 
+/* --- CAJA CHICA (Apps Script de Christian) -----------------------------
+   Solo aplica a Monhaco. El Dash lista los gastos en "Enviado a revision"
+   y al decidir llama de vuelta al mismo endpoint. Ver contrato compartido
+   con Christian. Si cambia algun nombre de accion/parametro, ajustar aqui. */
+const CC_ENDPOINT = "https://script.google.com/macros/s/AKfycbyvVTRRRA8LsO8Z_pRV8ym19tP_6SPqUDAo73lvSmYk_VxPK6f9U1mQbiSm1RzcZj_M/exec";
+const CC_EMPRESA  = "monhaco";   // caja chica solo existe para Monhaco
+
+function fmtL(monto){
+  const n = aNumero(monto);
+  return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+async function cargarCajaChica(){
+  const body = document.getElementById("caja-body");
+  const num  = document.getElementById("caja-num");
+  if(activeCompany !== CC_EMPRESA){
+    num.textContent = "–";
+    body.innerHTML = '<div class="nc-fill">Caja chica solo aplica a Monhaco</div>';
+    return;
+  }
+  body.innerHTML = '<div class="nc-fill">Cargando…</div>';
+  try{
+    // Lee la clave completa con el 'get' generico que ya existe y filtra aqui.
+    const r = await fetch(CC_ENDPOINT + "?action=get&key=data-cajachica&_=" + Date.now(), { cache:"no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    let arr = [];
+    if(data && data.found && data.value) arr = JSON.parse(data.value);
+    const pend = (Array.isArray(arr) ? arr : []).filter(x => x.estado === "Enviado a revisión");
+    console.log("[Dash] caja chica: total", (Array.isArray(arr)?arr.length:0), "| pendientes revision", pend.length);
+    renderCajaChica(pend);
+  }catch(e){
+    console.error("[Dash] ERROR caja chica:", e.message);
+    num.textContent = "!";
+    body.innerHTML = '<div class="nc-fill">No se pudo leer caja chica:<br>'+e.message+'</div>';
+  }
+}
+
+function renderCajaChica(items){
+  const body = document.getElementById("caja-body");
+  const num  = document.getElementById("caja-num");
+  num.textContent = items.length ? items.length : "0";
+  if(!items.length){ body.innerHTML = '<div class="nc-fill">Sin pendientes por aprobar</div>'; return; }
+  body.innerHTML = items.map(it => {
+    const meta = [it.sede, it.concepto].filter(Boolean).join(" · ");
+    return '<div class="cc-item" data-id="'+it.id+'">'
+      + '<div class="cc-top"><span class="cc-monto">'+fmtL(it.monto)+'</span><span class="cc-sede">'+(it.sede||"")+'</span></div>'
+      + '<div class="cc-meta">'+meta+(it.responsable ? ' — '+it.responsable : '')+'</div>'
+      + '<div class="cc-acts">'
+      +   '<button class="stamp ok" data-dec="aprobar">✓ Aprobar</button>'
+      +   '<button class="stamp no" data-dec="rechazar">✕ Rechazar</button>'
+      + '</div></div>';
+  }).join("");
+  body.querySelectorAll(".cc-item .stamp").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const item = btn.closest(".cc-item");
+      decidirCajaChica(item.dataset.id, btn.dataset.dec, item);
+    });
+  });
+}
+
+async function decidirCajaChica(id, decision, itemEl){
+  itemEl.querySelectorAll(".stamp").forEach(b => b.disabled = true);
+  try{
+    const url = CC_ENDPOINT + "?action=cajachica_decidir&id=" + encodeURIComponent(id)
+              + "&decision=" + decision + "&por=Omar&_=" + Date.now();
+    const r = await fetch(url, { cache:"no-store" });
+    const res = await r.json();
+    if(!res.ok) throw new Error(res.error || "respuesta no ok");
+    // exito: quitar el item y actualizar el contador
+    itemEl.remove();
+    const num = document.getElementById("caja-num");
+    const quedan = document.querySelectorAll("#caja-body .cc-item").length;
+    num.textContent = quedan;
+    if(quedan === 0) document.getElementById("caja-body").innerHTML =
+      '<div class="nc-fill">Sin pendientes por aprobar</div>';
+    showToast((decision === "aprobar" ? "Aprobado" : "Rechazado") + " · " + id);
+  }catch(e){
+    console.error("[Dash] ERROR al decidir:", e.message);
+    itemEl.querySelectorAll(".stamp").forEach(b => b.disabled = false);
+    showToast("No se pudo guardar: " + e.message);
+  }
+}
+
 function setConn(ok){
   document.getElementById("conn-dot").classList.toggle("off", !ok);
   document.getElementById("conn-txt").textContent = ok ? "EN LINEA" : "SIN CONEXION";
@@ -385,6 +492,7 @@ async function cargarEmpresa(key){
   if(!nodo){ // monhagro: aun no existe en la base
     ["flota-disp","flota-renta","flota-mant","flota-uso"].forEach(id=>document.getElementById(id).textContent="–");
     document.getElementById("mant-grid").innerHTML = '<div class="nc-fill">Monhagro aun no esta en la base.</div>';
+    cargarCajaChica();
     return;
   }
 
@@ -413,7 +521,8 @@ async function cargarEmpresa(key){
   }
 
   refrescar();
-  _timer = setInterval(refrescar, 60000);   // refresca cada 60s (sin conexion viva)
+  cargarCajaChica();
+  _timer = setInterval(()=>{ refrescar(); cargarCajaChica(); }, 60000);   // refresca cada 60s (sin conexion viva)
 }
 
 document.querySelectorAll(".company-pill").forEach(p=>{
@@ -436,6 +545,13 @@ document.querySelectorAll(".panel[data-href]").forEach(panel=>{
   panel.setAttribute("tabindex","0"); panel.setAttribute("role","link");
   panel.setAttribute("aria-label","Abrir "+panel.dataset.label);
   const go = ()=>{
+    // El widget de Flota navega a la pagina de gerencia de la empresa activa
+    if(panel.classList.contains("p-flota")){
+      const url = PAG_FLOTA[activeCompany];
+      if(url){ window.location.href = url; }
+      else { showToast("Aun no hay pagina de flota para " + activeCompany); }
+      return;
+    }
     showToast("Abrir "+panel.dataset.label+" → "+panel.dataset.href);
     // window.location.href = panel.dataset.href;  // <- activar cuando exista la pagina
   };
