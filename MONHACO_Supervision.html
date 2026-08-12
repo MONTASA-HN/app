@@ -680,7 +680,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast" style="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f3864;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9999;max-width:90%;text-align:center"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-h · nodo-seguro</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-i · guarda-siempre</div>
 
 <!-- Modal overlay (compartido por historial, vales, viáticos) -->
 <div id="modal-overlay" onclick="if(this===event.target)cerrarModal()">
@@ -811,15 +811,18 @@ function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INP
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
 // Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
 function _syncCortina(o){
-  if(!o||!o.id) return;
-  if(!(window._fbDB && window._fbReady)){ try{ toast('\u26a0\ufe0f Sin conexi\u00f3n: la cortina se guard\u00f3 solo en este equipo', true); }catch(e){} return; }
+  if(!o||!o.id||!window._fbDB) return;
   var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+o.id]=o;
-  window._fbDB.ref('monhaco').update(u).catch(function(err){ try{ toast('\u26a0\ufe0f Error al sincronizar la cortina', true); }catch(e){} });
+  window._fbDB.ref('monhaco').update(u).then(function(){
+    try{ window._fbDB.ref('monhaco/_cortDbg').set({corr:(o.correlativo||''),id:o.id,app:(document.title||''),fbReady:!!window._fbReady,stage:'OK',ts:Date.now()}); }catch(e){}
+  }).catch(function(err){
+    try{ window._fbDB.ref('monhaco/_cortDbg').set({corr:(o.correlativo||''),id:o.id,app:(document.title||''),fbReady:!!window._fbReady,stage:'ERROR',error:String((err&&err.message)||err),ts:Date.now()}); }catch(e){}
+  });
 }
 // Siguiente n\u00famero de cortina = (n\u00famero m\u00e1s alto existente) + 1, para no duplicar correlativos
 function _nextCortNum(){ var max=0; var arr=Array.isArray(DB.cortinas)?DB.cortinas:_toArr(DB.cortinas); arr.forEach(function(o){ if(o&&o.correlativo){ var m=/(\d+)\s*$/.exec(String(o.correlativo)); if(m){ var v=parseInt(m[1],10); if(v>max) max=v; } } }); return max+1; }
 function _mergeCort(a,b){ var out=[],seen={}; _toArr(b).forEach(function(o){ if(o&&o.id){ seen[o.id]=1; } out.push(o); }); _toArr(a).forEach(function(o){ if(o&&o.id&&seen[o.id]) return; out.push(o); }); return out; }
-function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
+function _delCortina(id){ if(!id||!window._fbDB) return; var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+id]=null; window._fbDB.ref('monhaco').update(u).catch(function(){}); }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
