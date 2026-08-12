@@ -400,7 +400,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-g · fix-correlativo</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-h · nodo-seguro</div>
 <div class="watermark" aria-hidden="true"></div>
 
 <!-- PIN MODAL -->
@@ -1190,12 +1190,13 @@ function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=n
 function _syncCortina(o){
   if(!o||!o.id) return;
   if(!(window._fbDB && window._fbReady)){ try{ toast('\u26a0\ufe0f Sin conexi\u00f3n: la cortina se guard\u00f3 solo en este equipo', true); }catch(e){} return; }
-  var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o;
+  var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+o.id]=o;
   window._fbDB.ref('monhaco').update(u).catch(function(err){ try{ toast('\u26a0\ufe0f Error al sincronizar la cortina', true); }catch(e){} });
 }
 // Siguiente n\u00famero de cortina = (n\u00famero m\u00e1s alto existente) + 1, para no duplicar correlativos
 function _nextCortNum(){ var max=0; var arr=Array.isArray(DB.cortinas)?DB.cortinas:_toArr(DB.cortinas); arr.forEach(function(o){ if(o&&o.correlativo){ var m=/(\d+)\s*$/.exec(String(o.correlativo)); if(m){ var v=parseInt(m[1],10); if(v>max) max=v; } } }); return max+1; }
-function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
+function _mergeCort(a,b){ var out=[],seen={}; _toArr(b).forEach(function(o){ if(o&&o.id){ seen[o.id]=1; } out.push(o); }); _toArr(a).forEach(function(o){ if(o&&o.id&&seen[o.id]) return; out.push(o); }); return out; }
+function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
@@ -5940,7 +5941,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
-        if(remote.cortinas)       DB.cortinas       = _toArr(remote.cortinas);
+        if(remote.cortinas)       DB.cortinas       = _mergeCort(remote.cortinas, remote.cortinasReg);
         if(remote.revisiones)     DB.revisiones     = _toArr(remote.revisiones);
         if(remote.evaluaciones)   DB.evaluaciones   = _toArr(remote.evaluaciones);
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
@@ -6028,7 +6029,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.evaluaciones)   DB.evaluaciones   = _toArr(d.evaluaciones);
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
-      if(d.cortinas)       DB.cortinas       = _toArr(d.cortinas);
+      if(d.cortinas)       DB.cortinas       = _mergeCort(d.cortinas, d.cortinasReg);
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
