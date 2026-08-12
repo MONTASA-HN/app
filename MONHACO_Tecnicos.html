@@ -550,7 +550,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 })();
 </script>
 <div id="toast"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Técnicos · v2026-08-12-c · cortinas✓✓</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Técnicos · v2026-08-12-d · cortinas-porID</div>
 
 <div class="app-header" style="padding:44px 16px 10px;background:#ffffff;border-bottom:1px solid var(--border)">
   <div style="display:flex;align-items:center;gap:10px">
@@ -853,6 +853,9 @@ const EQUIPOS_INICIALES = [{"id":"mh_000","codigo":"MT-1","tipo":"MONTACARGAS","
 
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
+// Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
+function _syncCortina(o){ if(!o||!o.id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o; window._fbDB.ref('monhaco').update(u); } }
+function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function loadDB(){
   try{
     const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
@@ -895,7 +898,7 @@ function saveDB(){
       if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = DB.correctivos;
       if(DB.revisiones && DB.revisiones.length)         payload.revisiones      = DB.revisiones;
       if(DB.evaluaciones && DB.evaluaciones.length)     payload.evaluaciones    = DB.evaluaciones;
-      if(DB.cortinas && DB.cortinas.length)             payload.cortinas        = DB.cortinas;
+      // cortinas se sincroniza por id con _syncCortina (no como arreglo completo)
       if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
       window._fbDB.ref('monhaco').update(payload);
     } else {
@@ -3579,8 +3582,7 @@ function guardarCortina(){
   };
   DB.cortinas.push(entry);
   saveDB();
-  if(window._fbDB && window._fbReady)
-    window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  _syncCortina(entry);
   ['cort-cliente','cort-desc','cort-fecha-ini','cort-hora-ini','cort-fecha-fin','cort-hora-fin'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
@@ -3720,7 +3722,7 @@ function toggleTecnicoCortina(id, checkbox){
   }
   o.tecnico = o.tecnicos.join(', ');
   saveDB();
-  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  _syncCortina(o);
 }
 
 function guardarFirmaCortina(id){
@@ -3730,14 +3732,14 @@ function guardarFirmaCortina(id){
   if(!o) return;
   o.firma = firma;
   saveDB();
-  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  _syncCortina(o);
   toast('Firma guardada ✓');
 }
 
 function limpiarFirmaCortina(id){
   limpiarFirma('firma-cort-'+id);
   const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
-  if(o){ o.firma=''; saveDB(); if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
+  if(o){ o.firma=''; saveDB(); _syncCortina(o); }
 }
 
 function actualizarCortina(id, campo, valor){
@@ -3751,7 +3753,7 @@ function actualizarCortina(id, campo, valor){
     o.fechaFin    = (o.fechaFinFecha && o.horaFin) ? o.fechaFinFecha+'T'+o.horaFin : (o.fechaFinFecha||'');
   }
   saveDB();
-  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  _syncCortina(o);
   renderCortinas();
 }
 
@@ -3765,7 +3767,7 @@ function finalizarCortina(id){
   o.completado = true;
   o.fechaCierre = new Date().toISOString().slice(0,10);
   saveDB();
-  if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+  _syncCortina(o);
   renderCortinas();
   toast('Orden ' + (o.correlativo||'') + ' finalizada ✓');
 }

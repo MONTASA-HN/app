@@ -680,7 +680,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast" style="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f3864;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9999;max-width:90%;text-align:center"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-c · cortinas✓✓</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-d · cortinas-porID</div>
 
 <!-- Modal overlay (compartido por historial, vales, viáticos) -->
 <div id="modal-overlay" onclick="if(this===event.target)cerrarModal()">
@@ -809,6 +809,9 @@ function _cacheLocal(){
 function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
+// Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
+function _syncCortina(o){ if(!o||!o.id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o; window._fbDB.ref('monhaco').update(u); } }
+function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
@@ -4229,7 +4232,7 @@ async function enviarSolicitudWA(){
     if(!DB.solicitudes) DB.solicitudes = [];
     DB.solicitudes.unshift({id:_cid, correlativo:corr, equipoTxt:'', equipoId:'', desc:descRaw, fecha:hoy, tecnicoNombre:tecNombre, prioridad:'Normal', tipo:'cortinas', estado:'Enviada'});
     saveDB();
-    if(window._fbDB && window._fbReady){ window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
+    _syncCortina(DB.cortinas[DB.cortinas.length-1]);
     clearSolicitudForm(); renderDashboardTec();
     if(typeof renderSolicitudes==='function') renderSolicitudes();
     toast('Orden '+corr+' creada ✓');
@@ -4412,7 +4415,7 @@ async function copiarMensajeWA(){
     if(!DB.solicitudes) DB.solicitudes = [];
     DB.solicitudes.unshift({id:_cid, correlativo:corr, equipoTxt:'', equipoId:'', desc:descRaw, fecha:hoy, tecnicoNombre:tecNombre, prioridad:'Normal', tipo:'cortinas', estado:'Enviada'});
     saveDB();
-    if(window._fbDB && window._fbReady){ window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
+    _syncCortina(DB.cortinas[DB.cortinas.length-1]);
     clearSolicitudForm(); renderDashboardTec();
     if(typeof renderSolicitudes==='function') renderSolicitudes();
     toast('Orden '+corr+' creada ✓ — mensaje copiado');
