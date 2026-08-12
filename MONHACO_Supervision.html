@@ -6417,13 +6417,14 @@ function _iniciarConexionFirebase(esReintento){
   if(!FB_REF){ console.warn('FB_REF no disponible'); return; }
   FB_REF.once('value').then(snap => {
    // Procesamiento del snapshot: un error AQUI es bug de datos/render, NO de conexion.
+   window._fbReady = true; // conexión OK: habilitar escritura aunque el procesamiento del snapshot falle
    try {
     const remote = snap.val();
     if(remote){
       loadDB();
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
       if(remote.equipos && remote.equipos.length){
-        DB.equipos = remote.equipos.map(req => {
+        DB.equipos = remote.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
@@ -6510,7 +6511,7 @@ function _iniciarConexionFirebase(esReintento){
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       // Always update DB from Firebase (even our own writes)
       if(d.equipos && d.equipos.length){
-        DB.equipos = d.equipos.map(req => {
+        DB.equipos = d.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
