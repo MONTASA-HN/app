@@ -1146,6 +1146,19 @@ function toast(msg, err=false){
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
   clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 2800);
+  // Confirmación PERSISTENTE de creación: sigue visible al volver de WhatsApp
+  if(!err && /creada|guardada/i.test(msg)) _bannerExito(msg);
+}
+function _bannerExito(msg){
+  let b = document.getElementById('sol-exito-banner');
+  if(!b){
+    b = document.createElement('div'); b.id = 'sol-exito-banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:#1a7a3a;color:#fff;font:600 14px/1.4 "DM Sans",sans-serif;padding:13px 16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.25);cursor:pointer';
+    b.onclick = function(){ b.remove(); };
+    document.body.appendChild(b);
+  }
+  b.textContent = '✓ ' + msg + '  ·  toca para cerrar';
+  clearTimeout(b._t); b._t = setTimeout(function(){ if(b) b.remove(); }, 30000);
 }
 
 function showTab(id, el){
@@ -4207,10 +4220,15 @@ async function enviarSolicitudWA(){
     const n = DB.cortinas.length + 1;
     const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
     const hoy = new Date().toISOString().slice(0,10);
-    DB.cortinas.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    const _cid = uid();
+    DB.cortinas.push({id:_cid, correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    // También registrar en solicitudes para que aparezca en la bandeja de Supervisión
+    if(!DB.solicitudes) DB.solicitudes = [];
+    DB.solicitudes.unshift({id:_cid, correlativo:corr, equipoTxt:'', equipoId:'', desc:descRaw, fecha:hoy, tecnicoNombre:tecNombre, prioridad:'Normal', tipo:'cortinas', estado:'Enviada'});
     saveDB();
-    if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+    if(window._fbDB && window._fbReady){ window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
     clearSolicitudForm(); renderDashboardTec();
+    if(typeof renderSolicitudes==='function') renderSolicitudes();
     toast('Orden '+corr+' creada ✓');
     const msg = '\uD83D\uDEAA *CORTINAS / NIVELADORAS - MONHACO*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+hoy;
     tecNums.forEach((num,i)=>{
@@ -4385,10 +4403,15 @@ async function copiarMensajeWA(){
     const n = DB.cortinas.length + 1;
     const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
     const hoy = new Date().toISOString().slice(0,10);
-    DB.cortinas.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    const _cid = uid();
+    DB.cortinas.push({id:_cid, correlativo:corr, estado:'Pendiente', tecnicos:tecs, tecnico:tecNombre, cliente:'', descripcion:descRaw, fecha:hoy, horaIni:'', fechaFinFecha:'', horaFin:'', fechaInicio:'', fechaFin:'', firma:'', completado:false});
+    // También registrar en solicitudes para que aparezca en la bandeja de Supervisión
+    if(!DB.solicitudes) DB.solicitudes = [];
+    DB.solicitudes.unshift({id:_cid, correlativo:corr, equipoTxt:'', equipoId:'', desc:descRaw, fecha:hoy, tecnicoNombre:tecNombre, prioridad:'Normal', tipo:'cortinas', estado:'Enviada'});
     saveDB();
-    if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+    if(window._fbDB && window._fbReady){ window._fbDB.ref('monhaco/cortinas').set(DB.cortinas); }
     clearSolicitudForm(); renderDashboardTec();
+    if(typeof renderSolicitudes==='function') renderSolicitudes();
     toast('Orden '+corr+' creada ✓ — mensaje copiado');
     const msg = '\uD83D\uDEAA *CORTINAS / NIVELADORAS - MONHACO*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+hoy;
     navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
