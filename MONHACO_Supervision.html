@@ -680,7 +680,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast" style="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f3864;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9999;max-width:90%;text-align:center"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-f · diag2</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-g · fix-correlativo</div>
 
 <!-- Modal overlay (compartido por historial, vales, viáticos) -->
 <div id="modal-overlay" onclick="if(this===event.target)cerrarModal()">
@@ -812,22 +812,12 @@ function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=n
 // Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
 function _syncCortina(o){
   if(!o||!o.id) return;
-  var _dbg = (window._fbDB) ? window._fbDB.ref('monhaco/_debug') : null;
-  var _base = {corr:(o.correlativo||''), id:o.id, app:(document.title||''), fbReady:!!window._fbReady, ts:Date.now()};
-  if(!(window._fbDB && window._fbReady)){
-    if(_dbg){ try{ _dbg.set(Object.assign({stage:'SIN_CONEXION_fbReady_false'}, _base)); }catch(e){} }
-    try{ alert('⚠️ CORTINA NO GUARDADA EN LÍNEA\n\n_fbReady = '+window._fbReady+'\nSe guardó solo en este dispositivo.'); }catch(e){}
-    return;
-  }
+  if(!(window._fbDB && window._fbReady)){ try{ toast('\u26a0\ufe0f Sin conexi\u00f3n: la cortina se guard\u00f3 solo en este equipo', true); }catch(e){} return; }
   var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o;
-  window._fbDB.ref('monhaco').update(u).then(function(){
-    window._fbDB.ref('monhaco/cortinas').once('value').then(function(s){ var v=s.val(); var n=Array.isArray(v)?v.filter(Boolean).length:(v&&typeof v==='object'?Object.keys(v).length:0); if(_dbg){ try{ _dbg.set(Object.assign({stage:'OK', firebaseCount:n}, _base)); }catch(e){} } try{ toast('Cortina '+(o.correlativo||'')+' guardada. Firebase: '+n+' \u2713'); }catch(e){} });
-  }).catch(function(err){
-    var msg=String((err&&err.message)||err);
-    if(_dbg){ try{ _dbg.set(Object.assign({stage:'ERROR', error:msg}, _base)); }catch(e){} }
-    try{ alert('\u26a0\ufe0f ERROR de Firebase al guardar la cortina:\n\n'+msg); }catch(e){}
-  });
+  window._fbDB.ref('monhaco').update(u).catch(function(err){ try{ toast('\u26a0\ufe0f Error al sincronizar la cortina', true); }catch(e){} });
 }
+// Siguiente n\u00famero de cortina = (n\u00famero m\u00e1s alto existente) + 1, para no duplicar correlativos
+function _nextCortNum(){ var max=0; var arr=Array.isArray(DB.cortinas)?DB.cortinas:_toArr(DB.cortinas); arr.forEach(function(o){ if(o&&o.correlativo){ var m=/(\d+)\s*$/.exec(String(o.correlativo)); if(m){ var v=parseInt(m[1],10); if(v>max) max=v; } } }); return max+1; }
 function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
@@ -4240,7 +4230,7 @@ async function enviarSolicitudWA(){
     const tecNombre = tecs.join(', ');
     const tecNums = Array.from(cbs).map(c=>c.value);
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
-    const n = DB.cortinas.length + 1;
+    const n = _nextCortNum();
     const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
     const hoy = new Date().toISOString().slice(0,10);
     const _cid = uid();
@@ -4423,7 +4413,7 @@ async function copiarMensajeWA(){
     const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
     const tecNombre = tecs.join(', ');
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
-    const n = DB.cortinas.length + 1;
+    const n = _nextCortNum();
     const corr = 'CT-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
     const hoy = new Date().toISOString().slice(0,10);
     const _cid = uid();
