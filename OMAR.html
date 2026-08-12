@@ -392,7 +392,11 @@ function pintarMantenimientos(companyData){
    y al decidir llama de vuelta al mismo endpoint. Ver contrato compartido
    con Christian. Si cambia algun nombre de accion/parametro, ajustar aqui. */
 const CC_ENDPOINT = "https://script.google.com/macros/s/AKfycbyvVTRRRA8LsO8Z_pRV8ym19tP_6SPqUDAo73lvSmYk_VxPK6f9U1mQbiSm1RzcZj_M/exec";
-const CC_EMPRESA  = "monhaco";   // caja chica solo existe para Monhaco
+/* Que sede(s) de caja chica muestra cada pestaña:
+   SPS = MT Rental (pestaña Montasa), Choloma = Monhaco.
+   La sede "General" no está asignada; si quieres que aparezca en alguna,
+   agrégala a la lista correspondiente. */
+const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
 
 function fmtL(monto){
   const n = aNumero(monto);
@@ -402,9 +406,10 @@ function fmtL(monto){
 async function cargarCajaChica(){
   const body = document.getElementById("caja-body");
   const num  = document.getElementById("caja-num");
-  if(activeCompany !== CC_EMPRESA){
+  const sedes = CC_SEDES[activeCompany] || [];
+  if(sedes.length === 0){
     num.textContent = "–";
-    body.innerHTML = '<div class="nc-fill">Caja chica solo aplica a Monhaco</div>';
+    body.innerHTML = '<div class="nc-fill">Caja chica no aplica a esta empresa</div>';
     return;
   }
   body.innerHTML = '<div class="nc-fill">Cargando…</div>';
@@ -415,8 +420,10 @@ async function cargarCajaChica(){
     const data = await r.json();
     let arr = [];
     if(data && data.found && data.value) arr = JSON.parse(data.value);
-    const pend = (Array.isArray(arr) ? arr : []).filter(x => x.estado === "Enviado a revisión");
-    console.log("[Dash] caja chica: total", (Array.isArray(arr)?arr.length:0), "| pendientes revision", pend.length);
+    const pend = (Array.isArray(arr) ? arr : [])
+      .filter(x => x.estado === "Enviado a revisión" && sedes.includes(x.sede));
+    console.log("[Dash] caja chica", activeCompany, "sedes", sedes.join(","),
+                "| total", (Array.isArray(arr)?arr.length:0), "| pendientes", pend.length);
     renderCajaChica(pend);
   }catch(e){
     console.error("[Dash] ERROR caja chica:", e.message);
