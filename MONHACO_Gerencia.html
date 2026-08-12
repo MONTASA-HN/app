@@ -400,7 +400,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-c · cortinas✓✓</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-d · cortinas-porID</div>
 <div class="watermark" aria-hidden="true"></div>
 
 <!-- PIN MODAL -->
@@ -1186,6 +1186,9 @@ function _cacheLocal(){
 function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
+// Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
+function _syncCortina(o){ if(!o||!o.id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o; window._fbDB.ref('monhaco').update(u); } }
+function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
@@ -1201,7 +1204,7 @@ function saveDB(){
       };
       if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
-      if(DB.cortinas && DB.cortinas.length)               payload.cortinas        = DB.cortinas;
+      // cortinas se sincroniza por id con _syncCortina (no como arreglo completo)
       if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
       if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
       if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
@@ -4692,7 +4695,7 @@ function eliminarDelHistorial(tipo, id){
     } else if(tipo==='ct'){
       DB.cortinas = (DB.cortinas||[]).filter(x=>x.id!==id);
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/cortinas').set(DB.cortinas);
+      _delCortina(id);
       fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='rv'){
       DB.revisiones = (DB.revisiones||[]).filter(x=>x.id!==id);
@@ -5414,6 +5417,7 @@ async function enviarSolicitudWA(){
   } else if(tipo === 'cortinas'){
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
     DB.cortinas.push({id:ordenId,correlativo,ubicacion:equipoTxt||desc,descripcion:desc,tecnicos:tecnicoNombre.split(', ').filter(Boolean),tecnico:tecnicoNombre,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',estado:'Pendiente',completado:false});
+    _syncCortina(DB.cortinas[DB.cortinas.length-1]);
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
@@ -5559,6 +5563,7 @@ async function copiarMensajeWA(){
   } else if(tipo === 'cortinas'){
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
     DB.cortinas.push({id:ordenId,correlativo,ubicacion:equipoTxt||desc,descripcion:desc,tecnicos:tecnicoNombre.split(', ').filter(Boolean),tecnico:tecnicoNombre,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',estado:'Pendiente',completado:false});
+    _syncCortina(DB.cortinas[DB.cortinas.length-1]);
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
