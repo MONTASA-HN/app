@@ -680,7 +680,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast" style="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f3864;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:9999;max-width:90%;text-align:center"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-d · cortinas-porID</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Supervisión · v2026-08-12-e · diag</div>
 
 <!-- Modal overlay (compartido por historial, vales, viáticos) -->
 <div id="modal-overlay" onclick="if(this===event.target)cerrarModal()">
@@ -810,7 +810,14 @@ function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INP
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
 // Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
-function _syncCortina(o){ if(!o||!o.id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o; window._fbDB.ref('monhaco').update(u); } }
+function _syncCortina(o){
+  if(!o||!o.id) return;
+  if(!(window._fbDB && window._fbReady)){ try{ alert('⚠️ CORTINA NO GUARDADA EN LÍNEA\n\n_fbReady = '+window._fbReady+'\nSe guardó solo en este dispositivo.'); }catch(e){} return; }
+  var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+o.id]=o;
+  window._fbDB.ref('monhaco').update(u).then(function(){
+    window._fbDB.ref('monhaco/cortinas').once('value').then(function(s){ var v=s.val(); var n=Array.isArray(v)?v.filter(Boolean).length:(v&&typeof v==='object'?Object.keys(v).length:0); try{ toast('Cortina '+(o.correlativo||'')+' guardada. Firebase: '+n+' ✓'); }catch(e){} });
+  }).catch(function(err){ try{ alert('⚠️ ERROR de Firebase al guardar la cortina:\n\n'+((err&&err.message)||err)+'\n\n(avísame este texto)'); }catch(e){} });
+}
 function _delCortina(id){ if(!id) return; if(window._fbDB && window._fbReady){ var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinas/'+id]=null; window._fbDB.ref('monhaco').update(u); } }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
