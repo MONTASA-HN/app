@@ -400,7 +400,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </div>
 
 <div id="toast"></div>
-<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-b · cortinas✓</div>
+<div style="position:fixed;left:6px;bottom:64px;font:10px monospace;color:#999;opacity:.55;z-index:6;pointer-events:none">Gerencia · v2026-08-12-c · cortinas✓✓</div>
 <div class="watermark" aria-hidden="true"></div>
 
 <!-- PIN MODAL -->
@@ -1184,6 +1184,8 @@ function _cacheLocal(){
   catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
 }
 function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
+// Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
+function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
@@ -5410,7 +5412,7 @@ async function enviarSolicitudWA(){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
-    if(!DB.cortinas) DB.cortinas = [];
+    if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
     DB.cortinas.push({id:ordenId,correlativo,ubicacion:equipoTxt||desc,descripcion:desc,tecnicos:tecnicoNombre.split(', ').filter(Boolean),tecnico:tecnicoNombre,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',estado:'Pendiente',completado:false});
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -5555,7 +5557,7 @@ async function copiarMensajeWA(){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
-    if(!DB.cortinas) DB.cortinas = [];
+    if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
     DB.cortinas.push({id:ordenId,correlativo,ubicacion:equipoTxt||desc,descripcion:desc,tecnicos:tecnicoNombre.split(', ').filter(Boolean),tecnico:tecnicoNombre,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',estado:'Pendiente',completado:false});
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -5926,9 +5928,9 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = remote.correctivos;
-        if(remote.cortinas)       DB.cortinas       = remote.cortinas||[];
-        if(remote.revisiones)     DB.revisiones     = remote.revisiones||[];
-        if(remote.evaluaciones)   DB.evaluaciones   = remote.evaluaciones||[];
+        if(remote.cortinas)       DB.cortinas       = _toArr(remote.cortinas);
+        if(remote.revisiones)     DB.revisiones     = _toArr(remote.revisiones);
+        if(remote.evaluaciones)   DB.evaluaciones   = _toArr(remote.evaluaciones);
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
@@ -6010,11 +6012,11 @@ function _iniciarConexionFirebase(esReintento){
         });
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
-      if(d.revisiones)     DB.revisiones     = d.revisiones||[];
-      if(d.evaluaciones)   DB.evaluaciones   = d.evaluaciones||[];
+      if(d.revisiones)     DB.revisiones     = _toArr(d.revisiones);
+      if(d.evaluaciones)   DB.evaluaciones   = _toArr(d.evaluaciones);
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
-      if(d.cortinas)       DB.cortinas       = d.cortinas||[];
+      if(d.cortinas)       DB.cortinas       = _toArr(d.cortinas);
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
