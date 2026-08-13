@@ -403,6 +403,23 @@ function fmtL(monto){
   return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
+/* Apps Script (ContentService) no manda headers CORS, asi que fetch se
+   bloquea aunque responda 200. JSONP carga la respuesta como <script>, que
+   no esta sujeto a CORS. Requiere que el Apps Script envuelva su respuesta
+   en la funcion 'callback' cuando venga ese parametro (lado de Christian). */
+function jsonp(url){
+  return new Promise((resolve, reject)=>{
+    const cb = "__cc_cb_" + Date.now() + "_" + Math.floor(Math.random()*100000);
+    const s = document.createElement("script");
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error("timeout")); }, 15000);
+    function cleanup(){ clearTimeout(timer); delete window[cb]; if(s.parentNode) s.remove(); }
+    window[cb] = (data)=>{ cleanup(); resolve(data); };
+    s.onerror = ()=>{ cleanup(); reject(new Error("error de red (JSONP)")); };
+    s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
+    document.body.appendChild(s);
+  });
+}
+
 async function cargarCajaChica(){
   const body = document.getElementById("caja-body");
   const num  = document.getElementById("caja-num");
@@ -415,9 +432,7 @@ async function cargarCajaChica(){
   body.innerHTML = '<div class="nc-fill">Cargando…</div>';
   try{
     // Lee la clave completa con el 'get' generico que ya existe y filtra aqui.
-    const r = await fetch(CC_ENDPOINT + "?action=get&key=data-cajachica&_=" + Date.now(), { cache:"no-store" });
-    if(!r.ok) throw new Error("HTTP " + r.status);
-    const data = await r.json();
+    const data = await jsonp(CC_ENDPOINT + "?action=get&key=data-cajachica&_=" + Date.now());
     let arr = [];
     if(data && data.found && data.value) arr = JSON.parse(data.value);
     const pend = (Array.isArray(arr) ? arr : [])
@@ -461,9 +476,8 @@ async function decidirCajaChica(id, decision, itemEl){
   try{
     const url = CC_ENDPOINT + "?action=cajachica_decidir&id=" + encodeURIComponent(id)
               + "&decision=" + decision + "&por=Omar&_=" + Date.now();
-    const r = await fetch(url, { cache:"no-store" });
-    const res = await r.json();
-    if(!res.ok) throw new Error(res.error || "respuesta no ok");
+    const res = await jsonp(url);
+    if(!res || !res.ok) throw new Error((res && res.error) || "respuesta no ok");
     // exito: quitar el item y actualizar el contador
     itemEl.remove();
     const num = document.getElementById("caja-num");
