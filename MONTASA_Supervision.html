@@ -964,8 +964,16 @@ function _campoRow(label, valor){
 function _construirCamposOrden(tipo, o, eq){
   const campos = [];
   const eqLabel = eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.equipoCompra || o.clienteNombre || '—');
+  const esCliente = o.equipoId === '__cliente__';
   campos.push(['Correlativo', o.correlativo||'—']);
-  campos.push(['Equipo', eqLabel]);
+  if(esCliente){
+    if(o.clienteNombre) campos.push(['Cliente', o.clienteNombre]);
+    if(o.clienteMarca)  campos.push(['Marca del equipo', o.clienteMarca]);
+    if(o.clienteModelo) campos.push(['Modelo', o.clienteModelo]);
+    if(o.clienteSerie)  campos.push(['Serie', o.clienteSerie]);
+  } else {
+    campos.push(['Equipo', eqLabel]);
+  }
 
   if(tipo==='preventivo'){
     const t = calcTiemposOrden(o);
@@ -1017,10 +1025,11 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Diagnóstico', o.diagnostico||'—']);
   } else {
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
-    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
+    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
     campos.push(['Tipo de orden', tipoLbl]);
     campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ')||'—']);
     if(o.motorista) campos.push(['Motorista', o.motorista]);
+    if(o.equipoCompra) campos.push(['🚗 Vehículo de traslado', o.equipoCompra]);
     campos.push(['Descripción', o.descripcion||'—']);
     campos.push(['Inicio', fmtDT(o.fechaInicio)||'—']);
     campos.push(['Fin', fmtDT(o.fechaFin)||'—']);
@@ -1032,6 +1041,15 @@ function _construirCamposOrden(tipo, o, eq){
       const diffHoro = (parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1);
       if(!isNaN(diffHoro)) campos.push(['Horas de uso (equipo)', diffHoro+' hrs']);
     }
+    if(o.fechaInicio && o.fechaFin){
+      const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
+      if(!isNaN(ini) && !isNaN(fin) && fin > ini){
+        const mins = Math.round((fin - ini) / 60000);
+        const h = Math.floor(mins / 60), m = mins % 60;
+        const durStr = h > 0 ? (h + 'h ' + (m > 0 ? m + 'min' : '')) : (m + 'min');
+        campos.push(['⏱ Tiempo total de la orden', durStr]);
+      }
+    }
     if(o.horometro) campos.push(['Horómetro', o.horometro+' hrs']);
   }
   return campos;
@@ -1039,6 +1057,7 @@ function _construirCamposOrden(tipo, o, eq){
 
 async function copiarImagenOrden(tipo, id){
   try{
+    if(tipo==='revision_fisica' || tipo==='revision_fisico_tecnica') tipo='revision';
     const arr = tipo==='preventivo' ? DB.preventivos
               : tipo==='correctivo' ? DB.correctivos
               : tipo==='revision'   ? DB.revisiones
@@ -5559,10 +5578,11 @@ function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
 
 function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
   let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-  d += `<div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">`;
-  [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—']].forEach(([k,v])=>{
-    d += `<div style="min-width:0"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${k}</span><span style="font-weight:600;color:var(--text);word-break:break-word">${v}</span></div>`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estRV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Placa',x.placa||'—'],['Tipo vehículo',x.tipoVehiculo||'—'],['Largo × Ancho × Alto',x.largo?(x.largo+' × '+x.ancho+' × '+x.alto+' mts'):'—'],['Dist. eje 1-2',x.ejeUnoDos?(x.ejeUnoDos+' mts'):'—']].filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
   });
+  if(x.notas) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Notas</span><span style="font-weight:600">${x.notas}</span></div>`;
   d += `</div>`;
   if(x.fotos&&x.fotos.length){
     d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length})</div>`;
@@ -5605,9 +5625,9 @@ function _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR){
 
 function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
   let d = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
-  d += `<div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">`;
-  [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Horómetro',x.horometro?(x.horometro+' hrs'):'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].forEach(([k,v])=>{
-    d += `<div style="min-width:0"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${k}</span><span style="font-weight:600;color:var(--text);word-break:break-word">${v}</span></div>`;
+  d += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">`;
+  [['Correlativo',x.correlativo||'—'],['Estado',estEV],['Técnico(s)',tecs],['Fecha',x.fecha||'—'],['Hora inicio',x.horaIni||'—'],['Hora fin',x.horaFin||'—'],['Tipo equipo',x.tipoEquipo||'—'],['Modelo',x.modelo||'—'],['Serie',x.serie||'—'],['Horómetro',x.horometro?(x.horometro+' hrs'):'—'],['Cliente',x.cliente||'—'],['Completado',x.fechaCierre||'—']].filter(([k,v])=>v&&v!=='—').forEach(([k,v])=>{
+    d += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text);word-break:break-word">${v}</span></div>`;
   });
   if(x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;color:var(--text)">${x.diagnostico}</span></div>`;
   d += `</div>`;
