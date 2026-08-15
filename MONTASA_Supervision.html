@@ -1232,6 +1232,7 @@ function saveEquipo(eq){
 
 function saveAllEquipos(){
   if(!window._fbDB || !window._fbReady) return;
+  if(!window._equiposFBok) return; // no escribir equipos hasta haber leído los reales de Firebase
   window._fbDB.ref('montasa/equipos').set(
     DB.equipos.map(e=>({id:e.id,codigo:e.codigo,serie:e.serie||'',tipo:e.tipo||'',marca:e.marca||'',
       desc:e.desc||'',combustible:e.combustible||'',estado:e.estado||'DISPONIBLE',
@@ -1522,14 +1523,14 @@ function _guardarEquipoCliente(nombre, marca, modelo, serie){
   if(existe){
     existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie;
     const idx=DB.equipos.indexOf(existe);
-    if(idx>=0&&window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
+    if(idx>=0&&window._fbDB&&window._fbReady&&window._equiposFBok) window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
     return existe.id;
   }
   const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
   if(!DB.equipos) DB.equipos=[];
   DB.equipos.push(nuevoEq);
   const newIdx=DB.equipos.length-1;
-  if(window._fbDB&&window._fbReady) window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
+  if(window._fbDB&&window._fbReady&&window._equiposFBok) window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
   try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_sup_v1',JSON.stringify(DB)); }catch(e){}
   return nuevoEq.id;
 }
@@ -6463,6 +6464,7 @@ function _iniciarConexionFirebase(esReintento){
       loadDB();
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
       if(remote.equipos && remote.equipos.length){
+        window._equiposFBok = true; // ya leímos equipos reales: permitir escrituras de equipos
         DB.equipos = remote.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
@@ -6551,6 +6553,7 @@ function _iniciarConexionFirebase(esReintento){
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       // Always update DB from Firebase (even our own writes)
       if(d.equipos && d.equipos.length){
+        window._equiposFBok = true;
         DB.equipos = d.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
