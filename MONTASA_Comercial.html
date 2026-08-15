@@ -1140,6 +1140,38 @@ function _estaVendido(e){
 
   loadDB(); renderFlota(); renderEquipos(); // render inmediato
 
+  // Handler del listener en vivo (extraído para poder adjuntarlo SIEMPRE,
+  // aunque la primera lectura .once() falle). Así nunca se queda en la base.
+  function _liveHandlerCom(snap){
+    const d = snap.val();
+    if(!d) return;
+    const ownWrite = d._sid && d._sid === _SESSION_ID;
+    if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);
+    var _dEq = _toArr(d.equipos);
+    if(_dEq.length){
+      DB.equipos = _dEq.map(req=>{
+        const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
+        return {...spec,...req};
+      });
+      EQUIPOS_INICIALES.forEach(spec=>{
+        const isSold = _estaVendido(spec);
+        if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
+          DB.equipos.push(JSON.parse(JSON.stringify(spec)));
+      });
+      DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
+    }
+    if(d.revisiones)   DB.revisiones   = _toArr(d.revisiones);
+    if(d.evaluaciones) DB.evaluaciones = _toArr(d.evaluaciones);
+    if(!DB.equipos||!DB.equipos.length) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    if(!DB.vendidos||!DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
+    window._fbReady = true;
+    if(ownWrite) return;
+    renderFlota(); renderEquipos();
+    var _tor=document.getElementById('tab-ordenes'); if(_tor && _tor.style.display!=='none' && typeof renderOrdenesCom==='function') renderOrdenesCom();
+  }
+  var _comListenerOn = false;
+  function _attachLiveCom(){ if(_comListenerOn) return; _comListenerOn = true; FB_REF.on('value', _liveHandlerCom); }
+
   FB_REF.once('value').then(snap=>{
     const remote = snap.val();
     if(remote){
@@ -1165,34 +1197,8 @@ function _estaVendido(e){
     }
     window._fbReady = true; // Firebase cargó — recién ahora es seguro escribir
     renderFlota(); renderEquipos();
-
-    FB_REF.on('value', snap=>{
-      const d = snap.val();
-      if(!d) return;
-      const ownWrite = d._sid && d._sid === _SESSION_ID;
-      if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);
-      var _dEq = _toArr(d.equipos);
-      if(_dEq.length){
-        DB.equipos = _dEq.map(req=>{
-          const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
-          return {...spec,...req};
-        });
-        EQUIPOS_INICIALES.forEach(spec=>{
-          const isSold = _estaVendido(spec);
-          if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
-            DB.equipos.push(JSON.parse(JSON.stringify(spec)));
-        });
-        DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
-      }
-      if(d.revisiones)   DB.revisiones   = _toArr(d.revisiones);
-      if(d.evaluaciones) DB.evaluaciones = _toArr(d.evaluaciones);
-      if(!DB.equipos||!DB.equipos.length) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-      if(!DB.vendidos||!DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
-      if(ownWrite) return;
-      renderFlota(); renderEquipos();
-      var _tor=document.getElementById('tab-ordenes'); if(_tor && _tor.style.display!=='none' && typeof renderOrdenesCom==='function') renderOrdenesCom();
-    });
-  }).catch(()=>{ loadDB(); renderFlota(); renderEquipos(); });
+    _attachLiveCom();
+  }).catch(()=>{ loadDB(); renderFlota(); renderEquipos(); _attachLiveCom(); });
 })();
 
 /* ===== MÓDULO ÓRDENES + IMAGEN + FOTOS (portado) ===== */
