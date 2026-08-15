@@ -370,16 +370,19 @@ function saveDB(){
 function renderFlota(){
   const el = document.getElementById('com-flota');
   if(!el) return;
-  const equs = (DB.equipos||[]).filter(e=>!e.esEquipoCliente && !e.esVehiculo);
+  // Mismo filtro que Gerencia MT Rental (espejo): sin genéricos ni vehículos
+  const equs = (DB.equipos||[]).filter(e=>!e.esGenerico && !e.esVehiculo);
   const total = equs.length || 1;
   const disp  = equs.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
   const renta = equs.filter(e=>e.estado==='EN RENTA').length;
   const mant  = equs.filter(e=>e.estado==='EN MANTENIMIENTO').length;
   const mal   = equs.filter(e=>e.estado==='MAL ESTADO').length;
+  const demo  = equs.filter(e=>e.estado==='DEMO/PRESTAMO').length;
   const pDisp  = total?Math.round(disp/total*100):0;
   const pRenta = total?Math.round(renta/total*100):0;
   const pMant  = total?Math.round(mant/total*100):0;
   const pMal   = total?Math.round(mal/total*100):0;
+  const pDemo  = total?Math.round(demo/total*100):0;
   const pctOp  = total?Math.round((disp+renta+mant)/total*100):0;
   el.innerHTML = `
   <div style="background:linear-gradient(135deg,#1f3864 0%,#2d6a9f 100%);border-radius:var(--radius);padding:16px;margin-bottom:12px;position:relative;overflow:hidden">
@@ -396,6 +399,7 @@ function renderFlota(){
           <circle id="com-donut-renta" class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF9A3D" stroke-dasharray="0 326"/>
           <circle id="com-donut-mant"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#F0C93D" stroke-dasharray="0 326"/>
           <circle id="com-donut-mal"   class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#FF5060" stroke-dasharray="0 326"/>
+          <circle id="com-donut-demo"  class="fleet-donut-seg" cx="60" cy="60" r="52" stroke="#9B59B6" stroke-dasharray="0 326"/>
         </svg>
         <div class="fleet-donut-center">
           <div class="fleet-donut-pct">${pctOp}%</div>
@@ -441,13 +445,22 @@ function renderFlota(){
       <div class="fleet-tile-value">${mal}</div>
       <div class="fleet-tile-label">Inactivos</div>
     </div>
+    <div class="fleet-tile" style="--tile-color:#7C3AED;--tile-bg:#efe7fb;grid-column:1/-1">
+      <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
+      <div class="fleet-tile-top">
+        <div class="fleet-tile-ring"><svg viewBox="0 0 56 56"><circle class="fleet-tile-ring-bg" cx="28" cy="28" r="23"/><circle id="com-ring-demo" class="fleet-tile-ring-fg" cx="28" cy="28" r="23" stroke="#7C3AED" stroke-dasharray="0 144"/></svg><div class="fleet-tile-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div></div>
+        <span class="fleet-tile-pct">${pDemo}%</span>
+      </div>
+      <div class="fleet-tile-value">${demo}</div>
+      <div class="fleet-tile-label">Demo/Préstamo</div>
+    </div>
   </div>`;
   // Anillos
   function setR(id,pct){const el=document.getElementById(id);if(!el)return;const C=2*Math.PI*23;el.setAttribute('stroke-dasharray',(pct/100*C).toFixed(1)+' '+(C*(1-pct/100)).toFixed(1));}
-  setR('com-ring-disp',pDisp); setR('com-ring-renta',pRenta); setR('com-ring-mant',pMant); setR('com-ring-mal',pMal);
+  setR('com-ring-disp',pDisp); setR('com-ring-renta',pRenta); setR('com-ring-mant',pMant); setR('com-ring-mal',pMal); setR('com-ring-demo',pDemo);
   // Donut
   const R=52,C2=2*Math.PI*R; let acc=0;
-  [{id:'com-donut-disp',val:disp},{id:'com-donut-renta',val:renta},{id:'com-donut-mant',val:mant},{id:'com-donut-mal',val:mal}].forEach(s=>{
+  [{id:'com-donut-disp',val:disp},{id:'com-donut-renta',val:renta},{id:'com-donut-mant',val:mant},{id:'com-donut-mal',val:mal},{id:'com-donut-demo',val:demo}].forEach(s=>{
     const el=document.getElementById(s.id);if(!el)return;
     const len=s.val/total*C2;
     el.setAttribute('stroke-dasharray',len.toFixed(1)+' '+(C2-len).toFixed(1));
