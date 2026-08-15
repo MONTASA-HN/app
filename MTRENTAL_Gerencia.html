@@ -1666,11 +1666,13 @@ function saveDB(){
       window._localWriteTs = ts;
       const payload = {
         notifCompletadas: DB.notifCompletadas||{},
-        equipos:        DB.equipos||[],
         lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
       };
+      // CANDADO ANTI-CLOBBER: sólo escribir 'equipos' si YA leímos equipos reales
+      // de Firebase en esta sesión. Evita que la lista base pise los estados en vivo.
+      if(window._equiposFBok) payload.equipos = DB.equipos||[];
       if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
       if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
@@ -2032,6 +2034,7 @@ function saveEquipo(eq){
 
 function saveAllEquipos(){
   if(!window._fbDB || !window._fbReady) return;
+  if(!window._equiposFBok) return; // no escribir equipos hasta haber leído los reales de Firebase
   // Conservar TODOS los campos del equipo (incluye esVehiculo, esEquipoCliente,
   // clienteNombre, modelo, rentas, dimensiones, etc.). Antes se listaban campos
   // fijos y se perdían banderas como esEquipoCliente al reescribir.
@@ -6327,6 +6330,7 @@ function _iniciarConexionFirebase(esReintento){
         });
         // Quitar de la flota cualquier equipo que esté en vendidos (por si Firebase aún lo tiene)
         DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
+        window._equiposFBok = true; // ya leímos equipos reales: permitir escrituras de equipos
       }
       window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
@@ -6437,6 +6441,7 @@ function _iniciarConexionFirebase(esReintento){
         });
         // Quitar de la flota cualquier equipo que esté en vendidos
         DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
+        window._equiposFBok = true;
       }
       if(d.preventivos)    DB.preventivos    = d.preventivos;
       if(d.revisiones)     DB.revisiones     = d.revisiones||[];

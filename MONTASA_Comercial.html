@@ -358,12 +358,14 @@ function saveDB(){
     // esGenerico ni las specs) para no corromper la flota que ve Gerencia.
     if(window._fbDB && window._fbReady){
       const ts = Date.now();
-      window._fbDB.ref('montasa').update({
-        equipos: DB.equipos||[],
+      const payload = {
         vendidos: (DB.vendidos && DB.vendidos.length) ? DB.vendidos : VENDIDOS_INICIALES,
         _ts: ts,
         _sid: _SESSION_ID
-      });
+      };
+      // CANDADO ANTI-CLOBBER: sólo escribir 'equipos' si YA leímos equipos reales de Firebase
+      if(window._equiposFBok) payload.equipos = DB.equipos||[];
+      window._fbDB.ref('montasa').update(payload);
     }
   }catch(e){}
 }
@@ -1159,6 +1161,7 @@ function _estaVendido(e){
           DB.equipos.push(JSON.parse(JSON.stringify(spec)));
       });
       DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
+      window._equiposFBok = true;
     }
     if(d.revisiones)   DB.revisiones   = _toArr(d.revisiones);
     if(d.evaluaciones) DB.evaluaciones = _toArr(d.evaluaciones);
@@ -1190,6 +1193,7 @@ function _estaVendido(e){
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
         DB.equipos = DB.equipos.filter(e=>!_estaVendido(e));
+        window._equiposFBok = true;
       }
       if(remote.revisiones)   DB.revisiones   = _toArr(remote.revisiones);
       if(remote.evaluaciones) DB.evaluaciones = _toArr(remote.evaluaciones);
