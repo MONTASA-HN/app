@@ -353,15 +353,13 @@ function loadDB(){
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   try{
-    if(window._fbDB){
+    // ESPEJO: sólo escribir DESPUÉS de que Firebase cargó (window._fbReady),
+    // y escribir el objeto COMPLETO de cada equipo (sin recortar esVehiculo,
+    // esGenerico ni las specs) para no corromper la flota que ve Gerencia.
+    if(window._fbDB && window._fbReady){
       const ts = Date.now();
       window._fbDB.ref('montasa').update({
-        equipos: DB.equipos.map(e=>({
-          id:e.id, codigo:e.codigo, estado:e.estado||'DISPONIBLE',
-          ubicacion:e.ubicacion||'', cliente:e.cliente||'',
-          horometro:e.horometro||'', observaciones:e.observaciones||'',
-          foto:e.foto||'', serie:e.serie||'', marca:e.marca||''
-        })),
+        equipos: DB.equipos||[],
         vendidos: (DB.vendidos && DB.vendidos.length) ? DB.vendidos : VENDIDOS_INICIALES,
         _ts: ts,
         _sid: _SESSION_ID
@@ -1165,6 +1163,7 @@ function _estaVendido(e){
       if(remote.evaluaciones) DB.evaluaciones = _toArr(remote.evaluaciones);
       localStorage.setItem(LS_KEY, JSON.stringify(DB));
     }
+    window._fbReady = true; // Firebase cargó — recién ahora es seguro escribir
     renderFlota(); renderEquipos();
 
     FB_REF.on('value', snap=>{
