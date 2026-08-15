@@ -1721,6 +1721,9 @@ function _estaVendido(e){
   });
 }
 
+// Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
+// (evita que los equipos remotos se ignoren y se sobrescriban con los valores por defecto)
+function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
 function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!equipoId) return;
   const eq = DB.equipos.find(e => e.id===equipoId);
@@ -6309,8 +6312,9 @@ function _iniciarConexionFirebase(esReintento){
       // Dedupe de vendidos por código (evita duplicados por ventas repetidas)
       DB.vendidos = _dedupeVendidos(DB.vendidos);
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
-      if(remote.equipos && remote.equipos.length){
-        DB.equipos = remote.equipos.filter(Boolean).map(req => {
+      var _remEq = _toArr(remote.equipos);
+      if(_remEq.length){
+        DB.equipos = _remEq.map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
@@ -6418,8 +6422,9 @@ function _iniciarConexionFirebase(esReintento){
       // Cargar vendidos ANTES de procesar equipos para que isSold funcione
       if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);
       // Always update DB from Firebase (even our own writes)
-      if(d.equipos && d.equipos.length){
-        DB.equipos = d.equipos.filter(Boolean).map(req => {
+      var _dEq = _toArr(d.equipos);
+      if(_dEq.length){
+        DB.equipos = _dEq.map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
         });
