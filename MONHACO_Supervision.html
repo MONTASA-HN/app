@@ -2663,7 +2663,7 @@ function _calcCostoViaticos(v){
   // guardado traiga un número viejo de peajes.
   var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA'];
   var numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
-  var cpU = v.vehiculo==='CAMION GRANDE' ? 134 : 22;
+  var cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
   var tPeaj = numPeajes * cpU;
   var comb = parseFloat(v.combustible)||0;
   var otros = parseFloat(v.otros_gastos)||0;
@@ -4954,7 +4954,7 @@ function actualizarDestino(){
 
 function actualizarVehiculo(){
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
-  const cpU = veh==='CAMION GRANDE'?134:22;
+  const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
   document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').textContent = 'L. '+cpU);
   recalcViaticos();
 }
@@ -4987,7 +4987,7 @@ function recalcViaticos(){
   const destNombre = document.getElementById('v-destino')?.value||'';
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
-  const cpU = veh==='CAMION GRANDE'?134:22;
+  const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
   const tPeaj = d.peajes * cpU;
   document.getElementById('v-tpeaj') && (document.getElementById('v-tpeaj').value=tPeaj);
   // Alimentación de todas las personas
@@ -5052,7 +5052,7 @@ function recalcFacturas(){
 function _calcTotalSol(v){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
   const tPeaj=d.peajes*cpU;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
@@ -5205,14 +5205,14 @@ async function generarPDFViaticos(tipo){
 function _buildSolicitudHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{km:0,peajes:0};
-  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
   const tPeaj=d.peajes*cpU;
   const comb=v.combustible||0; const otros=v.otros_gastos||0;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
   const tGen=tAlim+tTr+tPeaj+comb+tHosp+otros;
-  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':'PATRULLA';
+  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':(v.vehiculo==='GRUA'?'GR-01':'PATRULLA');
 
   const personaRows=personas.map(p=>`
     <tr>
@@ -5325,7 +5325,7 @@ function _buildSolicitudHTML(v, orden){
 function _buildLiquidacionHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=v.vehiculo==='CAMION GRANDE'?134:22;
+  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
   const tPeaj=d.peajes*cpU;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
