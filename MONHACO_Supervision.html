@@ -1179,6 +1179,7 @@ function saveEquipo(eq){
 
 function saveAllEquipos(){
   if(!window._fbDB || !window._fbReady) return;
+  if(!window._equiposFBok) return; // no escribir equipos hasta haber leído los reales de Firebase
   window._fbDB.ref('monhaco/equipos').set(
     DB.equipos.map(e=>({id:e.id,codigo:e.codigo,serie:e.serie||'',tipo:e.tipo||'',marca:e.marca||'',
       desc:e.desc||'',combustible:e.combustible||'',estado:e.estado||'DISPONIBLE',
@@ -1277,6 +1278,9 @@ function showTab(id, el){
 }
 
 function toggleForm(id){
+  // Descartar estado de edición pendiente al abrir/cerrar el formulario de orden.
+  // editarOrden() vuelve a fijar window._editandoOrden justo después.
+  if(id==='form-prev' || id==='form-corr') window._editandoOrden = null;
   const el = document.getElementById(id);
   el.style.display = el.style.display === 'block' ? 'none' : 'block';
   if(el.style.display === 'block') el.scrollIntoView({behavior:'smooth', block:'start'});
@@ -1580,6 +1584,7 @@ function editarOrden(tipo, id){
     document.getElementById('prev-notas').value = orden.notas||'';
     document.getElementById('prev-sugerencias').value = orden.sugerencias||'';
     preseleccionarTecnico('prev-tecnicos-grid', orden.tecnico);
+    window._editandoOrden = { tipo:'prev', orig: JSON.parse(JSON.stringify(orden)) };
     DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
     saveDB();
     toast('Orden abierta para edición');
@@ -1611,6 +1616,7 @@ function editarOrden(tipo, id){
     document.getElementById('corr-fecha-fin-t').value = ft2;
     document.getElementById('corr-diag').value = orden.diagnostico||'';
     preseleccionarTecnico('corr-tecnicos-grid', orden.tecnico);
+    window._editandoOrden = { tipo:'corr', orig: JSON.parse(JSON.stringify(orden)) };
     DB.correctivos = DB.correctivos.filter(x=>x.id!==id);
     saveDB();
     toast('Orden abierta para edición');
@@ -3653,6 +3659,18 @@ function guardarPreventivo(finalizar=false){
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    // Punto 1: al EDITAR, conservar firma original, correlativo, foto previa y datos
+    // fuera del formulario. Vuelve a "En proceso" sin volver a firmarse.
+    if(window._editandoOrden && window._editandoOrden.tipo==='prev'){
+      var _o = window._editandoOrden.orig;
+      entry.id = _o.id;
+      entry.correlativo = _o.correlativo;
+      entry.firma = _o.firma;
+      if(!entry.foto && _o.foto) entry.foto = _o.foto;
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
+      window._editandoOrden = null;
+    }
     DB.preventivos.push(entry);
     equipoAInactivo(equipoId);
     saveDB(); toggleForm('form-prev');
@@ -3693,7 +3711,7 @@ function completarPreventivo(id){
   if(p.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
   // ── VALIDACIÓN: firma obligatoria ──
   const firmaData = getFirmaData(id);
-  if(!firmaData) faltantes.push('Firma digital del cliente');
+  if(!firmaData && !p.firma) faltantes.push('Firma digital del cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -3709,7 +3727,7 @@ function completarPreventivo(id){
     if(faltantesGer.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGer.join('\n• ')); return; }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
-  p.firma = getFirmaData(id);
+  p.firma = p.firma || getFirmaData(id);
 
   // Auto-generar vale de alimentación al cerrar
   (function(){
@@ -3830,6 +3848,18 @@ function guardarCorrectivo(finalizar=false){
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.estado='Completado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
+    // Punto 1: al EDITAR, conservar firma original, correlativo, foto previa y datos
+    // fuera del formulario. Vuelve a "En proceso" sin volver a firmarse.
+    if(window._editandoOrden && window._editandoOrden.tipo==='corr'){
+      var _o = window._editandoOrden.orig;
+      entry.id = _o.id;
+      entry.correlativo = _o.correlativo;
+      entry.firma = _o.firma;
+      if(!entry.foto && _o.foto) entry.foto = _o.foto;
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      if(!finalizar){ entry.estado='En proceso'; }
+      window._editandoOrden = null;
+    }
     DB.correctivos.push(entry);
     equipoAInactivo(equipoId);
     saveDB(); toggleForm('form-corr');
@@ -3871,7 +3901,7 @@ function cerrarCorrectivo(id){
   if(c.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
     // ── VALIDACIÓN: firma obligatoria ──
   const firmaDataC = getFirmaData(id);
-  if(!firmaDataC) faltantes.push('Firma digital del cliente');
+  if(!firmaDataC && !c.firma) faltantes.push('Firma digital del cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -3887,7 +3917,7 @@ function cerrarCorrectivo(id){
     if(faltantesGerC.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGerC.join('\n• ')); return; }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
-  c.firma = getFirmaData(id);
+  c.firma = c.firma || getFirmaData(id);
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
   // Auto-generar vale de alimentación al cerrar
@@ -4019,6 +4049,17 @@ function getTecnicos(gridId){
 }
 function clearTecnicos(gridId){
   document.querySelectorAll('#'+gridId+' input[type=checkbox]').forEach(c=>{ c.checked=false; c.closest('.tecnico-check').classList.remove('selected'); });
+}
+function preseleccionarTecnico(gridId, tecnico){
+  const grid = document.getElementById(gridId);
+  if(!grid) return;
+  const nombres = (tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+  grid.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    const match = nombres.includes((cb.value||'').trim());
+    cb.checked = match;
+    const cont = cb.closest('.tecnico-check');
+    if(cont) cont.classList.toggle('selected', match);
+  });
 }
 function toggleEquipoClienteCorr(){
   const val = document.getElementById('corr-equipo').value;
@@ -6535,13 +6576,15 @@ function _iniciarConexionFirebase(esReintento){
   if(!FB_REF){ console.warn('FB_REF no disponible'); return; }
   FB_REF.once('value').then(snap => {
    // Procesamiento del snapshot: un error AQUI es bug de datos/render, NO de conexion.
-   window._fbReady = true; // conexión OK: habilitar escritura aunque el procesamiento del snapshot falle
+   // NO habilitar escritura (_fbReady) aquí: se activa más abajo, sólo tras cargar el
+   // snapshot real. Evita escribir la versión recortada (sin fotos/firmas) o la base.
    try {
     const remote = snap.val();
     if(remote){
       loadDB();
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
       if(remote.equipos && remote.equipos.length){
+        window._equiposFBok = true; // ya leímos equipos reales: permitir escrituras de equipos
         DB.equipos = remote.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
@@ -6554,7 +6597,6 @@ function _iniciarConexionFirebase(esReintento){
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
       }
-      window._fbReady = true; // Firebase data loaded — safe to write back
       if(true){ // always sync other data from Firebase too
         if(remote.preventivos)    DB.preventivos    = _toArr(remote.preventivos);
         if(remote.vendidos && remote.vendidos.length) DB.vendidos = remote.vendidos;
@@ -6569,6 +6611,9 @@ function _iniciarConexionFirebase(esReintento){
           try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
+        // Recién ahora, con TODO el snapshot real cargado (con fotos y firmas), es
+        // seguro habilitar la escritura. Evita escribir la versión recortada del caché.
+        window._fbReady = true;
         // Guardado local best-effort protegido: si el localStorage esta lleno
         // (QuotaExceeded) NO debe tumbar el procesamiento — Firebase manda.
         try{ _cacheLocal(); }
@@ -6578,8 +6623,9 @@ function _iniciarConexionFirebase(esReintento){
         saveDB();
       }
     } else {
+      // Firebase respondió vacío (posible hipo de conexión). Mostrar local; NO escribir
+      // (evita borrar fotos, firmas y estados en vivo con la versión recortada/base).
       loadDB();
-      saveDB();
     }
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
@@ -6629,6 +6675,7 @@ function _iniciarConexionFirebase(esReintento){
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       // Always update DB from Firebase (even our own writes)
       if(d.equipos && d.equipos.length){
+        window._equiposFBok = true;
         DB.equipos = d.equipos.filter(Boolean).map(req => {
           const spec = EQUIPOS_INICIALES.find(e=>e.codigo===req.codigo||e.id===req.id)||{};
           return {...spec, ...req};
