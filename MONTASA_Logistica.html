@@ -367,8 +367,11 @@ function _calcCostoViaticos(v){
   var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
   var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
   // Peajes según destino y vehículo
-  var PEAJES_MAP = {TRUJILLO:8,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:6,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:4,'LA CEIBA':4,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:2,CORTES:0};
-  var numPeajes = v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0);
+  var PEAJES_MAP = {TRUJILLO:0,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:0,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:0,'LA CEIBA':4,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:0,CORTES:0};
+  // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): forzar 0 aunque el viático
+  // guardado traiga un número viejo de peajes.
+  var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA'];
+  var numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
   var cpU = v.vehiculo==='CAMION GRANDE' ? 134 : 22;
   var tPeaj = numPeajes * cpU;
   var comb = parseFloat(v.combustible)||0;
@@ -1841,22 +1844,22 @@ const GESTORES_VIATICOS = [
   {nombre:"MARVIN JESUS TORRES",            id:"0502-1980-00830", cuenta:"757373211",   depto:"Taller"},
 ];
 const DESTINOS_VIATICOS = [
-  {nombre:"TRUJILLO",            km:767, peajes:8},
+  {nombre:"TRUJILLO",            km:767, peajes:0},
   {nombre:"CHOLUTECA",           km:756, peajes:6},
   {nombre:"DANLI",               km:735, peajes:6},
   {nombre:"COYOLITO",            km:693, peajes:4},
   {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
-  {nombre:"TOCOA",               km:630, peajes:6},
+  {nombre:"TOCOA",               km:630, peajes:0},
   {nombre:"OLANCHO",             km:609, peajes:6},
   {nombre:"TEGUCIGALPA",         km:525, peajes:6},
   {nombre:"GRACIAS LEMPIRA",     km:420, peajes:4},
-  {nombre:"COPAN",               km:416, peajes:4},
+  {nombre:"COPAN",               km:416, peajes:0},
   {nombre:"LA CEIBA",            km:410, peajes:4},
   {nombre:"COMAYAGUA",           km:347, peajes:4},
   {nombre:"SANTA ROSA DE COPAN", km:336, peajes:4},
   {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
   {nombre:"SANTA BARBARA",       km:221, peajes:2},
-  {nombre:"TELA",                km:200, peajes:2},
+  {nombre:"TELA",                km:200, peajes:0},
   {nombre:"CORTES",              km:116, peajes:0},
 ];
 
@@ -2510,7 +2513,7 @@ function _buildSolicitudHTML(v, orden){
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Solicitud Viáticos ${orden.correlativo||''}</title>
   <style>
-    @media print { @page { margin: 10mm; size: letter; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
+    @media print { @page { margin: 10mm; size: letter landscape; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
     body { font-family: Arial, sans-serif; font-size: 9pt; margin: 0; padding: 10mm; color: #222; }
     .header { background: #1f3864; color: white; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-radius: 4px; }
     .header h1 { margin:0; font-size:13pt; }
@@ -2624,7 +2627,7 @@ function _buildLiquidacionHTML(v, orden){
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Liquidación Viáticos ${orden.correlativo||''}</title>
   <style>
-    @media print { @page { margin: 10mm; size: letter; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
+    @media print { @page { margin: 10mm; size: letter landscape; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .no-print{display:none} }
     body { font-family: Arial, sans-serif; font-size: 9pt; margin: 0; padding: 10mm; color: #222; }
     .header { background: #1f3864; color: white; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-radius: 4px; }
     .header h1 { margin:0; font-size:13pt; }
