@@ -6139,7 +6139,8 @@ function _iniciarConexionFirebase(esReintento){
           if(!remote) return remote;
           const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
           return local ? Object.assign({}, remote, {
-            vales: remote.vales !== undefined ? remote.vales : local.vales
+            vales: remote.vales !== undefined ? remote.vales : local.vales,
+            viaticos: remote.viaticos !== undefined ? remote.viaticos : local.viaticos
           }) : remote;
         });
         try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
@@ -6834,7 +6835,8 @@ function _calcTotalSol(v){
 function agregarPersonaViaticos(){
   const orden=_getViaticosOrden();
   if(!orden) return;
-  const v=_viaticosData||{};
+  // Capturar lo ya escrito en el formulario ANTES de re-dibujar (evita perder datos)
+  const v={...(_viaticosData||{}), ..._leerFormSolicitud()};
   const personas=v.personas||[];
   personas.push({nombre:'',fecha:'',hora_ini:'',hora_fin:'',desayuno:0,almuerzo:0,cena:0,media_noche:0,transporte:0,hospedaje:0,total:0});
   _viaticosData={...v,personas};
@@ -6844,7 +6846,8 @@ function agregarPersonaViaticos(){
 function quitarPersonaViaticos(i){
   const orden=_getViaticosOrden();
   if(!orden) return;
-  const v=_viaticosData||{};
+  // Capturar lo ya escrito en el formulario ANTES de re-dibujar (evita perder datos)
+  const v={...(_viaticosData||{}), ..._leerFormSolicitud()};
   const personas=(v.personas||[]).filter((_,idx)=>idx!==i);
   _viaticosData={...v,personas};
   renderModalViaticos(orden);
@@ -6926,6 +6929,7 @@ function guardarViaticos(){
   orden.viaticos = {...formData, facturas: existingFacturas};
   _viaticosData = orden.viaticos;
   saveDB();
+  if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
   cerrarViaticos();
   _renderListaSegunTipo(_viaticosTipo);
   toast('Solicitud de viáticos guardada ✓');
@@ -6938,6 +6942,7 @@ function guardarLiquidacion(){
   orden.viaticos = {...(_viaticosData||{}), ...liqData};
   _viaticosData = orden.viaticos;
   saveDB();
+  if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
   toast('Liquidación guardada ✓');
   cerrarViaticos();
   _renderListaSegunTipo(_viaticosTipo);
@@ -6960,6 +6965,8 @@ async function generarPDFViaticos(tipo){
     _viaticosData=orden.viaticos;
     saveDB();
   }
+
+if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
 
   // Usar los datos recién guardados
   const v = orden.viaticos||{};
@@ -7085,10 +7092,8 @@ function _buildSolicitudHTML(v, orden){
       <div class="row total-row"><span>TOTAL GENERAL:</span><span>L. ${tGen}</span></div>
     </div>
   </div>
-  <div class="firmas">
-    <div class="firma">MIGUEL A. ORELLANA<br>___________<br>COORDINADOR LOGÍSTICA</div>
-    <div class="firma"><br>___________<br>APROBADO POR GERENCIA</div>
-    <div class="firma"><br>___________<br>RECIBIDO FINANZAS</div>
+  <div class="firmas" style="grid-template-columns:1fr;justify-items:center">
+    <div class="firma" style="min-width:300px">MIGUEL A. ORELLANA<br>___________<br>COORDINADOR LOGÍSTICA</div>
   </div>
 </body></html>`;
 }
