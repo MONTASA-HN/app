@@ -1600,17 +1600,20 @@ function editarOrden(tipo, id){
   const formId = tipo==='prev' ? 'form-prev' : 'form-corr';
   toggleForm(formId);
   if(tipo==='prev'){
-    const esCli = orden.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    const _eqCliP = (DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    const esCli = orden.equipoId==='__cliente__' || !!_eqCliP || !!(orden.clienteNombre||orden.clienteMarca||orden.clienteModelo||orden.clienteSerie);
     if(esCli){
       toggleOrigenPrev('cliente');
       fillSelCliente('prev-equipo-cliente-sel');
-      document.getElementById('prev-equipo-cliente-sel').value = orden.equipoId!=='__cliente__' ? orden.equipoId : '__nuevo__';
+      document.getElementById('prev-equipo-cliente-sel').value = _eqCliP ? orden.equipoId : '__nuevo__';
       onSelectEquipoCliente('prev');
+      const _cP = _eqCliP || {};
       const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-      setV('prev-cliente-nombre', orden.clienteNombre);
-      setV('prev-cliente-marca',  orden.clienteMarca);
-      setV('prev-cliente-modelo', orden.clienteModelo);
-      setV('prev-cliente-serie',  orden.clienteSerie);
+      setV('prev-cliente-nombre', orden.clienteNombre || _cP.clienteNombre || _cP.cliente);
+      setV('prev-cliente-marca',  orden.clienteMarca  || _cP.marca);
+      setV('prev-cliente-modelo', orden.clienteModelo || _cP.modelo || _cP.desc);
+      setV('prev-cliente-serie',  orden.clienteSerie  || _cP.serie);
+      const _cfP=document.getElementById('prev-cliente-fields'); if(_cfP) _cfP.style.display='block';
     } else {
       toggleOrigenPrev('montasa');
       fillSel('prev-equipo');
@@ -1633,17 +1636,20 @@ function editarOrden(tipo, id){
     saveDB();
     toast('Orden abierta para edición — la firma se conserva');
   } else {
-    const esCliC = orden.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    const _eqCliC = (DB.equipos||[]).find(e=>e.id===orden.equipoId&&e.esEquipoCliente);
+    const esCliC = orden.equipoId==='__cliente__' || !!_eqCliC || !!(orden.clienteNombre||orden.clienteMarca||orden.clienteModelo||orden.clienteSerie);
     if(esCliC){
       toggleOrigenCorr('cliente');
       fillSelCliente('corr-equipo-cliente-sel');
-      document.getElementById('corr-equipo-cliente-sel').value = orden.equipoId!=='__cliente__' ? orden.equipoId : '__nuevo__';
+      document.getElementById('corr-equipo-cliente-sel').value = _eqCliC ? orden.equipoId : '__nuevo__';
       onSelectEquipoCliente('corr');
+      const _cC = _eqCliC || {};
       const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-      setV('corr-cliente-nombre', orden.clienteNombre);
-      setV('corr-cliente-marca',  orden.clienteMarca);
-      setV('corr-cliente-modelo', orden.clienteModelo);
-      setV('corr-cliente-serie',  orden.clienteSerie);
+      setV('corr-cliente-nombre', orden.clienteNombre || _cC.clienteNombre || _cC.cliente);
+      setV('corr-cliente-marca',  orden.clienteMarca  || _cC.marca);
+      setV('corr-cliente-modelo', orden.clienteModelo || _cC.modelo || _cC.desc);
+      setV('corr-cliente-serie',  orden.clienteSerie  || _cC.serie);
+      const _cfC=document.getElementById('corr-cliente-fields'); if(_cfC) _cfC.style.display='block';
     } else {
       toggleOrigenCorr('montasa');
       fillSel('corr-equipo');
