@@ -1762,7 +1762,7 @@ try{
       if(remote && remote._ts){
         const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
         if(remote._ts >= (local._ts||0)){
-          if(remote.logistica)   DB.logistica   = _toArr(remote.logistica).filter(o=>o&&o.id);
+          if(remote.logistica)   DB.logistica   = _mergeLogViaticos(_toArr(remote.logistica).filter(o=>o&&o.id));
           if(remote.preventivos) DB.preventivos = _toArr(remote.preventivos);
           if(remote.correctivos) DB.correctivos = _toArr(remote.correctivos);
           if(remote.equipos && _toArr(remote.equipos).length) DB.equipos = _toArr(remote.equipos);
@@ -1779,12 +1779,26 @@ try{
     console.log('_fbReady = true SET');
     renderDashboardLog();
 
+function _mergeLogViaticos(remotos){
+  // Preserva viáticos/facturas locales si el remoto no los trae (evita perder
+  // liquidaciones recién escritas por un eco viejo del servidor)
+  const prev = DB.logistica||[];
+  return remotos.map(function(rem){
+    const loc = prev.find(function(l){return l&&l.id===rem.id;});
+    if(!loc) return rem;
+    let v = rem.viaticos;
+    if(v===undefined) v = loc.viaticos;
+    else if(loc.viaticos && loc.viaticos.facturas && loc.viaticos.facturas.filter(Boolean).length && (!v.facturas || !v.facturas.filter(Boolean).length)) v = Object.assign({}, v, {facturas: loc.viaticos.facturas});
+    return v!==rem.viaticos ? Object.assign({}, rem, {viaticos: v}) : rem;
+  });
+}
+
     FB_REF.on('value', snap=>{
       const d = snap.val();
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       const skipLog = window._skipLogOverwrite && (Date.now() - window._skipLogOverwrite) < 8000;
-      if(d.logistica && !skipLog)   DB.logistica   = _toArr(d.logistica).filter(o=>o&&o.id);
+      if(d.logistica && !skipLog)   DB.logistica   = _mergeLogViaticos(_toArr(d.logistica).filter(o=>o&&o.id));
       if(d.preventivos) DB.preventivos = _toArr(d.preventivos);
       if(d.correctivos) DB.correctivos = _toArr(d.correctivos);
       if(d.equipos && _toArr(d.equipos).length) DB.equipos = _toArr(d.equipos);
