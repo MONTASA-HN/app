@@ -1110,11 +1110,11 @@ function renderCamposTipo(o){
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:12px">';
     html += '<div class="form-group"><label>Km salida del plantel</label>';
-    html += '<input type="number" value="'+(o.kmSalida||'')+'" placeholder="0" ';
+    html += '<input type="number" id="log-kmsal-'+id+'" value="'+(o.kmSalida||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'kmSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     html += '<div class="form-group"><label>Km retorno al plantel</label>';
-    html += '<input type="number" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
-    html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    html += '<input type="number" id="log-kmret-'+id+'" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     html += '</div>';
   }
 
@@ -1147,11 +1147,11 @@ function renderCamposTipo(o){
     }
   } else if(isRenta){
     html += '<div class="form-group"><label>Horómetro de salida (hrs)</label>';
-    html += '<input type="number" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
+    html += '<input type="number" id="log-horsal-'+id+'" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
-    html += '<input type="number" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
-    html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    html += '<input type="number" id="log-horret-'+id+'" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
+    html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
   } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras'){
     html += '<div class="form-group"><label>Horómetro (hrs)</label>';
     html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
@@ -1159,13 +1159,15 @@ function renderCamposTipo(o){
   }
   return html;
 }
-function actualizarLogKmRetorno(id, valor){
+function actualizarLogKmRetorno(id, valor, inputEl){
   const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   const salida = parseFloat(o.kmSalida||0);
   const retorno = parseFloat(valor||0);
   if(retorno && salida && retorno < salida){
     alert('⚠️ El km de retorno ('+retorno+') no puede ser menor al de salida ('+salida+')');
+    // Restaurar el valor guardado en el campo: que la pantalla nunca muestre un número que NO se guardó
+    if(inputEl) inputEl.value = o.kmRetorno||'';
     return;
   }
   o.kmRetorno = valor;
@@ -1182,13 +1184,14 @@ function actualizarLogKmRetorno(id, valor){
   saveDB();
 }
 
-function actualizarLogHorometroRetorno(id, valor){
+function actualizarLogHorometroRetorno(id, valor, inputEl){
   const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
   const salida = parseFloat(o.horometroSalida||0);
   const retorno = parseFloat(valor||0);
   if(retorno && salida && retorno < salida){
     alert('⚠️ El horómetro de retorno ('+retorno+') no puede ser menor al de salida ('+salida+')');
+    if(inputEl) inputEl.value = o.horometroRetorno||'';
     return;
   }
   o.horometroRetorno = valor;
@@ -1227,6 +1230,14 @@ function subirFotoLog(id, input){
 function cerrarOrdenLog(id){
   const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;
+  // Comprometer los valores que están escritos en pantalla aunque el evento de
+  // guardado no haya alcanzado a dispararse (evita el falso "falta km de retorno"
+  // cuando el campo se ve lleno pero el valor nunca se registró).
+  const _leerCampo = (elId)=>{ const el=document.getElementById(elId); return el && el.value!=='' ? el.value : null; };
+  const _kmS = _leerCampo('log-kmsal-'+id);  if(_kmS!==null) o.kmSalida = _kmS;
+  const _kmR = _leerCampo('log-kmret-'+id);  if(_kmR!==null && !(parseFloat(o.kmSalida||0) && parseFloat(_kmR) < parseFloat(o.kmSalida||0))) o.kmRetorno = _kmR;
+  const _hS  = _leerCampo('log-horsal-'+id); if(_hS!==null) o.horometroSalida = _hS;
+  const _hR  = _leerCampo('log-horret-'+id); if(_hR!==null && !(parseFloat(o.horometroSalida||0) && parseFloat(_hR) < parseFloat(o.horometroSalida||0))) o.horometroRetorno = _hR;
   const faltantes = [];
   const esCancelado = o.estado === 'Cancelado';
   if(!esCancelado){
