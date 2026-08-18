@@ -592,7 +592,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
             <option>Staker</option><option>Pallet</option>
           </select>
         </div>
-        <div class="form-group"><label>Modelo del equipo</label><input id="sol-eval-modelo" placeholder="Ej: BAOLI KBE-20"></div>
+        <div class="form-group"><label>Marca del equipo</label><input id="sol-eval-marca" placeholder="Ej: BAOLI"></div>
+        <div class="form-group"><label>Modelo del equipo</label><input id="sol-eval-modelo" placeholder="Ej: KBE-20"></div>
         <div class="form-group"><label>Serie del equipo</label><input id="sol-eval-serie" placeholder="Ej: B16091J00102"></div>
         <div class="form-group"><label>Nombre del cliente</label><input id="sol-eval-cliente" placeholder="Nombre completo"></div>
       </div>
@@ -4396,10 +4397,17 @@ async function enviarSolicitudWA(){
       const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
       if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
     } else {
+      // Datos del equipo del cliente (antes estos campos del formulario no se guardaban)
+      const evMarca  = document.getElementById('sol-eval-marca')?.value.trim()||'';
+      const evModelo = document.getElementById('sol-eval-modelo')?.value.trim()||'';
+      const evSerie  = document.getElementById('sol-eval-serie')?.value.trim()||'';
+      const evCliente= document.getElementById('sol-eval-cliente')?.value.trim()||'';
+      const evTipoEq = document.getElementById('sol-eval-tipo')?.value||'';
+      if(!evCliente){ toast('Falta: Nombre del cliente', true); return; }
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboardTec();
@@ -4562,10 +4570,17 @@ async function copiarMensajeWA(){
       const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
       navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     } else {
+      // Datos del equipo del cliente (antes estos campos del formulario no se guardaban)
+      const evMarca  = document.getElementById('sol-eval-marca')?.value.trim()||'';
+      const evModelo = document.getElementById('sol-eval-modelo')?.value.trim()||'';
+      const evSerie  = document.getElementById('sol-eval-serie')?.value.trim()||'';
+      const evCliente= document.getElementById('sol-eval-cliente')?.value.trim()||'';
+      const evTipoEq = document.getElementById('sol-eval-tipo')?.value||'';
+      if(!evCliente){ toast('Falta: Nombre del cliente', true); return; }
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboardTec();
