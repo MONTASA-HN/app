@@ -2343,7 +2343,8 @@ function _calcTotalSol(v){
 function agregarPersonaViaticos(){
   const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
   if(!orden) return;
-  const v=_viaticosData||{};
+  // Capturar lo ya escrito en el formulario ANTES de re-dibujar (evita perder datos)
+  const v={...(_viaticosData||{}), ..._leerFormSolicitud()};
   const personas=v.personas||[];
   personas.push({nombre:'',fecha:'',hora_ini:'',hora_fin:'',desayuno:0,almuerzo:0,cena:0,media_noche:0,transporte:0,hospedaje:0,total:0});
   _viaticosData={...v,personas};
@@ -2353,7 +2354,8 @@ function agregarPersonaViaticos(){
 function quitarPersonaViaticos(i){
   const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
   if(!orden) return;
-  const v=_viaticosData||{};
+  // Capturar lo ya escrito en el formulario ANTES de re-dibujar (evita perder datos)
+  const v={...(_viaticosData||{}), ..._leerFormSolicitud()};
   const personas=(v.personas||[]).filter((_,idx)=>idx!==i);
   _viaticosData={...v,personas};
   renderModalViaticos(orden);
@@ -2445,6 +2447,7 @@ function guardarLiquidacion(){
   orden.viaticos = {...(_viaticosData||{}), ...liqData};
   _viaticosData = orden.viaticos;
   saveDB();
+  if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
   toast('Liquidación guardada ✓');
 }
 
@@ -2598,10 +2601,8 @@ function _buildSolicitudHTML(v, orden){
       <div class="row total-row"><span>TOTAL GENERAL:</span><span>L. ${tGen}</span></div>
     </div>
   </div>
-  <div class="firmas">
-    <div class="firma">MIGUEL A. ORELLANA<br>___________<br>COORDINADOR LOGÍSTICA</div>
-    <div class="firma"><br>___________<br>APROBADO POR GERENCIA</div>
-    <div class="firma"><br>___________<br>RECIBIDO FINANZAS</div>
+  <div class="firmas" style="grid-template-columns:1fr;justify-items:center">
+    <div class="firma" style="min-width:300px">MIGUEL A. ORELLANA<br>___________<br>COORDINADOR LOGÍSTICA</div>
   </div>
 </body></html>`;
 }
