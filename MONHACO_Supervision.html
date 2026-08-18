@@ -955,31 +955,42 @@ function _guardarLogisticaResiliente(nuevaOrdenId){
   try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
   renderLogistica(); renderDashboard();
   toast('Orden guardada ✓');
-  _sincronizarLogisticaConReintento(nuevaOrdenId);
+  // Capturar la orden AHORA: si el listener reemplaza DB.logistica antes de que el
+  // sincronizador corra, la orden igual viaja con la llamada y no se pierde.
+  _sincronizarLogisticaConReintento(nuevaOrdenId, (DB.logistica||[]).find(function(o){return o&&o.id===nuevaOrdenId;}));
 }
 
-function _sincronizarLogisticaConReintento(nuevaOrdenId){
+function _sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj){
   if(!window._fbDB || !window._fbReady){
-    setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
+    setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj), 5000);
     return;
   }
-  // Escribir SOLO la nueva orden por índice — nunca el array completo
-  if(nuevaOrdenId){
-    const idx = (DB.logistica||[]).findIndex(o=>o&&o.id===nuevaOrdenId);
-    if(idx>=0){
-      const clean = Object.assign({}, DB.logistica[idx]);
-      Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
-      window._fbDB.ref('monhaco/logistica/'+idx).set(clean)
-        .then(()=>{
-          window._fbDB.ref('monhaco/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
-        }).catch(()=>{
-          console.warn('Reintentando sync logistica...');
-          setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId), 5000);
-        });
+  // Leer el array real de Firebase, integrar la orden (por id) y escribir de vuelta.
+  // _nuevaObj viaja con la llamada: aunque el listener reemplace DB.logistica antes
+  // de que esto corra, la orden no se pierde.
+  window._fbDB.ref('monhaco/logistica').once('value').then(snap=>{
+    const remoto = snap.val() || [];
+    const arr = Array.isArray(remoto) ? remoto.filter(o=>o) : Object.values(remoto).filter(o=>o);
+    if(nuevaOrdenId){
+      const nueva = (DB.logistica||[]).find(o=>o&&o.id===nuevaOrdenId) || _nuevaObj;
+      if(nueva){
+        const idxRemoto = arr.findIndex(o=>o&&o.id===nuevaOrdenId);
+        const clean = Object.assign({}, nueva);
+        Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
+        if(idxRemoto >= 0) arr[idxRemoto] = clean;
+        else arr.push(clean);
+      }
     }
-  } else {
-    window._fbDB.ref('monhaco/lastCorrelativo_LG').set(DB['lastCorrelativo_LG']||0);
-  }
+    return window._fbDB.ref('monhaco/logistica').set(arr).then(()=>{
+      // Nunca degradar el contador remoto: solo escribir si tenemos un valor real (>0)
+      var _lcLG = parseInt(DB['lastCorrelativo_LG'],10)||0;
+      if(_lcLG>0) window._fbDB.ref('monhaco/lastCorrelativo_LG').set(_lcLG);
+      DB.logistica = arr;
+    });
+  }).catch(e=>{
+    console.warn('Reintentando sync logistica...', e);
+    setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj), 5000);
+  });
 }
 
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
@@ -5232,17 +5243,24 @@ async function generarPDFViaticos(tipo){
   const orden=_getViaticosOrden();
   if(!orden) return;
 
-  // Leer datos frescos del formulario y guardar
+  // Leer datos frescos del formulario y guardar — SOLO si los campos existen en
+  // pantalla. En modo solo-lectura los inputs no se dibujan: leerlos daría datos
+  // vacíos y BORRARÍA lo ya guardado (este bug vaciaba las liquidaciones al
+  // presionar Descargar PDF). Si no hay inputs, se imprime lo guardado tal cual.
   if(_viaticosMode==='solicitud'){
-    const formData=_leerFormSolicitud();
-    orden.viaticos={...(_viaticosData||{}),...formData};
-    _viaticosData=orden.viaticos;
-    saveDB();
+    if(document.getElementById('v-destino')){
+      const formData=_leerFormSolicitud();
+      orden.viaticos={...(_viaticosData||{}),...formData};
+      _viaticosData=orden.viaticos;
+      saveDB();
+    }
   } else {
-    const liqData=_leerFormLiquidacion();
-    orden.viaticos={...(_viaticosData||{}),...liqData};
-    _viaticosData=orden.viaticos;
-    saveDB();
+    if(document.getElementById('vlf-desc-0')){
+      const liqData=_leerFormLiquidacion();
+      orden.viaticos={...(_viaticosData||{}),...liqData};
+      _viaticosData=orden.viaticos;
+      saveDB();
+    }
   }
 
 if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
