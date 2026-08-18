@@ -1310,7 +1310,16 @@ function solicitarPINAccion(callback, titulo, subtitulo){
   document.body.style.overflow = 'hidden';
 }
 
-
+// Detecta si una orden es de equipo de cliente: por equipoId '__cliente__', por
+// referencia a un equipo de cliente guardado, o por tener datos de cliente en la orden.
+// Así los campos editables (marca/modelo/serie/cliente) aparecen aunque el equipo no
+// esté en la lista o haya perdido su bandera.
+function _esOrdenCliente(o){
+  if(!o) return false;
+  if(o.equipoId==='__cliente__') return true;
+  if((DB.equipos||[]).some(e=>e.id===o.equipoId && e.esEquipoCliente)) return true;
+  return !!(o.clienteNombre||o.clienteMarca||o.clienteModelo||o.clienteSerie);
+}
 function getEqLabel(id){
   if(id === '__cliente__') return 'Equipo de cliente';
   const e = DB.equipos.find(x => x.id == id);
@@ -1728,7 +1737,7 @@ function renderPreventivos(){
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
-      ${p.equipoId==='__cliente__'?`
+      ${_esOrdenCliente(p)?`
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
@@ -2151,7 +2160,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
-      ${(c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`
+      ${_esOrdenCliente(c)?`
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
