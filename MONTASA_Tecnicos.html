@@ -811,7 +811,8 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group"><label>Tipo de equipo</label>
         <select id="eval-tipo-equipo"><option value="">— Seleccionar —</option><option>Montacargas</option><option>Elevadora</option><option>Camion</option><option>Staker</option><option>Pallet</option></select>
       </div>
-      <div class="form-group"><label>Modelo del equipo</label><input id="eval-modelo" placeholder="Ej: BAOLI KBE-20"></div>
+      <div class="form-group"><label>Marca del equipo</label><input id="eval-marca" placeholder="Ej: BAOLI"></div>
+      <div class="form-group"><label>Modelo del equipo</label><input id="eval-modelo" placeholder="Ej: KBE-20"></div>
       <div class="form-group"><label>Serie del equipo</label><input id="eval-serie" placeholder="Ej: B16091J00102"></div>
       <div class="form-group"><label>Horómetro del equipo <span style="color:#c9211e">*</span></label><input type="number" id="eval-horometro" placeholder="Ej: 1250" min="0"></div>
       <div class="form-group"><label>Nombre del cliente</label><input id="eval-cliente" placeholder="Nombre completo"></div>
@@ -3436,6 +3437,7 @@ function guardarEvaluacion(){
   const kmSal     = document.getElementById('eval-km-sal').value;
   const kmRet     = document.getElementById('eval-km-ret').value;
   const tipoEq    = document.getElementById('eval-tipo-equipo').value;
+  const marca     = document.getElementById('eval-marca')?.value.trim()||'';
   const modelo    = document.getElementById('eval-modelo').value.trim();
   const serie     = document.getElementById('eval-serie').value.trim();
   const horometro = document.getElementById('eval-horometro').value.trim();
@@ -3446,6 +3448,7 @@ function guardarEvaluacion(){
   if(!tec1) faltantes.push('Técnico asignado');
   if(!diag) faltantes.push('Diagnóstico / Descripción');
   if(!horometro) faltantes.push('Horómetro del equipo');
+  if(!cliente) faltantes.push('Nombre del cliente');
   if(ubicacion !== 'plantel'){
     if(!kmSal) faltantes.push('Km salida');
     if(!kmRet) faltantes.push('Km retorno');
@@ -3460,14 +3463,16 @@ function guardarEvaluacion(){
     fecha, horaIni, horaFin,
     fechaInicio: fecha+'T'+horaIni, fechaFin: fecha+'T'+horaFin,
     kmSalida: kmSal, kmRetorno: kmRet,
-    tipoEquipo: tipoEq, modelo, serie, horometro, cliente, diagnostico: diag, firma,
+    tipoEquipo: tipoEq, marca, modelo, serie, horometro, cliente, diagnostico: diag, firma,
     completado: estado==='Completado'
   };
   DB.evaluaciones.push(entry);
   saveDB();
   if(window._fbDB && window._fbReady)
     window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
-  ['eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
+  // Al completar la evaluación, el montacargas del cliente entra a la flota de clientes
+  if(entry.completado) _crearEquipoClienteDesdeEval(entry);
+  ['eval-marca','eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('eval-estado').selectedIndex=0;
@@ -3555,6 +3560,7 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Modelo</label><input value="${v.modelo||''}" placeholder="Ej: BAOLI KBE-20" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','modelo',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Nombre del cliente</label><input value="${v.cliente||''}" placeholder="Nombre completo" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','cliente',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
@@ -3663,8 +3669,51 @@ function actualizarEvaluacion(id, campo, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
   if(!v) return;
   v[campo] = valor;
+  // Al pasar a Completado, el montacargas evaluado entra a la flota de clientes
+  if(campo==='estado' && valor==='Completado'){
+    v.completado = true;
+    _crearEquipoClienteDesdeEval(v);
+  }
   saveDB();
   if(campo==='estado') renderEvaluaciones();
+}
+
+// Crea (o actualiza) el equipo de cliente a partir de una evaluación completada,
+// con la misma lógica de deduplicación que los equipos de cliente de prev/corr.
+function _crearEquipoClienteDesdeEval(ev){
+  if(!ev) return;
+  const nombre = (ev.cliente||'').trim();
+  const modelo = (ev.modelo||'').trim();
+  const serie  = (ev.serie||'').trim();
+  let marca    = (ev.marca||'').trim();
+  if(!marca && modelo) marca = modelo.split(/\s+/)[0]; // respaldo: primera palabra del modelo
+  if(!nombre || !modelo) return; // sin cliente o modelo no se puede crear el equipo
+  const clave = nombre+'|'+serie;
+  const yaExiste = (DB.equipos||[]).find(e=>e.esEquipoCliente &&
+    ((serie && (e.serie||'').trim()===serie) ||
+     ((e.clienteNombre||'').trim()+'|'+(e.serie||'').trim())===clave));
+  if(yaExiste){
+    yaExiste.clienteNombre = nombre;
+    if(marca)  yaExiste.marca  = marca;
+    if(modelo) yaExiste.modelo = modelo;
+    if(serie)  yaExiste.serie  = serie;
+    if(window._fbDB && window._fbReady && window._equiposFBok) window._fbDB.ref('montasa/equipos').set(DB.equipos);
+    return;
+  }
+  const nuevoEq = {
+    id: 'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),
+    codigo: serie || (marca+'-'+modelo).slice(0,20),
+    desc: (marca?marca+' ':'')+modelo+(nombre?' — '+nombre:''),
+    tipo: ev.tipoEquipo || 'Equipo de cliente',
+    marca: marca, modelo: modelo, serie: serie,
+    cliente: nombre, clienteNombre: nombre,
+    combustible:'', ubicacion: nombre, estado:'DISPONIBLE',
+    horometro: ev.horometro||'', observaciones: 'Ingresado desde evaluación '+(ev.correlativo||''),
+    esEquipoCliente: true
+  };
+  if(!DB.equipos) DB.equipos=[];
+  DB.equipos.push(nuevoEq);
+  if(window._fbDB && window._fbReady && window._equiposFBok) window._fbDB.ref('montasa/equipos').set(DB.equipos);
 }
 
 // ── FOTOS DE ÓRDENES (Revisiones y Evaluaciones) ─────────────────────────────
