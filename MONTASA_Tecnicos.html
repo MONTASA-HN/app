@@ -34,22 +34,22 @@ let _valeMantOrdenId = null;
 let _valeMantTipo = null; // 'correctivo' o 'preventivo'
 
 const DESTINOS_VIATICOS = [
-  {nombre:"TRUJILLO",            km:767, peajes:8},
+  {nombre:"TRUJILLO",            km:767, peajes:0},
   {nombre:"CHOLUTECA",           km:756, peajes:6},
   {nombre:"DANLI",               km:735, peajes:6},
   {nombre:"COYOLITO",            km:693, peajes:4},
   {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
-  {nombre:"TOCOA",               km:630, peajes:6},
+  {nombre:"TOCOA",               km:630, peajes:0},
   {nombre:"OLANCHO",             km:609, peajes:6},
   {nombre:"TEGUCIGALPA",         km:525, peajes:6},
   {nombre:"GRACIAS LEMPIRA",     km:420, peajes:4},
-  {nombre:"COPAN",               km:416, peajes:4},
+  {nombre:"COPAN",               km:416, peajes:0},
   {nombre:"LA CEIBA",            km:410, peajes:4},
   {nombre:"COMAYAGUA",           km:347, peajes:4},
   {nombre:"SANTA ROSA DE COPAN", km:336, peajes:4},
   {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
   {nombre:"SANTA BARBARA",       km:221, peajes:2},
-  {nombre:"TELA",                km:200, peajes:2},
+  {nombre:"TELA",                km:200, peajes:0},
   {nombre:"CORTES",              km:116, peajes:0},
 ];
 
@@ -74,8 +74,12 @@ function verViaticosResumen(ordenId, tipo){
 
   const personas = v.personas||[];
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
-  const cpU = v.vehiculo==='CAMION GRANDE'?134:22;
-  const tPeaj = d.peajes * cpU;
+  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
+  // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): siempre 0, igual que en Gerencia.
+  // Y respetar el número de peajes guardado en el viático en vez de recalcular.
+  const _SIN_PEAJE=['TRUJILLO','TOCOA','COPAN','TELA'];
+  const numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes!==undefined && v.num_peajes!==null && v.num_peajes!=='' ? v.num_peajes : d.peajes);
+  const tPeaj = numPeajes * cpU;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tComb = v.combustible||0;
   const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
