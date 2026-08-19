@@ -425,17 +425,30 @@ function saveDB(){
 function _writeToFirebase(){
   try{
     if(window._fbDB && window._fbReady){
-      const ts = Date.now();
-      window._localWriteTs = ts;
-      const payload = {
-        logistica: DB.logistica||[],
-        _ts: ts,
-        _sid: _SESSION_ID
-      };
-      // Persist correlativo counter so other devices stay in sync
-      if(DB['lastCorrelativo_LG']) payload['lastCorrelativo_LG'] = DB['lastCorrelativo_LG'];
-      window._fbDB.ref('montasa').update(payload)
-        .catch(e=>console.warn('FB write error:',e));
+      // FUSIÓN-AL-ESCRIBIR: nunca empujar la lista local a ciegas. Se lee la lista
+      // real del servidor y se fusiona: las órdenes locales mandan sobre las suyas,
+      // pero las órdenes que OTRO dispositivo creó (y esta copia no conoce) se
+      // PRESERVAN. Evita que una pestaña con datos viejos borre órdenes nuevas.
+      window._fbDB.ref('montasa/logistica').once('value').then(snap=>{
+        const remoto=snap.val();
+        const remArr=(Array.isArray(remoto)?remoto:Object.values(remoto||{})).filter(o=>o&&o.id);
+        const locArr=(DB.logistica||[]).filter(o=>o&&o.id);
+        const borradas=window._logBorradasIds||new Set();
+        const idsLoc=new Set(locArr.map(o=>o.id));
+        const merged=locArr.concat(remArr.filter(o=>!idsLoc.has(o.id) && !borradas.has(o.id)));
+        DB.logistica=merged;
+        const ts = Date.now();
+        window._localWriteTs = ts;
+        const payload = {
+          logistica: merged,
+          _ts: ts,
+          _sid: _SESSION_ID
+        };
+        // Persist correlativo counter so other devices stay in sync (nunca degradar)
+        var _lc=parseInt(DB['lastCorrelativo_LG'],10)||0;
+        if(_lc>0) payload['lastCorrelativo_LG'] = _lc;
+        return window._fbDB.ref('montasa').update(payload);
+      }).catch(e=>console.warn('FB write error:',e));
     } else {
       setTimeout(_writeToFirebase, 2000);
     }
@@ -982,15 +995,21 @@ function _cleanLogistica(arr){
 function _eliminarOrdenLog(id){
   solicitarPINAccion(() => {
     if(!confirm('¿Eliminar esta orden de logística? Esta acción no se puede deshacer.')) return;
+    // Registrar el borrado para que la fusión-al-escribir no resucite esta orden
+    (window._logBorradasIds = window._logBorradasIds || new Set()).add(id);
     DB.logistica = (DB.logistica||[]).filter(o=>o.id!==id);
     saveDB();
     if(window._fbDB && window._fbReady){
-      // Escribir la lista completa sin la orden eliminada
-      const cleanList = _cleanLogistica(DB.logistica);
-      window._fbDB.ref('montasa').update({
-        logistica: cleanList,
-        _ts: Date.now(),
-        _sid: typeof _SESSION_ID !== 'undefined' ? _SESSION_ID : 'log'
+      // Eliminar leyendo la lista REAL del servidor (no la local, que puede estar
+      // desactualizada y borraría órdenes creadas por otros dispositivos).
+      window._fbDB.ref('montasa/logistica').once('value').then(snap=>{
+        const rem=snap.val();
+        const arr=(Array.isArray(rem)?rem:Object.values(rem||{})).filter(o=>o&&o.id&&o.id!==id);
+        return window._fbDB.ref('montasa').update({
+          logistica: _cleanLogistica(arr),
+          _ts: Date.now(),
+          _sid: typeof _SESSION_ID !== 'undefined' ? _SESSION_ID : 'log'
+        });
       }).then(()=>{
         renderOrdenesLog();
         renderDashboardLog();
@@ -2482,17 +2501,22 @@ async function generarPDFViaticos(tipo){
   const orden=(DB.logistica||[]).find(o=>o.id===_viaticosOrdenId);
   if(!orden) return;
 
-  // Guardar primero si hay cambios
+  // Guardar primero si hay cambios — SOLO si los campos existen en pantalla.
+  // En modo solo-lectura no hay inputs: leerlos daría vacío y borraría lo guardado.
   if(_viaticosMode==='solicitud'){
-    const formData=_leerFormSolicitud();
-    orden.viaticos={...(_viaticosData||{}),...formData};
-    _viaticosData=orden.viaticos;
-    saveDB();
+    if(document.getElementById('v-destino')){
+      const formData=_leerFormSolicitud();
+      orden.viaticos={...(_viaticosData||{}),...formData};
+      _viaticosData=orden.viaticos;
+      saveDB();
+    }
   } else {
-    const liqData=_leerFormLiquidacion();
-    orden.viaticos={...(_viaticosData||{}),...liqData};
-    _viaticosData=orden.viaticos;
-    saveDB();
+    if(document.getElementById('vlf-desc-0')){
+      const liqData=_leerFormLiquidacion();
+      orden.viaticos={...(_viaticosData||{}),...liqData};
+      _viaticosData=orden.viaticos;
+      saveDB();
+    }
   }
 
   const v = _viaticosData||{};
