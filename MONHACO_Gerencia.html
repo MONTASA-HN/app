@@ -7589,13 +7589,14 @@ function _elimLG(id){
     DB.logistica = (DB.logistica||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
-      var clean = (DB.logistica||[]).map(function(o){
-        if(!o) return null;
-        var c={}; 
-        Object.keys(o).forEach(function(k){ if(o[k]!==undefined) c[k]=o[k]; });
-        return c;
-      }).filter(Boolean);
-      window._fbDB.ref('monhaco').update({logistica:clean, _ts:Date.now()})
+      // Eliminar sobre la lista REAL del servidor (no la local, que puede estar
+      // desactualizada y borraría órdenes creadas por otros dispositivos).
+      window._fbDB.ref('monhaco/logistica').once('value').then(function(snap){
+        var rem=snap.val();
+        var arr=(Array.isArray(rem)?rem:Object.values(rem||{})).filter(function(o){return o&&o.id&&o.id!==id;});
+        var clean=arr.map(function(o){ var c={}; Object.keys(o).forEach(function(k){ if(o[k]!==undefined) c[k]=o[k]; }); return c; });
+        return window._fbDB.ref('monhaco').update({logistica:clean, _ts:Date.now()});
+      })
         .then(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
