@@ -1826,9 +1826,14 @@ function _mergeLogViaticos(remotos){
       const active=document.querySelector('.section.active');
       if(!active) return;
       const id=active.id.replace('tab-','');
+      // NO re-dibujar mientras el usuario está escribiendo en un campo: el re-dibujo
+      // borraba lo tecleado (km de retorno, horómetros) antes de poder guardarse,
+      // obligando a reingresar el dato 3-4 veces para cerrar una orden.
+      const _a=document.activeElement;
+      const _escribiendo = !!(_a && /^(INPUT|TEXTAREA|SELECT)$/.test(_a.tagName));
       if(id==='dashboard') renderDashboardLog();
-      if(id==='ordenes')   renderOrdenesLog();
-      if(id==='historial') renderHistorialLog();
+      if(id==='ordenes' && !_escribiendo)   renderOrdenesLog();
+      if(id==='historial' && !_escribiendo) renderHistorialLog();
     });
   }).catch(e=>{ console.warn('Firebase once error:', e); loadDB(); window._fbReady = true; renderDashboardLog(); });
 })();
