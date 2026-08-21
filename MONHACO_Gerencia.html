@@ -6972,6 +6972,57 @@ function guardarLiquidacion(){
 }
 
 // ── GENERADOR DE PDF (client-side con API Anthropic) ─────────────────────
+// ── DESCARGA DIRECTA DE PDF (sin diálogo de impresión) ─────────────────────
+// Convierte el documento HTML en un archivo .pdf real que se descarga al
+// dispositivo. No depende de la impresora ni del diálogo de imprimir.
+function _cargarLibPDF(){
+  function carga(src, ok){
+    return new Promise(function(res,rej){
+      if(ok()) return res();
+      var s=document.createElement('script'); s.src=src;
+      s.onload=function(){ res(); }; s.onerror=function(){ rej(new Error('No se pudo cargar librería PDF')); };
+      document.head.appendChild(s);
+    });
+  }
+  return carga('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function(){return !!window.html2canvas;})
+    .then(function(){ return carga('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){return !!(window.jspdf&&window.jspdf.jsPDF);}); });
+}
+async function _descargarDocPDF(htmlContent, nombreArchivo, apaisado){
+  await _cargarLibPDF();
+  var anchoPx = apaisado ? 1120 : 860;
+  var iframe=document.createElement('iframe');
+  iframe.style.cssText='position:fixed;left:-12000px;top:0;width:'+anchoPx+'px;height:900px;border:0';
+  document.body.appendChild(iframe);
+  try{
+    // quitar el botón de imprimir interno del documento
+    var html = htmlContent.replace(/<button class="no-print[^>]*>[\s\S]*?<\/button>/, '');
+    await new Promise(function(res){ iframe.onload=function(){res();}; iframe.srcdoc=html; });
+    await new Promise(function(r){ setTimeout(r, 500); });
+    var idoc=iframe.contentDocument;
+    idoc.body.style.margin='0';
+    var fullH=Math.max(idoc.body.scrollHeight, idoc.documentElement.scrollHeight);
+    iframe.style.height=fullH+'px';
+    await new Promise(function(r){ setTimeout(r, 150); });
+    var canvas=await html2canvas(idoc.body,{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:anchoPx,width:anchoPx,height:fullH});
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:apaisado?'landscape':'portrait',unit:'pt',format:'letter'});
+    var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    var margen=20, usableW=pw-margen*2, usableH=ph-margen*2;
+    var pxPorPt=canvas.width/usableW;
+    var altoPagPx=Math.floor(usableH*pxPorPt);
+    var y=0, primera=true;
+    while(y<canvas.height){
+      var sliceH=Math.min(altoPagPx, canvas.height-y);
+      var c2=document.createElement('canvas'); c2.width=canvas.width; c2.height=sliceH;
+      c2.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceH,0,0,canvas.width,sliceH);
+      if(!primera) pdf.addPage();
+      pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',margen,margen,usableW,sliceH/pxPorPt);
+      primera=false; y+=sliceH;
+    }
+    pdf.save(nombreArchivo);
+  } finally { iframe.remove(); }
+}
+
 async function generarPDFViaticos(tipo){
   const orden=_getViaticosOrden();
   if(!orden) return;
@@ -7004,7 +7055,9 @@ if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='fu
 
   try{
     const htmlContent = tipo==='solicitud' ? _buildSolicitudHTML(v, orden) : _buildLiquidacionHTML(v, orden);
-    _imprimirHTML(htmlContent);
+    const _corr=(orden.correlativo||'orden').replace(/[^\w\-]+/g,'_');
+    await _descargarDocPDF(htmlContent, (tipo==='solicitud'?'Solicitud_Viaticos_':'Liquidacion_Viaticos_')+_corr+'.pdf', tipo==='solicitud');
+    toast('PDF descargado ✓');
   }catch(e){
     toast('Error al generar PDF: '+e.message, true);
   }
