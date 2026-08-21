@@ -1583,64 +1583,155 @@ function _cacheLocal(){
   catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
 }
 function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
-// ── DESCARGA DE FLOTA EN EXCEL ─────────────────────────────────────────────
-// Genera un .xlsx con 3 hojas: MT RENTAL, MONHACO y EQUIPOS DE CLIENTES.
-// MT Rental sale de los datos en vivo de esta app; MONHACO se lee directo de
-// Firebase (mismo proyecto). La librería Excel se carga solo al usarla.
-function _cargarSheetJS(){
+// ── DESCARGA DE FLOTA EN EXCEL (diseño con logo, filtros y colores) ────────
+// Genera un .xlsx de 3 hojas: MT RENTAL, MONHACO y VENDIDOS (ambas empresas).
+// Con logo de MONTASA, encabezado corporativo, filtros de tabla y código de
+// colores por estado idéntico al de la app. Librería ExcelJS cargada al usarse.
+function _cargarExcelJS(){
   return new Promise((res,rej)=>{
-    if(window.XLSX) return res();
-    const sc=document.createElement('script');
-    sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.onload=()=>res(); sc.onerror=()=>rej(new Error('No se pudo cargar la librería Excel'));
+    if(window.ExcelJS) return res();
+    const sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+    sc.onload=()=>res(); sc.onerror=()=>rej(new Error("No se pudo cargar la librería Excel"));
     document.head.appendChild(sc);
   });
 }
-function _filaFlota(e){
-  return {
-    'CÓDIGO':      e.codigo||'',
-    'TIPO':        e.tipo||(e.esVehiculo?'Vehículo':''),
-    'MARCA':       e.marca||'',
-    'MODELO / DESCRIPCIÓN': e.modelo||e.desc||'',
-    'SERIE':       e.serie||'',
-    'ESTADO':      e.estado||'DISPONIBLE',
-    'UBICACIÓN':   e.ubicacion||'',
-    'CLIENTE':     e.clienteNombre||e.cliente||'',
-    'HORÓMETRO':   e.horometro||'',
-    'KILOMETRAJE': e.kilometraje||'',
-    'PLACA':       e.placa||'',
-    'MOTOR':       e.motor||'',
-    'AÑO':         e['año']||e.anio||'',
-    'COMBUSTIBLE': e.combustible||'',
-    'OBSERVACIONES': e.observaciones||''
-  };
+const _XL_AZUL="FF1F3864", _XL_AZUL2="FF2D6A9F";
+const _XL_ESTADOS={
+  "DISPONIBLE":       {bg:"FFE3F5D9", txt:"FF18A303"},
+  "EN RENTA":         {bg:"FFFDEAD9", txt:"FFB35F0F"},
+  "EN MANTENIMIENTO": {bg:"FFF5ECD2", txt:"FF8A6508"},
+  "MAL ESTADO":       {bg:"FFFBE0E0", txt:"FFB02525"},
+  "DEMO/PRESTAMO":    {bg:"FFEFE7FB", txt:"FF6D2FD6"}
+};
+const _XL_BORDE={style:"thin",color:{argb:"FFD8D6CC"}};
+function _xlFilaFlota(e){
+  return [e.codigo||"", e.tipo||(e.esVehiculo?"Vehículo":""), e.marca||"", e.modelo||e.desc||"",
+    e.serie||"", e.estado||"DISPONIBLE", e.ubicacion||"", e.clienteNombre||e.cliente||"",
+    e.horometro||"", e.kilometraje||"", e.placa||"", e.motor||"", e["año"]||e.anio||"",
+    e.combustible||"", e.observaciones||""];
 }
-function _hojaFlota(wb, nombre, lista){
-  const filas=(lista||[]).slice().sort((a,b)=>String(a.codigo||'').localeCompare(String(b.codigo||''),'es',{numeric:true})).map(_filaFlota);
-  const ws=XLSX.utils.json_to_sheet(filas.length?filas:[{'CÓDIGO':'(sin equipos)'}]);
-  ws['!cols']=[{wch:14},{wch:16},{wch:20},{wch:34},{wch:18},{wch:18},{wch:22},{wch:26},{wch:11},{wch:12},{wch:10},{wch:14},{wch:6},{wch:12},{wch:40}];
-  XLSX.utils.book_append_sheet(wb, ws, nombre);
+function _xlEncabezado(wb, ws, titulo, subtitulo, nCols){
+  // Logo MONTASA sobre fondo blanco (el logo es oscuro) + barra azul con el título
+  try{
+    const imgId=wb.addImage({base64:_LOGO_MONTASA_B64, extension:"png"});
+    ws.addImage(imgId,{tl:{col:0.15,row:0.2},ext:{width:190,height:59}});
+  }catch(e){}
+  ws.getRow(1).height=16; ws.getRow(2).height=16; ws.getRow(3).height=16;
+  ws.mergeCells(4,1,4,nCols);
+  const t=ws.getCell(4,1);
+  t.value="  "+titulo;
+  t.fill={type:"pattern",pattern:"solid",fgColor:{argb:_XL_AZUL}};
+  t.font={name:"Arial",size:14,bold:true,color:{argb:"FFFFFFFF"}};
+  t.alignment={vertical:"middle"};
+  ws.getRow(4).height=28;
+  ws.mergeCells(5,1,5,nCols);
+  const st=ws.getCell(5,1);
+  st.value="  "+subtitulo;
+  st.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFDCE6F1"}};
+  st.font={name:"Arial",size:9,color:{argb:_XL_AZUL}};
+  st.alignment={vertical:"middle"};
+  ws.getRow(5).height=17;
+}
+function _xlHeaders(ws, fila, headers){
+  const r=ws.getRow(fila);
+  headers.forEach((h,i)=>{
+    const c=r.getCell(i+1);
+    c.value=h;
+    c.fill={type:"pattern",pattern:"solid",fgColor:{argb:_XL_AZUL}};
+    c.font={name:"Arial",size:9,bold:true,color:{argb:"FFFFFFFF"}};
+    c.alignment={vertical:"middle",horizontal:"center",wrapText:true};
+    c.border={top:_XL_BORDE,bottom:_XL_BORDE,left:_XL_BORDE,right:_XL_BORDE};
+  });
+  r.height=26;
+}
+function _hojaFlotaX(wb, nombre, lista){
+  const HDRS=["CÓDIGO","TIPO","MARCA","MODELO / DESCRIPCIÓN","SERIE","ESTADO","UBICACIÓN","CLIENTE","HORÓMETRO","KM","PLACA","MOTOR","AÑO","COMBUSTIBLE","OBSERVACIONES"];
+  const ws=wb.addWorksheet(nombre,{views:[{state:"frozen",ySplit:7}]});
+  ws.columns=[{width:12},{width:15},{width:19},{width:32},{width:17},{width:19},{width:20},{width:24},{width:11},{width:9},{width:10},{width:13},{width:6},{width:12},{width:38}];
+  const datos=(lista||[]).slice().sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"es",{numeric:true}));
+  const f=new Date();
+  _xlEncabezado(wb, ws, "FLOTA "+nombre, "Generado el "+f.toLocaleDateString("es-HN")+" "+f.toLocaleTimeString("es-HN")+"  ·  "+datos.length+" equipos  ·  MONTASA HANDLING CO.", HDRS.length);
+  _xlHeaders(ws, 7, HDRS);
+  datos.forEach((e,idx)=>{
+    const r=ws.getRow(8+idx);
+    _xlFilaFlota(e).forEach((v,i)=>{
+      const c=r.getCell(i+1);
+      c.value=v;
+      c.font={name:"Arial",size:9,color:{argb:"FF3A382F"}};
+      c.border={top:_XL_BORDE,bottom:_XL_BORDE,left:_XL_BORDE,right:_XL_BORDE};
+      c.alignment={vertical:"middle",horizontal:(i===0||i===12)?"center":"left",wrapText:i===14};
+      if(idx%2===1) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF7F6F1"}};
+    });
+    // Celda de ESTADO con el código de colores de la app
+    const est=String(e.estado||"DISPONIBLE").toUpperCase();
+    const cc=_XL_ESTADOS[est];
+    if(cc){
+      const c=r.getCell(6);
+      c.fill={type:"pattern",pattern:"solid",fgColor:{argb:cc.bg}};
+      c.font={name:"Arial",size:9,bold:true,color:{argb:cc.txt}};
+      c.alignment={vertical:"middle",horizontal:"center"};
+    }
+  });
+  // Filtros de tabla sobre los encabezados
+  ws.autoFilter={from:{row:7,column:1},to:{row:7+Math.max(datos.length,1),column:HDRS.length}};
+}
+function _hojaVendidosX(wb, vendM, vendH){
+  const HDRS=["EMPRESA","CÓDIGO","MARCA","MODELO","SERIE","FECHA VENTA","LUGAR DE VENTA","CLIENTE"];
+  const ws=wb.addWorksheet("VENDIDOS",{views:[{state:"frozen",ySplit:7}]});
+  ws.columns=[{width:14},{width:12},{width:22},{width:22},{width:18},{width:13},{width:22},{width:38}];
+  const f=new Date();
+  const todos=[
+    ...vendM.map(v=>({emp:"MT RENTAL", v})),
+    ...vendH.map(v=>({emp:"MONHACO", v}))
+  ];
+  _xlEncabezado(wb, ws, "EQUIPOS VENDIDOS", "Generado el "+f.toLocaleDateString("es-HN")+"  ·  MT Rental: "+vendM.length+"  ·  MONHACO: "+vendH.length, HDRS.length);
+  _xlHeaders(ws, 7, HDRS);
+  const EMPCOLOR={"MT RENTAL":{bg:"FFDCE6F1",txt:_XL_AZUL},"MONHACO":{bg:"FFE3F5D9",txt:"FF18A303"}};
+  todos.forEach((it,idx)=>{
+    const v=it.v||{};
+    const vals=[it.emp, v.codigo||"", v.marca||"", v.modelo||"", v.serie||"", v.fechaVenta||"", v.lugarVenta||"", v.clienteVenta||v.cliente||""];
+    const r=ws.getRow(8+idx);
+    vals.forEach((val,i)=>{
+      const c=r.getCell(i+1);
+      c.value=val;
+      c.font={name:"Arial",size:9,color:{argb:"FF3A382F"}};
+      c.border={top:_XL_BORDE,bottom:_XL_BORDE,left:_XL_BORDE,right:_XL_BORDE};
+      c.alignment={vertical:"middle",horizontal:i===0?"center":"left"};
+      if(idx%2===1) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF7F6F1"}};
+    });
+    const ec=EMPCOLOR[it.emp];
+    if(ec){
+      const c=r.getCell(1);
+      c.fill={type:"pattern",pattern:"solid",fgColor:{argb:ec.bg}};
+      c.font={name:"Arial",size:9,bold:true,color:{argb:ec.txt}};
+    }
+  });
+  ws.autoFilter={from:{row:7,column:1},to:{row:7+Math.max(todos.length,1),column:HDRS.length}};
 }
 async function descargarFlotaExcel(){
   try{
-    toast('Generando Excel de flota...');
-    await _cargarSheetJS();
-    // MONHACO en vivo desde Firebase (mismo proyecto)
-    let monhaco=[];
-    try{
-      const snap=await window._fbDB.ref('monhaco/equipos').once('value');
-      monhaco=_toArr(snap.val()).filter(e=>e&&!e.esGenerico);
-    }catch(e){ console.warn('No se pudo leer MONHACO:', e); }
+    toast("Generando Excel de flota...");
+    await _cargarExcelJS();
     const propios=(DB.equipos||[]).filter(e=>e&&!e.esEquipoCliente&&!e.esGenerico);
-    const clientes=(DB.equipos||[]).filter(e=>e&&e.esEquipoCliente);
-    const wb=XLSX.utils.book_new();
-    _hojaFlota(wb,'MT RENTAL',propios);
-    _hojaFlota(wb,'MONHACO',monhaco);
-    _hojaFlota(wb,'EQUIPOS DE CLIENTES',clientes);
-    const f=new Date(); const fecha=f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
-    XLSX.writeFile(wb, 'Flota_MONTASA_'+fecha+'.xlsx');
-    toast('Flota descargada ✓');
-  }catch(e){ toast('Error al generar Excel: '+e.message, true); }
+    let monhaco=[], vendH=[];
+    try{ monhaco=_toArr((await window._fbDB.ref("monhaco/equipos").once("value")).val()).filter(e=>e&&!e.esGenerico); }catch(e){ console.warn("MONHACO equipos:",e); }
+    try{ vendH=_toArr((await window._fbDB.ref("monhaco/vendidos").once("value")).val()).filter(Boolean); }catch(e){ console.warn("MONHACO vendidos:",e); }
+    const vendM=(DB.vendidos||[]).filter(Boolean);
+    const wb=new ExcelJS.Workbook();
+    wb.creator="MONTASA HANDLING CO."; wb.created=new Date();
+    _hojaFlotaX(wb,"MT RENTAL",propios);
+    _hojaFlotaX(wb,"MONHACO",monhaco);
+    _hojaVendidosX(wb,vendM,vendH);
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const f=new Date(); const fecha=f.getFullYear()+"-"+String(f.getMonth()+1).padStart(2,"0")+"-"+String(f.getDate()).padStart(2,"0");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob); a.download="Flota_MONTASA_"+fecha+".xlsx";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    toast("Flota descargada ✓");
+  }catch(e){ toast("Error al generar Excel: "+e.message, true); }
 }
 
 // ── DESCARGA DE FOTOGRAFÍAS ────────────────────────────────────────────────
