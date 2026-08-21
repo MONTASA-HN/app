@@ -673,6 +673,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <option value="DEMO/PRESTAMO">Demo/Préstamo</option><option value="MAL ESTADO">Mal estado</option>
       </select>
     </div>
+    <button onclick="descargarFlotaExcel()" style="width:100%;margin-bottom:12px;padding:11px;background:#1f6e43;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">📥 Descargar flota (Excel) — MT Rental + MONHACO</button>
     <div id="eq-count" class="eq-count"></div>
     <div id="equipos-list"></div>
   </div>
@@ -1582,6 +1583,66 @@ function _cacheLocal(){
   catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
 }
 function _editandoCampo(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
+// ── DESCARGA DE FLOTA EN EXCEL ─────────────────────────────────────────────
+// Genera un .xlsx con 3 hojas: MT RENTAL, MONHACO y EQUIPOS DE CLIENTES.
+// MT Rental sale de los datos en vivo de esta app; MONHACO se lee directo de
+// Firebase (mismo proyecto). La librería Excel se carga solo al usarla.
+function _cargarSheetJS(){
+  return new Promise((res,rej)=>{
+    if(window.XLSX) return res();
+    const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload=()=>res(); sc.onerror=()=>rej(new Error('No se pudo cargar la librería Excel'));
+    document.head.appendChild(sc);
+  });
+}
+function _filaFlota(e){
+  return {
+    'CÓDIGO':      e.codigo||'',
+    'TIPO':        e.tipo||(e.esVehiculo?'Vehículo':''),
+    'MARCA':       e.marca||'',
+    'MODELO / DESCRIPCIÓN': e.modelo||e.desc||'',
+    'SERIE':       e.serie||'',
+    'ESTADO':      e.estado||'DISPONIBLE',
+    'UBICACIÓN':   e.ubicacion||'',
+    'CLIENTE':     e.clienteNombre||e.cliente||'',
+    'HORÓMETRO':   e.horometro||'',
+    'KILOMETRAJE': e.kilometraje||'',
+    'PLACA':       e.placa||'',
+    'MOTOR':       e.motor||'',
+    'AÑO':         e['año']||e.anio||'',
+    'COMBUSTIBLE': e.combustible||'',
+    'OBSERVACIONES': e.observaciones||''
+  };
+}
+function _hojaFlota(wb, nombre, lista){
+  const filas=(lista||[]).slice().sort((a,b)=>String(a.codigo||'').localeCompare(String(b.codigo||''),'es',{numeric:true})).map(_filaFlota);
+  const ws=XLSX.utils.json_to_sheet(filas.length?filas:[{'CÓDIGO':'(sin equipos)'}]);
+  ws['!cols']=[{wch:14},{wch:16},{wch:20},{wch:34},{wch:18},{wch:18},{wch:22},{wch:26},{wch:11},{wch:12},{wch:10},{wch:14},{wch:6},{wch:12},{wch:40}];
+  XLSX.utils.book_append_sheet(wb, ws, nombre);
+}
+async function descargarFlotaExcel(){
+  try{
+    toast('Generando Excel de flota...');
+    await _cargarSheetJS();
+    // MONHACO en vivo desde Firebase (mismo proyecto)
+    let monhaco=[];
+    try{
+      const snap=await window._fbDB.ref('monhaco/equipos').once('value');
+      monhaco=_toArr(snap.val()).filter(e=>e&&!e.esGenerico);
+    }catch(e){ console.warn('No se pudo leer MONHACO:', e); }
+    const propios=(DB.equipos||[]).filter(e=>e&&!e.esEquipoCliente&&!e.esGenerico);
+    const clientes=(DB.equipos||[]).filter(e=>e&&e.esEquipoCliente);
+    const wb=XLSX.utils.book_new();
+    _hojaFlota(wb,'MT RENTAL',propios);
+    _hojaFlota(wb,'MONHACO',monhaco);
+    _hojaFlota(wb,'EQUIPOS DE CLIENTES',clientes);
+    const f=new Date(); const fecha=f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
+    XLSX.writeFile(wb, 'Flota_MONTASA_'+fecha+'.xlsx');
+    toast('Flota descargada ✓');
+  }catch(e){ toast('Error al generar Excel: '+e.message, true); }
+}
+
 // ── DESCARGA DE FOTOGRAFÍAS ────────────────────────────────────────────────
 function _dataURLaBlob(u){
   try{ var p=u.split(','); var m=(p[0].match(/:(.*?);/)||[])[1]||'image/jpeg'; var b=atob(p[1]); var n=b.length; var a=new Uint8Array(n); while(n--) a[n]=b.charCodeAt(n); return new Blob([a],{type:m}); }catch(e){ return null; }
