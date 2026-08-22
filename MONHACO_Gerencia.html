@@ -480,6 +480,11 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <input id="det-ubicacion" placeholder="Ej: CHOLOMA, TALLER MONTASA...">
       </div>
       <div class="form-group">
+        <label>📍 Link de ubicación (Google Maps / Waze)</label>
+        <input id="det-ublink" placeholder="Link de donde está el equipo (opcional)">
+        <div id="det-ublink-btn" style="margin-top:4px"></div>
+      </div>
+      <div class="form-group">
         <label>Cliente (en renta)</label>
         <input id="det-cliente" placeholder="Nombre del cliente">
       </div>
@@ -1004,6 +1009,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <input type="hidden" id="sol-ubicacion" value="plantel">
       </div>
 
+      <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
+      <div id="sol-ublink-wrap" class="form-group" style="display:none">
+        <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
+        <input id="sol-ublink" type="url" inputmode="url" placeholder="Pega aquí el link de la ubicación del cliente">
+      </div>
+
       <!-- 5. Fecha -->
       <div class="form-group">
         <label>Fecha de reporte</label>
@@ -1382,6 +1393,17 @@ function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
   eq.estado = nuevoEstado;
   saveDB();
   _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
+}
+
+// Guarda/borra el link de ubicacion (Maps/Waze) en la ficha del equipo en flota.
+// Solo aplica a equipos propios (no cliente, no genericos de taller).
+function _setUbLinkEquipo(equipoId, link){
+  if(!equipoId) return;
+  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!eq || eq.esEquipoCliente || eq.esGenerico) return;
+  eq.ubicacionLink = link||'';
+  saveDB();
+  _syncEquipoCampoFB(equipoId, 'ubicacionLink', link||'');
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1766,6 +1788,8 @@ function abrirModal(id){
   }
   document.getElementById('det-estado').value = e.estado || 'DISPONIBLE';
   document.getElementById('det-ubicacion').value = e.ubicacion || '';
+  const _dUbI = document.getElementById('det-ublink'); if(_dUbI) _dUbI.value = e.ubicacionLink || '';
+  const _dUbB = document.getElementById('det-ublink-btn'); if(_dUbB) _dUbB.innerHTML = _ubLinkHTML(e);
   document.getElementById('det-cliente').value = e.cliente || '';
   document.getElementById('det-horometro').value = e.horometro || '';
   // Cambiar label y placeholder para vehículos
@@ -1883,6 +1907,8 @@ function guardarDesdeModal(){
     if(!e) return;
     e.estado      = document.getElementById('det-estado').value;
     e.ubicacion   = document.getElementById('det-ubicacion').value.trim();
+    const _dUbG = document.getElementById('det-ublink');
+    if(_dUbG) e.ubicacionLink = _normalizarUbLink(_dUbG.value);
     e.cliente     = document.getElementById('det-cliente').value.trim();
     e.horometro   = document.getElementById('det-horometro').value.trim();
     e.intervaloMantMeses = parseInt(document.getElementById('det-intervalo-mant').value)||3;
@@ -3245,6 +3271,7 @@ function _renderOrdenesLog(el, tipoFiltro){
     card += (o.fechaInicio&&o.fechaFin?'<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>':'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>');
     card += '</div>';
     // Costo de viaje (si tiene viáticos)
+    card += _ubLinkHTML(o);
     const _costo = _calcCostoViaticos(o.viaticos);
     if(_costo>0) card += '<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:4px">💰 Costo viaje: L. '+_costo.toFixed(2)+'</div>';
     else if(o.viaticos) card += '<div style="font-size:11px;color:#2d6a9f;margin-top:4px">📋 Viáticos solicitados</div>';
@@ -4474,6 +4501,7 @@ function _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
   {const _isCli=x.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===x.equipoId&&e.esEquipoCliente);
   if(_isCli){ if(x.clienteNombre) card+=`<div style="font-size:11px;font-weight:600;color:var(--text2)">👤 ${x.clienteNombre}</div>`; if(x.clienteMarca) card+=`<div style="font-size:11px;color:var(--text3)">${x.clienteMarca}${x.clienteModelo?' '+x.clienteModelo:''}${x.clienteSerie?' · '+x.clienteSerie:''}</div>`; }
   else card+=`<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;}
+  card += _ubLinkHTML(x);
   if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
   if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
   if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
@@ -4502,6 +4530,7 @@ function _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
   {const _isCli=x.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===x.equipoId&&e.esEquipoCliente);
   if(_isCli){ if(x.clienteNombre) card+=`<div style="font-size:11px;font-weight:600;color:var(--text2)">👤 ${x.clienteNombre}</div>`; if(x.clienteMarca) card+=`<div style="font-size:11px;color:var(--text3)">${x.clienteMarca}${x.clienteModelo?' '+x.clienteModelo:''}${x.clienteSerie?' · '+x.clienteSerie:''}</div>`; }
   else card+=`<div style="font-size:11px;color:var(--text3)">🔧 ${eqLabel}</div>`;}
+  card += _ubLinkHTML(x);
   if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
   if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
   if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
@@ -4516,6 +4545,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   const tipoColor = isPrev ? '#2d6a2d' : '#1f3864';
   const _esCliDet = x.equipoId==='__cliente__'||x.clienteNombre||(DB.equipos||[]).find(e=>e.id===x.equipoId&&e.esEquipoCliente);
   let d = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+  d += _ubLinkHTML(x);
 
   // Grid de datos clave
   // Bloque visual destacado para equipo de cliente
@@ -4706,7 +4736,7 @@ function guardarPreventivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
       window._editandoOrden = null;
     }
@@ -4897,7 +4927,7 @@ function guardarCorrectivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; }
       window._editandoOrden = null;
     }
@@ -5321,7 +5351,11 @@ function solUbicacionClick(val, sfx){
   var inact = 'padding:10px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
   if(val==='plantel'){ bP.style.cssText=activ; bF.style.cssText=inact; inp.value='plantel'; }
   else { bP.style.cssText=inact; bF.style.cssText=activ; inp.value='campo'; }
+  try{_ubLinkToggle();}catch(e){}
 }
+// El campo de link de ubicación también debe reaccionar al cambio de tipo de orden
+const _solTipoChangeOrigUbL = solTipoChange;
+solTipoChange = function(){ _solTipoChangeOrigUbL.apply(this, arguments); try{_ubLinkToggle();}catch(e){} };
 function solTipoChange(){
   // Leer del formulario activo (primer o segundo)
   const tipoEl = document.getElementById('sol-tipo-B')?.offsetParent !== null
@@ -5411,6 +5445,7 @@ function solUbicacionLogChange(){
     if(ublog1.offsetParent !== null) ublog2.value = ublog1.value;
     else ublog1.value = ublog2.value;
   }
+  try{_ubLinkToggle();}catch(e){}
 }
 
 
@@ -5441,6 +5476,45 @@ function actualizarBtnWA(){
   // handled by checkbox selection
 }
 
+// ── Link de ubicación del cliente (Google Maps / Waze / Apple Maps) ─────────
+function _normalizarUbLink(t){
+  t = (t||'').trim();
+  if(!t) return '';
+  if(/^https?:\/\//i.test(t)) return t;
+  if(/^[\w.-]+\.[a-z]{2,}([\/?#]|$)/i.test(t)) return 'https://'+t;
+  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(t);
+}
+function _leerUbLinkForm(){
+  var a=document.getElementById('sol-ublink'), b=document.getElementById('sol-ublink2');
+  return _normalizarUbLink((a&&a.value?a.value:'') || (b&&b.value?b.value:''));
+}
+function _ubLinkHTML(o){
+  var u = o && o.ubicacionLink ? String(o.ubicacionLink).trim() : '';
+  if(!u || !/^https?:\/\//i.test(u)) return '';
+  u = u.replace(/&/g,'&amp;').replace(/"/g,'%22').replace(/</g,'%3C').replace(/>/g,'%3E').replace(/'/g,'%27');
+  return '<a href="'+u+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;margin:6px 0;padding:8px 14px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">📍 Ver ubicación del cliente</a>';
+}
+function _ubLinkToggle(){
+  try{
+    var tEl = document.getElementById('sol-tipo-B');
+    var tipo = (tEl && tEl.offsetParent!==null ? tEl : document.getElementById('sol-tipo'));
+    tipo = tipo ? tipo.value : '';
+    var show = false;
+    if(tipo==='evaluacion'||tipo==='revision_fisica') show = true;
+    else if(tipo==='renta'||tipo==='entrega'||tipo==='retiro'||tipo==='apoyo_mantenimiento'){
+      var u1=document.getElementById('sol-ublog'), u2=document.getElementById('sol-ublog2');
+      var v=(u1&&u1.offsetParent!==null)?u1.value:((u2&&u2.offsetParent!==null)?u2.value:(u1?u1.value:'fuera'));
+      show = v!=='plantel';
+    } else {
+      var a=document.getElementById('sol-ubicacion'), b=document.getElementById('sol-ubicacion2b');
+      show = !!((a&&a.value!=='plantel')||(b&&b.value!=='plantel'));
+    }
+    var w1=document.getElementById('sol-ublink-wrap'), w2=document.getElementById('sol-ublink-wrap2');
+    if(w1) w1.style.display=show?'block':'none';
+    if(w2) w2.style.display=show?'block':'none';
+  }catch(e){}
+}
+
 async function enviarSolicitudWA(){
   if(!window._fbDB || !window._fbReady || !navigator.onLine){
     alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden porque no hay conexión con la base de datos.\n\nLa orden NO se ha guardado. Verifica tu conexión e intenta de nuevo.');
@@ -5460,28 +5534,29 @@ async function enviarSolicitudWA(){
     const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
     const tecNombre = tecs.join(', ');
     const tecNum = Array.from(cbs).map(c=>c.value)[0]||'';
+    const _ubL = _leerUbLinkForm(); // link de ubicación (se captura antes de limpiar el formulario)
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
       const n = DB.revisiones.length + 1;
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/revisiones').set(DB.revisiones);
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
-      const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
-      if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
+      const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
+if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
     } else {
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
-      const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval;
-      if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
+      const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
+if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
     }
     return;
   }
@@ -5532,6 +5607,7 @@ async function enviarSolicitudWA(){
   }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
+  const _ubL        = _leerUbLinkForm(); // link de ubicación del cliente (opcional)
   const fechaISO    = new Date().toISOString().slice(0,10);
   const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
 
@@ -5545,7 +5621,7 @@ async function enviarSolicitudWA(){
     const marcaCli = eqCli ? (eqCli.marca||'') : '';
     const modeloCli= eqCli ? (eqCli.modelo||eqCli.desc||'') : '';
     const serieCli = eqCli ? (eqCli.serie||'') : '';
-    const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion};
+    const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion,ubicacionLink:_ubL};
     if(tipo==='preventivo') DB.preventivos.push({...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
     else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
     if(!DB.solicitudes) DB.solicitudes=[];
@@ -5554,7 +5630,7 @@ async function enviarSolicitudWA(){
     // ── Enviar por WhatsApp ──────────────────────────────────────────────────
     const _tipoLblCli = tipo==='preventivo'?'Preventivo':'Correctivo';
     const _eqTxtCli = nomCli ? (nomCli+(marcaCli?' — '+marcaCli:'')+(modeloCli?' '+modeloCli:'')) : 'Equipo de cliente';
-    const _msgCli = ['🔧 *ASIGNACION DE TRABAJO - MONTASA*','🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html','','🔢 *Orden:* '+correlativo,'👷 *Tecnico:* '+tecnicoNombre,'📋 *Equipo:* '+_eqTxtCli,'🚛 *Tipo:* '+_tipoLblCli,'📝 *Detalle:* '+desc,'⚡ *Prioridad:* '+prioridad,'📅 *Fecha:* '+fecha].join('\n');
+    const _msgCli = ['🔧 *ASIGNACION DE TRABAJO - MONTASA*','🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html','','🔢 *Orden:* '+correlativo,'👷 *Tecnico:* '+tecnicoNombre,'📋 *Equipo:* '+_eqTxtCli,'🚛 *Tipo:* '+_tipoLblCli,'📝 *Detalle:* '+desc,'⚡ *Prioridad:* '+prioridad,'📅 *Fecha:* '+fecha].join('\n') + (_ubL?'\n📍 *Ubicación:* '+_ubL:'');
     tecnicosData.forEach((t,i)=>{ setTimeout(()=>window.open('https://wa.me/'+t.num.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(_msgCli),'_blank'),i*800); });
     toast('Orden '+correlativo+' creada ✓');
     return;
@@ -5566,7 +5642,7 @@ async function enviarSolicitudWA(){
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
@@ -5576,23 +5652,23 @@ async function enviarSolicitudWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     ubicacionLog = ubicacionLog2;
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
-      if(tipo==='renta' || tipo==='entrega') _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-      else if(tipo==='retiro') _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE');
+      if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
+      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); _setUbLinkEquipo(equipoId, ''); }
     }
     if(equipoId2Val){
-      if(tipo==='renta' || tipo==='entrega') _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA');
-      else if(tipo==='retiro') _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE');
+      if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
+      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); _setUbLinkEquipo(equipoId2Val, ''); }
     }
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
@@ -5615,7 +5691,8 @@ async function enviarSolicitudWA(){
     + '🚛 *Tipo:* ' + tipoLabel + (ubicacionLog==='plantel'?' 🏭 En plantel':'') + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
-    + '📅 *Fecha:* ' + fecha;
+    + '📅 *Fecha:* ' + fecha
+    + (_ubL?'\n📍 *Ubicación:* '+_ubL:'');
   tecnicosData.forEach((t, i) => {
     const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
     setTimeout(() => window.open(url, '_blank'), i * 800);
@@ -5642,28 +5719,29 @@ async function copiarMensajeWA(){
     const tecs = Array.from(cbs).map(c=>c.dataset.nombre);
     const tecNombre = tecs.join(', ');
     const fechaRevEval = document.getElementById('sol-fecha')?.value||new Date().toISOString().slice(0,10);
+    const _ubL = _leerUbLinkForm(); // link de ubicación (se captura antes de limpiar el formulario)
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
       const n = DB.revisiones.length + 1;
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/revisiones').set(DB.revisiones);
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
-      const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
-      navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
+      const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
+navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     } else {
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false});
+      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
       if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones);
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
-      const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval;
-      navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
+      const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
+navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     }
     return;
   }
@@ -5714,6 +5792,7 @@ async function copiarMensajeWA(){
   }
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
+  const _ubL        = _leerUbLinkForm(); // link de ubicación del cliente (opcional)
   const fechaISO    = new Date().toISOString().slice(0,10);
   const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
   const equipoId = eq ? eq.id : '__cliente__';
@@ -5721,7 +5800,7 @@ async function copiarMensajeWA(){
   const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
     if(!Array.isArray(DB.cortinas)) DB.cortinas = _toArr(DB.cortinas);
@@ -5731,23 +5810,23 @@ async function copiarMensajeWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
-      if(tipo==='renta' || tipo==='entrega') _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA');
-      else if(tipo==='retiro') _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE');
+      if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
+      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); _setUbLinkEquipo(equipoId, ''); }
     }
     if(equipoId2Val){
-      if(tipo==='renta' || tipo==='entrega') _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA');
-      else if(tipo==='retiro') _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE');
+      if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
+      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); _setUbLinkEquipo(equipoId2Val, ''); }
     }
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
@@ -5770,7 +5849,8 @@ async function copiarMensajeWA(){
     + '🚛 *Tipo:* ' + tipoLabel + (ubicacionLog==='plantel'?' 🏭 En plantel':'') + '\n'
     + '📝 *Detalle:* ' + desc + '\n'
     + '⚡ *Prioridad:* ' + prioridad + '\n'
-    + '📅 *Fecha:* ' + fecha;
+    + '📅 *Fecha:* ' + fecha
+    + (_ubL?'\n📍 *Ubicación:* '+_ubL:'');
   navigator.clipboard.writeText(msg).catch(()=>{
     const ta = document.createElement('textarea');
     ta.value = msg; ta.style.position='fixed'; ta.style.opacity='0';
@@ -5788,6 +5868,8 @@ function clearSolicitudForm(){
   clearTecnicos('sol-tecnicos-grid');
   const txt = document.getElementById('sol-equipo-txt');
   if(txt) txt.value = '';
+  const _ubl1 = document.getElementById('sol-ublink'); if(_ubl1) _ubl1.value='';
+  const _ubl2 = document.getElementById('sol-ublink2'); if(_ubl2) _ubl2.value='';
   solTipoChange(); // reset conditional fields
 }
 

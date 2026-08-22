@@ -467,6 +467,14 @@ function showTab(id, el){
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────
+// Botón "Ver ubicación del cliente" — abre el link (Maps/Waze) guardado en la orden.
+// Sanitizado: solo se muestran links http(s).
+function _ubLinkHTML(o){
+  var u = o && o.ubicacionLink ? String(o.ubicacionLink).trim() : '';
+  if(!u || !/^https?:\/\//i.test(u)) return '';
+  u = u.replace(/&/g,'&amp;').replace(/"/g,'%22').replace(/</g,'%3C').replace(/>/g,'%3E').replace(/'/g,'%27');
+  return '<a href="'+u+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;margin:6px 0;padding:8px 14px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;pointer-events:auto !important;opacity:1 !important">📍 Ver ubicación del cliente</a>';
+}
 function getEq2LabelLog(eq2Id){
   if(!eq2Id) return '';
   const eq2 = DB.equipos.find(function(e){return e.id===eq2Id;});
@@ -600,6 +608,7 @@ function renderOrdenesLog(){
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
+          ${_ubLinkHTML(o)}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
@@ -1403,6 +1412,7 @@ function renderHistorialLog(){
     // DETALLE expandible
     if(isOpen){
       card += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+      card += _ubLinkHTML(o);
       card += _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
       // Botón vale
       card += '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">';
