@@ -2992,6 +2992,40 @@ renderDashboardTec();
     } else { loadDB(); }
     if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     window._fbReady = true;
+    // Auto-reparación: órdenes de equipo de cliente que quedaron con el ID
+    // interno del equipo como "cliente" (p.ej. MH-0114). Se corrigen con los
+    // datos del equipo guardado y se rellenan marca/modelo/serie faltantes.
+    try{
+      (function(){
+        var n=0, porId={};
+        (DB.equipos||[]).forEach(function(e){ if(e&&e.id) porId[e.id]=e; });
+        function fixO(o){
+          if(!o) return;
+          var eqc=null;
+          if(o.clienteNombre && porId[o.clienteNombre] && porId[o.clienteNombre].esEquipoCliente){
+            eqc=porId[o.clienteNombre];
+            if(!o.equipoId || o.equipoId==='__cliente__') o.equipoId=eqc.id;
+          } else if(o.equipoId && porId[o.equipoId] && porId[o.equipoId].esEquipoCliente){
+            eqc=porId[o.equipoId];
+          }
+          if(!eqc) return;
+          var nom=eqc.clienteNombre||eqc.cliente||'';
+          if(nom && (!o.clienteNombre || o.clienteNombre===eqc.id)){ o.clienteNombre=nom; n++; }
+          if(!o.clienteMarca && eqc.marca){ o.clienteMarca=eqc.marca; n++; }
+          if(!o.clienteModelo && (eqc.modelo||eqc.desc)){ o.clienteModelo=eqc.modelo||eqc.desc; n++; }
+          if(!o.clienteSerie && eqc.serie){ o.clienteSerie=eqc.serie; n++; }
+        }
+        (DB.preventivos||[]).forEach(fixO);
+        (DB.correctivos||[]).forEach(fixO);
+        (DB.equipos||[]).forEach(function(e){
+          if(e && e.esEquipoCliente && e.clienteNombre){
+            if(!e.cliente || e.cliente==='__cliente__'){ e.cliente=e.clienteNombre; n++; }
+            if(!e.ubicacion || e.ubicacion==='__cliente__'){ e.ubicacion=e.clienteNombre; n++; }
+          }
+        });
+        if(n>0) saveDB();
+      })();
+    }catch(e){}
     renderDashboardTec();
 
     FB_REF.on('value', snap=>{
