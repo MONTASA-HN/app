@@ -6042,18 +6042,19 @@ async function enviarSolicitudWA(){
   }
 
   // ── Equipo Montasa ────────────────────────────────────────────────────────
-  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  // Buscar por código y TAMBIÉN por id: un equipo de cliente guardado llega como id del select
+  const eq = DB.equipos.find(e => (e.codigo||'').trim() === equipoTxt.trim() || e.id === equipoTxt);
   const equipoId = eq ? eq.id : '__cliente__';
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
-    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion});
+    if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     ubicacionLog = ubicacionLog2;
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -6069,8 +6070,8 @@ async function enviarSolicitudWA(){
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
-    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion});
+    if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
   if(!DB.solicitudes) DB.solicitudes = [];
@@ -6196,19 +6197,20 @@ async function copiarMensajeWA(){
   const correlativo = nextCorrelativo(depto==='logistica'?'LG':'MH');
   const ordenId     = uid();
   const fechaISO    = new Date().toISOString().slice(0,10);
-  const eq = DB.equipos.find(e => e.codigo.trim() === equipoTxt.trim());
+  // Buscar por código y TAMBIÉN por id: un equipo de cliente guardado llega como id del select
+  const eq = DB.equipos.find(e => (e.codigo||'').trim() === equipoTxt.trim() || e.id === equipoTxt);
   const equipoId = eq ? eq.id : '__cliente__';
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
-    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
+    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion});
+    if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -6224,8 +6226,8 @@ async function copiarMensajeWA(){
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion});
-    if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
+    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion});
+    if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
   if(!DB.solicitudes) DB.solicitudes = [];
@@ -6608,6 +6610,40 @@ function _iniciarConexionFirebase(esReintento){
         // evaluaciones, prev/corr con sus fotos y firmas), es seguro habilitar la
         // escritura. Así ningún saveDB() escribe la versión recortada del caché.
         window._fbReady = true;
+        // Auto-reparación: órdenes de equipo de cliente que quedaron con el ID
+        // interno del equipo como "cliente" (p.ej. MH-0114). Se corrigen con los
+        // datos del equipo guardado y se rellenan marca/modelo/serie faltantes.
+        try{
+          (function(){
+            var n=0, porId={};
+            (DB.equipos||[]).forEach(function(e){ if(e&&e.id) porId[e.id]=e; });
+            function fixO(o){
+              if(!o) return;
+              var eqc=null;
+              if(o.clienteNombre && porId[o.clienteNombre] && porId[o.clienteNombre].esEquipoCliente){
+                eqc=porId[o.clienteNombre];
+                if(!o.equipoId || o.equipoId==='__cliente__') o.equipoId=eqc.id;
+              } else if(o.equipoId && porId[o.equipoId] && porId[o.equipoId].esEquipoCliente){
+                eqc=porId[o.equipoId];
+              }
+              if(!eqc) return;
+              var nom=eqc.clienteNombre||eqc.cliente||'';
+              if(nom && (!o.clienteNombre || o.clienteNombre===eqc.id)){ o.clienteNombre=nom; n++; }
+              if(!o.clienteMarca && eqc.marca){ o.clienteMarca=eqc.marca; n++; }
+              if(!o.clienteModelo && (eqc.modelo||eqc.desc)){ o.clienteModelo=eqc.modelo||eqc.desc; n++; }
+              if(!o.clienteSerie && eqc.serie){ o.clienteSerie=eqc.serie; n++; }
+            }
+            (DB.preventivos||[]).forEach(fixO);
+            (DB.correctivos||[]).forEach(fixO);
+            (DB.equipos||[]).forEach(function(e){
+              if(e && e.esEquipoCliente && e.clienteNombre){
+                if(!e.cliente || e.cliente==='__cliente__'){ e.cliente=e.clienteNombre; n++; }
+                if(!e.ubicacion || e.ubicacion==='__cliente__'){ e.ubicacion=e.clienteNombre; n++; }
+              }
+            });
+            if(n>0) saveDB();
+          })();
+        }catch(e){}
         // Guardado local best-effort: igual que el resto de llamadas del archivo,
         // se protege con try/catch. Si el localStorage esta lleno (QuotaExceeded)
         // NO debe tumbar el procesamiento — Firebase es la fuente de verdad.
