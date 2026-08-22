@@ -1319,6 +1319,14 @@ function solicitarPINAccion(callback, titulo, subtitulo){
 // referencia a un equipo de cliente guardado, o por tener datos de cliente en la orden.
 // Así los campos editables (marca/modelo/serie/cliente) aparecen aunque el equipo no
 // esté en la lista o haya perdido su bandera.
+// Botón "Ver ubicación del cliente" — abre el link (Maps/Waze) guardado en la orden.
+// Sanitizado: solo se muestran links http(s).
+function _ubLinkHTML(o){
+  var u = o && o.ubicacionLink ? String(o.ubicacionLink).trim() : '';
+  if(!u || !/^https?:\/\//i.test(u)) return '';
+  u = u.replace(/&/g,'&amp;').replace(/"/g,'%22').replace(/</g,'%3C').replace(/>/g,'%3E').replace(/'/g,'%27');
+  return '<a href="'+u+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;margin:6px 0;padding:8px 14px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;pointer-events:auto !important;opacity:1 !important">📍 Ver ubicación del cliente</a>';
+}
 function _esOrdenCliente(o){
   if(!o) return false;
   if(o.equipoId==='__cliente__') return true;
@@ -1716,6 +1724,7 @@ function renderPreventivos(){
         <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
         <span style="font-size:11px;color:var(--text3)">${p.fechaCierre||''}</span>
       </div>
+      ${_ubLinkHTML(p)}
       <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${p.servicio||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${p.tecnico||'—'}</span></div>
@@ -1742,6 +1751,7 @@ function renderPreventivos(){
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
+      ${_ubLinkHTML(p)}
       ${_esOrdenCliente(p)?`
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
@@ -2139,6 +2149,7 @@ function renderCorrectivos(){
         <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
         <span style="font-size:11px;color:var(--text3)">${c.fechaCierre||''}</span>
       </div>
+      ${_ubLinkHTML(c)}
       <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${c.sistema||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${c.tecnico||'—'}</span></div>
@@ -2165,6 +2176,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
+      ${_ubLinkHTML(c)}
       ${_esOrdenCliente(c)?`
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
@@ -3343,6 +3355,7 @@ function renderRevisiones(){
     // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-rev-${r.id}" onclick="event.stopPropagation()">`;
+      card += _ubLinkHTML(r);
       if(r.completado){
         card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
@@ -3561,6 +3574,7 @@ function renderEvaluaciones(){
     // DETALLE EXPANDIDO
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-eval-${v.id}" onclick="event.stopPropagation()">`;
+      card += _ubLinkHTML(v);
       if(v.completado){
         card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <span style="font-size:11px;font-weight:700;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 10px;border-radius:10px">✅ Completado</span>
