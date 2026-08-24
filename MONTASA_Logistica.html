@@ -731,7 +731,7 @@ function renderOrdenesLog(){
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
             <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
-            <button onclick="event.stopPropagation();limpiarFirma('firma-log-${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+            <button onclick="event.stopPropagation();guardarFirmaLog('${o.id}')" style="font-size:12px;background:#27ae60;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:700;margin-right:6px">💾 Guardar firma</button><button onclick="event.stopPropagation();limpiarFirma('firma-log-${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
           </div>
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>`:``}
@@ -1695,9 +1695,21 @@ function _restoreFirmas(){
 }
 
 
+
+// Guardado explícito de la firma (además del auto-guardado al levantar el dedo)
+function guardarFirmaLog(ordenId){
+  const canvas=document.getElementById('firma-log-'+ordenId);
+  if(!canvas || !canvas.classList.contains('firmado')){ toast('Primero firme en el recuadro', true); return; }
+  const o=(DB.logistica||[]).find(x=>x&&x.id===ordenId);
+  if(!o){ toast('No se encontró la orden', true); return; }
+  o.firma=canvas.toDataURL('image/png');
+  saveDB();
+  toast('✍️ Firma guardada ✓');
+}
 function limpiarFirma(canvasId){
   const canvas = document.getElementById(canvasId);
   if(!canvas) return;
+  if(canvas.classList.contains('firmado') && !confirm('¿Seguro que quieres BORRAR la firma?\n\nEsto elimina también la firma GUARDADA de esta orden y el cliente tendrá que firmar de nuevo.')) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.classList.remove('firmado');
