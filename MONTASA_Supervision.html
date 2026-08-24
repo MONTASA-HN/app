@@ -2855,6 +2855,62 @@ function equipoADisponible(equipoId){
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 
+// ══ GUARDADO RESILIENTE DE ÓRDENES DE MANTENIMIENTO (anti-pérdida) ══════════
+// Igual que el blindaje de logística: lee la lista remota, incorpora la orden
+// (merge por id, preservando lo que otros clientes escribieron), asegura que el
+// contador nunca retroceda, y VERIFICA leyendo de vuelta. Reintenta hasta 4
+// veces; si aún así falla, avisa al usuario en pantalla en vez de perderse en
+// silencio.
+window._ordenesRecientes = window._ordenesRecientes || {};
+function _guardarOrdenMantResiliente(tipo, orden, intento){
+  intento = intento||0;
+  if(!window._fbDB || !orden || !orden.id) return;
+  const nodo = tipo==='prev' ? 'preventivos' : 'correctivos';
+  window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
+  const ref = window._fbDB.ref('montasa/'+nodo);
+  ref.once('value').then(function(snap){
+    let rem = snap.val()||[];
+    if(!Array.isArray(rem)) rem = Object.values(rem);
+    rem = rem.filter(Boolean);
+    const idx = rem.findIndex(function(o){ return o && o.id===orden.id; });
+    if(idx>=0) rem[idx]=orden; else rem.push(orden);
+    const n = parseInt((orden.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return window._fbDB.ref('montasa/lastCorrelativo_MH').once('value').then(function(cs){
+      const remC = parseInt(cs.val())||0;
+      const upd = {}; upd[nodo]=rem;
+      if(n>remC) upd['lastCorrelativo_MH']=n;
+      return window._fbDB.ref('montasa').update(upd);
+    }).then(function(){
+      return ref.once('value');
+    }).then(function(v){
+      let arr=v.val()||[]; if(!Array.isArray(arr)) arr=Object.values(arr);
+      const ok = arr.some(function(o){ return o && o.id===orden.id; });
+      if(!ok) throw new Error('verificacion fallida');
+      const loc = tipo==='prev'?DB.preventivos:DB.correctivos;
+      if(loc && !loc.some(function(o){ return o&&o.id===orden.id; })) loc.push(orden);
+    });
+  }).catch(function(){
+    if(intento<4){ setTimeout(function(){ _guardarOrdenMantResiliente(tipo, orden, intento+1); }, 1500*(intento+1)); }
+    else { try{ alert('⚠️ La orden '+(orden.correlativo||'')+' NO se pudo confirmar en la base de datos.\n\nNO cierres la aplicación. Revisa tu conexión a internet y la orden se reintentará al volver a guardar cualquier cambio, o vuelve a crearla.'); }catch(e){} }
+  });
+}
+// Re-inyecta órdenes creadas aquí hace <15 min que un snapshot remoto viejo no
+// traiga (protege contra el pisado por clientes con datos desactualizados).
+function _protegerOrdenesRecientes(){
+  try{
+    const ahora = Date.now();
+    Object.keys(window._ordenesRecientes||{}).forEach(function(id){
+      const r = window._ordenesRecientes[id];
+      if(!r || ahora - r.ts > 15*60*1000){ delete window._ordenesRecientes[id]; return; }
+      const arr = r.tipo==='prev' ? DB.preventivos : DB.correctivos;
+      if(arr && !arr.some(function(o){ return o&&o.id===id; })){
+        arr.push(r.obj);
+        _guardarOrdenMantResiliente(r.tipo, r.obj, 0);
+      }
+    });
+  }catch(e){}
+}
+
 function nextCorrelativo(prefijo='MH'){
   const key = 'lastCorrelativo_' + prefijo;
   let max = 0;
@@ -4476,7 +4532,8 @@ async function enviarSolicitudWA(){
       const evSerie  = document.getElementById('sol-eval-serie')?.value.trim()||'';
       const evCliente= document.getElementById('sol-eval-cliente')?.value.trim()||'';
       const evTipoEq = document.getElementById('sol-eval-tipo')?.value||'';
-      if(!evCliente){ toast('Falta: Nombre del cliente', true); return; }
+      // El nombre del cliente NO se exige al crear la solicitud de evaluación:
+      // esos datos los completa el técnico al cerrar la evaluación en su app.
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
@@ -4554,6 +4611,7 @@ async function enviarSolicitudWA(){
     const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion,ubicacionLink:_ubL};
     if(tipo==='preventivo') DB.preventivos.push({...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
     else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
+    _guardarOrdenMantResiliente(tipo==='preventivo'?'prev':'corr', (tipo==='preventivo'?DB.preventivos:DB.correctivos)[(tipo==='preventivo'?DB.preventivos:DB.correctivos).length-1]);
     if(!DB.solicitudes) DB.solicitudes=[];
     DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt:nomCli||'Equipo de cliente',equipoId:equipoIdCli,desc,fecha,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
     saveDB(); clearSolicitudForm(); renderDashboard(); toast('Orden '+correlativo+' creada ✓');
@@ -4567,6 +4625,7 @@ async function enviarSolicitudWA(){
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   if(tipo === 'preventivo'){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
+    _guardarOrdenMantResiliente('prev', DB.preventivos[DB.preventivos.length-1]);
     if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -4586,6 +4645,7 @@ async function enviarSolicitudWA(){
     _guardarLogisticaResiliente(ordenId);
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
+    _guardarOrdenMantResiliente('corr', DB.correctivos[DB.correctivos.length-1]);
     if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
@@ -4653,7 +4713,8 @@ async function copiarMensajeWA(){
       const evSerie  = document.getElementById('sol-eval-serie')?.value.trim()||'';
       const evCliente= document.getElementById('sol-eval-cliente')?.value.trim()||'';
       const evTipoEq = document.getElementById('sol-eval-tipo')?.value||'';
-      if(!evCliente){ toast('Falta: Nombre del cliente', true); return; }
+      // El nombre del cliente NO se exige al crear la solicitud de evaluación:
+      // esos datos los completa el técnico al cerrar la evaluación en su app.
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
@@ -4724,6 +4785,7 @@ async function copiarMensajeWA(){
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
     DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
+    _guardarOrdenMantResiliente('prev', DB.preventivos[DB.preventivos.length-1]);
     if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(depto === 'logistica') {
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
@@ -4743,6 +4805,7 @@ async function copiarMensajeWA(){
     _guardarLogisticaResiliente(ordenId);
   } else {
     DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):'',estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL});
+    _guardarOrdenMantResiliente('corr', DB.correctivos[DB.correctivos.length-1]);
     if(eq && !eq.esEquipoCliente) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
   saveDB();
@@ -6895,6 +6958,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.evaluaciones)   DB.evaluaciones   = d.evaluaciones||[];
       if(d.vendidos && d.vendidos.length) DB.vendidos = d.vendidos;
       if(d.correctivos)    DB.correctivos    = d.correctivos;
+      _protegerOrdenesRecientes();
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
@@ -6957,6 +7021,7 @@ function _iniciarConexionFirebase(esReintento){
       if(!d) return;
       if(d.preventivos)   DB.preventivos   = d.preventivos;
       if(d.correctivos)   DB.correctivos   = d.correctivos;
+      _protegerOrdenesRecientes();
       if(d.revisiones)    DB.revisiones    = d.revisiones||[];
       if(d.evaluaciones)  DB.evaluaciones  = d.evaluaciones||[];
       if(d.solicitudes)   DB.solicitudes   = d.solicitudes;
