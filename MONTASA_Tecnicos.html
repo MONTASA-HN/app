@@ -648,12 +648,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group"><label>Sugerencias para el próximo servicio</label><textarea id="prev-sugerencias" placeholder="Recomendaciones y sugerencias..."></textarea></div>
       <div class="form-group">
         <label>Foto del reporte firmado</label>
-        <div class="foto-upload" onclick="document.getElementById('prev-foto-input').click()">
+        <div class="foto-upload">
           <label class="foto-upload-label">
             <svg width="32" height="32" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
             Toca para subir foto
             <span style="font-size:11px;color:var(--text3)">JPG, PNG desde camara o galeria</span>
           </label>
+          <div style="display:flex;gap:8px;margin-top:6px"><button type="button" onclick="event.stopPropagation();_fotoDesde('prev-foto-input',true)" style="flex:1;padding:10px;border:none;border-radius:8px;background:#1f3864;color:#fff;font-weight:700;font-size:13px;cursor:pointer">📷 Cámara</button><button type="button" onclick="event.stopPropagation();_fotoDesde('prev-foto-input',false)" style="flex:1;padding:10px;border:1.5px solid #1f3864;border-radius:8px;background:#fff;color:#1f3864;font-weight:700;font-size:13px;cursor:pointer">🖼️ Galería</button></div>
           <input type="file" id="prev-foto-input" accept="image/*" capture="environment" onchange="previsualizarFoto('prev-foto-input','prev-foto-preview')">
         </div>
         <div class="foto-preview" id="prev-foto-preview">
@@ -725,12 +726,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group"><label>Estado inicial</label><select id="corr-estado"><option>En proceso</option><option>En espera de repuestos</option></select></div>
       <div class="form-group">
         <label>Foto del reporte firmado</label>
-        <div class="foto-upload" onclick="document.getElementById('corr-foto-input').click()">
+        <div class="foto-upload">
           <label class="foto-upload-label">
             <svg width="32" height="32" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
             Toca para subir foto
             <span style="font-size:11px;color:var(--text3)">JPG, PNG desde camara o galeria</span>
           </label>
+          <div style="display:flex;gap:8px;margin-top:6px"><button type="button" onclick="event.stopPropagation();_fotoDesde('corr-foto-input',true)" style="flex:1;padding:10px;border:none;border-radius:8px;background:#1f3864;color:#fff;font-weight:700;font-size:13px;cursor:pointer">📷 Cámara</button><button type="button" onclick="event.stopPropagation();_fotoDesde('corr-foto-input',false)" style="flex:1;padding:10px;border:1.5px solid #1f3864;border-radius:8px;background:#fff;color:#1f3864;font-weight:700;font-size:13px;cursor:pointer">🖼️ Galería</button></div>
           <input type="file" id="corr-foto-input" accept="image/*" capture="environment" onchange="previsualizarFoto('corr-foto-input','corr-foto-preview')">
         </div>
         <div class="foto-preview" id="corr-foto-preview">
@@ -2858,6 +2860,16 @@ function _protegerOrdenesRecientes(){
   }catch(e){}
 }
 
+
+// Abre el mismo campo de foto desde la cámara o desde la galería:
+// con 'capture' el teléfono abre la cámara; sin él, abre la galería/archivos.
+function _fotoDesde(inputId, camara){
+  const i = document.getElementById(inputId);
+  if(!i) return;
+  if(camara) i.setAttribute('capture','environment');
+  else i.removeAttribute('capture');
+  i.click();
+}
 function nextCorrelativo(){
   let max = 0;
   // Active orders
@@ -3559,11 +3571,7 @@ function renderRevisiones(){
             <button onclick="event.stopPropagation();eliminarFotoOrden('rev','${r.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
           </div>`).join('')}
         </div>
-        ${(r.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">
-          <input type="file" accept="image/*" capture="environment" multiple style="display:none"
-            onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">
-          📷 Agregar foto${(r.fotos||[]).length>0?' ('+(r.fotos||[]).length+'/10)':''}
-        </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+        ${(r.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">📷 Cámara${(r.fotos||[]).length>0?' ('+(r.fotos||[]).length+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
       </div>`;
       if(r.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
       card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
@@ -3766,11 +3774,7 @@ function renderEvaluaciones(){
             <button onclick="event.stopPropagation();eliminarFotoOrden('eval','${v.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
           </div>`).join('')}
         </div>
-        ${(v.fotos||[]).length < 10 ? `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">
-          <input type="file" accept="image/*" capture="environment" multiple style="display:none"
-            onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">
-          📷 Agregar foto${(v.fotos||[]).length>0?' ('+((v.fotos||[]).length)+'/10)':''}
-        </label>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+        ${(v.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">📷 Cámara${(v.fotos||[]).length>0?' ('+((v.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
       </div>`;
       // Firma del cliente
       const firmaId = 'firma-eval-'+v.id;
