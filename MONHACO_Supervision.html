@@ -67,6 +67,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .card-body{display:none!important}.card-body.open{display:block!important}
 .card-toggle{background:none;border:none;cursor:pointer;padding:4px;color:var(--text3);font-size:20px;transition:transform 0.2s;line-height:1}
 .card-toggle.open{transform:rotate(180deg)}
+#viaticos-overlay.open{display:block!important}
 .firma-canvas{width:100%;height:160px;border:2px dashed var(--border2);border-radius:var(--radius-sm);background:#fff;touch-action:none;display:block;cursor:crosshair}
 .firma-canvas.firmado{border-color:#27ae60;border-style:solid}
 
@@ -5093,6 +5094,411 @@ function cerrarExito(){
 // [KEYBOARD NAV eliminado para Supervisión]
 
 // ── FUNCIONES DE CÁLCULO ──────────────────────────────────────────────────
+// ══ MÓDULO DE VIÁTICOS (replicado de Gerencia) ══════════════════════════
+let _viaticosOrdenId = null;
+let _viaticosTipo = 'logistica'; // 'logistica' | 'preventivo' | 'correctivo' | 'revision' | 'evaluacion'
+let _viaticosMode = 'solicitud'; // 'solicitud' | 'liquidacion'
+let _viaticosReadOnly = false;
+let _viaticosData = null;
+
+function _getViaticosArray(tipo){
+  if(tipo==='preventivo') return DB.preventivos||[];
+  if(tipo==='correctivo') return DB.correctivos||[];
+  if(tipo==='revision')   return DB.revisiones||[];
+  if(tipo==='evaluacion') return DB.evaluaciones||[];
+  return DB.logistica||[];
+}
+function _getViaticosOrden(){
+  return _getViaticosArray(_viaticosTipo).find(o=>o.id===_viaticosOrdenId);
+}
+function _viaticosOrdenCompletada(orden, tipo){
+  if(tipo==='preventivo') return !!orden.completado;
+  if(tipo==='correctivo') return orden.estado==='Completado';
+  if(tipo==='revision'||tipo==='evaluacion') return !!orden.completado || orden.estado==='Completado';
+  return !!orden.cerrado || orden.estado==='Completado'; // logistica
+}
+function _renderListaSegunTipo(tipo){
+  if(tipo==='logistica') renderLogistica();
+  else renderHistorial();
+}
+
+function abrirViaticos(ordenId, tipo){
+  tipo = tipo || 'logistica';
+  const orden = _getViaticosArray(tipo).find(o=>o.id===ordenId);
+  if(!orden) return;
+  if(!orden.viaticos && orden.vales && orden.vales.length){
+    toast('Esta orden ya tiene un vale de alimentación generado. No se puede solicitar viáticos además.', true);
+    return;
+  }
+  const estaCompletada = _viaticosOrdenCompletada(orden, tipo);
+  if(!orden.viaticos && estaCompletada){
+    solicitarPINAccion(()=>{
+      _abrirViaticosInterno(orden, tipo);
+    }, '🔒 Solicitar viáticos', 'Esta orden ya está completada. Ingresa tu PIN para solicitar viáticos de todas formas.');
+    return;
+  }
+  _abrirViaticosInterno(orden, tipo);
+}
+
+function _abrirViaticosInterno(orden, tipo){
+  _viaticosOrdenId = orden.id;
+  _viaticosTipo = tipo || 'logistica';
+  _viaticosData = orden.viaticos || null;
+  _viaticosMode = 'solicitud';
+  _viaticosReadOnly = !!(orden.viaticos); // read-only if viaticos already saved
+  renderModalViaticos(orden);
+}
+
+function eliminarViaticosConPin(){
+  solicitarPINAccion(()=>{
+    const orden = _getViaticosOrden();
+    if(!orden) return;
+    delete orden.viaticos;
+    saveDB();
+    cerrarViaticos();
+    _renderListaSegunTipo(_viaticosTipo);
+    toast('Solicitud de viáticos eliminada ✓');
+  }, '🗑 Eliminar viáticos', 'Ingresa tu PIN para eliminar esta solicitud de viáticos');
+}
+
+function editarViaticosConPin(){
+  solicitarPINAccion(()=>{
+    _viaticosReadOnly = false;
+    const orden = _getViaticosOrden();
+    if(orden) renderModalViaticos(orden);
+  });
+}
+
+function cerrarViaticos(){
+  const ov = document.getElementById('viaticos-overlay');
+  if(ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderModalViaticos(orden){
+  const ov = document.getElementById('viaticos-overlay');
+  if(!ov) return;
+  const v = _viaticosData || {};
+  const esFutura = !v.gestor_nombre; // No hay solicitud previa
+
+  // Calcular automáticamente alimentación según horarios
+  function calcAlim(personas){
+    return (personas||[]).map(p=>{
+      // Si la persona ya trae montos guardados (incluye ediciones manuales),
+      // se respetan tal cual y no se recalculan por horario.
+      if(((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0))>0){
+        return {...p, total:(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)+(p.transporte||0)+(p.hospedaje||0)};
+      }
+      const hIni = p.hora_ini||'';
+      const hFin = p.hora_fin||'';
+      let des=0,alm=0,cen=0,mn=0;
+      if(hIni){
+        const [h,m] = hIni.split(':').map(Number);
+        const minIni = h*60+m;
+        if(minIni < 7*60+30) des=150;
+      }
+      if(hFin){
+        const [h,m] = hFin.split(':').map(Number);
+        const minFin = h*60+m;
+        const [hi,mi] = (hIni||'00:00').split(':').map(Number);
+        const minI = hi*60+mi;
+        if(minI<=12*60 && minFin>=13*60) alm=150;
+        if(minFin>=19*60) cen=150;
+        if(minFin>=23*60+30 || (minFin>=0 && minFin<6*60)) mn=150;
+      }
+      const total = des+alm+cen+mn+(p.transporte||0)+(p.hospedaje||0);
+      return {...p, desayuno:des, almuerzo:alm, cena:cen, media_noche:mn, total};
+    });
+  }
+
+  const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
+  const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
+  const gestorInfo = GESTORES_VIATICOS.find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
+  const tPeaj = destInfo.peajes * cpU;
+  const comb = v.combustible||0;
+  const otros = v.otros_gastos||0;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+  const tGen  = tAlim + tTr + tPeaj + comb + tHosp + otros;
+
+  ov.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch">
+  <div style="background:var(--surface);margin:10px auto;max-width:600px;border-radius:var(--radius);overflow:hidden">
+    <!-- Header -->
+    <div style="background:#1f3864;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:white">📋 Viáticos</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo||'Nueva OT'}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${orden.viaticos ? `<button onclick="eliminarViaticosConPin()" style="background:rgba(255,255,255,0.2);border:none;color:#ffb3b3;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">🗑 Eliminar</button>` : ''}
+        <button onclick="cerrarViaticos()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
+      </div>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:2px solid var(--border)">
+      <button onclick="switchTabViaticos('solicitud')" id="vtab-sol"
+        style="flex:1;padding:12px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:${_viaticosMode==='solicitud'?'var(--surface)':'var(--surface2)'};color:${_viaticosMode==='solicitud'?'#1f3864':'var(--text2)'}">
+        📝 Solicitud
+      </button>
+      <button onclick="switchTabViaticos('liquidacion')" id="vtab-liq"
+        style="flex:1;padding:12px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:${_viaticosMode==='liquidacion'?'var(--surface)':'var(--surface2)'};color:${_viaticosMode==='liquidacion'?'#1f3864':'var(--text2)'}">
+        🧾 Liquidación
+      </button>
+    </div>
+    <div style="padding:16px" id="viaticos-content">
+      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen, !!(v.facturas && v.facturas.some(f=>f.monto)))}
+    </div>
+  </div>
+  </div>`;
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function switchTabViaticos(mode){
+  _viaticosMode = mode;
+  const orden = _getViaticosOrden();
+  if(orden) renderModalViaticos(orden);
+}
+
+function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
+  const hoy = new Date().toISOString().slice(0,10);
+  const gestorOpts = GESTORES_VIATICOS.map(g=>
+    `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
+  ).join('');
+  const destOpts = DESTINOS_VIATICOS.map(d=>
+    `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
+  ).join('');
+  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
+  const numPeaj = destInfo.peajes||0;
+  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
+  const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
+  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
+
+  return `
+  <div class="form-group"><label>Fecha del documento</label>
+    <input type="date" id="v-fecha" value="${v.fecha_doc||hoy}">
+  </div>
+  <div class="form-group"><label>Cliente</label>
+    <input type="text" id="v-cliente" value="${v.cliente||''}" placeholder="Nombre del cliente">
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-group"><label>Destino</label>
+      <select id="v-destino" onchange="actualizarDestino()">
+        <option value="">Seleccionar...</option>${destOpts}
+      </select>
+    </div>
+    <div class="form-group"><label>Tipo de vehículo</label>
+      <select id="v-vehiculo" onchange="actualizarVehiculo()">
+        <option value="PICK-UP" ${v.vehiculo==='PICK-UP'?'selected':''}>PICK-UP (PATRULLA) — L.22/peaje</option>
+        <option value="CAMION GRANDE" ${v.vehiculo==='CAMION GRANDE'?'selected':''}>CAMIÓN GRANDE (CM-35) — L.134/peaje</option>
+        <option value="GRUA" ${v.vehiculo==='GRUA'?'selected':''}>GRÚA (GR-01) — L.134/peaje</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-group"><label>Motivo del viaje</label>
+    <input type="text" id="v-motivo" value="${v.motivo||''}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
+  </div>
+  <!-- GESTOR -->
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">👤 Gestor a depositar</div>
+    <div class="form-group"><label>Nombre del gestor</label>
+      <select id="v-gestor" onchange="actualizarGestor()">
+        <option value="">Seleccionar gestor...</option>${gestorOpts}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id||'—'}</div></div>
+      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta||'—'}</div></div>
+      <div><div style="color:var(--text3)">Departamento</div><div id="v-gestor-depto" style="font-weight:600">${gestorInfo.depto||'—'}</div></div>
+    </div>
+  </div>
+  <!-- PERSONAS -->
+  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">👥 Personal viajando</div>
+  <div id="v-personas-list">
+    ${personas.map((p,i)=>renderPersonaRow(p,i)).join('')}
+  </div>
+  <button onclick="agregarPersonaViaticos()" style="width:100%;padding:8px;background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;margin-bottom:12px">
+    + Agregar persona
+  </button>
+  <!-- TRANSPORTE -->
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🚛 Transporte</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
+      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600">${destInfo.km||0} km</div></div>
+      <div><div style="color:var(--text3)">Cant. peajes</div><div id="v-npeaj" style="font-weight:600">${numPeaj}</div></div>
+      <div><div style="color:var(--text3)">Costo peaje unit.</div><div id="v-cpunit" style="font-weight:600">L. ${cpU}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label>🔴 Total peaje (auto)</label>
+        <input type="number" id="v-tpeaj" value="${tPeaj}" readonly style="background:var(--surface);opacity:0.7">
+      </div>
+      <div class="form-group"><label>⛽ Combustible (manual)</label>
+        <input type="number" id="v-comb" value="${comb||0}" placeholder="0" oninput="recalcViaticos()">
+      </div>
+    </div>
+    <div class="form-group"><label>🏨 Hospedaje (por persona, si aplica)</label>
+      <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+    </div>
+    <div class="form-group"><label>📎 Otros gastos</label>
+      <input type="number" id="v-otros" value="${otros||0}" placeholder="0" oninput="recalcViaticos()">
+    </div>
+  </div>
+  <!-- PRESUPUESTO -->
+  <div style="background:#1f3864;border-radius:var(--radius-sm);padding:12px;color:white;margin-bottom:12px">
+    <div style="font-size:12px;opacity:0.8;margin-bottom:6px">PRESUPUESTO CONSOLIDADO</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px;margin-bottom:8px">
+      <span>Alimentación:</span> <span id="vp-alim">L. ${tAlim}</span>
+      <span>Transporte:</span>   <span id="vp-tr">L. ${tTr}</span>
+      <span>Peaje:</span>        <span id="vp-peaj">L. ${tPeaj}</span>
+      <span>Combustible:</span>  <span id="vp-comb">L. ${comb}</span>
+      <span>Hospedaje:</span>    <span id="vp-hosp">L. ${tHosp}</span>
+      <span>Otros:</span>        <span id="vp-otros">L. ${otros}</span>
+    </div>
+    <div style="border-top:1px solid rgba(255,255,255,0.3);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700">TOTAL GENERAL:</span>
+      <span id="vp-total" style="font-size:20px;font-weight:800;font-family:DM Mono,monospace">L. ${tGen}</span>
+    </div>
+  </div>
+  <div class="form-group"><label>Observaciones</label>
+    <textarea id="v-obs" rows="2" placeholder="Observaciones del viaje...">${v.observaciones||''}</textarea>
+  </div>
+  <!-- BOTONES -->
+  ${_viaticosReadOnly ? `
+  <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:8px;font-size:13px;color:#856404">
+    🔒 Solo lectura — esta solicitud ya fue guardada
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+    <button onclick="editarViaticosConPin()" style="padding:13px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🔑 Editar (PIN)
+    </button>
+    <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>` : `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+    <button onclick="guardarViaticos()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      💾 Guardar solicitud
+    </button>
+    <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>`}`;
+}
+
+function renderPersonaRow(p, i){
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px" id="vp-row-${i}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:#1f3864">Persona ${i+1}</div>
+      ${i>0?`<button onclick="quitarPersonaViaticos(${i})" style="background:none;border:none;color:#e74c3c;font-size:16px;cursor:pointer">✕</button>`:''}
+    </div>
+    <div class="form-group"><label>Nombre</label>
+      <input type="text" id="vp-nombre-${i}" value="${p.nombre||''}" placeholder="Nombre completo">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group"><label>Fecha</label>
+        <input type="date" id="vp-fecha-${i}" value="${p.fecha||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Hora salida</label>
+        <input type="time" id="vp-hini-${i}" value="${p.hora_ini||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Hora regreso</label>
+        <input type="time" id="vp-hfin-${i}" value="${p.hora_fin||''}" onchange="recalcPersona(${i})">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
+      <div style="background:${p.desayuno?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🍳 Desayuno</div><input type="number" min="0" id="vp-des-${i}" value="${p.desayuno||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
+      <div style="background:${p.almuerzo?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🍽 Almuerzo</div><input type="number" min="0" id="vp-alm-${i}" value="${p.almuerzo||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
+      <div style="background:${p.cena?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🌙 Cena</div><input type="number" min="0" id="vp-cen-${i}" value="${p.cena||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
+      <div style="background:${p.media_noche?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
+        <div>🌃 M.Noche</div><input type="number" min="0" id="vp-mn-${i}" value="${p.media_noche||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">Total alimentación: <strong id="vp-talim-${i}">L.${(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)}</strong> <span style="font-size:10px;color:var(--text3)">· montos editables (p.ej. viajes fuera del país)</span></div>
+  </div>`;
+}
+
+function renderLiquidacionForm(v, montoSol, readOnly){
+  const facturas = v.facturas || [];
+  const totalFact = facturas.reduce((s,f)=>s+(f.monto||0),0);
+  const diff = montoSol - totalFact;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  return `
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
+      <div><span style="color:var(--text3)">Monto solicitado:</span><br><strong>L. ${montoSol.toFixed(2)}</strong></div>
+      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
+    </div>
+  </div>
+  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🧾 Facturas del viaje (máx. 14)</div>
+  <div id="vliq-facturas">
+    ${Array.from({length:14},(_,i)=>{
+      const f = facturas[i]||{};
+      // En modo lectura: solo mostrar facturas con datos
+      if(readOnly && !f.descripcion && !f.monto) return '';
+      if(readOnly) return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
+        <div style="font-size:13px;margin-bottom:4px"><span style="color:var(--text3)">Descripción: </span><strong>${f.descripcion||'—'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;font-size:13px">
+          <div><span style="color:var(--text3)">Fecha: </span><strong>${f.fecha||'—'}</strong></div>
+          <div style="overflow:hidden"><span style="color:var(--text3)">N° Doc: </span><strong style="white-space:nowrap;font-size:12px">${f.ndocumento||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Monto: </span><strong>L. ${f.monto||0}</strong></div>
+        </div>
+      </div>`;
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
+        <div class="form-group"><label>Descripción</label>
+          <input type="text" id="vlf-desc-${i}" value="${f.descripcion||''}" placeholder="Ej: Gasolinera UNO" oninput="recalcFacturas()">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div class="form-group"><label>Fecha</label>
+            <input type="date" id="vlf-fecha-${i}" value="${f.fecha||hoy}">
+          </div>
+          <div class="form-group"><label>N° Documento</label>
+            <input type="text" id="vlf-ndoc-${i}" value="${f.ndocumento||''}" placeholder="001-001-0001">
+          </div>
+          <div class="form-group"><label>Monto (L.)</label>
+            <input type="number" id="vlf-monto-${i}" value="${f.monto||''}" placeholder="0" oninput="recalcFacturas()">
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+  <!-- RESUMEN -->
+  <div style="background:#1f3864;border-radius:var(--radius-sm);padding:12px;color:white;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:13px">Total documentación:</span>
+      <span id="vliq-total" style="font-size:18px;font-weight:800;font-family:DM Mono,monospace">L. ${totalFact.toFixed(2)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid rgba(255,255,255,0.3)">
+      <span style="font-size:13px">Diferencia (solicitado - liquidado):</span>
+      <span id="vliq-diff" style="font-size:15px;font-weight:700;font-family:DM Mono,monospace;color:${diff>0?'#ff9999':'#99ffaa'}">L. ${diff.toFixed(2)}</span>
+    </div>
+  </div>
+  ${readOnly ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <button onclick="editarLiquidacionConPin()" style="padding:13px;background:#c87000;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🔑 Editar liquidación
+    </button>
+    <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>` : `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <button onclick="guardarLiquidacion()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      💾 Guardar liquidación
+    </button>
+    <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      📄 Descargar PDF
+    </button>
+  </div>`}`;
+}
+
 function actualizarGestor(){
   const sel = document.getElementById('v-gestor');
   if(!sel) return;
@@ -5151,12 +5557,20 @@ function actualizarVehiculo(){
   recalcViaticos();
 }
 
+// Monto de alimentación editado a mano (p.ej. viajes fuera del país):
+// se respeta lo escrito y solo se recalculan los totales.
+function _alimManual(i){
+  const g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+  const talim=g('vp-des-'+i)+g('vp-alm-'+i)+g('vp-cen-'+i)+g('vp-mn-'+i);
+  const t=document.getElementById('vp-talim-'+i); if(t) t.textContent='L.'+talim;
+  recalcViaticos();
+}
 function recalcPersona(i){
   const hIni = document.getElementById('vp-hini-'+i)?.value||'';
   const hFin = document.getElementById('vp-hfin-'+i)?.value||'';
   let des=0,alm=0,cen=0,mn=0;
   if(hIni){
-    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=120;
+    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=150;
   }
   if(hFin){
     const [h,m]=hFin.split(':').map(Number);
@@ -5166,10 +5580,8 @@ function recalcPersona(i){
     if(minFin>=19*60) cen=150;
     if(minFin>=23*60+30||(minFin>=0&&minFin<6*60)) mn=150;
   }
-  document.getElementById('vp-des-'+i) && (document.getElementById('vp-des-'+i).textContent='L.'+des);
-  document.getElementById('vp-alm-'+i) && (document.getElementById('vp-alm-'+i).textContent='L.'+alm);
-  document.getElementById('vp-cen-'+i) && (document.getElementById('vp-cen-'+i).textContent='L.'+cen);
-  document.getElementById('vp-mn-'+i)  && (document.getElementById('vp-mn-'+i).textContent='L.'+mn);
+  const _setV=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  _setV('vp-des-'+i,des); _setV('vp-alm-'+i,alm); _setV('vp-cen-'+i,cen); _setV('vp-mn-'+i,mn);
   const talim=des+alm+cen+mn;
   document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim);
   recalcViaticos();
@@ -5186,18 +5598,9 @@ function recalcViaticos(){
   let tAlim=0, tTr=0, tHosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
   const nPersonas = document.querySelectorAll('[id^="vp-row-"]').length;
   for(let i=0;i<nPersonas;i++){
-    const hIni=document.getElementById('vp-hini-'+i)?.value||'';
-    const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
-    let des=0,alm=0,cen=0,mn=0;
-    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
-    if(hFin){
-      const[h,m]=hFin.split(':').map(Number);
-      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
-      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=150;
-      if(h*60+m>=19*60)cen=150;
-      if(h*60+m>=23*60+30)mn=150;
-    }
-    tAlim+=des+alm+cen+mn;
+    // Se leen los montos de las casillas (auto-calculados o editados a mano)
+    const g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+    tAlim += g('vp-des-'+i)+g('vp-alm-'+i)+g('vp-cen-'+i)+g('vp-mn-'+i);
   }
   const comb=parseFloat(document.getElementById('v-comb')?.value||0)||0;
   const otros=parseFloat(document.getElementById('v-otros')?.value||0)||0;
@@ -5279,15 +5682,9 @@ function _leerFormSolicitud(){
   for(let i=0;i<nPersonas;i++){
     const hIni=document.getElementById('vp-hini-'+i)?.value||'';
     const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
-    let des=0,alm=0,cen=0,mn=0;
-    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
-    if(hFin){
-      const[h,m]=hFin.split(':').map(Number);
-      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
-      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=150;
-      if(h*60+m>=19*60)cen=150;
-      if(h*60+m>=23*60+30)mn=150;
-    }
+    // Montos desde las casillas (auto-calculados o editados a mano)
+    const _g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+    const des=_g('vp-des-'+i), alm=_g('vp-alm-'+i), cen=_g('vp-cen-'+i), mn=_g('vp-mn-'+i);
     const hosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
     personas.push({
       nombre:document.getElementById('vp-nombre-'+i)?.value||'',
@@ -5543,7 +5940,7 @@ function _buildSolicitudHTML(v, orden){
   <table>
     <tr>
       <th>NOMBRE</th><th>FECHA</th><th>H.INICIO</th><th>H.FIN</th>
-      <th class="mid">DESAY.<br>L.120</th><th class="mid">ALMUER.<br>L.150</th>
+      <th class="mid">DESAY.<br>L.150</th><th class="mid">ALMUER.<br>L.150</th>
       <th class="mid">CENA<br>L.150</th><th class="mid">M.NOCHE<br>L.150</th>
       <th class="mid">TRANSP.</th><th class="mid">HOSPEDAJE</th><th class="mid">TOTAL</th>
     </tr>
@@ -5666,7 +6063,7 @@ function calcularVales(fechaInicio, fechaFin){
   const hIni = ini.getHours() + ini.getMinutes()/60;
   const hFin = fin.getHours() + fin.getMinutes()/60;
   const vales = [];
-  if(hIni < 7) vales.push({tipo:'desayuno', monto:120});
+  if(hIni < 7) vales.push({tipo:'desayuno', monto:150});
   if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
   if(hFin > 19) vales.push({tipo:'cena', monto:150});
   const mismodia = ini.toDateString() === fin.toDateString();
@@ -5727,7 +6124,7 @@ function _mostrarOverlayVale(ordenId){
   if(!orden) return;
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.120)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
   const emojis = {desayuno:'🌅', almuerzo:'🍽', cena:'🌙', media_noche:'🌃'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const ov = document.getElementById('vale-overlay');
@@ -5778,7 +6175,7 @@ function _mostrarOverlayVale(ordenId){
 }
 
 function recalcVales(){
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vc-'+t);
@@ -5798,7 +6195,7 @@ function guardarValeGerencia(){
 function _ejecutarGuardarVale(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
@@ -6458,7 +6855,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   if(!orden) return;
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.120)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
   const emojis = {desayuno:'\uD83C\uDF05', almuerzo:'\uD83C\uDF7D', cena:'\uD83C\uDF19', media_noche:'\uD83C\uDF03'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
@@ -6505,7 +6902,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
 }
 
 function recalcValesMant(){
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vcm-'+t);
@@ -6525,7 +6922,7 @@ function _ejecutarGuardarValeMant(){
   const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
@@ -6558,7 +6955,7 @@ function imprimirValeMant(){
   if(!orden) return;
   const vales = orden.vales||[];
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   const total = vales.reduce((s,v)=>s+v.monto,0);
   const fIni = typeof fmtDT==='function' ? fmtDT(orden.fechaInicio||'') : (orden.fechaInicio||'').slice(0,16).replace('T',' ');
   const fFin = typeof fmtDT==='function' ? fmtDT(orden.fechaFin||'') : (orden.fechaFin||'').slice(0,16).replace('T',' ');
@@ -7056,5 +7453,6 @@ function _iniciarConexionFirebase(esReintento){
   }
 })();
 </script>
+<div id="viaticos-overlay" style="display:none"></div>
 </body>
 </html>
