@@ -6574,13 +6574,18 @@ function renderModalViaticos(orden){
   // Calcular automáticamente alimentación según horarios
   function calcAlim(personas){
     return (personas||[]).map(p=>{
+      // Si la persona ya trae montos guardados (incluye ediciones manuales),
+      // se respetan tal cual y no se recalculan por horario.
+      if(((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0))>0){
+        return {...p, total:(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)+(p.transporte||0)+(p.hospedaje||0)};
+      }
       const hIni = p.hora_ini||'';
       const hFin = p.hora_fin||'';
       let des=0,alm=0,cen=0,mn=0;
       if(hIni){
         const [h,m] = hIni.split(':').map(Number);
         const minIni = h*60+m;
-        if(minIni < 7*60+30) des=120;
+        if(minIni < 7*60+30) des=150;
       }
       if(hFin){
         const [h,m] = hFin.split(':').map(Number);
@@ -6795,15 +6800,15 @@ function renderPersonaRow(p, i){
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
       <div style="background:${p.desayuno?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
-        <div>🍳 Desayuno</div><div id="vp-des-${i}" style="font-weight:700">L.${p.desayuno||0}</div></div>
+        <div>🍳 Desayuno</div><input type="number" min="0" id="vp-des-${i}" value="${p.desayuno||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
       <div style="background:${p.almuerzo?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
-        <div>🍽 Almuerzo</div><div id="vp-alm-${i}" style="font-weight:700">L.${p.almuerzo||0}</div></div>
+        <div>🍽 Almuerzo</div><input type="number" min="0" id="vp-alm-${i}" value="${p.almuerzo||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
       <div style="background:${p.cena?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
-        <div>🌙 Cena</div><div id="vp-cen-${i}" style="font-weight:700">L.${p.cena||0}</div></div>
+        <div>🌙 Cena</div><input type="number" min="0" id="vp-cen-${i}" value="${p.cena||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
       <div style="background:${p.media_noche?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
-        <div>🌃 M.Noche</div><div id="vp-mn-${i}" style="font-weight:700">L.${p.media_noche||0}</div></div>
+        <div>🌃 M.Noche</div><input type="number" min="0" id="vp-mn-${i}" value="${p.media_noche||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
     </div>
-    <div style="font-size:12px;color:var(--text3);margin-top:4px">Total alimentación: <strong id="vp-talim-${i}">L.${(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)}</strong></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">Total alimentación: <strong id="vp-talim-${i}">L.${(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)}</strong> <span style="font-size:10px;color:var(--text3)">· montos editables (p.ej. viajes fuera del país)</span></div>
   </div>`;
 }
 
@@ -6910,12 +6915,20 @@ function actualizarVehiculo(){
   recalcViaticos();
 }
 
+// Monto de alimentación editado a mano (p.ej. viajes fuera del país):
+// se respeta lo escrito y solo se recalculan los totales.
+function _alimManual(i){
+  const g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+  const talim=g('vp-des-'+i)+g('vp-alm-'+i)+g('vp-cen-'+i)+g('vp-mn-'+i);
+  const t=document.getElementById('vp-talim-'+i); if(t) t.textContent='L.'+talim;
+  recalcViaticos();
+}
 function recalcPersona(i){
   const hIni = document.getElementById('vp-hini-'+i)?.value||'';
   const hFin = document.getElementById('vp-hfin-'+i)?.value||'';
   let des=0,alm=0,cen=0,mn=0;
   if(hIni){
-    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=120;
+    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=150;
   }
   if(hFin){
     const [h,m]=hFin.split(':').map(Number);
@@ -6925,10 +6938,8 @@ function recalcPersona(i){
     if(minFin>=19*60) cen=150;
     if(minFin>=23*60+30||(minFin>=0&&minFin<6*60)) mn=150;
   }
-  document.getElementById('vp-des-'+i) && (document.getElementById('vp-des-'+i).textContent='L.'+des);
-  document.getElementById('vp-alm-'+i) && (document.getElementById('vp-alm-'+i).textContent='L.'+alm);
-  document.getElementById('vp-cen-'+i) && (document.getElementById('vp-cen-'+i).textContent='L.'+cen);
-  document.getElementById('vp-mn-'+i)  && (document.getElementById('vp-mn-'+i).textContent='L.'+mn);
+  const _setV=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  _setV('vp-des-'+i,des); _setV('vp-alm-'+i,alm); _setV('vp-cen-'+i,cen); _setV('vp-mn-'+i,mn);
   const talim=des+alm+cen+mn;
   document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim);
   recalcViaticos();
@@ -6945,18 +6956,9 @@ function recalcViaticos(){
   let tAlim=0, tTr=0, tHosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
   const nPersonas = document.querySelectorAll('[id^="vp-row-"]').length;
   for(let i=0;i<nPersonas;i++){
-    const hIni=document.getElementById('vp-hini-'+i)?.value||'';
-    const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
-    let des=0,alm=0,cen=0,mn=0;
-    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
-    if(hFin){
-      const[h,m]=hFin.split(':').map(Number);
-      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
-      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=150;
-      if(h*60+m>=19*60)cen=150;
-      if(h*60+m>=23*60+30)mn=150;
-    }
-    tAlim+=des+alm+cen+mn;
+    // Se leen los montos de las casillas (auto-calculados o editados a mano)
+    const g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+    tAlim += g('vp-des-'+i)+g('vp-alm-'+i)+g('vp-cen-'+i)+g('vp-mn-'+i);
   }
   const comb=parseFloat(document.getElementById('v-comb')?.value||0)||0;
   const otros=parseFloat(document.getElementById('v-otros')?.value||0)||0;
@@ -7038,15 +7040,9 @@ function _leerFormSolicitud(){
   for(let i=0;i<nPersonas;i++){
     const hIni=document.getElementById('vp-hini-'+i)?.value||'';
     const hFin=document.getElementById('vp-hfin-'+i)?.value||'';
-    let des=0,alm=0,cen=0,mn=0;
-    if(hIni){const[h,m]=hIni.split(':').map(Number);if(h*60+m<7*60+30)des=120;}
-    if(hFin){
-      const[h,m]=hFin.split(':').map(Number);
-      const[hi,mi]=(hIni||'00:00').split(':').map(Number);
-      if(hi*60+mi<=12*60&&h*60+m>=13*60)alm=150;
-      if(h*60+m>=19*60)cen=150;
-      if(h*60+m>=23*60+30)mn=150;
-    }
+    // Montos desde las casillas (auto-calculados o editados a mano)
+    const _g=id=>parseFloat(document.getElementById(id)?.value||0)||0;
+    const des=_g('vp-des-'+i), alm=_g('vp-alm-'+i), cen=_g('vp-cen-'+i), mn=_g('vp-mn-'+i);
     const hosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
     personas.push({
       nombre:document.getElementById('vp-nombre-'+i)?.value||'',
@@ -7289,7 +7285,7 @@ function _buildSolicitudHTML(v, orden){
   <table>
     <tr>
       <th>NOMBRE</th><th>FECHA</th><th>H.INICIO</th><th>H.FIN</th>
-      <th class="mid">DESAY.<br>L.120</th><th class="mid">ALMUER.<br>L.150</th>
+      <th class="mid">DESAY.<br>L.150</th><th class="mid">ALMUER.<br>L.150</th>
       <th class="mid">CENA<br>L.150</th><th class="mid">M.NOCHE<br>L.150</th>
       <th class="mid">TRANSP.</th><th class="mid">HOSPEDAJE</th><th class="mid">TOTAL</th>
     </tr>
@@ -7412,7 +7408,7 @@ function calcularVales(fechaInicio, fechaFin){
   const hIni = ini.getHours() + ini.getMinutes()/60;
   const hFin = fin.getHours() + fin.getMinutes()/60;
   const vales = [];
-  if(hIni < 7) vales.push({tipo:'desayuno', monto:120});
+  if(hIni < 7) vales.push({tipo:'desayuno', monto:150});
   if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
   if(hFin > 19) vales.push({tipo:'cena', monto:150});
   const mismodia = ini.toDateString() === fin.toDateString();
@@ -7473,7 +7469,7 @@ function _mostrarOverlayVale(ordenId){
   if(!orden) return;
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.120)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
   const emojis = {desayuno:'🌅', almuerzo:'🍽', cena:'🌙', media_noche:'🌃'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const ov = document.getElementById('vale-overlay');
@@ -7524,7 +7520,7 @@ function _mostrarOverlayVale(ordenId){
 }
 
 function recalcVales(){
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vc-'+t);
@@ -7544,7 +7540,7 @@ function guardarValeGerencia(){
 function _ejecutarGuardarVale(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
@@ -7870,7 +7866,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   if(!orden) return;
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.120)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
   const emojis = {desayuno:'\uD83C\uDF05', almuerzo:'\uD83C\uDF7D', cena:'\uD83C\uDF19', media_noche:'\uD83C\uDF03'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
@@ -7917,7 +7913,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
 }
 
 function recalcValesMant(){
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vcm-'+t);
@@ -7937,7 +7933,7 @@ function _ejecutarGuardarValeMant(){
   const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
   }).map(t=>({tipo:t,monto:montos[t]}));
@@ -7970,7 +7966,7 @@ function imprimirValeMant(){
   if(!orden) return;
   const vales = orden.vales||[];
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
-  const montos = {desayuno:120,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
   const total = vales.reduce((s,v)=>s+v.monto,0);
   const fIni = typeof fmtDT==='function' ? fmtDT(orden.fechaInicio||'') : (orden.fechaInicio||'').slice(0,16).replace('T',' ');
   const fFin = typeof fmtDT==='function' ? fmtDT(orden.fechaFin||'') : (orden.fechaFin||'').slice(0,16).replace('T',' ');
