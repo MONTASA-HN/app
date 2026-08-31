@@ -417,6 +417,55 @@ function loadDB(){
   }catch(e){ DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES)); }
 }
 
+// ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
+// Las fotos viven en montasa/fotosOrden/<idOrden> y se descargan SOLO cuando
+// se abre esa orden. La orden lleva el marcador nFotos. Compatibilidad total:
+// si una orden aún trae las fotos adentro (formato viejo), se muestran igual.
+window._fotosOrdenCache = window._fotosOrdenCache || {};
+window._fotosHidratando = window._fotosHidratando || {};
+function _fotosPendientes(o){
+  return !!(o && o.id && (o.nFotos>0) && !(Array.isArray(o.fotos) && o.fotos.length));
+}
+function _fotosCargandoHTML(){
+  return '<div style="font-size:12px;color:var(--text3);padding:8px 0">📷 Cargando fotografías…</div>';
+}
+function _hidratarFotos(o, cb){
+  if(!o || !o.id) return;
+  const cacheado = window._fotosOrdenCache[o.id];
+  if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
+  if(!window._fbDB || window._fotosHidratando[o.id]) return;
+  window._fotosHidratando[o.id] = true;
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).once('value').then(function(s){
+    delete window._fotosHidratando[o.id];
+    const v = s.val();
+    const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
+    window._fotosOrdenCache[o.id] = arr;
+    if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
+  }).catch(function(){ delete window._fotosHidratando[o.id]; });
+}
+function _persistirFotosOrden(o){
+  if(!o || !o.id || !window._fbDB) return;
+  const fotos = (o.fotos||[]).filter(Boolean);
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).set({fotos:fotos}).then(function(){
+    o.nFotos = fotos.length;
+    window._fotosOrdenCache[o.id] = fotos;
+    try{ saveDB(); }catch(e){}
+  });
+}
+function _sinFotosPersist(arr){
+  return (arr||[]).map(function(o){
+    if(!o || o.nFotos===undefined || !Array.isArray(o.fotos) || !o.fotos.length) return o;
+    const c = Object.assign({}, o); delete c.fotos; return c;
+  });
+}
+let _refrescoFotosTimer = null;
+function _refrescarVistasFotos(){
+  clearTimeout(_refrescoFotosTimer);
+  _refrescoFotosTimer = setTimeout(function(){
+    try{renderOrdenesLog();}catch(e){} try{renderHistorialLog();}catch(e){}
+  }, 120);
+}
+
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   _writeToFirebase();
@@ -440,7 +489,7 @@ function _writeToFirebase(){
         const ts = Date.now();
         window._localWriteTs = ts;
         const payload = {
-          logistica: merged,
+          logistica: _sinFotosPersist(merged),
           _ts: ts,
           _sid: _SESSION_ID
         };
@@ -598,6 +647,7 @@ function renderOrdenesLog(){
     const estadoColor = o.estado==='En proceso'?'#f39c12':o.estado==='En espera'?'#3498db':'#e74c3c';
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
+    if(isOpen && _fotosPendientes(o)) _hidratarFotos(o);
     return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;cursor:pointer" data-lgid="${o.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1">
@@ -821,6 +871,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px"><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">⏱ HORAS EQUIPO</div><div style="font-size:18px;font-weight:800;color:#1f3864">'+hEq+'</div></div><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">👷 HORAS OPERADOR</div><div style="font-size:18px;font-weight:800;color:#1f3864">'+hOp+'</div></div></div>';
   if(o.foto) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">📷 Foto</div><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)" onclick="event.stopPropagation();_verFotoGrandeLog(\''+o.id+'\',0)"></div>';
   if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="'+o.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+  if(_fotosPendientes(o)){ h += _fotosCargandoHTML(); _hidratarFotos(o); }
   if(o.fotos&&o.fotos.length){
     h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 Fotografías ('+o.fotos.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
     o.fotos.forEach(function(f,i){ h += '<div style="width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0" onclick="event.stopPropagation();_verFotoGrandeLog(\''+o.id+'\','+i+')"><img src="'+f+'" style="width:100%;height:100%;object-fit:cover"></div>'; });
@@ -2860,6 +2911,7 @@ function agregarFotosLog(id, input){
         orden.fotos.push(canvas.toDataURL('image/jpeg', 0.7));
         pendientes--;
         if(pendientes === 0){
+          _persistirFotosOrden(orden);
           saveDB();
           openSubgrupos.add('cb-log-'+id);
           renderOrdenesLog();
@@ -2877,6 +2929,7 @@ function eliminarFotoLog(id, idx){
   const orden = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!orden || !orden.fotos) return;
   orden.fotos.splice(idx, 1);
+  _persistirFotosOrden(orden);
   saveDB();
   openSubgrupos.add('cb-log-'+id);
   renderOrdenesLog();

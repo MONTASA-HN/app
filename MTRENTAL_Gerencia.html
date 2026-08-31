@@ -1766,6 +1766,7 @@ function abrirDescargaFotos(id){
   var o=null;
   for(var i=0;i<arrs.length;i++){ if(Array.isArray(arrs[i])){ var f=arrs[i].find(function(x){return x&&x.id===id;}); if(f){o=f;break;} } }
   if(!o){ try{toast('Orden no encontrada',true);}catch(e){} return; }
+  if(typeof _fotosPendientes==='function' && _fotosPendientes(o)){ _hidratarFotos(o, function(){ abrirDescargaFotos(id); }); try{toast('Descargando fotografías…');}catch(e){} return; }
   var fotos=[]; if(Array.isArray(o.fotos)) fotos=o.fotos.filter(Boolean); if(o.foto) fotos=fotos.concat([o.foto]);
   if(!fotos.length){ try{toast('Esta orden no tiene fotografías',true);}catch(e){} return; }
   var corr=(o.correlativo||'orden').replace(/[^\w\-]+/g,'_');
@@ -1833,6 +1834,55 @@ function abrirDescargaFotos(id){
   document.body.appendChild(ov);
   upd();
 }
+// ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
+// Las fotos viven en montasa/fotosOrden/<idOrden> y se descargan SOLO cuando
+// se abre esa orden. La orden lleva el marcador nFotos. Compatibilidad total:
+// si una orden aún trae las fotos adentro (formato viejo), se muestran igual.
+window._fotosOrdenCache = window._fotosOrdenCache || {};
+window._fotosHidratando = window._fotosHidratando || {};
+function _fotosPendientes(o){
+  return !!(o && o.id && (o.nFotos>0) && !(Array.isArray(o.fotos) && o.fotos.length));
+}
+function _fotosCargandoHTML(){
+  return '<div style="font-size:12px;color:var(--text3);padding:8px 0">📷 Cargando fotografías…</div>';
+}
+function _hidratarFotos(o, cb){
+  if(!o || !o.id) return;
+  const cacheado = window._fotosOrdenCache[o.id];
+  if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
+  if(!window._fbDB || window._fotosHidratando[o.id]) return;
+  window._fotosHidratando[o.id] = true;
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).once('value').then(function(s){
+    delete window._fotosHidratando[o.id];
+    const v = s.val();
+    const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
+    window._fotosOrdenCache[o.id] = arr;
+    if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
+  }).catch(function(){ delete window._fotosHidratando[o.id]; });
+}
+function _persistirFotosOrden(o){
+  if(!o || !o.id || !window._fbDB) return;
+  const fotos = (o.fotos||[]).filter(Boolean);
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).set({fotos:fotos}).then(function(){
+    o.nFotos = fotos.length;
+    window._fotosOrdenCache[o.id] = fotos;
+    try{ saveDB(); }catch(e){}
+  });
+}
+function _sinFotosPersist(arr){
+  return (arr||[]).map(function(o){
+    if(!o || o.nFotos===undefined || !Array.isArray(o.fotos) || !o.fotos.length) return o;
+    const c = Object.assign({}, o); delete c.fotos; return c;
+  });
+}
+let _refrescoFotosTimer = null;
+function _refrescarVistasFotos(){
+  clearTimeout(_refrescoFotosTimer);
+  _refrescoFotosTimer = setTimeout(function(){
+    try{renderHistorial();}catch(e){} try{renderLogistica();}catch(e){}
+  }, 120);
+}
+
 function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
@@ -1850,8 +1900,8 @@ function saveDB(){
       if(window._equiposFBok) payload.equipos = DB.equipos||[];
       if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = DB.preventivos;
       if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = DB.correctivos;
-      if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
-      if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
+      if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = _sinFotosPersist(DB.revisiones);
+      if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = _sinFotosPersist(DB.evaluaciones);
       if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
       if(DB.vendidos && DB.vendidos.length)               payload.vendidos        = DB.vendidos;
       if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
@@ -1960,7 +2010,7 @@ function _sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj){
         else arr.push(clean);
       }
     }
-    return window._fbDB.ref('montasa/logistica').set(arr).then(()=>{
+    return window._fbDB.ref('montasa/logistica').set(_sinFotosPersist(arr)).then(()=>{
       // Nunca degradar el contador remoto: solo escribir si tenemos un valor real (>0)
       var _lcLG = parseInt(DB['lastCorrelativo_LG'],10)||0;
       if(_lcLG>0) window._fbDB.ref('montasa/lastCorrelativo_LG').set(_lcLG);
@@ -3927,6 +3977,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     h+="<div style=\"display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;background:#dce6f1;border-radius:6px;padding:12px\"><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS EQUIPO</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hEq+"</div></div><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS OPERADOR</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hOp+"</div></div></div>";
   if(o.foto) h+="<div style=\"margin-bottom:12px\"><img src=\""+o.foto+"\" style=\"width:100%;max-height:200px;object-fit:cover;border-radius:8px;cursor:zoom-in\" onclick=\"event.stopPropagation();_verFotoGer(this.src)\"></div>";
   if(o.firma) h+="<div style=\"margin-bottom:12px\"><div style=\"font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px\">\u270d\ufe0f Firma</div><img src=\""+o.firma+"\" style=\"width:100%;max-height:80px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff\"></div>";
+  if(_fotosPendientes(o)){ h += _fotosCargandoHTML(); _hidratarFotos(o); }
   if(o.fotos&&o.fotos.length){ h += _btnDescFotos(o.id);
     h+="<div style=\"margin-bottom:12px\"><div style=\"font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px\">&nbsp;\ud83d\udcf7 Fotograf\u00edas ("+o.fotos.length+")</div><div style=\"display:flex;flex-wrap:wrap;gap:8px\">";
     o.fotos.forEach(function(f){ h+="<div style=\"width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0\" onclick=\"event.stopPropagation();_verFotoGer(this.querySelector('img').src)\"><img src=\""+f+"\" style=\"width:100%;height:100%;object-fit:cover\"></div>"; });
@@ -4975,6 +5026,7 @@ function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
   });
   if(x.notas) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Notas</span><span style="font-weight:600">${x.notas}</span></div>`;
   d += `</div>`;
+  if(_fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos&&x.fotos.length){ d += _btnDescFotos(x.id);
     d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 FOTOGRAFÍAS (${x.fotos.length})</div>`;
     d += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
@@ -5023,6 +5075,7 @@ function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
   if(x.diagnostico) d += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Diagnóstico</span><span style="font-weight:600">${x.diagnostico}</span></div>`;
   d += `</div>`;
   if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+  if(_fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos&&x.fotos.length){ d += _btnDescFotos(x.id);
     d += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 Fotografías ('+x.fotos.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
     x.fotos.forEach(function(f,i){ d += '<div style="width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0" onclick="event.stopPropagation();(function(src){var ov=document.createElement(\'div\');ov.style.cssText=\'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out\';var img=document.createElement(\'img\');img.src=src;img.style.cssText=\'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px\';ov.appendChild(img);ov.onclick=function(){ov.remove()};document.body.appendChild(ov);})(this.querySelector(\'img\').src)"><img src="'+f+'" style="width:100%;height:100%;object-fit:cover"></div>'; });
@@ -5152,6 +5205,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
 
   // Firma
   if(x.firma) d += `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="${x.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`;
+  if(_fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos&&x.fotos.length){ d += _btnDescFotos(x.id);
     d += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 Fotografías ('+x.fotos.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
     x.fotos.forEach(function(f,i){ d += '<div style="width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0" onclick="event.stopPropagation();(function(src){var ov=document.createElement(\'div\');ov.style.cssText=\'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out\';var img=document.createElement(\'img\');img.src=src;img.style.cssText=\'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px\';ov.appendChild(img);ov.onclick=function(){ov.remove()};document.body.appendChild(ov);})(this.querySelector(\'img\').src)"><img src="'+f+'" style="width:100%;height:100%;object-fit:cover"></div>'; });
@@ -6097,7 +6151,7 @@ async function enviarSolicitudWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(_sinFotosPersist(DB.revisiones));
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
@@ -6116,7 +6170,7 @@ async function enviarSolicitudWA(){
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente, ubicacionLink:_ubL});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(_sinFotosPersist(DB.evaluaciones));
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
@@ -6287,7 +6341,7 @@ async function copiarMensajeWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/revisiones').set(_sinFotosPersist(DB.revisiones));
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
@@ -6306,7 +6360,7 @@ async function copiarMensajeWA(){
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente, ubicacionLink:_ubL});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) window._fbDB.ref('montasa/evaluaciones').set(_sinFotosPersist(DB.evaluaciones));
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'');
@@ -8321,7 +8375,7 @@ function _elimRV(id){
     DB.revisiones = (DB.revisiones||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa/revisiones').set(DB.revisiones)
+      window._fbDB.ref('montasa/revisiones').set(_sinFotosPersist(DB.revisiones))
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -8335,7 +8389,7 @@ function _elimEV(id){
     DB.evaluaciones = (DB.evaluaciones||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('montasa/evaluaciones').set(DB.evaluaciones)
+      window._fbDB.ref('montasa/evaluaciones').set(_sinFotosPersist(DB.evaluaciones))
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
