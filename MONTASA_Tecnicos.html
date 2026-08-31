@@ -3231,13 +3231,35 @@ function borrarFoto(inputId,previewId){
   const p=document.getElementById(previewId);
   if(p){ const img=p.querySelector("img"); if(img) img.src=""; p.style.display="none"; }
 }
+// Comprime una foto (dataURL) a máx. 1024px y JPEG 0.7 antes de guardarla en
+// Firebase — clave para que la base no engorde y las apps carguen rápido.
+function _comprimirFotoDataURL(dataUrl){
+  return new Promise(resolve=>{
+    try{
+      if(!dataUrl || typeof dataUrl!=='string' || dataUrl.length<100000) return resolve(dataUrl);
+      const img=new Image();
+      img.onload=function(){
+        try{
+          const MAX=1024; let w=img.width,h=img.height;
+          if(w>MAX||h>MAX){const e=Math.min(MAX/w,MAX/h); w=Math.round(w*e); h=Math.round(h*e);}
+          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          c.getContext('2d').drawImage(img,0,0,w,h);
+          const out=c.toDataURL('image/jpeg',0.7);
+          resolve(out.length<dataUrl.length?out:dataUrl);
+        }catch(e){ resolve(dataUrl); }
+      };
+      img.onerror=()=>resolve(dataUrl);
+      img.src=dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
 function getFotoBase64(inputId){
   return new Promise(resolve=>{
     const input=document.getElementById(inputId);
     const file=input && input.files ? input.files[0] : null;
     if(!file){ resolve(null); return; }
     const reader=new FileReader();
-    reader.onload=e=>resolve(e.target.result);
+    reader.onload=e=>_comprimirFotoDataURL(e.target.result).then(resolve);
     reader.readAsDataURL(file);
   });
 }
@@ -3933,13 +3955,13 @@ function agregarFotosOrden(tipo, id, input){
       img.onload = ()=>{
         try{
           const canvas = document.createElement('canvas');
-          const MAX = 1200;
+          const MAX = 1024;
           let w = img.width, h = img.height;
           if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
           if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
           canvas.width = w; canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
           const o = getOrden();
           if(o){ if(!o.fotos) o.fotos=[]; o.fotos.push(dataUrl); agregadas++; }
         }catch(err){ /* esta foto falló: se omite, el resto continúa */ }
