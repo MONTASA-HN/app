@@ -350,6 +350,55 @@ function loadDB(){
   }
 }
 
+// ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
+// Las fotos viven en montasa/fotosOrden/<idOrden> y se descargan SOLO cuando
+// se abre esa orden. La orden lleva el marcador nFotos. Compatibilidad total:
+// si una orden aún trae las fotos adentro (formato viejo), se muestran igual.
+window._fotosOrdenCache = window._fotosOrdenCache || {};
+window._fotosHidratando = window._fotosHidratando || {};
+function _fotosPendientes(o){
+  return !!(o && o.id && (o.nFotos>0) && !(Array.isArray(o.fotos) && o.fotos.length));
+}
+function _fotosCargandoHTML(){
+  return '<div style="font-size:12px;color:var(--text3);padding:8px 0">📷 Cargando fotografías…</div>';
+}
+function _hidratarFotos(o, cb){
+  if(!o || !o.id) return;
+  const cacheado = window._fotosOrdenCache[o.id];
+  if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
+  if(!window._fbDB || window._fotosHidratando[o.id]) return;
+  window._fotosHidratando[o.id] = true;
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).once('value').then(function(s){
+    delete window._fotosHidratando[o.id];
+    const v = s.val();
+    const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
+    window._fotosOrdenCache[o.id] = arr;
+    if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
+  }).catch(function(){ delete window._fotosHidratando[o.id]; });
+}
+function _persistirFotosOrden(o){
+  if(!o || !o.id || !window._fbDB) return;
+  const fotos = (o.fotos||[]).filter(Boolean);
+  window._fbDB.ref('montasa/fotosOrden/'+o.id).set({fotos:fotos}).then(function(){
+    o.nFotos = fotos.length;
+    window._fotosOrdenCache[o.id] = fotos;
+    try{ saveDB(); }catch(e){}
+  });
+}
+function _sinFotosPersist(arr){
+  return (arr||[]).map(function(o){
+    if(!o || o.nFotos===undefined || !Array.isArray(o.fotos) || !o.fotos.length) return o;
+    const c = Object.assign({}, o); delete c.fotos; return c;
+  });
+}
+let _refrescoFotosTimer = null;
+function _refrescarVistasFotos(){
+  clearTimeout(_refrescoFotosTimer);
+  _refrescoFotosTimer = setTimeout(function(){
+    try{renderOrdenesCom();}catch(e){}
+  }, 120);
+}
+
 function saveDB(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
   try{
@@ -1458,6 +1507,7 @@ function abrirDescargaFotos(id){
   var o=null;
   for(var i=0;i<arrs.length;i++){ if(Array.isArray(arrs[i])){ var f=arrs[i].find(function(x){return x&&x.id===id;}); if(f){o=f;break;} } }
   if(!o){ try{toast('Orden no encontrada',true);}catch(e){} return; }
+  if(typeof _fotosPendientes==='function' && _fotosPendientes(o)){ _hidratarFotos(o, function(){ abrirDescargaFotos(id); }); try{toast('Descargando fotografías…');}catch(e){} return; }
   var fotos=[]; if(Array.isArray(o.fotos)) fotos=o.fotos.filter(Boolean); if(o.foto) fotos=fotos.concat([o.foto]);
   if(!fotos.length){ try{toast('Esta orden no tiene fotografías',true);}catch(e){} return; }
   var corr=(o.correlativo||'orden').replace(/[^\w\-]+/g,'_');
@@ -1605,6 +1655,7 @@ function _detalleOrdenCom(x, tipo, est){
   campos.forEach(function(c){ if(c[1]&&c[1]!=='—'){ d+='<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">'+c[0]+'</span><span style="font-weight:600;color:var(--text);word-break:break-word">'+c[1]+'</span></div>'; } });
   d+='</div>';
   if(x.firma) d+='<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="'+x.firma+'" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+  if(_fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos&&x.fotos.length){
     d+=_btnDescFotos(x.id);
     d+='<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 Fotografías ('+x.fotos.length+')</div><div style="display:flex;flex-wrap:wrap;gap:6px">';
