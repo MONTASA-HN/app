@@ -1835,7 +1835,8 @@ function abrirDescargaFotos(id){
   upd();
 }
 // ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
-// Las fotos viven en montasa/fotosOrden/<idOrden> y se descargan SOLO cuando
+// Las fotos viven en fotosOrden_montasa/<idOrden> (FUERA del nodo raíz que
+// las apps descargan al abrir) y se descargan SOLO cuando
 // se abre esa orden. La orden lleva el marcador nFotos. Compatibilidad total:
 // si una orden aún trae las fotos adentro (formato viejo), se muestran igual.
 window._fotosOrdenCache = window._fotosOrdenCache || {};
@@ -1852,7 +1853,7 @@ function _hidratarFotos(o, cb){
   if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
   if(!window._fbDB || window._fotosHidratando[o.id]) return;
   window._fotosHidratando[o.id] = true;
-  window._fbDB.ref('montasa/fotosOrden/'+o.id).once('value').then(function(s){
+  window._fbDB.ref('fotosOrden_montasa/'+o.id).once('value').then(function(s){
     delete window._fotosHidratando[o.id];
     const v = s.val();
     const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
@@ -1863,7 +1864,7 @@ function _hidratarFotos(o, cb){
 function _persistirFotosOrden(o){
   if(!o || !o.id || !window._fbDB) return;
   const fotos = (o.fotos||[]).filter(Boolean);
-  window._fbDB.ref('montasa/fotosOrden/'+o.id).set({fotos:fotos}).then(function(){
+  window._fbDB.ref('fotosOrden_montasa/'+o.id).set({fotos:fotos}).then(function(){
     o.nFotos = fotos.length;
     window._fotosOrdenCache[o.id] = fotos;
     try{ saveDB(); }catch(e){}
