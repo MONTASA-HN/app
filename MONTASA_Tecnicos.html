@@ -646,6 +646,14 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div class="form-group"><label>Trabajo realizado</label><textarea id="prev-notas" placeholder="Descripción del trabajo realizado..."></textarea></div>
       <div class="form-group"><label>Sugerencias para el próximo servicio</label><textarea id="prev-sugerencias" placeholder="Recomendaciones y sugerencias..."></textarea></div>
+      <div class="form-group"><label>🔜 Próximo mantenimiento</label>
+        <select id="prev-proximo">
+          <option value="">-- Seleccionar --</option>
+          <option value="Mantenimiento 250 horas">⏱ 250 horas</option>
+          <option value="Mantenimiento 500 horas">⏱ 500 horas</option>
+          <option value="Mantenimiento 1000 horas">⏱ 1,000 horas</option>
+          <option value="Mantenimiento 2000 horas">⏱ 2,000 horas</option>
+        </select></div>
       <div class="form-group">
         <label>Foto del reporte firmado</label>
         <div class="foto-upload">
@@ -823,6 +831,14 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       <div class="form-group"><label>Horómetro del equipo <span style="color:#c9211e">*</span></label><input type="number" id="eval-horometro" placeholder="Ej: 1250" min="0"></div>
       <div class="form-group"><label>Nombre del cliente</label><input id="eval-cliente" placeholder="Nombre completo"></div>
       <div class="form-group"><label>Diagnóstico del equipo</label><textarea id="eval-diagnostico" rows="3" placeholder="Diagnóstico..."></textarea></div>
+      <div class="form-group"><label>🔜 Mantenimiento sugerido</label>
+        <select id="eval-mant-sugerido">
+          <option value="">-- Seleccionar --</option>
+          <option value="Mantenimiento 250 horas">⏱ 250 horas</option>
+          <option value="Mantenimiento 500 horas">⏱ 500 horas</option>
+          <option value="Mantenimiento 1000 horas">⏱ 1,000 horas</option>
+          <option value="Mantenimiento 2000 horas">⏱ 2,000 horas</option>
+        </select></div>
       <div style="margin-top:14px">
         <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
         <canvas id="firma-eval-new" class="firma-canvas" width="600" height="160"
@@ -2080,6 +2096,13 @@ function renderPreventivos(){
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
+      <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','proximoMant',this.value)">
+        <option value="">-- Seleccionar --</option>
+        <option value="Mantenimiento 250 horas" ${p.proximoMant==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
+        <option value="Mantenimiento 500 horas" ${p.proximoMant==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option>
+        <option value="Mantenimiento 1000 horas" ${p.proximoMant==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option>
+        <option value="Mantenimiento 2000 horas" ${p.proximoMant==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option>
+      </select></div>
       ${(p.ubicacion||'campo')!=='plantel'?`
       <div style="margin-top:12px">
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
@@ -2150,7 +2173,7 @@ function guardarPreventivo(finalizar=false){
   const fechaInicio = prevFID ? (prevFIT ? prevFID+'T'+prevFIT : prevFID) : '';
   const fechaFin    = prevFFD ? (prevFFT ? prevFFD+'T'+prevFFT : prevFFD) : '';
   const correlativoPrev = nextCorrelativo();
-  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),completado:false};
+  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),proximoMant:document.getElementById('prev-proximo')?.value||'',completado:false};
   if(equipoId === '__cliente__' || document.getElementById('prev-equipo-cliente-sel')?.value){
     const nom   = document.getElementById('prev-cliente-nombre').value.trim();
     const marca  = document.getElementById('prev-cliente-marca').value.trim();
@@ -2184,7 +2207,7 @@ function guardarPreventivo(finalizar=false){
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
-  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  ['prev-horometro','prev-notas','prev-sugerencias','prev-proximo','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
@@ -2316,6 +2339,7 @@ function editarOrden(tipo, id){
     document.getElementById('prev-horometro').value = orden.horometro||'';
     document.getElementById('prev-notas').value = orden.notas||'';
     document.getElementById('prev-sugerencias').value = orden.sugerencias||'';
+    if(document.getElementById('prev-proximo')) document.getElementById('prev-proximo').value = orden.proximoMant||'';
     preseleccionarTecnico('prev-tecnicos-grid', orden.tecnico);
     // Remove old entry and save on re-submit
     DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
@@ -2982,6 +3006,7 @@ function registrarOrdenCerrada(orden, tipo){
     tecnico:      orden.tecnico||'',
     trabajo:      orden.notas||orden.diagnostico||'',
     sugerencias:  orden.sugerencias||'',
+    proximoMant:  orden.proximoMant||'',
     diagnostico:  tipo==='Correctivo' ? (orden.diagnostico||'') : '',
     fechaCierre:  hoy
   });
@@ -3897,6 +3922,7 @@ function guardarEvaluacion(){
     fechaInicio: fecha+'T'+horaIni, fechaFin: fecha+'T'+horaFin,
     kmSalida: kmSal, kmRetorno: kmRet,
     tipoEquipo: tipoEq, marca, modelo, serie, horometro, cliente, diagnostico: diag, firma,
+    mantSugerido: document.getElementById('eval-mant-sugerido')?.value||'',
     completado: estado==='Completado'
   };
   DB.evaluaciones.push(entry);
@@ -3905,7 +3931,7 @@ function guardarEvaluacion(){
     window._fbDB.ref('montasa/evaluaciones').set(_sinFotosPersist(DB.evaluaciones));
   // Al completar la evaluación, el montacargas del cliente entra a la flota de clientes
   if(entry.completado) _crearEquipoClienteDesdeEval(entry);
-  ['eval-marca','eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
+  ['eval-marca','eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-mant-sugerido','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('eval-estado').selectedIndex=0;
@@ -3998,6 +4024,7 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Nombre del cliente</label><input value="${v.cliente||''}" placeholder="Nombre completo" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','cliente',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
+      card += `<div class="form-group"><label>🔜 Mantenimiento sugerido</label><select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','mantSugerido',this.value)"><option value="">-- Seleccionar --</option><option value="Mantenimiento 250 horas" ${v.mantSugerido==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option><option value="Mantenimiento 500 horas" ${v.mantSugerido==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option><option value="Mantenimiento 1000 horas" ${v.mantSugerido==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option><option value="Mantenimiento 2000 horas" ${v.mantSugerido==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option></select></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
