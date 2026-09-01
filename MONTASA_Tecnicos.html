@@ -841,6 +841,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   </div>
   <div id="evaluacion-list"></div>
 </div>
+<div class="section" id="tab-agenda">
+  <div class="card" style="padding:14px">
+    <div style="font-weight:800;font-size:17px;color:#1f3864;margin-bottom:10px">📅 Agenda semanal</div>
+    <div id="agenda-cont"></div>
+  </div>
+</div>
 <nav class="bottom-nav">
   <button class="nav-btn active" id="btn-dashboard" onclick="showTab('dashboard',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Inicio
@@ -856,6 +862,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   </button>
   <button class="nav-btn" onclick="showTab('evaluacion',this)">
     <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><span class="nav-badge" id="badge-eval"></span></span>Evaluación
+  </button>
+  <button class="nav-btn" onclick="showTab('agenda',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Agenda
   </button>
 </nav>
 
@@ -924,6 +933,7 @@ function loadDB(){
     if(d.preventivos)     DB.preventivos     = d.preventivos;
     if(d.correctivos)     DB.correctivos     = d.correctivos;
     _protegerOrdenesRecientes();
+      if(d && d.agenda) DB.agenda = d.agenda;
     if(d.revisiones)      DB.revisiones      = d.revisiones||[];
     if(d.evaluaciones)    DB.evaluaciones    = d.evaluaciones||[];
     if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
@@ -1045,6 +1055,150 @@ function _guardarEquipoClienteEnFlota(orden){
   }
 }
 
+// ══ AGENDA SEMANAL POR TÉCNICO ══════════════════════════════════════════════
+// Datos en montasa/agenda/<idEvento> — escritura POR EVENTO individual (dos
+// personas pueden agendar a la vez sin pisarse). Horario: L–V 7:30–16:30,
+// sábado 7:30–11:30.
+const AGENDA_EDIT = false;
+const AGENDA_TECNICOS = ['Jonathan Martinez','Marvin Torres','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'];
+const AGENDA_SLOTS = ['07:30','08:30','09:30','10:30','11:30','12:30','13:30','14:30','15:30'];
+const AGENDA_DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+let _agSemana = null; // fecha (Date) del lunes mostrado
+let _agTecnico = localStorage.getItem('agenda_tecnico') || AGENDA_TECNICOS[0];
+function _agLunes(d){ const x=new Date(d); const dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function _agISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _agEventos(){ const a=DB.agenda||{}; return (Array.isArray(a)?a:Object.values(a)).filter(Boolean); }
+function _agMoverSemana(n){ _agSemana.setDate(_agSemana.getDate()+7*n); renderAgenda(); }
+function _agSetTecnico(v){ _agTecnico=v; try{localStorage.setItem('agenda_tecnico',v);}catch(e){} renderAgenda(); }
+function _agSlotFin(h){ const i=AGENDA_SLOTS.indexOf(h); return i>=0&&i<AGENDA_SLOTS.length-1?AGENDA_SLOTS[i+1]:'16:30'; }
+function renderAgenda(){
+  const cont=document.getElementById('agenda-cont'); if(!cont) return;
+  if(!_agSemana) _agSemana=_agLunes(new Date());
+  const dias=[]; for(let i=0;i<6;i++){ const d=new Date(_agSemana); d.setDate(d.getDate()+i); dias.push(d); }
+  const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const rango='Semana del '+dias[0].getDate()+' '+meses[dias[0].getMonth()]+' al '+dias[5].getDate()+' '+meses[dias[5].getMonth()]+' '+dias[5].getFullYear();
+  const evs=_agEventos().filter(e=>e.tecnico===_agTecnico);
+  let h='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">';
+  h+='<select onchange="_agSetTecnico(this.value)" style="flex:1;min-width:170px;padding:10px;border:1px solid var(--border2);border-radius:8px;font-weight:700;font-size:14px">';
+  AGENDA_TECNICOS.forEach(t=>{ h+='<option '+(t===_agTecnico?'selected':'')+'>'+t+'</option>'; });
+  h+='</select>';
+  h+='<button onclick="_agMoverSemana(-1)" style="padding:10px 14px;border:1px solid var(--border2);border-radius:8px;background:#fff;cursor:pointer;font-weight:700">‹</button>';
+  h+='<button onclick="_agSemana=_agLunes(new Date());renderAgenda()" style="padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:700">Hoy</button>';
+  h+='<button onclick="_agMoverSemana(1)" style="padding:10px 14px;border:1px solid var(--border2);border-radius:8px;background:#fff;cursor:pointer;font-weight:700">›</button>';
+  if(AGENDA_EDIT) h+='<button onclick="_agCopiarSemana()" style="padding:10px 12px;border:none;border-radius:8px;background:#1f3864;color:#fff;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar semana</button>';
+  h+='</div>';
+  h+='<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:15px">'+rango+'</div>';
+  const hoyISO=_agISO(new Date());
+  // ── GRILLA (edición) o LISTA (consulta) ──
+  if(AGENDA_EDIT){
+    h+='<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:760px;width:100%;font-size:11px;background:#fff;border-radius:8px">';
+    h+='<tr><th style="border:1px solid var(--border2);padding:6px;background:#1f3864;color:#fff;width:52px">Hora</th>';
+    dias.forEach((d,i)=>{ const esHoy=_agISO(d)===hoyISO; h+='<th style="border:1px solid var(--border2);padding:6px;background:'+(esHoy?'#2d6a9f':'#1f3864')+';color:#fff">'+AGENDA_DIAS[i]+' '+d.getDate()+'</th>'; });
+    h+='</tr>';
+    AGENDA_SLOTS.forEach((slot,si)=>{
+      h+='<tr><td style="border:1px solid var(--border2);padding:4px;font-weight:700;color:var(--text3);text-align:center;white-space:nowrap">'+slot+'</td>';
+      dias.forEach((d,di)=>{
+        const esSab=di===5;
+        if(esSab && si>=4){ h+='<td style="border:1px solid var(--border2);background:#f2f2f2"></td>'; return; }
+        const fISO=_agISO(d);
+        const enSlot=evs.filter(e=>e.fecha===fISO && e.horaIni>=slot && e.horaIni<_agSlotFin(slot)).sort((a,b)=>a.horaIni<b.horaIni?-1:1);
+        h+='<td onclick="_agAbrirEvento(\''+fISO+'\',\''+slot+'\')" style="border:1px solid var(--border2);padding:2px;vertical-align:top;min-width:105px;height:44px;cursor:pointer">';
+        enSlot.forEach(e=>{
+          h+='<div onclick="event.stopPropagation();_agAbrirEvento(null,null,\''+e.id+'\')" style="background:#e8f0fe;border-left:3px solid #1f3864;border-radius:5px;padding:4px 5px;margin-bottom:2px;cursor:pointer">'
+            +'<div style="font-weight:800;color:#1f3864">'+e.horaIni+'–'+(e.horaFin||'')+'</div>'
+            +'<div style="font-weight:600">'+String(e.actividad||'').replace(/[<>]/g,'')+'</div>'
+            +(e.orden?'<div style="color:var(--text3)">'+String(e.orden).replace(/[<>]/g,'')+'</div>':'')
+            +'</div>';
+        });
+        h+='</td>';
+      });
+      h+='</tr>';
+    });
+    h+='</table></div>';
+    h+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Toca una casilla vacía para agendar, o una actividad para editarla.</div>';
+  } else {
+    // Vista del técnico: lista día por día (cómoda en teléfono)
+    dias.forEach((d,i)=>{
+      const fISO=_agISO(d);
+      const delDia=evs.filter(e=>e.fecha===fISO).sort((a,b)=>a.horaIni<b.horaIni?-1:1);
+      const esHoy=fISO===hoyISO;
+      h+='<div style="background:#fff;border:1px solid var(--border);border-left:4px solid '+(esHoy?'#2d6a9f':'#1f3864')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">';
+      h+='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+AGENDA_DIAS[i]+' '+d.getDate()+(esHoy?' · HOY':'')+'</div>';
+      if(!delDia.length) h+='<div style="font-size:12px;color:var(--text3)">Sin actividades programadas</div>';
+      delDia.forEach(e=>{
+        h+='<div style="background:#e8f0fe;border-left:3px solid #1f3864;border-radius:6px;padding:7px 9px;margin-bottom:4px;font-size:13px">'
+          +'<b>'+e.horaIni+'–'+(e.horaFin||'')+'</b> · '+String(e.actividad||'').replace(/[<>]/g,'')
+          +(e.orden?' <span style="color:#2d6a9f;font-weight:700">['+String(e.orden).replace(/[<>]/g,'')+']</span>':'')
+          +(e.notas?'<div style="font-size:12px;color:var(--text3);margin-top:2px">'+String(e.notas).replace(/[<>]/g,'')+'</div>':'')
+          +'</div>';
+      });
+      h+='</div>';
+    });
+  }
+  cont.innerHTML=h;
+}
+function _agAbrirEvento(fecha, slot, evId){
+  if(!AGENDA_EDIT) return;
+  const ev = evId ? _agEventos().find(e=>e.id===evId) : null;
+  const f = ev?ev.fecha:fecha, hi = ev?ev.horaIni:slot, hf = ev?(ev.horaFin||_agSlotFin(slot||'07:30')):_agSlotFin(slot);
+  const ov=document.createElement('div');
+  ov.id='agenda-ev-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;max-height:90vh;overflow:auto" onclick="event.stopPropagation()">'
+    +'<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">'+(ev?'✏️ Editar actividad':'📅 Nueva actividad')+' — '+_agTecnico+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Fecha: <b>'+f+'</b></div>'
+    +'<div class="form-group"><label>Actividad *</label><input id="ag-actividad" value="'+(ev?String(ev.actividad||'').replace(/"/g,'&quot;'):'')+'" placeholder="Ej: Preventivo MT-119 en ELCATEX"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="form-group"><label>Hora inicio</label><input id="ag-hini" type="time" value="'+hi+'"></div>'
+    +'<div class="form-group"><label>Hora fin</label><input id="ag-hfin" type="time" value="'+hf+'"></div></div>'
+    +'<div class="form-group"><label>Orden vinculada (opcional)</label><input id="ag-orden" value="'+(ev?String(ev.orden||'').replace(/"/g,'&quot;'):'')+'" placeholder="Ej: MH-0125"></div>'
+    +'<div class="form-group"><label>Notas (opcional)</label><input id="ag-notas" value="'+(ev?String(ev.notas||'').replace(/"/g,'&quot;'):'')+'" placeholder="Detalles, contacto, etc."></div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px">'
+    +'<button onclick="_agGuardarEvento(\''+(ev?ev.id:'')+'\',\''+f+'\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar</button>'
+    +(ev?'<button onclick="_agEliminarEvento(\''+ev.id+'\')" style="padding:12px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:800;cursor:pointer">🗑</button>':'')
+    +'<button onclick="document.getElementById(\'agenda-ev-overlay\').remove()" style="padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  ov.onclick=()=>ov.remove();
+  document.body.appendChild(ov);
+}
+function _agGuardarEvento(evId, fecha){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ Sin conexión — no se puede guardar la agenda ahora.'); return; }
+  const act=document.getElementById('ag-actividad').value.trim();
+  if(!act){ toast('Falta la actividad', true); return; }
+  const hi=document.getElementById('ag-hini').value||'07:30';
+  const hf=document.getElementById('ag-hfin').value||'';
+  const ev={ id: evId || ('ag'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
+    tecnico:_agTecnico, fecha:fecha, horaIni:hi, horaFin:hf, actividad:act,
+    orden:document.getElementById('ag-orden').value.trim(),
+    notas:document.getElementById('ag-notas').value.trim(), ts:Date.now() };
+  window._fbDB.ref('montasa/agenda/'+ev.id).set(ev).then(()=>{
+    if(!DB.agenda || Array.isArray(DB.agenda)) DB.agenda={};
+    DB.agenda[ev.id]=ev;
+    const o=document.getElementById('agenda-ev-overlay'); if(o) o.remove();
+    renderAgenda(); toast('Actividad guardada ✓');
+  }).catch(()=>alert('No se pudo guardar. Revisa tu conexión.'));
+}
+function _agEliminarEvento(id){
+  if(!confirm('¿Eliminar esta actividad de la agenda?')) return;
+  window._fbDB.ref('montasa/agenda/'+id).remove().then(()=>{
+    if(DB.agenda) delete DB.agenda[id];
+    const o=document.getElementById('agenda-ev-overlay'); if(o) o.remove();
+    renderAgenda(); toast('Actividad eliminada');
+  }).catch(()=>alert('No se pudo eliminar. Revisa tu conexión.'));
+}
+function _agCopiarSemana(){
+  const dias=[]; for(let i=0;i<6;i++){ const d=new Date(_agSemana); d.setDate(d.getDate()+i); dias.push(d); }
+  const evs=_agEventos().filter(e=>e.tecnico===_agTecnico);
+  let msg='📅 *AGENDA SEMANAL — '+_agTecnico.toUpperCase()+'*\n';
+  dias.forEach((d,i)=>{
+    const del=evs.filter(e=>e.fecha===_agISO(d)).sort((a,b)=>a.horaIni<b.horaIni?-1:1);
+    msg+='\n*'+AGENDA_DIAS[i]+' '+d.getDate()+'*\n';
+    if(!del.length) msg+='— libre —\n';
+    del.forEach(e=>{ msg+='• '+e.horaIni+'–'+(e.horaFin||'')+' '+e.actividad+(e.orden?' ['+e.orden+']':'')+'\n'; });
+  });
+  navigator.clipboard.writeText(msg).then(()=>toast('Agenda copiada — pégala en WhatsApp ✓')).catch(()=>{
+    const ta=document.createElement('textarea'); ta.value=msg; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Agenda copiada ✓');
+  });
+}
 function showTab(id, el){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -1055,6 +1209,7 @@ function showTab(id, el){
   if(id==='correctivo') { fillSel('corr-equipo'); renderCorrectivos(); }
   if(id==='revision')   renderRevisiones();
   if(id==='evaluacion') renderEvaluaciones();
+  if(id==='agenda') renderAgenda();
   window.scrollTo(0,0);
 }
 
@@ -3254,6 +3409,7 @@ renderDashboardTec();
       if(d.preventivos)     DB.preventivos     = d.preventivos;
       if(d.correctivos)     DB.correctivos     = d.correctivos;
       _protegerOrdenesRecientes();
+      if(d && d.agenda) DB.agenda = d.agenda;
       if(d.revisiones && !_blockFBrev)      DB.revisiones      = d.revisiones||[];
       if(d.evaluaciones && !_blockFBeval)    DB.evaluaciones    = d.evaluaciones||[];
       if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
