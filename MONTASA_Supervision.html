@@ -1161,6 +1161,7 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
     campos.push(['Trabajo realizado', o.notas||'—']);
     if(o.sugerencias) campos.push(['Sugerencias', o.sugerencias]);
+    campos.push(['🔜 Próximo mantenimiento', o.proximoMant||'—']);
   } else if(tipo==='correctivo'){
     const t = calcTiemposOrden(o);
     campos.push(['Sistema afectado', o.sistema||'—']);
@@ -1195,6 +1196,7 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Serie', o.serie||'—']);
     campos.push(['Horómetro', o.horometro?(o.horometro+' hrs'):'—']);
     campos.push(['Diagnóstico', o.diagnostico||'—']);
+    campos.push(['🔜 Mantenimiento sugerido', o.mantSugerido||'—']);
   } else {
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
     const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
@@ -1723,6 +1725,7 @@ function editarOrden(tipo, id){
     document.getElementById('prev-horometro').value = orden.horometro||'';
     document.getElementById('prev-notas').value = orden.notas||'';
     document.getElementById('prev-sugerencias').value = orden.sugerencias||'';
+    if(document.getElementById('prev-proximo')) document.getElementById('prev-proximo').value = orden.proximoMant||'';
     preseleccionarTecnico('prev-tecnicos-grid', orden.tecnico);
     // Punto 1: recordar la orden original para conservar firma, correlativo, foto, etc.
     window._editandoOrden = { tipo:'prev', orig: JSON.parse(JSON.stringify(orden)) };
@@ -3520,6 +3523,13 @@ function renderPreventivos(){
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
+      <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','proximoMant',this.value)">
+        <option value="">-- Seleccionar --</option>
+        <option value="Mantenimiento 250 horas" ${p.proximoMant==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
+        <option value="Mantenimiento 500 horas" ${p.proximoMant==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option>
+        <option value="Mantenimiento 1000 horas" ${p.proximoMant==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option>
+        <option value="Mantenimiento 2000 horas" ${p.proximoMant==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option>
+      </select></div>
       ${(p.ubicacion||'campo')!=='plantel'?`<div style="margin-top:12px">
       <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🛣 Kilometraje <span style="color:#c9211e">*</span></div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px">
@@ -3839,7 +3849,7 @@ function guardarPreventivo(finalizar=false){
   const fechaInicio = prevFID ? (prevFIT ? prevFID+'T'+prevFIT : prevFID) : '';
   const fechaFin    = prevFFD ? (prevFFT ? prevFFD+'T'+prevFFT : prevFFD) : '';
   const correlativoPrev = nextCorrelativo('MH');
-  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),completado:false};
+  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),proximoMant:document.getElementById('prev-proximo')?.value||'',completado:false};
   if(equipoId === '__cliente__'){
     const nom = document.getElementById('prev-cliente-nombre').value.trim();
     if(!nom){ toast('Ingresa el nombre del cliente',true); return; }
@@ -3895,7 +3905,7 @@ function guardarPreventivo(finalizar=false){
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
-  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
+  ['prev-horometro','prev-notas','prev-sugerencias','prev-proximo','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
