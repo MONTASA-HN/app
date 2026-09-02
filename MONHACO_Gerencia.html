@@ -1445,6 +1445,123 @@ function _revertirEstadoEquipoAlEliminar(orden){
   _syncEquipoCampoFB(equipoId, 'estado', eq.estado);
 }
 
+
+// ── Compartir tarjeta de equipo/vehículo como imagen ────────────────────────
+function _cargarHtml2Canvas(){
+  if(window.html2canvas) return Promise.resolve();
+  return new Promise(function(res, rej){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload=res; s.onerror=function(){ rej(new Error('sin conexión para cargar el generador')); };
+    document.head.appendChild(s);
+  });
+}
+function _insertarBtnCompartirEq(){
+  try{
+    var btn = document.getElementById('btn-compartir-eq');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.id = 'btn-compartir-eq';
+      btn.innerHTML = '📋 Compartir tarjeta (copiar imagen)';
+      btn.style.cssText = 'width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin:2px 0 12px';
+      btn.onclick = function(ev){ ev.stopPropagation(); copiarImagenEquipo(); };
+    }
+    var est = document.getElementById('det-estado');
+    var ref = est ? (est.closest('.form-group')||est) : null;
+    if(ref && ref.previousElementSibling && ref.previousElementSibling.classList && ref.previousElementSibling.classList.contains('modal-section-title')) ref = ref.previousElementSibling;
+    if(ref && ref.parentNode){ ref.parentNode.insertBefore(btn, ref); return; }
+    var cont = document.getElementById('modal-body') || document.getElementById('modal-content');
+    if(cont) cont.insertBefore(btn, cont.firstChild);
+  }catch(e){}
+}
+async function copiarImagenEquipo(){
+  try{
+    const e = DB.equipos.find(x=>x.id===modalEquipoId);
+    if(!e){ toast('Equipo no encontrado', true); return; }
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const esCli = !!e.esEquipoCliente;
+    const titulo = esCli ? (e.clienteNombre||e.cliente||'Equipo de cliente') : (e.codigo||'Equipo');
+    const subT = esCli ? ((e.marca||'')+(e.modelo?' '+e.modelo:'')) : (e.desc || ((e.marca||'')+(e.tipo?' · '+e.tipo:'')));
+    const estLbl = {'DISPONIBLE':'✅ Disponible','EN RENTA':'🟠 En renta','EN MANTENIMIENTO':'🔧 En mantenimiento','MAL ESTADO':'🔴 Inactivo','DEMO/PRESTAMO':'🟣 Demo/Préstamo'}[e.estado||'DISPONIBLE']||(e.estado||'—');
+    const campos = [['Estado', estLbl]];
+    if(e.esVehiculo){
+      if(e.subtipo)      campos.push(['Tipo', e.subtipo]);
+      if(e.marca)        campos.push(['Marca / Modelo', e.marca]);
+      if(e['año'])       campos.push(['Año', e['año']]);
+      if(e.serie)        campos.push(['Serie / VIN', e.serie]);
+      if(e.motor)        campos.push(['Motor', e.motor]);
+      if(e.placa)        campos.push(['Placa', e.placa]);
+      if(e.combustible)  campos.push(['Combustible', e.combustible]);
+      if(e.horometro)    campos.push(['Kilometraje', e.horometro+' km']);
+    } else {
+      if(e.tipo)          campos.push(['Tipo', e.tipo]);
+      if(e.marca)         campos.push(['Marca', e.marca]);
+      if(e.modelo||e.desc)campos.push(['Modelo', e.modelo||e.desc]);
+      if(e.serie)         campos.push(['Serie', e.serie]);
+      if(e.combustible)   campos.push(['Combustible', e.combustible]);
+      if(e.capacidad)     campos.push(['Capacidad', e.capacidad]);
+      if(e.horometro)     campos.push(['Horómetro', e.horometro+' hrs']);
+    }
+    if(e.ubicacion) campos.push(['📍 Ubicación', e.ubicacion]);
+    if(esCli){ if(e.clienteNombre||e.cliente) campos.push(['Cliente', e.clienteNombre||e.cliente]); }
+    else if(e.cliente) campos.push(['Cliente', e.cliente]);
+    const esElev = (e.codigo||'').startsWith('E-');
+    const specs = e.esVehiculo ? [] : (esElev ? [
+      ['⬆️ Altura extendida',e.alturaExtendida],['↗️ Alcance horizontal',e.alcanceHorizontal],['⚖️ Peso bruto',e.pesoBruto],['↔️ Ancho',e.anchoEq],['↕️ Largo',e.largoEq],['🔽 Altura replegada',e.alturaReplegada],['👷 Carga en canasta',e.cargaCanasta],['🔵 Llantas/Rodos',e.llantas]
+    ] : [
+      ['🏗 Mástil elevado',e.mastil],['⚖️ Peso bruto',e.pesoBruto],['↔️ Ancho',e.anchoEq],['↕️ Largo',e.largoEq],['📏 Altura',e.alturaEq],['🔧 Torre',e.torre],['🍴 Horquillas',e.horquillas],['🔵 Llantas/Rodos',e.llantas]
+    ]);
+    specs.forEach(function(s){ if(s[1]) campos.push(s); });
+    const fmtP = function(v){ return '$'+Number(v).toLocaleString('en-US'); };
+    const _hayPrecios = !!(e.rentaHora||e.rentaDia||e.rentaMes||e.precioVenta);
+    if(_hayPrecios && confirm('¿Incluir los PRECIOS en la imagen?\n\nAceptar → tarjeta CON precios\nCancelar → tarjeta SIN precios')){
+      if(e.rentaHora)   campos.push(['💰 Renta por hora', fmtP(e.rentaHora)]);
+      if(e.rentaDia)    campos.push(['💰 Renta por día', fmtP(e.rentaDia)]);
+      if(e.rentaMes)    campos.push(['💰 Renta por mes', fmtP(e.rentaMes)]);
+      if(e.precioVenta) campos.push(['🏷 Precio de venta', fmtP(e.precioVenta)]);
+    }
+    if(e.observaciones) campos.push(['Observaciones', e.observaciones]);
+
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
+    cont.innerHTML =
+      '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      + '<div style="min-width:0"><div style="font-size:20px;font-weight:700">'+String(titulo).replace(/[<>]/g,'')+'</div>'
+      + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+String(subT||'').replace(/[<>]/g,'')+'</div></div>'
+      + '<div style="flex-shrink:0"><img src="'+_LOGO_MONTASA_B64+'" style="height:44px;display:block"></div>'
+      + '</div>'
+      + (e.foto ? '<div style="padding:14px 22px 0"><img src="'+e.foto+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;border:1px solid #e2e0d8"></div>' : '')
+      + '<div style="padding:18px 22px 6px">'+campos.map(function(c){ return _campoRow(c[0], c[1]); }).join('')+'</div>'
+      + '<div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
+    document.body.appendChild(cont);
+    const imgs = cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(r){ img.onload=r; img.onerror=r; setTimeout(r,3000); });
+    }));
+    const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+    canvas.toBlob(async function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      try{
+        if(navigator.clipboard && window.ClipboardItem){
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
+        } else { throw new Error('Clipboard API no disponible'); }
+      }catch(err){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = (e.codigo||'equipo')+'.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('No se pudo copiar automáticamente — se descargó la imagen');
+      }
+    }, 'image/png');
+  }catch(err){
+    toast('Error al generar la imagen: '+err.message, true);
+  }
+}
 function _campoRow(label, valor){
   return `<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #e2e0d8">
     <span style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0">${label}</span>
@@ -1773,6 +1890,7 @@ function abrirModal(id){
     specs_keys.forEach(k => { if(fresh[k]) e[k] = fresh[k]; });
   }
   modalEquipoId = id;
+  _insertarBtnCompartirEq();
 
   // Para equipos de cliente: mostrar datos del cliente, ocultar estados no aplicables
   const detEstado = document.getElementById('det-estado');
