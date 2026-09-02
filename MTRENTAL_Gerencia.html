@@ -9095,9 +9095,26 @@ function _verFotoGrande(src){
 function _gerMenuToggle(force){
   const p=document.getElementById('ger-menu-panel'), o=document.getElementById('ger-menu-overlay');
   const show = (force!==undefined && force!==null) ? force : p.style.display!=='block';
-  p.style.display = show?'block':'none';
-  o.style.display = show?'block':'none';
-  if(show) _gerMenuSync();
+  if(show){
+    p.style.visibility='hidden'; p.style.display='block';
+    _gerMenuSync();
+    _gerMenuColocarPanel();
+    p.style.visibility='visible';
+    o.style.display='block';
+  } else {
+    p.style.display='none'; o.style.display='none';
+  }
+}
+// El panel se abre junto al botón, esté donde esté (arriba si hay espacio, si no abajo)
+function _gerMenuColocarPanel(){
+  const fab=document.getElementById('ger-menu-fab'), p=document.getElementById('ger-menu-panel');
+  const fr=fab.getBoundingClientRect(), pw=p.offsetWidth, ph=p.offsetHeight;
+  let x=fr.left, y=fr.top-ph-10;
+  if(y<8) y=Math.min(fr.bottom+10, window.innerHeight-ph-8);
+  if(x+pw>window.innerWidth-8) x=window.innerWidth-pw-8;
+  if(x<8) x=8;
+  if(y<8) y=8;
+  p.style.left=x+'px'; p.style.top=y+'px'; p.style.bottom='auto';
 }
 function _gerMenuGo(idx, tab){
   _gerMenuToggle(false);
@@ -9125,6 +9142,63 @@ function _gerFabDot(){
 }
 setInterval(_gerFabDot, 3000);
 setTimeout(_gerFabDot, 1500);
+// ── Botón hamburguesa movible: arrástralo a donde no estorbe; recuerda la posición ──
+(function(){
+  const fab=document.getElementById('ger-menu-fab');
+  if(!fab) return;
+  const KEY='ger_fab_pos';
+  function clamp(x,y){
+    const m=6, w=fab.offsetWidth||58, h=fab.offsetHeight||58;
+    x=Math.max(m, Math.min(x, window.innerWidth-w-m));
+    y=Math.max(m, Math.min(y, window.innerHeight-h-m));
+    return [x,y];
+  }
+  function aplicar(x,y){
+    const c=clamp(x,y);
+    fab.style.left=c[0]+'px'; fab.style.top=c[1]+'px';
+    fab.style.bottom='auto'; fab.style.right='auto';
+  }
+  try{
+    const g=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(g && typeof g.x==='number' && typeof g.y==='number') aplicar(g.x, g.y);
+  }catch(e){}
+  let sx=0, sy=0, ox=0, oy=0, activo=false, movido=false;
+  fab.style.touchAction='none';
+  fab.addEventListener('pointerdown', function(ev){
+    activo=true; movido=false;
+    const r=fab.getBoundingClientRect();
+    sx=ev.clientX; sy=ev.clientY; ox=r.left; oy=r.top;
+    try{ fab.setPointerCapture(ev.pointerId); }catch(e){}
+  });
+  fab.addEventListener('pointermove', function(ev){
+    if(!activo) return;
+    const dx=ev.clientX-sx, dy=ev.clientY-sy;
+    if(!movido && Math.abs(dx)<8 && Math.abs(dy)<8) return;
+    movido=true;
+    aplicar(ox+dx, oy+dy);
+  });
+  fab.addEventListener('pointerup', function(){
+    if(!activo) return;
+    activo=false;
+    if(!movido) return;
+    // Pegar al borde lateral más cercano y recordar la posición
+    const r=fab.getBoundingClientRect();
+    const izq=(r.left + r.width/2) < window.innerWidth/2;
+    aplicar(izq ? 14 : window.innerWidth - r.width - 14, r.top);
+    const r2=fab.getBoundingClientRect();
+    try{ localStorage.setItem(KEY, JSON.stringify({x:r2.left, y:r2.top})); }catch(e){}
+    // Que el toque de soltar no abra el menú
+    const blk=function(e2){ e2.stopPropagation(); e2.preventDefault(); fab.removeEventListener('click', blk, true); };
+    fab.addEventListener('click', blk, true);
+    setTimeout(function(){ fab.removeEventListener('click', blk, true); }, 300);
+  });
+  fab.addEventListener('pointercancel', function(){ activo=false; });
+  window.addEventListener('resize', function(){
+    if(!fab.style.top) return;
+    const r=fab.getBoundingClientRect();
+    aplicar(r.left, r.top);
+  });
+})();
 </script>
 
 </body>
