@@ -68,7 +68,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .card-toggle{background:none;border:none;cursor:pointer;padding:4px;color:var(--text3);font-size:20px;transition:transform 0.2s;line-height:1}
 .card-toggle.open{transform:rotate(180deg)}
 #viaticos-overlay.open{display:block!important}
-.firma-canvas{width:100%;height:160px;border:2px dashed var(--border2);border-radius:var(--radius-sm);background:#fff;touch-action:none;display:block;cursor:crosshair}
+.firma-canvas{width:100%;height:160px;border:2px dashed var(--border2);border-radius:var(--radius-sm);background:#fff;touch-action:pan-y;display:block;cursor:pointer}
 .firma-canvas.firmado{border-color:#27ae60;border-style:solid}
 
 .tec-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:2px solid var(--border2);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:500;transition:all 0.15s;background:var(--surface);user-select:none}
@@ -2670,29 +2670,126 @@ function _firmaGetPos(e, canvas){
 }
 
 function firmaStart(e, canvas){
-  e.preventDefault();
-  _firmaDrawing = true;
-  const ctx = canvas.getContext('2d');
-  ctx.strokeStyle = '#1f3864';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  const pos = _firmaGetPos(e, canvas);
-  ctx.beginPath();
-  ctx.moveTo(pos.x, pos.y);
-  canvas._ctx = ctx;
+  // El recuadro de la tarjeta ya NO dibuja directo (evita manchas al hacer scroll).
+  // Un toque abre el recuadro grande de firma.
+  const s = e.touches ? e.touches[0] : e;
+  window._firmaTap = { c: canvas, t: Date.now(), x: s.clientX, y: s.clientY, mov: false };
 }
 
 function firmaMove(e, canvas){
-  if(!_firmaDrawing || !canvas._ctx) return;
-  e.preventDefault();
-  const pos = _firmaGetPos(e, canvas);
-  canvas._ctx.lineTo(pos.x, pos.y);
-  canvas._ctx.stroke();
-  canvas.classList.add('firmado');
+  const ti = window._firmaTap;
+  if(!ti || ti.c !== canvas) return;
+  const s = e.touches ? e.touches[0] : e;
+  if(Math.abs(s.clientX - ti.x) > 10 || Math.abs(s.clientY - ti.y) > 10) ti.mov = true;
 }
 
 function firmaStop(canvas){
+  const ti = window._firmaTap; window._firmaTap = null;
+  if(ti && ti.c === canvas && !ti.mov && (Date.now() - ti.t) < 700) _firmaOverlayAbrir(canvas);
+}
+// ── Recuadro grande de firma: pantalla completa, horizontal en teléfono ─────
+function _firmaOverlayAbrir(dest){
+  window._foDest = dest;
+  const prev = document.getElementById('firma-overlay');
+  if(prev) prev.remove();
+  const esPC = window.innerWidth >= 1024 && !('ontouchstart' in window);
+  const rotar = !esPC && window.innerHeight > window.innerWidth; // teléfono en vertical → firmar en horizontal
+  const ov = document.createElement('div');
+  ov.id = 'firma-overlay';
+  const BTNS = '<button onclick="_firmaOvGuardar()" style="padding:11px 18px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap">💾 Guardar firma</button>'
+    + '<button onclick="_firmaOvLimpiar()" style="padding:11px 14px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap">🧹 Limpiar</button>'
+    + '<button onclick="_firmaOvCerrar()" style="padding:11px 14px;background:#eee;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>';
+  if(esPC){
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99997;display:flex;align-items:center;justify-content:center;padding:12px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:720px" onclick="event.stopPropagation()">'
+      + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">✍️ Firma del cliente</div>'
+      + '<canvas id="firma-ov-canvas" style="width:100%;height:auto;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
+      + '<div style="display:flex;gap:8px;margin-top:10px">' + BTNS + '</div>'
+      + '</div>';
+  } else {
+    ov.style.cssText = 'position:fixed;inset:0;background:#10203a;z-index:99997';
+    const w = rotar ? window.innerHeight : window.innerWidth;
+    const h = rotar ? window.innerWidth : window.innerHeight;
+    ov.innerHTML = '<div style="position:fixed;top:50%;left:50%;width:'+w+'px;height:'+h+'px;transform:translate(-50%,-50%)'+(rotar?' rotate(90deg)':'')+';background:#fff;display:flex;flex-direction:column;padding:10px;box-sizing:border-box">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✍️ Firma del cliente</div>'
+      + BTNS
+      + '</div>'
+      + '<canvas id="firma-ov-canvas" style="flex:1;min-height:0;width:100%;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
+      + '</div>';
+  }
+  document.body.appendChild(ov);
+  const c = document.getElementById('firma-ov-canvas');
+  c._rot = rotar;
+  const cr = c.getBoundingClientRect();
+  const lw = Math.max(1, rotar ? cr.height : cr.width);
+  const lh = Math.max(1, rotar ? cr.width : cr.height);
+  if(esPC){
+    c.width = 1200;
+    c.height = Math.max(200, Math.round(1200 * ((dest.height||160)/(dest.width||600))));
+  } else {
+    c.width = 1400;
+    c.height = Math.max(160, Math.round(1400 * lh / lw));
+  }
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  c._hay = false;
+  // Si ya hay trazo en la orden, mostrarlo sin deformarlo (se puede continuar o limpiar)
+  if(dest.classList.contains('firmado')){
+    try{
+      const es = Math.min(c.width/(dest.width||600), c.height/(dest.height||160));
+      const dw = (dest.width||600)*es, dh = (dest.height||160)*es;
+      ctx.drawImage(dest, (c.width-dw)/2, (c.height-dh)/2, dw, dh);
+      c._hay = true;
+    }catch(e){}
+  }
+  const pos = function(e){
+    const r = c.getBoundingClientRect();
+    const s = e.touches ? e.touches[0] : e;
+    if(c._rot) return { x:(s.clientY-r.top)*c.width/r.height, y:(r.right-s.clientX)*c.height/r.width };
+    return { x:(s.clientX-r.left)*c.width/r.width, y:(s.clientY-r.top)*c.height/r.height };
+  };
+  const st = function(e){ e.preventDefault(); window._foDib=true; const x=c.getContext('2d'); x.strokeStyle='#1f3864'; x.lineWidth=3.5; x.lineCap='round'; x.lineJoin='round'; const p=pos(e); x.beginPath(); x.moveTo(p.x,p.y); c._ctx=x; };
+  const mv = function(e){ if(!window._foDib||!c._ctx) return; e.preventDefault(); const p=pos(e); c._ctx.lineTo(p.x,p.y); c._ctx.stroke(); c._hay=true; };
+  const en = function(){ window._foDib=false; };
+  c.addEventListener('touchstart',st); c.addEventListener('touchmove',mv); c.addEventListener('touchend',en);
+  c.addEventListener('mousedown',st); c.addEventListener('mousemove',mv); c.addEventListener('mouseup',en); c.addEventListener('mouseleave',en);
+  document.body.style.overflow = 'hidden';
+}
+function _firmaOvCerrar(){
+  const ov = document.getElementById('firma-overlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+  window._foDest = null;
+}
+function _firmaOvLimpiar(){
+  const c = document.getElementById('firma-ov-canvas');
+  if(!c) return;
+  c.getContext('2d').clearRect(0,0,c.width,c.height);
+  c._hay = false;
+}
+function _firmaOvGuardar(){
+  const c = document.getElementById('firma-ov-canvas');
+  const dest = window._foDest;
+  if(!dest || !c){ _firmaOvCerrar(); return; }
+  if(!c._hay){ toast('Firme dentro del recuadro primero', true); return; }
+  const dctx = dest.getContext('2d');
+  dctx.clearRect(0,0,dest.width,dest.height);
+  // Pasar la firma a la orden sin deformarla (ajuste proporcional, centrada)
+  const es = Math.min(dest.width/c.width, dest.height/c.height);
+  const dw = c.width*es, dh = c.height*es;
+  dctx.drawImage(c, (dest.width-dw)/2, (dest.height-dh)/2, dw, dh);
+  dest.classList.add('firmado');
+  _firmaOvCerrar();
+  try{ _firmaPostGuardar(dest); }catch(e){}
+  if(/-new$/.test(dest.id||'')){ toast('✍️ Firma lista ✓ — se guarda al crear la orden'); return; }
+  try{
+    if(typeof guardarFirmaOrden === 'function'){ guardarFirmaOrden(dest.id); return; }
+    if(typeof guardarFirmaLog === 'function' && (dest.id||'').indexOf('firma-log-')===0){ guardarFirmaLog(dest.id.replace('firma-log-','')); return; }
+    toast('✍️ Firma guardada ✓');
+  }catch(e){ toast('✍️ Firma guardada ✓'); }
+}
+function _firmaPostGuardar(canvas){
   _firmaDrawing = false;
 }
 
