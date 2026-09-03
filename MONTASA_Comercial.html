@@ -924,7 +924,7 @@ function abrirModal(id){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${specsFields.map(([label,val])=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px"><div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">${label}</div><div style="font-size:13px;font-weight:500;color:var(--text)">${val}</div></div>`).join('')}
       </div>`:''}
-      <button onclick="copiarImagenEquipo()" style="width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:14px">📋 Compartir tarjeta (copiar imagen)</button>
+      <button onclick="copiarImagenEquipo()" style="width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:14px">📤 Compartir tarjeta</button>
     </div>`;
 
   document.getElementById('modal-overlay').classList.add('open');
@@ -1275,7 +1275,7 @@ function _insertarBtnCompartirEq(){
     if(!btn){
       btn = document.createElement('button');
       btn.id = 'btn-compartir-eq';
-      btn.innerHTML = '📋 Compartir tarjeta (copiar imagen)';
+      btn.innerHTML = '📤 Compartir tarjeta';
       btn.style.cssText = 'width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin:2px 0 12px';
       btn.onclick = function(ev){ ev.stopPropagation(); copiarImagenEquipo(); };
     }
@@ -1355,25 +1355,47 @@ async function copiarImagenEquipo(){
     }));
     const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
     document.body.removeChild(cont);
-    canvas.toBlob(async function(blob){
+    canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      try{
-        if(navigator.clipboard && window.ClipboardItem){
-          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
-        } else { throw new Error('Clipboard API no disponible'); }
-      }catch(err){
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = (e.codigo||'equipo')+'.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast('No se pudo copiar automáticamente — se descargó la imagen');
-      }
+      _entregarImagen(blob, (e.codigo||'equipo'));
     }, 'image/png');
   }catch(err){
     toast('Error al generar la imagen: '+err.message, true);
   }
+}
+// ── Entrega de la imagen: compartir nativo (WhatsApp) → portapapeles → vista ─
+async function _entregarImagen(blob, nombre){
+  // 1) Hoja de compartir del teléfono (ahí se elige WhatsApp y el contacto)
+  try{
+    const file = new File([blob], (nombre||'imagen')+'.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title: nombre||'Orden'});
+      toast('📤 Imagen compartida ✓');
+      return;
+    }
+  }catch(err){
+    if(err && err.name === 'AbortError') return; // el usuario cerró la hoja de compartir
+  }
+  // 2) Portapapeles (PC o navegadores sin hoja de compartir)
+  try{
+    if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      toast('📋 Imagen copiada — pégala donde quieras');
+      return;
+    }
+  }catch(err){}
+  // 3) Mostrarla en pantalla: mantener presionada para compartir o guardar
+  _verImagenCompartir(blob);
+}
+function _verImagenCompartir(blob){
+  const url = URL.createObjectURL(blob);
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px';
+  ov.innerHTML = '<div style="color:#fff;font-weight:700;font-size:14px;text-align:center">Mantén presionada la imagen para compartirla o guardarla</div>'
+    + '<img src="'+url+'" style="max-width:100%;max-height:72vh;border-radius:10px;background:#fff">'
+    + '<button style="padding:12px 26px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cerrar</button>';
+  ov.querySelector('button').onclick = function(){ ov.remove(); URL.revokeObjectURL(url); };
+  document.body.appendChild(ov);
 }
 function _campoRow(label, valor){
   if(valor===undefined || valor===null || valor==='') return '';
@@ -1537,24 +1559,9 @@ async function copiarImagenOrden(tipo, id){
     const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
     document.body.removeChild(cont);
 
-    canvas.toBlob(async (blob)=>{
+    canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      try{
-        if(navigator.clipboard && window.ClipboardItem){
-          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
-        } else {
-          throw new Error('Clipboard API no disponible');
-        }
-      }catch(err){
-        // Respaldo: descargar la imagen si no se pudo copiar al portapapeles
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = (o.correlativo||'orden')+'.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast('No se pudo copiar automáticamente — se descargó la imagen');
-      }
+      _entregarImagen(blob, (o.correlativo||'orden'));
     }, 'image/png');
   }catch(err){
     console.error('Error generando imagen de orden:', err);
@@ -1783,7 +1790,7 @@ function _detalleOrdenCom(x, tipo, est){
     x.fotos.forEach(function(f,i){ var k='ord-'+x.id+'-'+i; window._fotosCache=window._fotosCache||{}; window._fotosCache[k]=f; d+='<img src="'+f+'" onclick="event.stopPropagation();_verFotoGrande(window._fotosCache[\''+k+'\'])" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border2)">'; });
     d+='</div></div>';
   }
-  d+='<button onclick="event.stopPropagation();copiarImagenOrden(\''+(tipo==='revision'?'revision':'evaluacion')+'\',\''+x.id+'\')" style="width:100%;margin-top:4px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>';
+  d+='<button onclick="event.stopPropagation();copiarImagenOrden(\''+(tipo==='revision'?'revision':'evaluacion')+'\',\''+x.id+'\')" style="width:100%;margin-top:4px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>';
   d+='</div>';
   return d;
 }

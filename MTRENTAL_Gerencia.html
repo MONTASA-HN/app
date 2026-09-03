@@ -2127,7 +2127,7 @@ function _insertarBtnCompartirEq(){
     if(!btn){
       btn = document.createElement('button');
       btn.id = 'btn-compartir-eq';
-      btn.innerHTML = '📋 Compartir tarjeta (copiar imagen)';
+      btn.innerHTML = '📤 Compartir tarjeta';
       btn.style.cssText = 'width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin:2px 0 12px';
       btn.onclick = function(ev){ ev.stopPropagation(); copiarImagenEquipo(); };
     }
@@ -2207,25 +2207,47 @@ async function copiarImagenEquipo(){
     }));
     const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
     document.body.removeChild(cont);
-    canvas.toBlob(async function(blob){
+    canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      try{
-        if(navigator.clipboard && window.ClipboardItem){
-          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
-        } else { throw new Error('Clipboard API no disponible'); }
-      }catch(err){
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = (e.codigo||'equipo')+'.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast('No se pudo copiar automáticamente — se descargó la imagen');
-      }
+      _entregarImagen(blob, (e.codigo||'equipo'));
     }, 'image/png');
   }catch(err){
     toast('Error al generar la imagen: '+err.message, true);
   }
+}
+// ── Entrega de la imagen: compartir nativo (WhatsApp) → portapapeles → vista ─
+async function _entregarImagen(blob, nombre){
+  // 1) Hoja de compartir del teléfono (ahí se elige WhatsApp y el contacto)
+  try{
+    const file = new File([blob], (nombre||'imagen')+'.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title: nombre||'Orden'});
+      toast('📤 Imagen compartida ✓');
+      return;
+    }
+  }catch(err){
+    if(err && err.name === 'AbortError') return; // el usuario cerró la hoja de compartir
+  }
+  // 2) Portapapeles (PC o navegadores sin hoja de compartir)
+  try{
+    if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      toast('📋 Imagen copiada — pégala donde quieras');
+      return;
+    }
+  }catch(err){}
+  // 3) Mostrarla en pantalla: mantener presionada para compartir o guardar
+  _verImagenCompartir(blob);
+}
+function _verImagenCompartir(blob){
+  const url = URL.createObjectURL(blob);
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px';
+  ov.innerHTML = '<div style="color:#fff;font-weight:700;font-size:14px;text-align:center">Mantén presionada la imagen para compartirla o guardarla</div>'
+    + '<img src="'+url+'" style="max-width:100%;max-height:72vh;border-radius:10px;background:#fff">'
+    + '<button style="padding:12px 26px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cerrar</button>';
+  ov.querySelector('button').onclick = function(){ ov.remove(); URL.revokeObjectURL(url); };
+  document.body.appendChild(ov);
 }
 function _campoRow(label, valor){
   return `<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #e2e0d8">
@@ -2391,24 +2413,9 @@ async function copiarImagenOrden(tipo, id){
     const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
     document.body.removeChild(cont);
 
-    canvas.toBlob(async (blob)=>{
+    canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      try{
-        if(navigator.clipboard && window.ClipboardItem){
-          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-          toast('📋 Imagen copiada — ya puedes pegarla donde quieras');
-        } else {
-          throw new Error('Clipboard API no disponible');
-        }
-      }catch(err){
-        // Respaldo: descargar la imagen si no se pudo copiar al portapapeles
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = (o.correlativo||'orden')+'.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast('No se pudo copiar automáticamente — se descargó la imagen');
-      }
+      _entregarImagen(blob, (o.correlativo||'orden'));
     }, 'image/png');
   }catch(err){
     console.error('Error generando imagen de orden:', err);
@@ -4446,7 +4453,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.checklistPdf) h+="<button onclick=\"event.stopPropagation();verChecklistPDFGer('"+o.id+"')\" style=\"font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\ud83d\udc41 Ver Checklist</button>";
   if(!o.viaticos) h+="<button onclick=\"event.stopPropagation();abrirValeGerencia('"+o.id+"')\" style=\"font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer\">"+(o.vales&&o.vales.length?'Vale':'Generar Vale')+"</button>";
   h+="<button onclick=\"event.stopPropagation();_reabrirOrdenLogGer('"+o.id+"')\" style=\"font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\u270f\ufe0f Editar (PIN)</button>";
-  h+="<button onclick=\"event.stopPropagation();copiarImagenOrden('"+(o.tipoLogistica||"")+"','"+o.id+"')\" style=\"font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\ud83d\udccb Copiar imagen</button>";
+  h+="<button onclick=\"event.stopPropagation();copiarImagenOrden('"+(o.tipoLogistica||"")+"','"+o.id+"')\" style=\"font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">📤 Compartir imagen</button>";
   h+="<button onclick=\"event.stopPropagation();_elimLG('"+o.id+"')\" style=\"font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\ud83d\uddd1 Eliminar</button>";
   h+="</div>";
   return h;
@@ -5496,7 +5503,7 @@ function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
   }
   d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
   if(estRV==='Completado'){
-    d += `<button onclick="event.stopPropagation();copiarImagenOrden('revision_fisica','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('revision_fisica','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
     d += `<button onclick="event.stopPropagation();eliminarDelHistorial('rv','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   }
   d += `</div>`;
@@ -5546,7 +5553,7 @@ function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
   d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
   if(estEV==='Completado'){
     d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
   }
   d += `<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
   d += `</div>`;
@@ -5679,7 +5686,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
 
   if(estRaw==='Completado'){
     d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar imagen</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
     d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   } else {
     d += _buildCamposEdicionPC(x, eq, tipoPC);
