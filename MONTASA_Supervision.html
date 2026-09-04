@@ -6903,6 +6903,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   const _esCliDet = x.equipoId==='__cliente__'||x.clienteNombre||(DB.equipos||[]).find(e=>e.id===x.equipoId&&e.esEquipoCliente);
   let d = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
   d += _ubLinkHTML(x) + _contactoHTML(x);
+  d += _srChipsHTML(x.id);
 
   // Grid de datos clave
   // Bloque visual destacado para equipo de cliente
@@ -7856,13 +7857,36 @@ function _srVer(id){
     +'<div style="font-size:12px;color:var(--text3);margin-top:6px">'+(r.esCliente?'Cliente':'Equipo')+': '+esc(r.equipoTxt)+(r.modelo?' · '+esc(r.modelo):'')+(r.serie?' · Serie '+esc(r.serie):'')+(r.tecnico?' · Técnico: '+esc(r.tecnico):'')+'</div>';
   det.style.display='block';
 }
+// Visor de una solicitud de repuestos (desde la orden o desde el módulo)
+function _srVerModal(id){
+  const r=_srLista().find(function(x){ return x.id===id; });
+  if(!r){ toast('Solicitud no encontrada', true); return; }
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  const viejo=document.getElementById('sr-ver-overlay'); if(viejo) viejo.remove();
+  const ov=document.createElement('div');
+  ov.id='sr-ver-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99996;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px" onclick="event.stopPropagation()">'
+    +'<div style="font-weight:800;color:#1f3864;font-size:16px">🔩 '+esc(r.correlativo)+' <span style="font-weight:600;color:var(--text3);font-size:13px">→ '+esc(r.ordenCorrelativo)+'</span></div>'
+    +'<div style="font-size:12px;color:var(--text2);margin:4px 0 10px;line-height:1.5">'+(r.esCliente?'Cliente':'Equipo')+': <b>'+esc(r.equipoTxt)+'</b>'+(r.marca?' · '+esc(r.marca):'')+(r.modelo?' '+esc(r.modelo):'')+(r.serie?' · Serie '+esc(r.serie):'')+(r.tecnico?' · 👷 '+esc(r.tecnico):'')+' · 📅 '+esc(r.fecha||'')+'</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<tr><th style="text-align:center;border:1px solid var(--border2);padding:6px;background:#eef4fb;width:50px">Cant.</th><th style="text-align:left;border:1px solid var(--border2);padding:6px;background:#eef4fb">Descripción</th><th style="text-align:left;border:1px solid var(--border2);padding:6px;background:#eef4fb;width:110px">No. de parte</th></tr>'
+    +(r.items||[]).map(function(it){ return '<tr><td style="text-align:center;border:1px solid var(--border2);padding:6px">'+esc(it.cant)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.desc)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
+    +'</table>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir solicitud</button>'
+    +'<button onclick="document.getElementById(\'sr-ver-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
+    +'</div></div>';
+  ov.onclick=function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
 // Chips de trazabilidad dentro de la tarjeta de la orden
 function _srChipsHTML(oid){
   try{
     const srs=_srDeOrden(oid);
     if(!srs.length) return '';
     return '<div style="margin:8px 0"><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">🔩 Solicitudes de repuestos</span>'
-      + srs.map(function(r){ return '<button onclick="event.stopPropagation();compartirSolRepuesto(\''+r.id+'\')" style="padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;margin:0 6px 6px 0">'+r.correlativo+' · '+(r.items||[]).length+' ítems 📤</button>'; }).join('')
+      + srs.map(function(r){ return '<button onclick="event.stopPropagation();_srVerModal(\''+r.id+'\')" style="padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;margin:0 6px 6px 0">🔩 '+r.correlativo+' · '+(r.items||[]).length+' ítems</button>'; }).join('')
       + '</div>';
   }catch(e){ return ''; }
 }
@@ -7905,23 +7929,23 @@ async function compartirSolRepuesto(id){
     toast('Generando imagen…');
     await _srH2C();
     const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
-    const row=function(l,v){ return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #eeede8"><div style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0">'+l+'</div><div style="font-size:13px;font-weight:600;color:#26241d;text-align:right;word-break:break-word">'+esc(v||'—')+'</div></div>'; };
     const logo=_srLogo();
     const cont=document.createElement('div');
     cont.style.cssText='position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
-    cont.innerHTML='<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+    cont.innerHTML='<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:18px 22px 14px;color:#fff">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
       +'<div style="min-width:0"><div style="font-size:20px;font-weight:700">Solicitud de Repuestos</div>'
-      +'<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+esc(r.correlativo)+'</div></div>'
+      +'<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+esc(r.correlativo)+' · Orden '+esc(r.ordenCorrelativo)+'</div></div>'
       +(logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
       +'</div>'
-      +'<div style="padding:16px 22px 4px">'
-      +row('Orden de trabajo', r.ordenCorrelativo)
-      +row(r.esCliente?'Cliente':'Equipo', r.equipoTxt)
-      +(r.marca?row('Marca', r.marca):'')
-      +(r.modelo?row('Modelo', r.modelo):'')
-      +(r.serie?row('Serie', r.serie):'')
-      +row('Técnico', r.tecnico)
-      +row('Fecha', r.fecha)
+      +'<div style="font-size:11.5px;color:#cfe0f0;margin-top:10px;line-height:1.7;border-top:1px solid rgba(255,255,255,0.18);padding-top:8px">'
+      +'<span style="color:#8fb3d4">'+(r.esCliente?'CLIENTE':'EQUIPO')+'</span> <b style="color:#fff">'+esc(r.equipoTxt)+'</b>'
+      +(r.marca?' &nbsp;·&nbsp; <span style="color:#8fb3d4">MARCA</span> <b style="color:#fff">'+esc(r.marca)+'</b>':'')
+      +(r.modelo?' &nbsp;·&nbsp; <span style="color:#8fb3d4">MODELO</span> <b style="color:#fff">'+esc(r.modelo)+'</b>':'')
+      +(r.serie?'<br><span style="color:#8fb3d4">SERIE</span> <b style="color:#fff">'+esc(r.serie)+'</b>':'')
+      +(r.tecnico?' &nbsp;·&nbsp; <span style="color:#8fb3d4">TÉCNICO</span> <b style="color:#fff">'+esc(r.tecnico)+'</b>':'')
+      +' &nbsp;·&nbsp; <span style="color:#8fb3d4">FECHA</span> <b style="color:#fff">'+esc(r.fecha)+'</b>'
+      +'</div>'
       +'</div>'
       +'<div style="padding:12px 22px 6px">'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
