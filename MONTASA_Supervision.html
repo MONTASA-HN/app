@@ -5513,6 +5513,68 @@ function _renderListaSegunTipo(tipo){
   else renderHistorial();
 }
 
+// ── Viáticos multi-día: días del período y alimentación por horarios ────────
+function _viatDias(f1, f2){
+  if(!f1 || !f2 || f2<=f1) return 1;
+  const a=new Date(f1+'T12:00:00'), b=new Date(f2+'T12:00:00');
+  const d=Math.round((b-a)/86400000)+1;
+  return (isNaN(d)||d<1)?1:Math.min(d,60);
+}
+function _viatCalcAlimPeriodo(hIni, hFin, dias){
+  const T=150;
+  let des=0,alm=0,cen=0,mn=0;
+  const mm=function(h){ if(!h) return null; const p=h.split(':'); return parseInt(p[0],10)*60+parseInt(p[1],10); };
+  const minI=mm(hIni), minF=mm(hFin);
+  if(dias<=1){
+    // Un solo día: las mismas reglas de siempre
+    if(minI!=null && minI<7*60+30) des=T;
+    if(minF!=null){
+      const mi=(minI!=null?minI:0);
+      if(mi<=12*60 && minF>=13*60) alm=T;
+      if(minF>=19*60) cen=T;
+      if(minF>=23*60+30||(minF>=0&&minF<6*60)) mn=T;
+    }
+  } else {
+    // Día 1 — según la hora de salida (la noche se pasa fuera)
+    if(minI!=null){
+      if(minI<7*60+30) des+=T;
+      if(minI<=12*60) alm+=T;
+      if(minI<19*60) cen+=T;
+    } else { des+=T; alm+=T; cen+=T; }
+    // Días intermedios completos — desayuno, almuerzo y cena (mismas reglas de horario)
+    const inter=Math.max(0,dias-2);
+    des+=inter*T; alm+=inter*T; cen+=inter*T;
+    // Último día — amanece fuera (desayuno); almuerzo/cena/m.noche según hora de regreso
+    des+=T;
+    if(minF!=null){
+      if(minF>=13*60) alm+=T;
+      if(minF>=19*60) cen+=T;
+      if(minF>=23*60+30) mn+=T;
+    } else { alm+=T; }
+  }
+  return {des:des, alm:alm, cen:cen, mn:mn};
+}
+function _viatNochesForm(){
+  let noches=0;
+  const n=document.querySelectorAll('[id^="vp-row-"]').length;
+  for(let i=0;i<n;i++){
+    const f1=document.getElementById('vp-fecha-'+i)?.value||'';
+    const f2=document.getElementById('vp-ffin-'+i)?.value||'';
+    noches=Math.max(noches, _viatDias(f1,f2)-1);
+  }
+  return noches;
+}
+function _viatHospAuto(){
+  const noches=_viatNochesForm();
+  const lbl=document.getElementById('v-noches-lbl');
+  if(lbl) lbl.textContent = noches+' noche'+(noches===1?'':'s');
+  const pn=parseFloat(document.getElementById('v-hosp-noche')?.value||0)||0;
+  if(pn>0){
+    const t=document.getElementById('v-hosp');
+    if(t) t.value=pn*noches;
+  }
+  recalcViaticos();
+}
 function abrirViaticos(ordenId, tipo){
   tipo = tipo || 'logistica';
   const orden = _getViaticosArray(tipo).find(o=>o.id===ordenId);
@@ -5580,25 +5642,10 @@ function renderModalViaticos(orden){
       if(((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0))>0){
         return {...p, total:(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)+(p.transporte||0)+(p.hospedaje||0)};
       }
-      const hIni = p.hora_ini||'';
-      const hFin = p.hora_fin||'';
-      let des=0,alm=0,cen=0,mn=0;
-      if(hIni){
-        const [h,m] = hIni.split(':').map(Number);
-        const minIni = h*60+m;
-        if(minIni < 7*60+30) des=150;
-      }
-      if(hFin){
-        const [h,m] = hFin.split(':').map(Number);
-        const minFin = h*60+m;
-        const [hi,mi] = (hIni||'00:00').split(':').map(Number);
-        const minI = hi*60+mi;
-        if(minI<=12*60 && minFin>=13*60) alm=150;
-        if(minFin>=19*60) cen=150;
-        if(minFin>=23*60+30 || (minFin>=0 && minFin<6*60)) mn=150;
-      }
-      const total = des+alm+cen+mn+(p.transporte||0)+(p.hospedaje||0);
-      return {...p, desayuno:des, almuerzo:alm, cena:cen, media_noche:mn, total};
+      const dias = _viatDias(p.fecha, p.fecha_fin);
+      const r = _viatCalcAlimPeriodo(p.hora_ini||'', p.hora_fin||'', dias);
+      const total = r.des+r.alm+r.cen+r.mn+(p.transporte||0)+(p.hospedaje||0);
+      return {...p, desayuno:r.des, almuerzo:r.alm, cena:r.cen, media_noche:r.mn, total};
     });
   }
 
@@ -5646,6 +5693,13 @@ function renderModalViaticos(orden){
   </div>`;
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
+  // Etiqueta de noches del hospedaje (solo informativa al abrir; no altera montos guardados)
+  setTimeout(function(){
+    try{
+      const l=document.getElementById('v-noches-lbl');
+      if(l){ const nn=_viatNochesForm(); l.textContent=nn+' noche'+(nn===1?'':'s'); }
+    }catch(e){}
+  }, 30);
 }
 
 function switchTabViaticos(mode){
@@ -5730,8 +5784,13 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
         <input type="number" id="v-comb" value="${comb||0}" placeholder="0" oninput="recalcViaticos()">
       </div>
     </div>
-    <div class="form-group"><label>🏨 Hospedaje (por persona, si aplica)</label>
-      <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label>🏨 Hospedaje por noche</label>
+        <input type="number" id="v-hosp-noche" value="${v.hospedaje_noche||0}" placeholder="0" oninput="_viatHospAuto()">
+      </div>
+      <div class="form-group"><label>🏨 Total hospedaje · <span id="v-noches-lbl">—</span></label>
+        <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+      </div>
     </div>
     <div class="form-group"><label>📎 Otros gastos</label>
       <input type="number" id="v-otros" value="${otros||0}" placeholder="0" oninput="recalcViaticos()">
@@ -5788,9 +5847,12 @@ function renderPersonaRow(p, i){
     <div class="form-group"><label>Nombre</label>
       <input type="text" id="vp-nombre-${i}" value="${p.nombre||''}" placeholder="Nombre completo">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <div class="form-group"><label>Fecha</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>Fecha inicio</label>
         <input type="date" id="vp-fecha-${i}" value="${p.fecha||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Fecha final <span style="font-weight:400;color:var(--text3);font-size:10px">(si son varios días)</span></label>
+        <input type="date" id="vp-ffin-${i}" value="${p.fecha_fin||''}" onchange="recalcPersona(${i})">
       </div>
       <div class="form-group"><label>Hora salida</label>
         <input type="time" id="vp-hini-${i}" value="${p.hora_ini||''}" onchange="recalcPersona(${i})">
@@ -5799,6 +5861,7 @@ function renderPersonaRow(p, i){
         <input type="time" id="vp-hfin-${i}" value="${p.hora_fin||''}" onchange="recalcPersona(${i})">
       </div>
     </div>
+    <div id="vp-dias-${i}" style="font-size:11px;color:#1f3864;font-weight:700;margin:-2px 0 6px">${(function(){const d=_viatDias(p.fecha,p.fecha_fin);return d>1?('📆 Período de '+d+' días'):'';})()}</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
       <div style="background:${p.desayuno?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
         <div>🍳 Desayuno</div><input type="number" min="0" id="vp-des-${i}" value="${p.desayuno||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
@@ -5959,23 +6022,17 @@ function _alimManual(i){
 function recalcPersona(i){
   const hIni = document.getElementById('vp-hini-'+i)?.value||'';
   const hFin = document.getElementById('vp-hfin-'+i)?.value||'';
-  let des=0,alm=0,cen=0,mn=0;
-  if(hIni){
-    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=150;
-  }
-  if(hFin){
-    const [h,m]=hFin.split(':').map(Number);
-    const [hi,mi]=(hIni||'00:00').split(':').map(Number);
-    const minFin=h*60+m, minI=hi*60+mi;
-    if(minI<=12*60 && minFin>=13*60) alm=150;
-    if(minFin>=19*60) cen=150;
-    if(minFin>=23*60+30||(minFin>=0&&minFin<6*60)) mn=150;
-  }
+  const f1 = document.getElementById('vp-fecha-'+i)?.value||'';
+  const f2 = document.getElementById('vp-ffin-'+i)?.value||'';
+  const dias = _viatDias(f1, f2);
+  const r = _viatCalcAlimPeriodo(hIni, hFin, dias);
   const _setV=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
-  _setV('vp-des-'+i,des); _setV('vp-alm-'+i,alm); _setV('vp-cen-'+i,cen); _setV('vp-mn-'+i,mn);
-  const talim=des+alm+cen+mn;
-  document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim);
-  recalcViaticos();
+  _setV('vp-des-'+i,r.des); _setV('vp-alm-'+i,r.alm); _setV('vp-cen-'+i,r.cen); _setV('vp-mn-'+i,r.mn);
+  const talim=r.des+r.alm+r.cen+r.mn;
+  document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim+(dias>1?' · '+dias+' días':''));
+  const dEl=document.getElementById('vp-dias-'+i);
+  if(dEl) dEl.textContent = dias>1?('📆 Período de '+dias+' días'):'';
+  _viatHospAuto();
 }
 
 function recalcViaticos(){
@@ -6081,10 +6138,11 @@ function _leerFormSolicitud(){
     personas.push({
       nombre:document.getElementById('vp-nombre-'+i)?.value||'',
       fecha:document.getElementById('vp-fecha-'+i)?.value||'',
+      fecha_fin:document.getElementById('vp-ffin-'+i)?.value||'',
       hora_ini:hIni, hora_fin:hFin,
       desayuno:des, almuerzo:alm, cena:cen, media_noche:mn,
-      transporte:0, hospedaje:hosp,
-      total:des+alm+cen+mn+hosp
+      transporte:0, hospedaje:(i===0?hosp:0),
+      total:des+alm+cen+mn+(i===0?hosp:0)
     });
   }
   const destNombre=document.getElementById('v-destino')?.value||'';
@@ -6105,6 +6163,7 @@ function _leerFormSolicitud(){
     num_peajes:d.peajes,
     combustible:   parseFloat(document.getElementById('v-comb')?.value||0)||0,
     hospedaje:     parseFloat(document.getElementById('v-hosp')?.value||0)||0,
+    hospedaje_noche: parseFloat(document.getElementById('v-hosp-noche')?.value||0)||0,
     otros_gastos:  parseFloat(document.getElementById('v-otros')?.value||0)||0,
     observaciones: document.getElementById('v-obs')?.value||'',
     personas,
@@ -6276,7 +6335,7 @@ function _buildSolicitudHTML(v, orden){
 
   const personaRows=personas.map(p=>`
     <tr>
-      <td>${p.nombre||''}</td><td>${p.fecha||''}</td>
+      <td>${p.nombre||''}</td><td>${p.fecha||''}${p.fecha_fin&&p.fecha_fin!==p.fecha?('<br>al '+p.fecha_fin):''}</td>
       <td>${p.hora_ini||''}</td><td>${p.hora_fin||''}</td>
       <td class="num">${p.desayuno?'L.'+p.desayuno:''}</td>
       <td class="num">${p.almuerzo?'L.'+p.almuerzo:''}</td>
