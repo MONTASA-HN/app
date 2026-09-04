@@ -780,6 +780,14 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div id="agenda-cont"></div>
   </div>
 </div>
+<div class="section" id="tab-repuestos">
+  <div style="background:#fff;border-radius:12px;padding:14px;border:1px solid var(--border2)">
+    <div style="font-weight:800;font-size:17px;color:#1f3864;margin-bottom:10px">🔩 Solicitudes de repuestos</div>
+    <button onclick="abrirSolRepuesto()" style="width:100%;padding:13px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:12px">➕ Crear solicitud de repuesto</button>
+    <div id="repuestos-list"></div>
+  </div>
+</div>
+
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="supShowTab('sup-dashboard',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -804,6 +812,9 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <span id="badge-notif-mant" class="badge-nav"></span>
     Alertas
+  </button>
+  <button class="nav-btn" onclick="supShowTab('repuestos',this)">
+    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><circle cx="19" cy="19" r="3.2"/></svg>Repuestos
   </button>
 </nav>
 
@@ -3745,6 +3756,7 @@ function renderPreventivos(){
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
+      ${_srChipsHTML(p.id)}
       <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','proximoMant',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.proximoMant==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
@@ -3861,6 +3873,7 @@ function renderCorrectivos(){
         <div class="tec-btn" data-n="Eliberto Peña" onclick="event.stopPropagation();toggleTecnicoOrden('corr','${c.id}','Eliberto Peña',this)">Eliberto Peña</div>
       </div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
+      ${_srChipsHTML(c.id)}
       <div style="margin-top:12px">
       ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
@@ -7684,6 +7697,252 @@ function _agendarDesdeOrden(correlativo, tecnicos, fechaVal, actividad, dur){
     if(lista.length){ const ta=document.getElementById('tab-agenda'); if(ta && ta.classList.contains('active')) renderAgenda(); }
   }catch(e){}
 }
+
+// ══ REPUESTOS — solicitudes de repuestos vinculadas a órdenes de trabajo ═════
+// Datos en montasa/repuestos/<id> — escritura POR SOLICITUD individual.
+const SR_MAX_FILAS = 40;
+function _srLista(){ const r=DB.repuestos||{}; return (Array.isArray(r)?r:Object.values(r)).filter(Boolean); }
+function _srDeOrden(oid){ return _srLista().filter(r=>r.ordenId===oid); }
+function _srSigCorrelativo(){
+  let mx=0;
+  _srLista().forEach(r=>{ const m=String(r.correlativo||'').match(/^SR-(\d+)$/); if(m) mx=Math.max(mx, parseInt(m[1],10)); });
+  const n=mx+1;
+  return 'SR-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
+}
+function _srBuscarOrdenPorCorr(txt){
+  const t=String(txt||'').trim().toUpperCase();
+  if(!t) return null;
+  const bus=[['prev',DB.preventivos||[]],['corr',DB.correctivos||[]]];
+  for(let i=0;i<bus.length;i++){
+    const o=bus[i][1].find(x=>x && String(x.correlativo||'').toUpperCase()===t);
+    if(o) return {tipo:bus[i][0], o:o};
+  }
+  return null;
+}
+function _srDatosOrden(o){
+  const eq=(DB.equipos||[]).find(e=>e.id===o.equipoId);
+  const esCli = o.equipoId==='__cliente__' || !!(eq&&eq.esEquipoCliente);
+  return {
+    esCliente: esCli,
+    equipoTxt: esCli ? (o.clienteNombre||(eq&&(eq.clienteNombre||eq.cliente))||'Equipo de cliente') : (eq?eq.codigo:(o.equipoId||'—')),
+    marca: (esCli ? (o.clienteMarca||(eq&&eq.marca)) : (eq&&eq.marca))||'',
+    modelo:(esCli ? (o.clienteModelo||(eq&&(eq.modelo||eq.desc))) : (eq&&(eq.modelo||eq.desc)))||'',
+    serie: (esCli ? (o.clienteSerie||(eq&&eq.serie)) : (eq&&eq.serie))||'',
+    tecnico: String(o.tecnico||'').split(',')[0].trim()
+  };
+}
+let _srOrdenSel=null;
+function _srFilaHTML(){
+  return '<div class="sr-fila" style="display:grid;grid-template-columns:56px 1fr 110px;gap:6px;margin-bottom:6px">'
+    +'<input type="number" min="1" class="sr-cant" placeholder="1" style="padding:9px 6px;text-align:center;border:1px solid var(--border2);border-radius:8px">'
+    +'<input class="sr-desc" placeholder="Descripción del repuesto" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
+    +'<input class="sr-parte" placeholder="Opcional" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
+    +'</div>';
+}
+function abrirSolRepuesto(){
+  _srOrdenSel=null;
+  const viejo=document.getElementById('sr-overlay'); if(viejo) viejo.remove();
+  const ov=document.createElement('div');
+  ov.id='sr-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99996;display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow:auto';
+  let filas=''; for(let i=0;i<5;i++) filas+=_srFilaHTML();
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:16px;margin:12px 0" onclick="event.stopPropagation()">'
+    +'<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">🔩 Nueva solicitud de repuestos</div>'
+    +'<div class="form-group"><label>Número de orden de trabajo <span style="color:#c9211e">*</span></label>'
+    +'<div style="display:flex;gap:8px"><input id="sr-orden" placeholder="Ej: MH-0123" style="flex:1;text-transform:uppercase;padding:10px;border:1px solid var(--border2);border-radius:8px" onkeydown="if(event.key===\'Enter\')_srBuscar()">'
+    +'<button onclick="_srBuscar()" style="padding:10px 16px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Buscar</button></div></div>'
+    +'<div id="sr-info" style="display:none;background:#eef4fb;border:1px solid #c9d9ec;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5"></div>'
+    +'<div id="sr-filas-wrap" style="display:none">'
+    +'<div style="display:grid;grid-template-columns:56px 1fr 110px;gap:6px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px"><span>Cant.</span><span>Descripción</span><span>No. de parte</span></div>'
+    +'<div id="sr-filas">'+filas+'</div>'
+    +'<button onclick="_srAgregarFila()" style="width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin-top:6px">➕ Agregar fila</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="_srGuardar()" style="flex:1;padding:13px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer">💾 Guardar solicitud</button>'
+    +'<button onclick="document.getElementById(\'sr-overlay\').remove()" style="padding:13px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){ const i=document.getElementById('sr-orden'); if(i) i.focus(); },100);
+}
+function _srAgregarFila(){
+  const cont=document.getElementById('sr-filas');
+  if(cont.querySelectorAll('.sr-fila').length>=SR_MAX_FILAS){ toast('Máximo '+SR_MAX_FILAS+' filas', true); return; }
+  cont.insertAdjacentHTML('beforeend', _srFilaHTML());
+}
+function _srBuscar(){
+  const txt=document.getElementById('sr-orden').value;
+  const res=_srBuscarOrdenPorCorr(txt);
+  const info=document.getElementById('sr-info');
+  if(!res){
+    _srOrdenSel=null;
+    info.style.display='block';
+    info.innerHTML='<span style="color:#c00;font-weight:700">No se encontró la orden "'+String(txt||'').replace(/[<>]/g,'')+'" en preventivos ni correctivos. Verifica el número (Ej: MH-0123).</span>';
+    document.getElementById('sr-filas-wrap').style.display='none';
+    return;
+  }
+  _srOrdenSel=res;
+  const d=_srDatosOrden(res.o);
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  info.style.display='block';
+  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(res.o.correlativo)+' — '+(res.tipo==='prev'?'Preventivo':'Correctivo')+'</div>'
+    +'<div><b>'+(d.esCliente?'Cliente':'Equipo')+':</b> '+esc(d.equipoTxt)+'</div>'
+    +(d.marca?'<div><b>Marca:</b> '+esc(d.marca)+'</div>':'')
+    +(d.modelo?'<div><b>Modelo:</b> '+esc(d.modelo)+'</div>':'')
+    +(d.serie?'<div><b>Serie:</b> '+esc(d.serie)+'</div>':'')
+    +'<div><b>Técnico:</b> '+esc(d.tecnico||'—')+'</div>';
+  document.getElementById('sr-filas-wrap').style.display='block';
+}
+function _srGuardar(){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ Sin conexión — no se puede guardar la solicitud ahora.'); return; }
+  if(!_srOrdenSel){ toast('Primero busca la orden de trabajo', true); return; }
+  const items=[];
+  document.querySelectorAll('#sr-filas .sr-fila').forEach(function(f){
+    const desc=f.querySelector('.sr-desc').value.trim();
+    if(!desc) return;
+    items.push({ cant: f.querySelector('.sr-cant').value.trim()||'1', desc: desc, parte: f.querySelector('.sr-parte').value.trim() });
+  });
+  if(!items.length){ toast('Ingresa al menos un repuesto (cantidad y descripción)', true); return; }
+  const d=_srDatosOrden(_srOrdenSel.o);
+  const sr={ id:'sr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+    correlativo:_srSigCorrelativo(),
+    ordenId:_srOrdenSel.o.id, ordenCorrelativo:_srOrdenSel.o.correlativo, ordenTipo:_srOrdenSel.tipo,
+    esCliente:d.esCliente, equipoTxt:d.equipoTxt, marca:d.marca, modelo:d.modelo, serie:d.serie, tecnico:d.tecnico,
+    items:items, fecha:new Date().toISOString().slice(0,10), ts:Date.now() };
+  window._fbDB.ref('montasa/repuestos/'+sr.id).set(sr).then(function(){
+    if(!DB.repuestos || Array.isArray(DB.repuestos)) DB.repuestos={};
+    DB.repuestos[sr.id]=sr;
+    // Trazabilidad: anotar el correlativo SR dentro de la orden de trabajo
+    try{
+      const o=_srOrdenSel.o;
+      if(!o.solRepuestos) o.solRepuestos=[];
+      if(o.solRepuestos.indexOf(sr.correlativo)<0) o.solRepuestos.push(sr.correlativo);
+      saveDB();
+      if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(_srOrdenSel.tipo==='prev'?'prev':'corr', o);
+    }catch(e){}
+    const ovv=document.getElementById('sr-overlay'); if(ovv) ovv.remove();
+    renderRepuestos();
+    toast('Solicitud '+sr.correlativo+' guardada ✓');
+  }).catch(function(){ alert('No se pudo guardar. Revisa tu conexión.'); });
+}
+function renderRepuestos(){
+  const el=document.getElementById('repuestos-list');
+  if(!el) return;
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  const list=_srLista().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if(!list.length){ el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:14px 0;text-align:center">Aún no hay solicitudes de repuestos.<br>Crea la primera con el botón de arriba.</div>'; return; }
+  el.innerHTML=list.map(function(r){
+    const n=(r.items||[]).length;
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:15px">'+esc(r.correlativo)+' <span style="font-weight:600;color:var(--text3);font-size:12px">→ '+esc(r.ordenCorrelativo)+'</span></div>'
+      +'<div style="font-size:12px;color:var(--text2)">'+esc(r.equipoTxt)+(r.marca?' · '+esc(r.marca):'')+' · '+n+' repuesto'+(n===1?'':'s')+' · '+esc(r.fecha||'')+'</div></div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+      +'<button onclick="_srVer(\''+r.id+'\')" style="padding:9px 12px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">👁 Ver</button>'
+      +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="padding:9px 12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📤 Compartir</button>'
+      +'</div></div>'
+      +'<div id="sr-det-'+r.id+'" style="display:none;margin-top:8px"></div>'
+      +'</div>';
+  }).join('');
+}
+function _srVer(id){
+  const r=_srLista().find(function(x){ return x.id===id; }); if(!r) return;
+  const det=document.getElementById('sr-det-'+id); if(!det) return;
+  if(det.style.display==='block'){ det.style.display='none'; return; }
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  det.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<tr><th style="text-align:center;border:1px solid var(--border2);padding:6px;background:#eef4fb;width:50px">Cant.</th><th style="text-align:left;border:1px solid var(--border2);padding:6px;background:#eef4fb">Descripción</th><th style="text-align:left;border:1px solid var(--border2);padding:6px;background:#eef4fb;width:110px">No. de parte</th></tr>'
+    +(r.items||[]).map(function(it){ return '<tr><td style="text-align:center;border:1px solid var(--border2);padding:6px">'+esc(it.cant)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.desc)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
+    +'</table>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:6px">'+(r.esCliente?'Cliente':'Equipo')+': '+esc(r.equipoTxt)+(r.modelo?' · '+esc(r.modelo):'')+(r.serie?' · Serie '+esc(r.serie):'')+(r.tecnico?' · Técnico: '+esc(r.tecnico):'')+'</div>';
+  det.style.display='block';
+}
+// Chips de trazabilidad dentro de la tarjeta de la orden
+function _srChipsHTML(oid){
+  try{
+    const srs=_srDeOrden(oid);
+    if(!srs.length) return '';
+    return '<div style="margin:8px 0"><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">🔩 Solicitudes de repuestos</span>'
+      + srs.map(function(r){ return '<button onclick="event.stopPropagation();compartirSolRepuesto(\''+r.id+'\')" style="padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;margin:0 6px 6px 0">'+r.correlativo+' · '+(r.items||[]).length+' ítems 📤</button>'; }).join('')
+      + '</div>';
+  }catch(e){ return ''; }
+}
+function _srLogo(){
+  if(window._LOGO_MONTASA_B64) return window._LOGO_MONTASA_B64;
+  const im=document.querySelector('img[src^="data:image/png;base64,"]');
+  return im?im.src:'';
+}
+function _srH2C(){
+  if(window.html2canvas) return Promise.resolve();
+  return new Promise(function(res,rej){ var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; sc.onload=res; sc.onerror=function(){rej(new Error('sin conexión para el generador'));}; document.head.appendChild(sc); });
+}
+async function _srEntregar(blob, nombre){
+  try{
+    const file=new File([blob], (nombre||'solicitud')+'.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:nombre||'Solicitud'});
+      toast('📤 Imagen compartida ✓'); return;
+    }
+  }catch(err){ if(err && err.name==='AbortError') return; }
+  try{
+    if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+      toast('📋 Imagen copiada — pégala donde quieras'); return;
+    }
+  }catch(err){}
+  const url=URL.createObjectURL(blob);
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px';
+  ov.innerHTML='<div style="color:#fff;font-weight:700;font-size:14px;text-align:center">Mantén presionada la imagen para compartirla o guardarla</div>'
+    +'<img src="'+url+'" style="max-width:100%;max-height:72vh;border-radius:10px;background:#fff">'
+    +'<button style="padding:12px 26px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cerrar</button>';
+  ov.querySelector('button').onclick=function(){ ov.remove(); URL.revokeObjectURL(url); };
+  document.body.appendChild(ov);
+}
+async function compartirSolRepuesto(id){
+  try{
+    const r=_srLista().find(function(x){ return x.id===id; });
+    if(!r){ toast('Solicitud no encontrada', true); return; }
+    toast('Generando imagen…');
+    await _srH2C();
+    const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+    const row=function(l,v){ return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #eeede8"><div style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0">'+l+'</div><div style="font-size:13px;font-weight:600;color:#26241d;text-align:right;word-break:break-word">'+esc(v||'—')+'</div></div>'; };
+    const logo=_srLogo();
+    const cont=document.createElement('div');
+    cont.style.cssText='position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
+    cont.innerHTML='<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      +'<div style="min-width:0"><div style="font-size:20px;font-weight:700">Solicitud de Repuestos</div>'
+      +'<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+esc(r.correlativo)+'</div></div>'
+      +(logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+      +'</div>'
+      +'<div style="padding:16px 22px 4px">'
+      +row('Orden de trabajo', r.ordenCorrelativo)
+      +row(r.esCliente?'Cliente':'Equipo', r.equipoTxt)
+      +(r.marca?row('Marca', r.marca):'')
+      +(r.modelo?row('Modelo', r.modelo):'')
+      +(r.serie?row('Serie', r.serie):'')
+      +row('Técnico', r.tecnico)
+      +row('Fecha', r.fecha)
+      +'</div>'
+      +'<div style="padding:12px 22px 6px">'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<tr><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;width:46px">Cant.</th><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;text-align:left">Descripción</th><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;width:96px;text-align:left">No. parte</th></tr>'
+      +(r.items||[]).map(function(it){ return '<tr><td style="border:1px solid #e2e0d8;padding:6px;text-align:center">'+esc(it.cant)+'</td><td style="border:1px solid #e2e0d8;padding:6px">'+esc(it.desc)+'</td><td style="border:1px solid #e2e0d8;padding:6px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
+      +'</table></div>'
+      +'<div style="padding:12px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
+    document.body.appendChild(cont);
+    const imgs=cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(x){ img.onload=x; img.onerror=x; setTimeout(x,3000); });
+    }));
+    const canvas=await html2canvas(cont,{scale:2,backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _srEntregar(blob, r.correlativo);
+    },'image/png');
+  }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+}
 function supShowTab(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -7692,6 +7951,7 @@ function supShowTab(id, btn) {
   if(btn) btn.classList.add('active');
   if(id === 'sup-dashboard') renderDashboardTec();
   if(id === 'agenda') renderAgenda();
+  if(id === 'repuestos') renderRepuestos();
   if(id === 'historial') { fillHistSel(); renderHistorial(); }
   if(id === 'personal') renderPersonal();
   if(id === 'solicitudes'){
@@ -7797,6 +8057,7 @@ function _iniciarConexionFirebase(esReintento){
         }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         if(remote.agenda) DB.agenda = remote.agenda;
+    if(remote.repuestos) DB.repuestos = remote.repuestos;
         // Recién ahora, con TODO el snapshot real cargado (con fotos y firmas), es
         // seguro habilitar la escritura. Evita escribir la versión recortada del caché.
         window._fbReady = true;
@@ -7915,6 +8176,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.correctivos)    DB.correctivos    = d.correctivos;
       _protegerOrdenesRecientes();
       if(d && d.agenda) DB.agenda = d.agenda;
+      if(d && d.repuestos) DB.repuestos = d.repuestos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
@@ -7979,6 +8241,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.correctivos)   DB.correctivos   = d.correctivos;
       _protegerOrdenesRecientes();
       if(d && d.agenda) DB.agenda = d.agenda;
+      if(d && d.repuestos) DB.repuestos = d.repuestos;
       if(d.revisiones)    DB.revisiones    = d.revisiones||[];
       if(d.evaluaciones)  DB.evaluaciones  = d.evaluaciones||[];
       if(d.solicitudes)   DB.solicitudes   = d.solicitudes;
