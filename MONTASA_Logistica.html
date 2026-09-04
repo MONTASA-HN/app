@@ -371,9 +371,10 @@ function _calcCostoViaticos(v){
   // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): forzar 0 aunque el viático
   // guardado traiga un número viejo de peajes.
   var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA'];
-  var numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
-  var cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
-  var tPeaj = numPeajes * cpU;
+  var _pjc = _viatPeajes(v, (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
+  var numPeajes = _pjc.n;
+  var cpU = _pjc.c;
+  var tPeaj = _pjc.t;
   var comb = parseFloat(v.combustible)||0;
   var otros = parseFloat(v.otros_gastos)||0;
   var total = tAlim + tTr + tHosp + tPeaj + comb + otros;
@@ -2109,8 +2110,9 @@ function abrirViaticos(ordenId){
   // Calculate totals
   const personas = v.personas||[];
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
-  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj = d.peajes * cpU;
+  const _pjR = _viatPeajes(v, d.peajes);
+  const cpU = _pjR.c;
+  const tPeaj = _pjR.t;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tComb = v.combustible||0;
   const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -2213,8 +2215,9 @@ function renderModalViaticos(orden){
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
   const gestorInfo = GESTORES_VIATICOS.find(g=>g.nombre===(v.gestor_nombre||''))||{};
-  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj = destInfo.peajes * cpU;
+  const _pjM = _viatPeajes(v, destInfo.peajes);
+  const cpU = _pjM.c;
+  const tPeaj = _pjM.t;
   const comb = v.combustible||0;
   const otros = v.otros_gastos||0;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
@@ -2269,8 +2272,9 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   const destOpts = DESTINOS_VIATICOS.map(d=>
     `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
   ).join('');
-  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const numPeaj = destInfo.peajes||0;
+  const _pjF = _viatPeajes(v, destInfo.peajes);
+  const cpU = _pjF.c;
+  const numPeaj = _pjF.n;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -2325,9 +2329,9 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
     <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🚛 Transporte</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
-      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600">${destInfo.km||0} km</div></div>
-      <div><div style="color:var(--text3)">Cant. peajes</div><div id="v-npeaj" style="font-weight:600">${numPeaj}</div></div>
-      <div><div style="color:var(--text3)">Costo peaje unit.</div><div id="v-cpunit" style="font-weight:600">L. ${cpU}</div></div>
+      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600;padding-top:8px">${destInfo.km||0} km</div></div>
+      <div><div style="color:var(--text3)">Cant. peajes ✏️</div><input type="number" min="0" id="v-npeaj" value="${numPeaj}" oninput="recalcViaticos()" style="width:100%;font-weight:700;padding:7px 6px;border:1px solid var(--border2);border-radius:6px;text-align:center"></div>
+      <div><div style="color:var(--text3)">Costo unit. (L.) ✏️</div><input type="number" min="0" id="v-cpunit" value="${cpU}" oninput="recalcViaticos()" style="width:100%;font-weight:700;padding:7px 6px;border:1px solid var(--border2);border-radius:6px;text-align:center"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-group"><label>🔴 Total peaje (auto)</label>
@@ -2480,14 +2484,14 @@ function actualizarDestino(){
   if(!sel) return;
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===sel.value)||{km:0,peajes:0};
   document.getElementById('v-km') && (document.getElementById('v-km').textContent = d.km+' km');
-  document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').textContent = d.peajes);
+  document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').value = d.peajes);
   recalcViaticos();
 }
 
 function actualizarVehiculo(){
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
   const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
-  document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').textContent = 'L. '+cpU);
+  document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').value = cpU);
   recalcViaticos();
 }
 
@@ -2521,12 +2525,28 @@ function recalcPersona(i){
   recalcViaticos();
 }
 
+// ── Peajes con control manual: cantidad y valor editables (auto por defecto) ─
+function _viatPeajes(v, destPeajes){
+  v = v || {};
+  const cpAuto = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
+  const tieneManual = (v.costo_peaje!=null && v.costo_peaje!=='');
+  const c = tieneManual ? (parseFloat(v.costo_peaje)||0) : cpAuto;
+  let n;
+  if(tieneManual){
+    n = (v.num_peajes!=null && v.num_peajes!=='') ? (parseFloat(v.num_peajes)||0) : (destPeajes||0);
+  } else {
+    const SIN = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA'];
+    n = SIN.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (destPeajes||0));
+  }
+  return { n:n, c:c, t:n*c };
+}
 function recalcViaticos(){
   const destNombre = document.getElementById('v-destino')?.value||'';
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
-  const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
-  const tPeaj = d.peajes * cpU;
+  const cpU = parseFloat(document.getElementById('v-cpunit')?.value||0)||0;
+  const _nPj = parseFloat(document.getElementById('v-npeaj')?.value||0)||0;
+  const tPeaj = _nPj * cpU;
   document.getElementById('v-tpeaj') && (document.getElementById('v-tpeaj').value=tPeaj);
   // Alimentación de todas las personas
   let tAlim=0, tTr=0, tHosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
@@ -2564,8 +2584,9 @@ function recalcFacturas(){
 function _calcTotalSol(v){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -2627,7 +2648,8 @@ function _leerFormSolicitud(){
     gestor_depto:  g.depto||'',
     vehiculo:  document.getElementById('v-vehiculo')?.value||'PICK-UP',
     km_total:  d.km,
-    num_peajes:d.peajes,
+    num_peajes: parseFloat(document.getElementById('v-npeaj')?.value||0)||0,
+    costo_peaje: parseFloat(document.getElementById('v-cpunit')?.value||0)||0,
     combustible:   parseFloat(document.getElementById('v-comb')?.value||0)||0,
     hospedaje:     parseFloat(document.getElementById('v-hosp')?.value||0)||0,
     otros_gastos:  parseFloat(document.getElementById('v-otros')?.value||0)||0,
@@ -2768,8 +2790,9 @@ async function generarPDFViaticos(tipo){
 function _buildSolicitudHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{km:0,peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const comb=v.combustible||0; const otros=v.otros_gastos||0;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
@@ -2859,7 +2882,7 @@ function _buildSolicitudHTML(v, orden){
     </tr>
     <tr>
       <td>${v.vehiculo||''}</td><td>${vehCod}</td><td class="num">${d.km} km</td>
-      <td class="num">${d.peajes}</td><td class="num">L.${cpU}</td>
+      <td class="num">${_pj.n}</td><td class="num">L.${cpU}</td>
       <td class="num">L.${tPeaj}</td><td class="num">L.${comb}</td>
       <td class="num">L.${otros}</td><td class="num tot"><strong>L.${tPeaj+comb+otros}</strong></td>
     </tr>
@@ -2886,8 +2909,9 @@ function _buildSolicitudHTML(v, orden){
 function _buildLiquidacionHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
