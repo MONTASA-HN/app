@@ -819,6 +819,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         <select id="eval-tec2" style="margin-top:8px"><option value="">— Segundo técnico (opcional) —</option><option>Jonathan Martinez</option><option>Marvin Torres</option><option>Elkin Perez</option><option>Kevin Deras</option><option>Fernando Benavides</option><option>Dalton Garcia</option><option>Eliberto Peña</option></select>
       </div>
       <div id="eval-km-wrap" style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+        <div class="form-group" style="margin-bottom:0"><label>Vehículo <span style="color:#c9211e">*</span></label><select id="eval-vehiculo"><option value="">— Seleccionar —</option></select></div>
         <div class="form-group" style="margin-bottom:0"><label>Km salida <span style="color:#c9211e">*</span></label><input type="number" id="eval-km-sal" placeholder="0"></div>
         <div class="form-group" style="margin-bottom:0"><label>Km retorno <span style="color:#c9211e">*</span></label><input type="number" id="eval-km-ret" placeholder="0"></div>
       </div>
@@ -3993,6 +3994,7 @@ function guardarEvaluacion(){
   const horaFin   = document.getElementById('eval-hora-fin').value;
   const kmSal     = document.getElementById('eval-km-sal').value;
   const kmRet     = document.getElementById('eval-km-ret').value;
+  const vehiculo  = document.getElementById('eval-vehiculo')?.value||'';
   const tipoEq    = document.getElementById('eval-tipo-equipo').value;
   const marca     = document.getElementById('eval-marca')?.value.trim()||'';
   const modelo    = document.getElementById('eval-modelo').value.trim();
@@ -4008,6 +4010,7 @@ function guardarEvaluacion(){
   if(!cliente) faltantes.push('Nombre del cliente');
   if(estado==='Completado' && !document.getElementById('eval-mant-sugerido')?.value) faltantes.push('🔜 Mantenimiento sugerido');
   if(ubicacion !== 'plantel'){
+    if(!vehiculo) faltantes.push('Vehículo de traslado');
     if(!kmSal) faltantes.push('Km salida');
     if(!kmRet) faltantes.push('Km retorno');
   }
@@ -4020,7 +4023,7 @@ function guardarEvaluacion(){
     tecnicos: [tec1, tec2].filter(Boolean),
     fecha, horaIni, horaFin,
     fechaInicio: fecha+'T'+horaIni, fechaFin: fecha+'T'+horaFin,
-    kmSalida: kmSal, kmRetorno: kmRet,
+    kmSalida: kmSal, kmRetorno: kmRet, vehiculo,
     tipoEquipo: tipoEq, marca, modelo, serie, horometro, cliente, diagnostico: diag, firma,
     mantSugerido: document.getElementById('eval-mant-sugerido')?.value||'',
     completado: estado==='Completado'
@@ -4031,7 +4034,7 @@ function guardarEvaluacion(){
     window._fbDB.ref('montasa/evaluaciones').set(_sinFotosPersist(DB.evaluaciones));
   // Al completar la evaluación, el montacargas del cliente entra a la flota de clientes
   if(entry.completado) _crearEquipoClienteDesdeEval(entry);
-  ['eval-marca','eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-mant-sugerido','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
+  ['eval-marca','eval-modelo','eval-serie','eval-horometro','eval-cliente','eval-diagnostico','eval-mant-sugerido','eval-vehiculo','eval-hora-ini','eval-hora-fin','eval-fecha','eval-km-sal','eval-km-ret'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('eval-estado').selectedIndex=0;
@@ -4046,7 +4049,16 @@ function guardarEvaluacion(){
   toast('Evaluación guardada ✓');
 }
 
+function _fillEvalVehiculo(){
+  const sel = document.getElementById('eval-vehiculo');
+  if(!sel) return;
+  const val = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar —</option>'
+    + DB.equipos.filter(e=>e.esVehiculo && (e.estado||'DISPONIBLE')!=='MAL ESTADO').map(v=>'<option value="'+v.codigo+'">'+v.codigo+'</option>').join('');
+  if(val) sel.value = val;
+}
 function renderEvaluaciones(){
+  _fillEvalVehiculo();
   const el = document.getElementById('evaluacion-list');
   if(!el) return;
   const list = (DB.evaluaciones||[]).slice().sort((a,b)=>{
@@ -4123,6 +4135,17 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Nombre del cliente</label><input value="${v.cliente||''}" placeholder="Nombre completo" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','cliente',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
+      if((v.ubicacion||'campo')!=='plantel'){
+        card += `<div class="form-group"><label>🚗 Vehículo de traslado <span style="color:#c9211e">*</span></label>
+          <select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','vehiculo',this.value)">
+            <option value="">— Seleccionar —</option>
+            ${DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').map(x=>`<option value="${x.codigo}" ${v.vehiculo===x.codigo?'selected':''}>${x.codigo}</option>`).join('')}
+          </select></div>`;
+        card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px">
+          <div class="form-group" style="margin-bottom:0"><label>Km salida <span style="color:#c9211e">*</span></label><input type="number" value="${v.kmSalida||''}" placeholder="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','kmSalida',this.value)" oninput="event.stopPropagation()"></div>
+          <div class="form-group" style="margin-bottom:0"><label>Km retorno <span style="color:#c9211e">*</span></label><input type="number" value="${v.kmRetorno||''}" placeholder="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','kmRetorno',this.value)" oninput="event.stopPropagation()"></div>
+        </div>`;
+      }
       card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
       card += `<div class="form-group"><label>🔜 Mantenimiento sugerido</label><select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','mantSugerido',this.value)"><option value="">-- Seleccionar --</option><option value="Mantenimiento 250 horas" ${v.mantSugerido==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option><option value="Mantenimiento 500 horas" ${v.mantSugerido==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option><option value="Mantenimiento 1000 horas" ${v.mantSugerido==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option><option value="Mantenimiento 2000 horas" ${v.mantSugerido==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option></select></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
@@ -4199,6 +4222,11 @@ function finalizarEvaluacion(id){
   if(!v.diagnostico) faltantes.push('Diagnóstico');
   if(!v.mantSugerido) faltantes.push('🔜 Mantenimiento sugerido');
   if(!firmaOk) faltantes.push('Firma del cliente');
+  if((v.ubicacion||'campo')!=='plantel'){
+    if(!v.vehiculo)  faltantes.push('🚗 Vehículo de traslado');
+    if(!v.kmSalida)  faltantes.push('Km salida');
+    if(!v.kmRetorno) faltantes.push('Km retorno');
+  }
   if(faltantes.length){ alert('No se puede finalizar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   if(fc && fc.classList.contains('firmado')) v.firma = fc.toDataURL('image/png');
   v.estado = 'Completado';
@@ -4232,6 +4260,18 @@ function actualizarEvaluacion(id, campo, valor){
   if(campo==='estado' && valor==='Completado'){
     v.completado = true;
     _crearEquipoClienteDesdeEval(v);
+  }
+  // Actualizar km del vehículo cuando se llena kmRetorno
+  if(campo === 'kmRetorno' && valor && v.vehiculo){
+    const km = parseFloat(valor);
+    const eq = DB.equipos.find(e=>e.esVehiculo && e.codigo===String(v.vehiculo).trim().toUpperCase());
+    if(eq && !isNaN(km)){
+      eq.kilometraje = km.toString();
+      if(window._fbDB && window._fbReady){
+        const idx = DB.equipos.findIndex(e=>e.id===eq.id);
+        if(idx>=0) window._fbDB.ref('montasa/equipos/'+idx+'/kilometraje').set(km.toString());
+      }
+    }
   }
   saveDB();
   if(campo==='estado') renderEvaluaciones();
