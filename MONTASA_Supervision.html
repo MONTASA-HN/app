@@ -7869,6 +7869,7 @@ function _agendarDesdeOrden(correlativo, tecnicos, fechaVal, actividad, dur){
 // ══ REPUESTOS — solicitudes de repuestos vinculadas a órdenes de trabajo ═════
 // Datos en montasa/repuestos/<id> — escritura POR SOLICITUD individual.
 const SR_MAX_FILAS = 40;
+const SR_EDITAR = true; // editar SR con PIN: solo Gerencia y Supervisión
 function _srLista(){ const r=DB.repuestos||{}; return (Array.isArray(r)?r:Object.values(r)).filter(Boolean); }
 function _srDeOrden(oid){ return _srLista().filter(r=>r.ordenId===oid); }
 function _srSigCorrelativo(){
@@ -7900,59 +7901,124 @@ function _srDatosOrden(o){
   };
 }
 let _srOrdenSel=null;
-function _srFilaHTML(){
+let _srEditando=null;
+function _srFilaHTML(it){
+  it = it||{};
+  const esc=function(t){ return String(t==null?'':t).replace(/["<>]/g,''); };
   return '<div class="sr-fila" style="display:grid;grid-template-columns:56px 1fr 110px;gap:6px;margin-bottom:6px">'
-    +'<input type="number" min="1" class="sr-cant" placeholder="1" style="padding:9px 6px;text-align:center;border:1px solid var(--border2);border-radius:8px">'
-    +'<input class="sr-desc" placeholder="Descripción del repuesto" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
-    +'<input class="sr-parte" placeholder="Opcional" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
+    +'<input type="number" min="1" class="sr-cant" placeholder="1" value="'+esc(it.cant||'')+'" style="padding:9px 6px;text-align:center;border:1px solid var(--border2);border-radius:8px">'
+    +'<input class="sr-desc" placeholder="Descripción del repuesto" value="'+esc(it.desc||'')+'" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
+    +'<input class="sr-parte" placeholder="Opcional" value="'+esc(it.parte||'')+'" style="padding:9px 8px;border:1px solid var(--border2);border-radius:8px">'
     +'</div>';
 }
-function abrirSolRepuesto(){
-  _srOrdenSel=null;
+function abrirSolRepuesto(editId){
+  _srOrdenSel=null; _srEditando=null;
   const viejo=document.getElementById('sr-overlay'); if(viejo) viejo.remove();
+  let srEdit=null;
+  if(editId){
+    srEdit=_srLista().find(function(x){ return x.id===editId; });
+    if(!srEdit){ toast('Solicitud no encontrada', true); return; }
+    _srEditando=editId;
+  }
   const ov=document.createElement('div');
   ov.id='sr-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99996;display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow:auto';
-  let filas=''; for(let i=0;i<5;i++) filas+=_srFilaHTML();
+  let filas='';
+  if(srEdit){
+    (srEdit.items||[]).forEach(function(it){ filas+=_srFilaHTML(it); });
+    filas+=_srFilaHTML(); filas+=_srFilaHTML();
+  } else {
+    for(let i=0;i<5;i++) filas+=_srFilaHTML();
+  }
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
   ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:16px;margin:12px 0" onclick="event.stopPropagation()">'
-    +'<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">🔩 Nueva solicitud de repuestos</div>'
-    +'<div class="form-group"><label>Número de orden de trabajo <span style="color:#c9211e">*</span></label>'
-    +'<div style="display:flex;gap:8px"><input id="sr-orden" placeholder="Ej: MH-0123" style="flex:1;text-transform:uppercase;padding:10px;border:1px solid var(--border2);border-radius:8px" onkeydown="if(event.key===\'Enter\')_srBuscar()">'
-    +'<button onclick="_srBuscar()" style="padding:10px 16px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Buscar</button></div></div>'
+    +'<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">'+(srEdit?('✏️ Editar '+esc(srEdit.correlativo)):'🔩 Nueva solicitud de repuestos')+'</div>'
+    +(srEdit?'':('<div class="form-group"><label>Orden de trabajo <span style="color:#c9211e">*</span></label>'
+    +'<div style="display:flex;gap:8px"><input id="sr-orden" placeholder="Correlativo, equipo o cliente…" style="flex:1;padding:10px;border:1px solid var(--border2);border-radius:8px" oninput="_srBuscar()" onkeydown="if(event.key===\'Enter\')_srBuscar()">'
+    +'<button onclick="_srBuscar()" style="padding:10px 16px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Buscar</button></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:4px">Toca Buscar para ver todas las órdenes activas, o escribe para filtrar.</div></div>'
+    +'<div id="sr-resultados" style="display:none;max-height:40vh;overflow:auto;border:1px solid var(--border2);border-radius:10px;margin-bottom:12px;background:#fff"></div>'))
     +'<div id="sr-info" style="display:none;background:#eef4fb;border:1px solid #c9d9ec;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5"></div>'
-    +'<div id="sr-filas-wrap" style="display:none">'
+    +'<div id="sr-filas-wrap" style="display:'+(srEdit?'block':'none')+'">'
     +'<div style="display:grid;grid-template-columns:56px 1fr 110px;gap:6px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px"><span>Cant.</span><span>Descripción</span><span>No. de parte</span></div>'
     +'<div id="sr-filas">'+filas+'</div>'
     +'<button onclick="_srAgregarFila()" style="width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin-top:6px">➕ Agregar fila</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:14px">'
-    +'<button onclick="_srGuardar()" style="flex:1;padding:13px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer">💾 Guardar solicitud</button>'
+    +'<button onclick="_srGuardar()" style="flex:1;padding:13px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer">'+(srEdit?'💾 Guardar cambios':'💾 Guardar solicitud')+'</button>'
     +'<button onclick="document.getElementById(\'sr-overlay\').remove()" style="padding:13px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
     +'</div></div>';
   document.body.appendChild(ov);
-  setTimeout(function(){ const i=document.getElementById('sr-orden'); if(i) i.focus(); },100);
+  if(srEdit){
+    const info=document.getElementById('sr-info');
+    info.style.display='block';
+    info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">Orden '+esc(srEdit.ordenCorrelativo)+'</div>'
+      +'<div><b>'+(srEdit.esCliente?'Cliente':'Equipo')+':</b> '+esc(srEdit.equipoTxt)+(srEdit.marca?' · '+esc(srEdit.marca):'')+'</div>'
+      +(srEdit.tecnico?'<div><b>Técnico:</b> '+esc(srEdit.tecnico)+'</div>':'');
+  } else {
+    setTimeout(function(){ const i=document.getElementById('sr-orden'); if(i) i.focus(); },100);
+  }
 }
 function _srAgregarFila(){
   const cont=document.getElementById('sr-filas');
   if(cont.querySelectorAll('.sr-fila').length>=SR_MAX_FILAS){ toast('Máximo '+SR_MAX_FILAS+' filas', true); return; }
   cont.insertAdjacentHTML('beforeend', _srFilaHTML());
 }
+function _srOrdenesActivas(){
+  const out=[];
+  const add=function(arr,tipo){
+    (arr||[]).forEach(function(o){
+      if(!o) return;
+      const est=o.completado?'Completado':(o.estado||'Pendiente');
+      if(est==='Completado'||est==='Cancelado') return;
+      out.push({tipo:tipo, o:o});
+    });
+  };
+  add(DB.preventivos,'prev'); add(DB.correctivos,'corr');
+  return out.sort(function(a,b){ return String(b.o.correlativo||'').localeCompare(String(a.o.correlativo||'')); });
+}
 function _srBuscar(){
-  const txt=document.getElementById('sr-orden').value;
-  const res=_srBuscarOrdenPorCorr(txt);
-  const info=document.getElementById('sr-info');
-  if(!res){
-    _srOrdenSel=null;
-    info.style.display='block';
-    info.innerHTML='<span style="color:#c00;font-weight:700">No se encontró la orden "'+String(txt||'').replace(/[<>]/g,'')+'" en preventivos ni correctivos. Verifica el número (Ej: MH-0123).</span>';
-    document.getElementById('sr-filas-wrap').style.display='none';
+  const txt=String(document.getElementById('sr-orden')?.value||'').trim().toLowerCase();
+  const cont=document.getElementById('sr-resultados');
+  if(!cont) return;
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  let lista=_srOrdenesActivas();
+  if(txt){
+    lista=lista.filter(function(r){
+      const d=_srDatosOrden(r.o);
+      return String(r.o.correlativo||'').toLowerCase().indexOf(txt)>=0
+        || String(d.equipoTxt||'').toLowerCase().indexOf(txt)>=0
+        || String(d.marca||'').toLowerCase().indexOf(txt)>=0;
+    });
+  }
+  cont.style.display='block';
+  if(!lista.length){
+    cont.innerHTML='<div style="padding:12px;font-size:13px;color:#c00;font-weight:600">No hay órdenes activas'+(txt?' que coincidan con "'+esc(txt)+'"':'')+'.</div>';
     return;
   }
-  _srOrdenSel=res;
-  const d=_srDatosOrden(res.o);
+  cont.innerHTML=lista.slice(0,60).map(function(r){
+    const d=_srDatosOrden(r.o);
+    return '<div onclick="_srElegir(\''+r.tipo+'\',\''+r.o.id+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
+      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':'Correctivo')+'</span></div>'
+      +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div></div>'
+      +'<span style="color:#1f3864;font-weight:800;font-size:18px">›</span>'
+      +'</div>';
+  }).join('');
+}
+function _srElegir(tipo, oid){
+  const arr = tipo==='prev' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const o = arr.find(function(x){ return x && x.id===oid; });
+  if(!o) return;
+  _srOrdenSel={tipo:tipo, o:o};
+  const cont=document.getElementById('sr-resultados');
+  if(cont) cont.style.display='none';
+  const inp=document.getElementById('sr-orden');
+  if(inp) inp.value=o.correlativo||'';
+  const d=_srDatosOrden(o);
   const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  const info=document.getElementById('sr-info');
   info.style.display='block';
-  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(res.o.correlativo)+' — '+(res.tipo==='prev'?'Preventivo':'Correctivo')+'</div>'
+  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(o.correlativo)+' — '+(tipo==='prev'?'Preventivo':'Correctivo')+'</div>'
     +'<div><b>'+(d.esCliente?'Cliente':'Equipo')+':</b> '+esc(d.equipoTxt)+'</div>'
     +(d.marca?'<div><b>Marca:</b> '+esc(d.marca)+'</div>':'')
     +(d.modelo?'<div><b>Modelo:</b> '+esc(d.modelo)+'</div>':'')
@@ -7960,9 +8026,18 @@ function _srBuscar(){
     +'<div><b>Técnico:</b> '+esc(d.tecnico||'—')+'</div>';
   document.getElementById('sr-filas-wrap').style.display='block';
 }
+function _srEditarPin(id){
+  if(typeof solicitarPINAccion==='function'){
+    solicitarPINAccion(function(){ abrirSolRepuesto(id); }, '🔑 Editar solicitud de repuestos', 'Ingresa tu PIN para agregar o eliminar repuestos de esta solicitud');
+  } else {
+    const pin=prompt('Ingresa el PIN para editar la solicitud:');
+    if(pin===null) return;
+    if(pin!=='1624'){ alert('⚠️ PIN incorrecto.'); return; }
+    abrirSolRepuesto(id);
+  }
+}
 function _srGuardar(){
   if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ Sin conexión — no se puede guardar la solicitud ahora.'); return; }
-  if(!_srOrdenSel){ toast('Primero busca la orden de trabajo', true); return; }
   const items=[];
   document.querySelectorAll('#sr-filas .sr-fila').forEach(function(f){
     const desc=f.querySelector('.sr-desc').value.trim();
@@ -7970,6 +8045,23 @@ function _srGuardar(){
     items.push({ cant: f.querySelector('.sr-cant').value.trim()||'1', desc: desc, parte: f.querySelector('.sr-parte').value.trim() });
   });
   if(!items.length){ toast('Ingresa al menos un repuesto (cantidad y descripción)', true); return; }
+  // ── Edición con PIN: actualizar la SR existente (mismo correlativo) ──
+  if(_srEditando){
+    const sr=_srLista().find(function(x){ return x.id===_srEditando; });
+    if(!sr){ toast('Solicitud no encontrada', true); return; }
+    sr.items=items;
+    sr.editadoTs=Date.now();
+    window._fbDB.ref('montasa/repuestos/'+sr.id).set(sr).then(function(){
+      if(!DB.repuestos || Array.isArray(DB.repuestos)) DB.repuestos={};
+      DB.repuestos[sr.id]=sr;
+      _srEditando=null;
+      const ovv=document.getElementById('sr-overlay'); if(ovv) ovv.remove();
+      renderRepuestos();
+      toast('Solicitud '+sr.correlativo+' actualizada ✓');
+    }).catch(function(){ alert('No se pudo guardar. Revisa tu conexión.'); });
+    return;
+  }
+  if(!_srOrdenSel){ toast('Primero busca y selecciona la orden de trabajo', true); return; }
   const d=_srDatosOrden(_srOrdenSel.o);
   const sr={ id:'sr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
     correlativo:_srSigCorrelativo(),
@@ -8006,6 +8098,7 @@ function renderRepuestos(){
       +'<div style="font-size:12px;color:var(--text2)">'+esc(r.equipoTxt)+(r.marca?' · '+esc(r.marca):'')+' · '+n+' repuesto'+(n===1?'':'s')+' · '+esc(r.fecha||'')+'</div></div>'
       +'<div style="display:flex;gap:6px;flex-shrink:0">'
       +'<button onclick="_srVer(\''+r.id+'\')" style="padding:9px 12px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">👁 Ver</button>'
+      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="_srEditarPin(\''+r.id+'\')" style="padding:9px 12px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">✏️ Editar</button>':'')
       +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="padding:9px 12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📤 Compartir</button>'
       +'</div></div>'
       +'<div id="sr-det-'+r.id+'" style="display:none;margin-top:8px"></div>'
@@ -8042,6 +8135,7 @@ function _srVerModal(id){
     +'</table>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
     +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir solicitud</button>'
+    +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-ver-overlay\').remove();_srEditarPin(\''+r.id+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️</button>':'')
     +'<button onclick="document.getElementById(\'sr-ver-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
     +'</div></div>';
   ov.onclick=function(){ ov.remove(); };
