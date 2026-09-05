@@ -2834,9 +2834,12 @@ function _srBuscar(){
   }
   cont.innerHTML=lista.slice(0,60).map(function(r){
     const d=_srDatosOrden(r.o);
+    const ya=_srDeOrden(r.o.id);
     return '<div onclick="_srElegir(\''+r.tipo+'\',\''+r.o.id+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
       +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':'Correctivo')+'</span></div>'
-      +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div></div>'
+      +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div>'
+      +(ya.length?'<div style="font-size:11px;color:#8a6d00;font-weight:700">🔩 Ya tiene: '+ya.map(function(x){return esc(x.correlativo);}).join(', ')+'</div>':'')
+      +'</div>'
       +'<span style="color:#1f3864;font-weight:800;font-size:18px">›</span>'
       +'</div>';
   }).join('');
@@ -2845,6 +2848,26 @@ function _srElegir(tipo, oid){
   const arr = tipo==='prev' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const o = arr.find(function(x){ return x && x.id===oid; });
   if(!o) return;
+  const esc0=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  // Una solicitud por orden: si ya existe, no se crea otra — se ve o se edita la existente
+  const ya=_srDeOrden(oid);
+  if(ya.length){
+    _srOrdenSel=null;
+    const cont0=document.getElementById('sr-resultados');
+    if(cont0) cont0.style.display='none';
+    const fw=document.getElementById('sr-filas-wrap');
+    if(fw) fw.style.display='none';
+    const sr0=ya[0];
+    const info0=document.getElementById('sr-info');
+    info0.style.display='block';
+    info0.innerHTML='<div style="font-weight:800;color:#8a6d00;margin-bottom:6px">⚠️ La orden '+esc0(o.correlativo)+' ya tiene la solicitud '+esc0(sr0.correlativo)+' ('+(sr0.items||[]).length+' repuestos)</div>'
+      +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">No se puede crear otra solicitud para la misma orden. '+((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'Para agregar o quitar repuestos, edítala con PIN.':'Si faltan repuestos, pide a Gerencia o Supervisión que la editen.')+'</div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button onclick="_srVerModal(\''+sr0.id+'\')" style="flex:1;padding:11px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:800;cursor:pointer">👁 Ver '+esc0(sr0.correlativo)+'</button>'
+      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-overlay\').remove();_srEditarPin(\''+sr0.id+'\')" style="flex:1;padding:11px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️ Editar (PIN)</button>':'')
+      +'</div>';
+    return;
+  }
   _srOrdenSel={tipo:tipo, o:o};
   const cont=document.getElementById('sr-resultados');
   if(cont) cont.style.display='none';
@@ -2898,6 +2921,7 @@ function _srGuardar(){
     return;
   }
   if(!_srOrdenSel){ toast('Primero busca y selecciona la orden de trabajo', true); return; }
+  if(_srDeOrden(_srOrdenSel.o.id).length){ toast('Esta orden ya tiene una solicitud de repuestos — edítala en lugar de crear otra', true); return; }
   const d=_srDatosOrden(_srOrdenSel.o);
   const sr={ id:'sr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
     correlativo:_srSigCorrelativo(),
