@@ -586,6 +586,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
         <div class="fleet-tile-value" id="st-disp">0</div>
         <div class="fleet-tile-label">Disponibles</div>
+        <button onclick="event.stopPropagation();verEquiposEstado('DISPONIBLE')" style="position:absolute;right:12px;bottom:12px;z-index:3;background:#fff;color:var(--tile-color);border:1.5px solid var(--tile-color);border-radius:9px;padding:6px 11px;font-size:11px;font-weight:800;cursor:pointer">👁 Ver</button>
       </div>
       <div class="fleet-tile" style="--tile-color:#E8811A;--tile-bg:#fdead9" onclick="document.getElementById('filt-eq-estado').value='EN RENTA';showTab('flota',document.querySelector('.nav-btn:nth-child(4)'));renderEquipos()">
         <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
@@ -601,6 +602,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
         <div class="fleet-tile-value" id="st-renta">0</div>
         <div class="fleet-tile-label">En renta</div>
+        <button onclick="event.stopPropagation();verEquiposEstado('EN RENTA')" style="position:absolute;right:12px;bottom:12px;z-index:3;background:#fff;color:var(--tile-color);border:1.5px solid var(--tile-color);border-radius:9px;padding:6px 11px;font-size:11px;font-weight:800;cursor:pointer">👁 Ver</button>
       </div>
       <div class="fleet-tile" style="--tile-color:#B8860B;--tile-bg:#f5ecd2" onclick="document.getElementById('filt-eq-estado').value='EN MANTENIMIENTO';showTab('flota',document.querySelector('.nav-btn:nth-child(4)'));renderEquipos()">
         <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
@@ -616,6 +618,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
         <div class="fleet-tile-value" id="st-mant">0</div>
         <div class="fleet-tile-label">En mantenimiento</div>
+        <button onclick="event.stopPropagation();verEquiposEstado('EN MANTENIMIENTO')" style="position:absolute;right:12px;bottom:12px;z-index:3;background:#fff;color:var(--tile-color);border:1.5px solid var(--tile-color);border-radius:9px;padding:6px 11px;font-size:11px;font-weight:800;cursor:pointer">👁 Ver</button>
       </div>
       <div class="fleet-tile" style="--tile-color:#D32F2F;--tile-bg:#fbe0e0" onclick="document.getElementById('filt-eq-estado').value='MAL ESTADO';showTab('flota',document.querySelector('.nav-btn:nth-child(4)'));renderEquipos()">
         <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
@@ -631,6 +634,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
         <div class="fleet-tile-value" id="st-mal">0</div>
         <div class="fleet-tile-label">Inactivos</div>
+        <button onclick="event.stopPropagation();verEquiposEstado('MAL ESTADO')" style="position:absolute;right:12px;bottom:12px;z-index:3;background:#fff;color:var(--tile-color);border:1.5px solid var(--tile-color);border-radius:9px;padding:6px 11px;font-size:11px;font-weight:800;cursor:pointer">👁 Ver</button>
       </div>
       <div class="fleet-tile" style="--tile-color:#7C3AED;--tile-bg:#efe7fb;grid-column:1/-1" onclick="document.getElementById('filt-eq-estado').value='DEMO/PRESTAMO';showTab('flota',document.querySelector('.nav-btn:nth-child(4)'));renderEquipos()">
         <div class="fleet-tile-glow"></div><div class="fleet-tile-corner"></div>
@@ -646,6 +650,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         </div>
         <div class="fleet-tile-value" id="st-demo">0</div>
         <div class="fleet-tile-label">Demo/Préstamo</div>
+        <button onclick="event.stopPropagation();verEquiposEstado('DEMO/PRESTAMO')" style="position:absolute;right:12px;bottom:12px;z-index:3;background:#fff;color:var(--tile-color);border:1.5px solid var(--tile-color);border-radius:9px;padding:6px 11px;font-size:11px;font-weight:800;cursor:pointer">👁 Ver</button>
       </div>
     </div>
 
@@ -3956,6 +3961,75 @@ function renderActividadReciente(){
   }).join('');
 }
 
+// ── Ver y compartir los equipos por estado (tarjetas del dashboard) ─────────
+function _eqPorEstado(estado){
+  return (DB.equipos||[]).filter(function(e){ return e && !e.esGenerico && !e.esVehiculo && !e.esEquipoCliente && (e.estado||'DISPONIBLE')===estado; })
+    .sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
+}
+const _ESTADO_META = {
+  'DISPONIBLE':       {t:'Equipos disponibles',      c:'#18A303', e:'✅'},
+  'EN RENTA':         {t:'Equipos en renta',         c:'#E8811A', e:'🟠'},
+  'EN MANTENIMIENTO': {t:'Equipos en mantenimiento', c:'#B8860B', e:'🔧'},
+  'MAL ESTADO':       {t:'Equipos inactivos',        c:'#D32F2F', e:'🔴'},
+  'DEMO/PRESTAMO':    {t:'Equipos en demo/préstamo', c:'#7C3AED', e:'🟣'}
+};
+function verEquiposEstado(estado){
+  const meta=_ESTADO_META[estado]||{t:estado,c:'#1f3864',e:''};
+  const eqs=_eqPorEstado(estado);
+  const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+  const viejo=document.getElementById('eqestado-overlay'); if(viejo) viejo.remove();
+  const ov=document.createElement('div');
+  ov.id='eqestado-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99996;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px" onclick="event.stopPropagation()">'
+    +'<div style="font-weight:800;color:'+meta.c+';font-size:16px;margin-bottom:2px">'+meta.e+' '+esc(meta.t)+'</div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">'+eqs.length+' equipo'+(eqs.length===1?'':'s')+' · '+new Date().toLocaleDateString('es-HN')+'</div>'
+    +(eqs.length
+      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+        + eqs.map(function(q){ return '<div style="border:1px solid var(--border2);border-left:3px solid '+meta.c+';border-radius:8px;padding:8px 10px"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(q.codigo)+'</div><div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(q.marca||'')+((estado==='EN RENTA'&&(q.cliente||q.ubicacion))?' · '+esc(q.cliente||q.ubicacion):'')+'</div></div>'; }).join('')
+        +'</div>'
+      : '<div style="color:var(--text3);font-size:13px;padding:10px 0">No hay equipos en este estado.</div>')
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="compartirEquiposEstado(\''+estado+'\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir tarjeta</button>'
+    +'<button onclick="document.getElementById(\'eqestado-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
+    +'</div></div>';
+  ov.onclick=function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
+async function compartirEquiposEstado(estado){
+  try{
+    const meta=_ESTADO_META[estado]||{t:estado,c:'#1f3864',e:''};
+    const eqs=_eqPorEstado(estado);
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
+    const logo=(typeof _srLogo==='function')?_srLogo():((typeof _LOGO_MONTASA_B64!=='undefined')?_LOGO_MONTASA_B64:((document.querySelector('img[src^="data:image/png;base64,"]')||{}).src||''));
+    const cont=document.createElement('div');
+    cont.style.cssText='position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px;box-sizing:border-box;';
+    cont.innerHTML='<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      +'<div style="min-width:0"><div style="font-size:19px;font-weight:700">'+esc(meta.t)+'</div>'
+      +'<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+eqs.length+' equipo'+(eqs.length===1?'':'s')+' · '+new Date().toLocaleDateString('es-HN')+'</div></div>'
+      +(logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+      +'</div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px">'
+      +eqs.map(function(q){ return '<div style="border:1px solid #e2e0d8;border-left:3px solid '+meta.c+';border-radius:8px;padding:8px 10px"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(q.codigo)+'</div><div style="font-size:11px;color:#6b6960">'+esc(q.marca||'—')+((estado==='EN RENTA'&&(q.cliente||q.ubicacion))?'<br>👤 '+esc(q.cliente||q.ubicacion):'')+'</div></div>'; }).join('')
+      +'</div>'
+      +'<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
+    document.body.appendChild(cont);
+    const imgs=cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(r){ img.onload=r; img.onerror=r; setTimeout(r,3000); });
+    }));
+    const canvas=await html2canvas(cont,{scale:2,backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, meta.t.replace(/ /g,'_'));
+    },'image/png');
+  }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+}
 function renderDashboard(){
   // Ocultar indicador de carga si existe
   const _loadEl = document.getElementById('loading-indicator');
