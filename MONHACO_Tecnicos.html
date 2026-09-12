@@ -20,13 +20,11 @@ function calcularVales(fechaInicio, fechaFin){
   var hIni = ini.getHours() + ini.getMinutes()/60;
   var hFin = fin.getHours() + fin.getMinutes()/60;
   var vales = [];
-  if(hIni < 7) vales.push({tipo:'desayuno', monto:150});
-  if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
-  if(hFin > 19) vales.push({tipo:'cena', monto:150});
+  // MONHACO: a los técnicos solo les aplica automáticamente el vale de CENA.
+  // Desayuno, almuerzo y media noche solo pueden asignarse manualmente desde Gerencia.
   var mismodia = ini.toDateString() === fin.toDateString();
-  if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:150});
-  var acum = 0;
-  return vales.filter(function(v){ acum+=v.monto; return acum<=1500; });
+  if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:150});
+  return vales;
 }
 
 // ── VALES DE ALIMENTACIÓN — MANTENIMIENTO (Correctivos / Preventivos) ─────────
@@ -858,9 +856,13 @@ const EQUIPOS_INICIALES = [{"id":"mh_000","codigo":"MT-1","tipo":"MONTACARGAS","
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
 // Cortinas: escribir/borrar por id (NUNCA el arreglo completo) para no pisar las de otros
+function _cortSinFotos(o){
+  if(!o || !Array.isArray(o.fotos) || !o.fotos.length) return o;
+  var c = Object.assign({}, o); c.nFotos = o.fotos.length; delete c.fotos; return c;
+}
 function _syncCortina(o){
   if(!o||!o.id||!window._fbDB) return;
-  var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+o.id]=o;
+  var u={_ts:Date.now(),_sid:_SESSION_ID}; u['cortinasReg/'+o.id]=_cortSinFotos(o);
   window._fbDB.ref('monhaco').update(u).then(function(){
     try{ window._fbDB.ref('monhaco/_cortDbg').set({corr:(o.correlativo||''),id:o.id,app:(document.title||''),fbReady:!!window._fbReady,stage:'OK',ts:Date.now()}); }catch(e){}
   }).catch(function(err){
@@ -903,6 +905,59 @@ function _cacheLocal(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(_dbSinFotos())); }
   catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_e){} }
 }
+// ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
+// Las fotos viven en fotosOrden_monhaco/<idOrden> (FUERA del nodo raíz que
+// las apps descargan al abrir) y se descargan SOLO cuando se abre esa orden.
+// La orden lleva el marcador nFotos. Compatibilidad total: si una orden aún
+// trae las fotos adentro (formato viejo), se muestran igual.
+window._fotosOrdenCache = window._fotosOrdenCache || {};
+window._fotosHidratando = window._fotosHidratando || {};
+function _fotosPendientes(o){
+  return !!(o && o.id && (o.nFotos>0) && !(Array.isArray(o.fotos) && o.fotos.length));
+}
+function _fotosCargandoHTML(){
+  return '<div style="font-size:12px;color:var(--text3);padding:8px 0">📷 Cargando fotografías…</div>';
+}
+function _hidratarFotos(o, cb){
+  if(!o || !o.id) return;
+  const cacheado = window._fotosOrdenCache[o.id];
+  if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
+  if(!window._fbDB || window._fotosHidratando[o.id]) return;
+  window._fotosHidratando[o.id] = true;
+  window._fbDB.ref('fotosOrden_monhaco/'+o.id).once('value').then(function(s){
+    delete window._fotosHidratando[o.id];
+    const v = s.val();
+    const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
+    window._fotosOrdenCache[o.id] = arr;
+    if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
+  }).catch(function(){ delete window._fotosHidratando[o.id]; });
+}
+function _persistirFotosOrden(o){
+  if(!o || !o.id || !window._fbDB) return;
+  const fotos = (o.fotos||[]).filter(Boolean);
+  window._fbDB.ref('fotosOrden_monhaco/'+o.id).set({fotos:fotos}).then(function(){
+    o.nFotos = fotos.length;
+    window._fotosOrdenCache[o.id] = fotos;
+    try{ saveDB(); }catch(e){}
+    try{ if((DB.cortinas||[]).some(function(x){return x&&x.id===o.id;})) _syncCortina(o); }catch(e){}
+  });
+}
+function _sinFotosPersist(arr){
+  return (arr||[]).map(function(o){
+    if(!o || o.nFotos===undefined || !Array.isArray(o.fotos) || !o.fotos.length) return o;
+    const c = Object.assign({}, o); delete c.fotos; return c;
+  });
+}
+let _refrescoFotosTimer = null;
+function _refrescarVistasFotos(){
+  clearTimeout(_refrescoFotosTimer);
+  _refrescoFotosTimer = setTimeout(function(){
+    ['renderPreventivos','renderCorrectivos','renderCortinas'].forEach(function(fn){
+      try{ if(typeof window[fn]==='function') window[fn](); }catch(e){}
+    });
+  }, 120);
+}
+
 function saveDB(){
   _cacheLocal();
   try{
@@ -910,8 +965,8 @@ function saveDB(){
       const ts = Date.now();
       window._localWriteTs = ts;
       const payload = { _ts: ts, _sid: _SESSION_ID };
-      if(DB.preventivos && DB.preventivos.length)       payload.preventivos     = DB.preventivos;
-      if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = DB.correctivos;
+      if(DB.preventivos && DB.preventivos.length)       payload.preventivos     = _sinFotosPersist(DB.preventivos);
+      if(DB.correctivos && DB.correctivos.length)       payload.correctivos     = _sinFotosPersist(DB.correctivos);
       if(DB.revisiones && DB.revisiones.length)         payload.revisiones      = DB.revisiones;
       if(DB.evaluaciones && DB.evaluaciones.length)     payload.evaluaciones    = DB.evaluaciones;
       // cortinas se sincroniza por id con _syncCortina (no como arreglo completo)
@@ -1896,6 +1951,7 @@ function renderPreventivos(){
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
+      ${_fotosUIHTML('prev', p.id, p.fotos)}
       ${(p.ubicacion||'campo')!=='plantel'?`
       <div style="margin-top:12px">
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
@@ -1919,7 +1975,8 @@ function renderPreventivos(){
       `:''}
       `}
       ${(est==='Completado' && p.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${p.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
-      ${_renderFotosOrden(p.fotos)}
+      ${(_openMant.has(p.id)&&_fotosPendientes(p))?(_hidratarFotos(p),_fotosCargandoHTML()):''}
+      ${est==='Completado'?_renderFotosOrden(p.fotos):''}
       ${(est==='Completado' && p.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (est==='Completado' && p.vales && p.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
@@ -2309,6 +2366,7 @@ function renderCorrectivos(){
         ${_tecBtnsHTML('corr', c.id)}
       </div></div>
       <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
+      ${_fotosUIHTML('corr', c.id, c.fotos)}
       ${(c.ubicacion||'campo')!=='plantel'?`
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
         <select onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','vehiculo',this.value)">
@@ -2331,7 +2389,8 @@ function renderCorrectivos(){
       `}
       <div style="margin-top:12px">
       ${(c.estado==='Completado' && c.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ Firma del cliente</div><img src="${c.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
-      ${_renderFotosOrden(c.fotos)}
+      ${(_openMant.has(c.id)&&_fotosPendientes(c))?(_hidratarFotos(c),_fotosCargandoHTML()):''}
+      ${c.estado==='Completado'?_renderFotosOrden(c.fotos):''}
       ${(c.estado==='Completado' && c.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (c.estado==='Completado' && c.vales && c.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
@@ -3930,7 +3989,8 @@ function renderCortinas(){
     card += `</div>`;
     if(isOpen){
       const bloqueado = o.completado || est==='Completado';
-      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">`;
+      card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-cort-${o.id}" onclick="event.stopPropagation()">`;
+      if(_fotosPendientes(o)){ card += _fotosCargandoHTML(); _hidratarFotos(o); }
       if(bloqueado){
         // ── SOLO LECTURA ──────────────────────────────────────────────
         card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -3946,16 +4006,20 @@ function renderCortinas(){
         detalles.forEach(([k,v])=>{
           card += `<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">${k}</span><span style="font-weight:600;color:var(--text)">${v}</span></div>`;
         });
-        card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Descripción del trabajo</span><span style="font-weight:600;color:var(--text)">${o.descripcion||'—'}</span></div>`;
+        card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Breve descripción del trabajo a realizar</span><span style="font-weight:600;color:var(--text)">${o.descripcion||'—'}</span></div>`;
+        card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">🛠 Trabajo realizado</span><span style="font-weight:600;color:var(--text)">${o.trabajoRealizado||'—'}</span></div>`;
         card += `<div style="grid-column:1/-1"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Técnicos</span><span style="font-weight:600;color:var(--text)">${tecs}</span></div>`;
         card += `</div>`;
         if(o.firma){
           card += `<div style="margin-top:6px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">✍️ Firma del cliente</div>`;
           card += `<img src="${o.firma}" style="width:100%;max-width:300px;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>`;
         }
+        card += _renderFotosOrden(o.fotos);
       } else {
         // ── EDITABLE ──────────────────────────────────────────────────
-        card += `<div class="form-group"><label>Estado</label><select onchange="actualizarCortina('${o.id}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select></div>`;
+        card += est==='Pendiente'?`<style>#cb-cort-${o.id} input,#cb-cort-${o.id} textarea{pointer-events:none;opacity:0.5}#cb-cort-${o.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
+        card += `<div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCortina('${o.id}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select>
+        ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}</div>`;
         card += `<div class="form-group"><label>Nombre del cliente</label><input value="${(o.cliente||'').replace(/"/g,'&quot;')}" onchange="actualizarCortina('${o.id}','cliente',this.value)"></div>`;
         card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">`;
         card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${o.fecha||''}" onchange="actualizarCortina('${o.id}','fecha',this.value)"></div>`;
@@ -3965,7 +4029,8 @@ function renderCortinas(){
         card += `<div class="form-group" style="margin-bottom:0"><label>Fecha fin</label><input type="date" value="${o.fechaFinFecha||''}" onchange="actualizarCortina('${o.id}','fechaFinFecha',this.value)"></div>`;
         card += `<div class="form-group" style="margin-bottom:0"><label>Hora final</label><input type="time" value="${o.horaFin||''}" onchange="actualizarCortina('${o.id}','horaFin',this.value)"></div>`;
         card += `</div>`;
-        card += `<div class="form-group" style="margin-top:10px"><label>Descripción del trabajo</label><textarea rows="3" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
+        card += `<div class="form-group" style="margin-top:10px"><label>Breve descripción del trabajo a realizar</label><textarea rows="2" onchange="actualizarCortina('${o.id}','descripcion',this.value)">${o.descripcion||''}</textarea></div>`;
+        card += `<div class="form-group" style="margin-top:10px"><label>🛠 Trabajo realizado</label><textarea rows="3" placeholder="Todo lo que se realizó en la asistencia técnica..." onchange="actualizarCortina('${o.id}','trabajoRealizado',this.value)">${o.trabajoRealizado||''}</textarea></div>`;
         card += `<div class="form-group" style="margin-top:10px"><label>Técnicos asignados</label>`;
         card += `<div class="tecnicos-grid" style="flex-wrap:wrap" id="cort-tecs-${o.id}">`;
         ROSTER_TEC.map(function(t){return t.n;}).forEach(nom=>{
@@ -3973,6 +4038,7 @@ function renderCortinas(){
           card += `<label class="tecnico-check${marcado?' selected':''}"><input type="checkbox" value="${nom}" ${marcado?'checked':''} onchange="toggleTecnicoCortina('${o.id}',this)"> ${nom}</label>`;
         });
         card += `</div></div>`;
+        card += _fotosUIHTML('cort', o.id, o.fotos);
         card += `<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>`;
         card += `<canvas id="firma-cort-${o.id}" class="firma-canvas${o.firma?' firmado':''}" width="600" height="160"
           ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
@@ -4063,6 +4129,10 @@ function finalizarCortina(id){
   // Capturar la firma actual del canvas si el técnico firmó pero no la guardó
   const firmaActual = getFirmaData('cort-'+id);
   if(firmaActual) o.firma = firmaActual;
+  if(!(o.cliente||'').trim()){
+    alert('No se puede finalizar.\nFalta:\n\n• Nombre del cliente');
+    return;
+  }
   o.estado = 'Completado';
   o.completado = true;
   o.fechaCierre = new Date().toISOString().slice(0,10);
@@ -4121,8 +4191,44 @@ function actualizarEvaluacion(id, campo, valor){
 }
 
 // ── FOTOS DE ÓRDENES (Revisiones y Evaluaciones) ─────────────────────────────
+function _arrFotosTipo(tipo){
+  return tipo==='prev'?(DB.preventivos||[]):tipo==='corr'?(DB.correctivos||[]):tipo==='cort'?(DB.cortinas||[]):tipo==='rev'?(DB.revisiones||[]):(DB.evaluaciones||[]);
+}
+function _renderFotosTipo(tipo){
+  try{
+    if(tipo==='prev') renderPreventivos();
+    else if(tipo==='corr') renderCorrectivos();
+    else if(tipo==='cort') renderCortinas();
+    else if(tipo==='rev') renderRevisiones();
+    else renderEvaluaciones();
+  }catch(e){}
+}
+function _fotosUIHTML(tipo, id, fotos){
+  fotos = (fotos||[]).filter(Boolean);
+  var h = '<div class="form-group" style="margin-top:10px"><label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>';
+  if(fotos.length){
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">';
+    fotos.forEach(function(f,i){
+      h += '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">'
+        +'<img src="'+f+'" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(this.src)">'
+        +'<button onclick="event.stopPropagation();eliminarFotoOrden(\''+tipo+'\',\''+id+'\','+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
+    });
+    h += '</div>';
+  }
+  if(fotos.length < 10){
+    var inp = function(cam){ return '<input type="file" accept="image/*"'+(cam?' capture="environment"':'')+' multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden(\''+tipo+'\',\''+id+'\',this)">'; };
+    h += '<div style="display:flex;gap:8px">'
+      +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">'+inp(true)+'📷 Cámara'+(fotos.length>0?' ('+fotos.length+'/10)':'')+'</label>'
+      +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)">'+inp(false)+'🖼️ Galería</label>'
+      +'</div>';
+  } else {
+    h += '<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>';
+  }
+  h += '</div>';
+  return h;
+}
 function agregarFotosOrden(tipo, id, input){
-  const getOrden = ()=> ((tipo==='rev'?DB.revisiones:DB.evaluaciones)||[]).find(x=>x.id===id);
+  const getOrden = ()=> _arrFotosTipo(tipo).find(x=>x.id===id);
   const orden = getOrden();
   if(!orden) return;
   if(!orden.fotos) orden.fotos = [];
@@ -4134,8 +4240,9 @@ function agregarFotosOrden(tipo, id, input){
   if(archivos.length>espacio){ toast('Solo se agregaron '+espacio+' de '+archivos.length+' (límite 10)', true); }
   let pendientes = procesar.length, agregadas = 0;
   const finalizar = ()=>{
+    _persistirFotosOrden(getOrden());
     saveDB();
-    if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
+    _renderFotosTipo(tipo);
     if(agregadas>0) toast(agregadas+' foto'+(agregadas>1?'s':'')+' agregada'+(agregadas>1?'s':'')+' ✓');
     else toast('No se pudo procesar ninguna foto', true);
   };
@@ -4169,12 +4276,13 @@ function agregarFotosOrden(tipo, id, input){
 
 function eliminarFotoOrden(tipo, id, idx){
   if(!confirm('¿Eliminar esta foto?')) return;
-  const arr = tipo==='rev' ? DB.revisiones : DB.evaluaciones;
+  const arr = _arrFotosTipo(tipo);
   const orden = (arr||[]).find(x=>x.id===id);
   if(!orden || !orden.fotos) return;
   orden.fotos.splice(idx, 1);
+  _persistirFotosOrden(orden);
   saveDB();
-  if(tipo==='rev') renderRevisiones(); else renderEvaluaciones();
+  _renderFotosTipo(tipo);
 }
 function actualizarEvaluacionTecnico(id, pos, valor){
   const v = (DB.evaluaciones||[]).find(x=>x.id===id);
