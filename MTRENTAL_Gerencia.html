@@ -459,7 +459,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <div id="det-marca" style="font-size:13px;opacity:0.85;margin-top:3px"></div>
           <div id="det-serie" style="font-size:11px;opacity:0.65;margin-top:4px;font-family:'DM Mono',monospace"></div>
         </div>
-        <button id="modal-close" onclick="cerrarModal()">✕</button>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button id="det-editar-btn" onclick="editarEquipoCliente()" title="Editar datos" style="display:none;background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;line-height:1">✏️</button>
+          <button id="modal-close" onclick="cerrarModal()">✕</button>
+        </div>
       </div>
     </div>
     <div id="modal-body">
@@ -3139,6 +3142,8 @@ function abrirModal(id){
   }
   modalEquipoId = id;
   _insertarBtnCompartirEq();
+  const _ebtnEd = document.getElementById('det-editar-btn');
+  if(_ebtnEd) _ebtnEd.style.display = e.esEquipoCliente ? 'flex' : 'none';
 
   // Para equipos de cliente: mostrar datos del cliente, ocultar estados no aplicables
   const detEstado = document.getElementById('det-estado');
@@ -3268,6 +3273,97 @@ function aplicarColorHeader(estado){
   else if(estado === 'EN MANTENIMIENTO') h.className = 'modal-header-mant';
   else if(estado === 'DEMO/PRESTAMO') h.className = 'modal-header-demo';
   else h.className = 'modal-header-mal';
+}
+
+
+// ── Editar datos de un EQUIPO DE CLIENTE (con PIN) ──────────────────────────
+// Corrige errores de escritura de los técnicos: cliente, marca, modelo y serie.
+// La corrección se propaga a las órdenes ACTIVAS vinculadas al equipo.
+function editarEquipoCliente(){
+  if(!modalEquipoId) return;
+  const _idEq = modalEquipoId;
+  solicitarPINAccion(function(){ _eqCliAbrirEdicion(_idEq); }, '✏️ Editar equipo de cliente', 'Ingresa tu PIN para corregir los datos de este equipo');
+}
+function _eqCliAbrirEdicion(id){
+  const e = (DB.equipos||[]).find(function(x){ return x && x.id===id; });
+  if(!e || !e.esEquipoCliente) return;
+  const viejo = document.getElementById('eqcli-edit-overlay'); if(viejo) viejo.remove();
+  const esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/[<>]/g,''); };
+  const campo = function(lbl, iid, val, ph){
+    return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">'+lbl+'</label>'
+      +'<input id="'+iid+'" value="'+esc(val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2);border-radius:8px;font-size:14px"></div>';
+  };
+  const ov = document.createElement('div');
+  ov.id = 'eqcli-edit-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;max-height:88vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">'
+    +'<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:2px">✏️ Editar equipo de cliente</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">La corrección se aplicará también a las órdenes activas de este equipo.</div>'
+    +campo('👤 Cliente', 'eqcli-nombre', e.clienteNombre||e.cliente||'', 'Nombre del cliente')
+    +campo('🏭 Marca',   'eqcli-marca',  e.marca||'',  'Ej: Baoly')
+    +campo('📦 Modelo',  'eqcli-modelo', e.modelo||e.desc||'', 'Ej: KBG25')
+    +campo('🔢 Serie',   'eqcli-serie',  e.serie||'',  'Número de serie')
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="_eqCliGuardarEdicion(\''+id+'\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar cambios</button>'
+    +'<button onclick="document.getElementById(\'eqcli-edit-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  ov.onclick = function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
+function _eqCliGuardarEdicion(id){
+  const e = (DB.equipos||[]).find(function(x){ return x && x.id===id; });
+  if(!e) return;
+  const val = function(iid){ const el=document.getElementById(iid); return el ? el.value.trim() : ''; };
+  const nombre = val('eqcli-nombre'), marca = val('eqcli-marca'), modelo = val('eqcli-modelo'), serie = val('eqcli-serie');
+  if(!nombre){ toast('El nombre del cliente es obligatorio', true); return; }
+  if(!marca && !modelo && !serie){ toast('Completa al menos marca, modelo o serie', true); return; }
+  const antesNombre = e.clienteNombre || e.cliente || '';
+  e.clienteNombre = nombre;
+  e.cliente = nombre;
+  e.marca = marca;
+  e.modelo = modelo;
+  e.serie = serie;
+  e.codigo = serie || ((marca+' '+modelo).trim() || nombre);
+  e.desc = ((marca+' '+modelo).trim()) + (nombre ? ' — ' + nombre : '');
+  if((e.ubicacion||'') === antesNombre) e.ubicacion = nombre;
+  // Propagar a las órdenes ACTIVAS vinculadas (las completadas/canceladas quedan como registro)
+  const datos = {clienteNombre:nombre, clienteMarca:marca, clienteModelo:modelo, clienteSerie:serie};
+  let nOrd = 0;
+  (DB.preventivos||[]).forEach(function(o){
+    if(o && o.equipoId===id && o.estado!=='Completado' && o.estado!=='Cancelado'){ Object.assign(o, datos); nOrd++; }
+  });
+  (DB.correctivos||[]).forEach(function(o){
+    if(o && o.equipoId===id && o.estado!=='Completado' && o.estado!=='Cancelado'){ Object.assign(o, datos); nOrd++; }
+  });
+  let nLog = 0;
+  (DB.logistica||[]).forEach(function(o){
+    if(o && (o.equipoId===id || o.equipoId2===id) && !o.cerrado && o.estado!=='Cancelado'){ Object.assign(o, datos); nLog++; }
+  });
+  saveDB();          // escribe equipos + preventivos + correctivos
+  saveEquipo(e);     // reescritura íntegra del array de equipos
+  if(nLog && window._fbDB && window._fbReady){
+    try{
+      window._fbDB.ref('montasa/logistica').once('value').then(function(snap){
+        let rem = snap.val()||[];
+        if(!Array.isArray(rem)) rem = Object.values(rem);
+        rem = rem.filter(Boolean);
+        let ch = false;
+        rem.forEach(function(o){
+          if(o && (o.equipoId===id || o.equipoId2===id) && !o.cerrado && o.estado!=='Cancelado'){ Object.assign(o, datos); ch = true; }
+        });
+        if(ch) return window._fbDB.ref('montasa').update({logistica: rem});
+      }).catch(function(){});
+    }catch(_e){}
+  }
+  const ovE = document.getElementById('eqcli-edit-overlay'); if(ovE) ovE.remove();
+  try{ renderEquipos(); }catch(_e){}
+  try{ renderPreventivos(); }catch(_e){}
+  try{ renderCorrectivos(); }catch(_e){}
+  try{ renderLogistica(); }catch(_e){}
+  try{ renderDashboard(); }catch(_e){}
+  if(document.getElementById('modal-overlay').classList.contains('open')) abrirModal(id);
+  const tot = nOrd + nLog;
+  toast('Equipo corregido ✓' + (tot ? ' · ' + tot + ' orden' + (tot===1?'':'es') + ' activa' + (tot===1?'':'s') + ' actualizada' + (tot===1?'':'s') : ''));
 }
 
 function guardarDesdeModal(){
