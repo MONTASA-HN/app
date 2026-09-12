@@ -6279,11 +6279,12 @@ function renderSolicitudes(){
 
   // Get live estado from preventivos/correctivos for each solicitud
   function getEstadoLive(sol){
-    const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===sol.id||o.correlativo===sol.correlativo);
+    const orden = [...(DB.preventivos||[]), ...(DB.correctivos||[]), ...(DB.cortinas||[]), ...(DB.logistica||[])]
+      .filter(Boolean).find(o=>o.id===sol.id||(sol.correlativo&&o.correlativo===sol.correlativo));
     if(!orden){
-      // Order might be finalized (in historial) or not found yet
-      const enHistorial = (DB.ordenesCerradas||[]).find(o=>o.correlativo===sol.correlativo);
-      return enHistorial ? 'Finalizada' : (sol.estado||'Pendiente');
+      const enHistorial = (DB.ordenesCerradas||[]).find(o=>o&&o.correlativo===sol.correlativo);
+      // Si la orden ya no existe en ningún lado, la solicitud quedó huérfana: no mostrarla.
+      return enHistorial ? 'Finalizada' : 'Eliminada';
     }
     if(orden.completado || orden.estado==='Completado') return 'Finalizada';
     return orden.estado || 'Pendiente';
@@ -6305,8 +6306,8 @@ function renderSolicitudes(){
     );
   }
 
-  // Only show non-finalized (finalized go to historial only)
-  const activas = list.filter(s => getEstadoLive(s) !== 'Finalizada');
+  // Only show non-finalized (finalized go to historial only; orphaned are hidden)
+  const activas = list.filter(s => { const _e = getEstadoLive(s); return _e !== 'Finalizada' && _e !== 'Eliminada'; });
   const finalizadas = list.filter(s => getEstadoLive(s) === 'Finalizada');
 
   if(!activas.length && !list.length){ el.innerHTML='<div class="empty">Sin resultados</div>'; return; }
@@ -6464,6 +6465,11 @@ function actualizarPinDots(){
 function eliminarSolicitud(id){
   if(!confirm('¿Eliminar esta solicitud?')) return;
   DB.solicitudes = (DB.solicitudes||[]).filter(s=>s.id!==id);
+  // Escribir el nodo explícitamente: saveDB() omite 'solicitudes' cuando la
+  // lista queda vacía y la solicitud borrada reaparecía al recargar.
+  if(window._fbDB && window._fbReady){
+    try{ window._fbDB.ref('monhaco').update({solicitudes: DB.solicitudes, _ts: Date.now(), _sid: _SESSION_ID}); }catch(e){}
+  }
   saveDB(); renderSolicitudes(); toast('Solicitud eliminada');
 }
 
