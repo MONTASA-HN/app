@@ -506,6 +506,7 @@ function rcFirmaGuardarOverlay(){
 
 // Las fotos del daño viven FUERA del nodo raíz, en fotosOrden_monhaco/<rcId>,
 // con el marcador nFotos en el reporte (igual que las órdenes de técnicos).
+const RC_ELIMINAR = false; // eliminar reportes de cobro: solo Gerencia
 let _rcEditando = null;
 let _HC_RC_CONT = 'rc-cont';
 let _HC_HOR_CONT = 'hor-cont';
@@ -855,10 +856,29 @@ function rcVer(id){
     + '</div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
     + '<button onclick="rcEditarPin(\''+r.id+'\')" style="flex:1;padding:12px 14px;background:#eef2f8;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">✏️ Editar</button>'
     + (!cobrado?'<button onclick="rcMarcarCobrado(\''+r.id+'\')" style="flex:1;padding:12px 14px;background:#e5f7e0;color:#1a5c1a;border:1px solid #bbf7d0;border-radius:8px;font-weight:700;cursor:pointer">✔ Cobrado</button>':'')
+    + (RC_ELIMINAR?'<button onclick="rcEliminar(\''+r.id+'\')" style="padding:12px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:8px;font-weight:700;cursor:pointer">🗑</button>':'')
     + '<button onclick="document.getElementById(\'rc-ver-overlay\').remove()" style="padding:12px 14px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
     + '</div></div>';
   ov.onclick = function(){ ov.remove(); };
   document.body.appendChild(ov);
+}
+function rcEliminar(id){
+  if(!RC_ELIMINAR) return;
+  solicitarPINAccion(function(){
+    if(!confirm('¿Eliminar este reporte de cobro?\nEsta acción no se puede deshacer.')) return;
+    const r = _rcLista().find(function(x){ return x.id===id; });
+    if(DB.cobros && !Array.isArray(DB.cobros)) delete DB.cobros[id];
+    try{
+      if(window._fbDB){
+        window._fbDB.ref('monhaco/cobros/'+id).remove();
+        window._fbDB.ref('fotosOrden_monhaco/'+id).remove(); // también sus fotos
+      }
+    }catch(e){}
+    delete window._rcFotoCache[id];
+    const o = document.getElementById('rc-ver-overlay'); if(o) o.remove();
+    renderCobros(_HC_RC_CONT);
+    toast(((r&&r.correlativo)||'Reporte')+' eliminado ✓');
+  }, '🗑 Eliminar reporte de cobro', 'Ingresa tu PIN para eliminar este reporte');
 }
 function rcEditarPin(id){
   const cerrar = function(){ const o=document.getElementById('rc-ver-overlay'); if(o) o.remove(); };
