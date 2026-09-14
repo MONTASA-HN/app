@@ -1118,6 +1118,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   </div>
 
   <div id="tab-historial" class="section">
+    <button onclick="abrirReporteMensual()" style="width:100%;margin-bottom:12px;padding:12px;border-radius:10px;border:1px solid #b9d2ef;background:#eef2f8;color:#1f3864;font-size:13px;font-weight:800;cursor:pointer">📊 Reporte mensual por cliente</button>
     <div style="padding:4px 0 14px">
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px">
         <select id="filt-hist-equipo" style="font-size:13px">
@@ -3104,6 +3105,238 @@ async function rcCompartirPDF(id){
       a.href = url; a.download = nombre+'.pdf'; a.click();
       toast('📄 PDF generado');
     }
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
+}
+
+// ── CLIENTES MONHACO + REPORTE MENSUAL POR CLIENTE ───────────────────────────
+const CLIENTES_MONHACO = ['ELCATEX','RETHINK','FIVE STAR','SAINT JOHN','GENESIS','FRANCIS','SAN JUAN','CEPCO','SUYAPA'];
+function _cliSelOptions(val){
+  val = (val||'').trim();
+  let h = '<option value="">— Seleccionar cliente —</option>';
+  if(val && CLIENTES_MONHACO.indexOf(val)===-1) h += '<option value="'+_hcEsc(val)+'" selected>'+_hcEsc(val)+'</option>';
+  CLIENTES_MONHACO.forEach(function(c){ h += '<option value="'+c+'"'+(c===val?' selected':'')+'>'+c+'</option>'; });
+  return h;
+}
+let _rmCliente = '';
+let _rmMes = null;
+function _rmMesDe(o){
+  const f = String(o.fechaDano||o.fecha||'');
+  if(/^\d{4}-\d{2}/.test(f)) return f.slice(0,7);
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(f);
+  if(m) return m[3]+'-'+String(m[2]).padStart(2,'0');
+  return '';
+}
+function _rmCliDe(o){ return String(o.cliente||'').trim().toUpperCase(); }
+function _rmOrdenes(cliente, mes){
+  cliente = String(cliente||'').trim().toUpperCase();
+  const out = [];
+  const met = function(arr, tipo, color, emoji){
+    (arr||[]).filter(Boolean).forEach(function(o){
+      if(_rmCliDe(o)!==cliente || _rmMesDe(o)!==mes) return;
+      out.push({tipo:tipo, color:color, emoji:emoji, o:o});
+    });
+  };
+  met(DB.preventivos, 'Preventivo', '#2E83C3', '📋');
+  met(DB.correctivos, 'Correctivo', '#C9211E', '🔧');
+  met(DB.cortinas, 'Cortinas / Niveladoras', '#9B59B6', '🚪');
+  met((typeof _rcLista==='function')?_rcLista():[], 'Reporte de cobro', '#8a4800', '💰');
+  out.sort(function(a,b){ return String(a.o.fecha||a.o.fechaDano||'').localeCompare(String(b.o.fecha||b.o.fechaDano||'')); });
+  return out;
+}
+function _rmClientes(){
+  const set = new Set(CLIENTES_MONHACO);
+  [].concat(DB.preventivos||[], DB.correctivos||[], DB.cortinas||[], (typeof _rcLista==='function')?_rcLista():[])
+    .filter(Boolean).forEach(function(o){ const c=_rmCliDe(o); if(c) set.add(c); });
+  return Array.from(set);
+}
+function _rmEquipoTxt(o, esRC){
+  if(esRC) return o.equipoTxt||'—';
+  if(o.equipoId){
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    if(eq) return eq.codigo+(eq.marca?' — '+eq.marca:'');
+  }
+  return o.clienteNombre || o.ubicacion || '—';
+}
+function _rmDescDe(x){
+  const o = x.o;
+  if(x.tipo==='Preventivo') return o.servicio || o.notas || '';
+  if(x.tipo==='Correctivo') return o.falla || o.diagnostico || '';
+  if(x.tipo==='Reporte de cobro') return o.causa || '';
+  return o.descripcion || '';
+}
+function abrirReporteMensual(){
+  const viejo = document.getElementById('rm-overlay'); if(viejo) viejo.remove();
+  const ov = document.createElement('div');
+  ov.id = 'rm-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f3ee);z-index:700;overflow:auto';
+  ov.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-weight:800;font-size:16px">📊 Reporte mensual por cliente</div>'
+    + '<button onclick="document.getElementById(\'rm-overlay\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer">✕</button></div>'
+    + '<div style="max-width:680px;margin:0 auto;padding:14px" id="rm-cont"></div>';
+  document.body.appendChild(ov);
+  if(!_rmMes) _rmMes = horMesActual();
+  renderReporteMensual();
+}
+function _rmMoverMes(n){
+  const p = (_rmMes||horMesActual()).split('-');
+  const d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1+n, 1);
+  _rmMes = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderReporteMensual();
+}
+function renderReporteMensual(){
+  const cont = document.getElementById('rm-cont'); if(!cont) return;
+  const mes = _rmMes||horMesActual();
+  let h = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+    + '<button onclick="_rmMoverMes(-1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">‹</button>'
+    + '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">'+_hcEsc(horMesLabel(mes))+'</div>'
+    + '<button onclick="_rmMoverMes(1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>'
+    + '</div>';
+  h += '<select id="rm-cliente" onchange="_rmCliente=this.value;renderReporteMensual()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
+    + '<option value="">— Seleccionar cliente —</option>'
+    + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'"'+(c===_rmCliente?' selected':'')+'>'+_hcEsc(c)+'</option>'; }).join('')
+    + '</select>';
+  if(!_rmCliente){
+    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes del mes.</div>';
+    cont.innerHTML = h; return;
+  }
+  const lista = _rmOrdenes(_rmCliente, mes);
+  const porTipo = {};
+  lista.forEach(function(x){ porTipo[x.tipo] = (porTipo[x.tipo]||0)+1; });
+  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:14px">'+_hcEsc(_rmCliente)+' — '+lista.length+' orden'+(lista.length===1?'':'es')+' en '+_hcEsc(horMesLabel(mes))+'</div>'
+    + '<div style="font-size:12px;color:var(--text2,#555);margin-top:3px">'+(Object.keys(porTipo).map(function(t){ return porTipo[t]+' '+t.toLowerCase(); }).join(' · ')||'—')+'</div>'
+    + '</div>';
+  if(lista.length){
+    h += '<div style="display:flex;gap:8px;margin-bottom:12px">'
+      + '<button onclick="rmCompartirPDF()" style="flex:1;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📄 Compartir PDF</button>'
+      + '<button onclick="rmCompartirImagen()" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📤 Compartir imagen</button>'
+      + '</div>';
+  } else {
+    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:16px 0">Sin órdenes de '+_hcEsc(_rmCliente)+' en este mes.</div>';
+  }
+  lista.forEach(function(x){
+    const o = x.o;
+    const est = o.estado || (o.completado?'Completado':'Pendiente');
+    const comp = o.completado || est==='Completado' || est==='Cobrado';
+    h += '<div style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:3px solid '+x.color+';border-radius:10px;padding:10px 13px;margin-bottom:7px">'
+      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">'
+      + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#eef2f8;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
+      + '<span style="font-size:11px;font-weight:700;color:'+x.color+'">'+x.emoji+' '+_hcEsc(x.tipo)+'</span>'
+      + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(est)+'</span>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:700">'+_hcEsc(_rmEquipoTxt(o, x.tipo==='Reporte de cobro'))+'</div>'
+      + (_rmDescDe(x)?'<div style="font-size:12px;color:var(--text2,#555);margin-top:2px">'+_hcEsc(String(_rmDescDe(x)).slice(0,140))+'</div>':'')
+      + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">📅 '+_hcEsc(o.fechaDano||o.fecha||'—')+(o.tecnico?' · 👷 '+_hcEsc(o.tecnico):'')+'</div>'
+      + '</div>';
+  });
+  cont.innerHTML = h;
+}
+function _rmHeaderDOM(mes, lista){
+  const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : '';
+  const porTipo = {};
+  lista.forEach(function(x){ porTipo[x.tipo] = (porTipo[x.tipo]||0)+1; });
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px 14px 4px;box-sizing:border-box;';
+  d.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
+    + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Reporte mensual — '+_hcEsc(_rmCliente)+'</div>'
+    + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+_hcEsc(horMesLabel(mes))+' · '+lista.length+' orden'+(lista.length===1?'':'es')+' · MONHACO</div></div>'
+    + (logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+    + '</div></div>'
+    + '<div style="font-size:12px;color:#55534b;font-weight:700;padding:8px 2px 4px">'+(Object.keys(porTipo).map(function(t){ return porTipo[t]+' '+t.toLowerCase(); }).join(' · ')||'')+'</div>';
+  return d;
+}
+function _rmCardDOM(x, conPie){
+  const o = x.o;
+  const est = o.estado || (o.completado?'Completado':'Pendiente');
+  const comp = o.completado || est==='Completado' || est==='Cobrado';
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:3px 14px '+(conPie?'14px':'3px')+';box-sizing:border-box;';
+  d.innerHTML = '<div style="border:1px solid #e2e0d8;border-left:3px solid '+x.color+';border-radius:10px;padding:9px 12px">'
+    + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">'
+    + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#eef2f8;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
+    + '<span style="font-size:11px;font-weight:700;color:'+x.color+'">'+x.emoji+' '+_hcEsc(x.tipo)+'</span>'
+    + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(est)+'</span>'
+    + '</div>'
+    + '<div style="font-size:13px;font-weight:700;color:#1a1a18">'+_hcEsc(_rmEquipoTxt(o, x.tipo==='Reporte de cobro'))+'</div>'
+    + (_rmDescDe(x)?'<div style="font-size:12px;color:#55534b;margin-top:2px">'+_hcEsc(String(_rmDescDe(x)).slice(0,160))+'</div>':'')
+    + '<div style="font-size:11px;color:#9c9a90;margin-top:3px">📅 '+_hcEsc(o.fechaDano||o.fecha||'—')+(o.tecnico?' · 👷 '+_hcEsc(o.tecnico):'')+'</div>'
+    + '</div>'
+    + (conPie?'<div style="padding:10px 2px 0;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>':'');
+  return d;
+}
+async function _rmCanvasDe(el){
+  document.body.appendChild(el);
+  const imgs = el.querySelectorAll('img');
+  await Promise.all(Array.from(imgs).map(function(img){
+    if(img.complete && img.naturalWidth>0) return Promise.resolve();
+    return new Promise(function(r){ img.onload=r; img.onerror=r; setTimeout(r,3000); });
+  }));
+  const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff'});
+  document.body.removeChild(el);
+  return canvas;
+}
+async function rmCompartirImagen(){
+  try{
+    const mes = _rmMes||horMesActual();
+    const lista = _rmOrdenes(_rmCliente, mes);
+    if(!lista.length) return;
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const cont = _rmHeaderDOM(mes, lista);
+    lista.forEach(function(x, i){
+      const card = _rmCardDOM(x, i===lista.length-1);
+      cont.innerHTML += card.innerHTML.replace('position:fixed;left:-9999px;top:0;','');
+    });
+    const canvas = await _rmCanvasDe(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, 'Reporte_'+_rmCliente.replace(/[^\w]+/g,'_')+'_'+mes);
+    }, 'image/png');
+  }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+}
+async function rmCompartirPDF(){
+  try{
+    const mes = _rmMes||horMesActual();
+    const lista = _rmOrdenes(_rmCliente, mes);
+    if(!lista.length) return;
+    toast('Generando PDF…');
+    await _cargarHtml2Canvas();
+    await _cargarJsPDF();
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({unit:'mm', format:'letter'});
+    const margen = 12;
+    const anchoMM = pdf.internal.pageSize.getWidth() - margen*2;
+    const altoPag = pdf.internal.pageSize.getHeight();
+    // Encabezado y luego cada orden COMPLETA (si no cabe, pasa a la otra página)
+    const hCanvas = await _rmCanvasDe(_rmHeaderDOM(mes, lista));
+    const pxPorMM = hCanvas.width / anchoMM;
+    let yMM = margen;
+    const hMM = hCanvas.height / pxPorMM;
+    pdf.addImage(hCanvas.toDataURL('image/jpeg',0.92), 'JPEG', margen, yMM, anchoMM, hMM);
+    yMM += hMM;
+    for(let i=0;i<lista.length;i++){
+      const c = await _rmCanvasDe(_rmCardDOM(lista[i], false));
+      const cMM = c.height / (c.width / anchoMM);
+      if(yMM + cMM > altoPag - margen){ pdf.addPage(); yMM = margen; }
+      pdf.addImage(c.toDataURL('image/jpeg',0.92), 'JPEG', margen, yMM, anchoMM, cMM);
+      yMM += cMM;
+    }
+    const nombre = 'Reporte_'+_rmCliente.replace(/[^\w]+/g,'_')+'_'+mes;
+    const blob = pdf.output('blob');
+    try{
+      const file = new File([blob], nombre+'.pdf', {type:'application/pdf'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: nombre});
+        toast('📄 PDF compartido ✓');
+        return;
+      }
+    }catch(err){ if(err && err.name==='AbortError') return; }
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if(w){ toast('📄 PDF abierto en otra pestaña'); }
+    else { const a=document.createElement('a'); a.href=url; a.download=nombre+'.pdf'; a.click(); toast('📄 PDF generado'); }
     setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
   }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
 }
@@ -6059,7 +6292,7 @@ function guardarPreventivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
       window._editandoOrden = null;
     }
@@ -6250,7 +6483,7 @@ function guardarCorrectivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; }
       window._editandoOrden = null;
     }
