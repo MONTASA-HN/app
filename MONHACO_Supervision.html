@@ -2256,6 +2256,38 @@ function renderCobros(contId){
   });
   cont.innerHTML = h;
 }
+function _rcEquiposLista(){
+  return (DB.equipos||[]).filter(function(e){
+    if(!e || e.esGenerico || e.esVehiculo || e.esEquipoCliente) return false;
+    return ['EN RENTA','EN MANTENIMIENTO','DEMO/PRESTAMO'].includes(String(e.estado||'').toUpperCase().trim());
+  }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
+}
+function _rcEquipoSelHTML(val){
+  const lista = _rcEquiposLista();
+  const vals = lista.map(function(e){ return e.codigo+(e.marca?' — '+e.marca:''); });
+  let extra = '';
+  if(val && vals.indexOf(val)===-1) extra = '<option value="'+_hcEsc(val)+'" selected>'+_hcEsc(val)+'</option>';
+  return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">🚜 Equipo</label>'
+    + '<select id="rc-equipo" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff">'
+    + '<option value="">— Seleccionar equipo —</option>'
+    + extra
+    + lista.map(function(e){
+        const t = e.codigo+(e.marca?' — '+e.marca:'');
+        return '<option value="'+_hcEsc(t)+'"'+(t===val?' selected':'')+'>'+_hcEsc(t)+'  ·  '+_hcEsc(e.estado||'')+'</option>';
+      }).join('')
+    + '</select></div>';
+}
+function _rcSetEquipo(txt){
+  const sel = document.getElementById('rc-equipo'); if(!sel || !txt) return;
+  let hay = false;
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===txt){ hay=true; break; } }
+  if(!hay){
+    const op = document.createElement('option');
+    op.value = txt; op.textContent = txt;
+    sel.insertBefore(op, sel.options[1]||null);
+  }
+  sel.value = txt;
+}
 function rcAbrirForm(editId){
   _rcEditando = editId||null;
   const r = editId ? _rcLista().find(function(x){ return x.id===editId; }) : null;
@@ -2279,7 +2311,7 @@ function rcAbrirForm(editId){
     + '</div>'
     + '<button onclick="rcBuscarOrden()" style="width:100%;padding:11px;background:#eef2f8;color:#1f3864;border:1.5px dashed #7f9bd1;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;margin-bottom:12px">🔎 Buscar orden para enlazar (en proceso o completada)</button>'
     + '<input type="hidden" id="rc-orden-id" value="'+_hcEsc(r?r.ordenId||'':'')+'"><input type="hidden" id="rc-orden-corr" value="'+_hcEsc(r?r.ordenCorrelativo||'':'')+'"><input type="hidden" id="rc-orden-tipo" value="'+_hcEsc(r?r.ordenTipo||'':'')+'">'
-    + campo('🚜 Equipo', 'rc-equipo', r?r.equipoTxt:'', 'Ej: BC-4 — CASCADE')
+    + _rcEquipoSelHTML(r?r.equipoTxt:'')
     + campo('👤 Cliente (responsable del daño)', 'rc-cliente', r?r.cliente:'', 'Nombre del cliente')
     + campo('📅 Fecha del daño', 'rc-fecha', r?(r.fechaDano||''):new Date().toISOString().slice(0,10), '', 'date')
     + campo('⚠️ Daño y causa (mala operación)', 'rc-causa', r?r.causa:'', 'Describe el daño y cómo lo causó la operación...', 'textarea')
@@ -2348,7 +2380,7 @@ function rcElegirOrden(tipo, oid){
   document.getElementById('rc-orden-id').value = o.id;
   document.getElementById('rc-orden-corr').value = o.correlativo||'';
   document.getElementById('rc-orden-tipo').value = tipo;
-  setV('rc-equipo', eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||''));
+  _rcSetEquipo(eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||''));
   setV('rc-tecnico', o.tecnico || (o.tecnicos&&o.tecnicos.filter(Boolean).join(', ')) || '');
   const chip = document.getElementById('rc-orden-chip');
   if(chip) chip.innerHTML = '<span style="font-size:12px;font-weight:700;background:#eef2f8;color:#1f3864;padding:6px 12px;border-radius:10px;display:inline-block">🔗 Enlazado a '+_hcEsc(o.correlativo||'')+'</span>';
@@ -2439,11 +2471,11 @@ function rcMarcarCobrado(id){
   if(typeof solicitarPINAccion==='function') solicitarPINAccion(marcar, '✔ Marcar como cobrado', 'Ingresa tu PIN para confirmar el cobro');
   else marcar();
 }
-function _rcConstruirDOM(r){
+function _rcConstruirDOM(r, sinFotos){
   const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : ((document.querySelector('img[src^="data:image/png;base64,"]')||{}).src||'');
   const fila = function(k,v){ return v?'<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 10px;border-bottom:1px solid #eeece4"><span style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;flex-shrink:0">'+k+'</span><span style="font-size:13px;font-weight:700;color:#1a1a18;text-align:right">'+_hcEsc(v)+'</span></div>':''; };
   const bloque = function(k,v){ return v?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">'+k+'</div><div style="font-size:12.5px;font-weight:600;color:#1a1a18;white-space:pre-wrap">'+_hcEsc(v)+'</div></div>':''; };
-  const fotos = (r.fotos||[]).filter(Boolean);
+  const fotos = sinFotos ? [] : (r.fotos||[]).filter(Boolean);
   let fotosHTML = '';
   if(fotos.length){
     fotosHTML = '<div style="margin-top:10px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:6px">📷 Fotografías del daño ('+fotos.length+')</div>'
@@ -2469,9 +2501,9 @@ function _rcConstruirDOM(r){
     + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
   return cont;
 }
-async function _rcCanvas(r){
+async function _rcCanvas(r, sinFotos){
   await _cargarHtml2Canvas();
-  const cont = _rcConstruirDOM(r);
+  const cont = _rcConstruirDOM(r, sinFotos);
   document.body.appendChild(cont);
   const imgs = cont.querySelectorAll('img');
   await Promise.all(Array.from(imgs).map(function(img){
@@ -2509,24 +2541,57 @@ async function rcCompartirPDF(id){
     if(_rcFotosPend(r)){ toast('Cargando fotografías…'); _rcHidratar(r, function(){ rcCompartirPDF(id); }); return; }
     toast('Generando PDF…');
     await _cargarJsPDF();
-    const canvas = await _rcCanvas(r);
-    // Carta (215.9 × 279.4 mm) con márgenes; la imagen se parte en páginas si es larga
+    // 1) Datos del reporte (sin fotos) — se pagina por tramos
+    const canvas = await _rcCanvas(r, true);
     const jsPDF = window.jspdf.jsPDF;
     const pdf = new jsPDF({unit:'mm', format:'letter'});
     const margen = 12;
     const anchoMM = pdf.internal.pageSize.getWidth() - margen*2;
-    const altoPagMM = pdf.internal.pageSize.getHeight() - margen*2;
+    const altoPag = pdf.internal.pageSize.getHeight();
     const pxPorMM = canvas.width / anchoMM;
-    const altoPagPx = Math.floor(altoPagMM * pxPorMM);
-    let y = 0, pagina = 0;
+    const altoPagPx = Math.floor((altoPag - margen*2) * pxPorMM);
+    let y = 0, pagina = 0, yMM = margen;
     while(y < canvas.height){
       const tramo = Math.min(altoPagPx, canvas.height - y);
       const c2 = document.createElement('canvas');
       c2.width = canvas.width; c2.height = tramo;
       c2.getContext('2d').drawImage(canvas, 0, y, canvas.width, tramo, 0, 0, canvas.width, tramo);
-      if(pagina > 0) pdf.addPage();
-      pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', margen, margen, anchoMM, tramo / pxPorMM);
+      if(pagina > 0){ pdf.addPage(); yMM = margen; }
+      const tramoMM = tramo / pxPorMM;
+      pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', margen, margen, anchoMM, tramoMM);
+      yMM = margen + tramoMM;
       y += tramo; pagina++;
+    }
+    // 2) Fotografías: cada una completa, saltando de página cuando no cabe
+    const fotos = (r.fotos||[]).filter(Boolean);
+    if(fotos.length){
+      const dims = await Promise.all(fotos.map(function(f){
+        return new Promise(function(res){
+          const im = new Image();
+          im.onload = function(){ res({w: im.naturalWidth||4, h: im.naturalHeight||3}); };
+          im.onerror = function(){ res({w: 4, h: 3}); };
+          im.src = f;
+        });
+      }));
+      const gap = 4;
+      const cellW = (anchoMM - gap) / 2;
+      const maxCellH = 85;
+      yMM += 6;
+      if(yMM + 10 > altoPag - margen){ pdf.addPage(); yMM = margen; }
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(138, 72, 0);
+      pdf.text('FOTOGRAFIAS DEL DANO ('+fotos.length+')', margen, yMM + 4);
+      yMM += 8;
+      for(let i = 0; i < fotos.length; i += 2){
+        const h1 = Math.min(cellW * dims[i].h / dims[i].w, maxCellH);
+        const h2 = (i+1 < fotos.length) ? Math.min(cellW * dims[i+1].h / dims[i+1].w, maxCellH) : 0;
+        const filaH = Math.max(h1, h2);
+        if(yMM + filaH > altoPag - margen){ pdf.addPage(); yMM = margen; }
+        try{ pdf.addImage(fotos[i], 'JPEG', margen, yMM, cellW, h1); }catch(e){}
+        if(i+1 < fotos.length){ try{ pdf.addImage(fotos[i+1], 'JPEG', margen + cellW + gap, yMM, cellW, h2); }catch(e){} }
+        yMM += filaH + gap;
+      }
     }
     const nombre = String(r.correlativo||'Reporte_cobro').replace(/[^\w\-]+/g,'_');
     const blob = pdf.output('blob');
