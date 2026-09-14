@@ -4216,7 +4216,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px"><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS EQUIPO</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hEq+'</div></div><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">HORAS OPERADOR</div><div style="font-size:16px;font-weight:800;color:#1f3864">'+hOp+'</div></div></div>';
   if(o.foto) h += '<div style="margin-bottom:10px"><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)"></div>';
   if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Firma</div><img src="'+o.firma+'" style="width:100%;max-height:80px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
-  if(o.vales&&o.vales.length){ var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' \u2014 L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
+  if(o.vales&&o.vales.length){ _valeMigrarPersonas(o); var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}; h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#856404"><strong>Vale:</strong> '+o.vales.map(function(v){ return vlbl[v.tipo]||v.tipo; }).join(', ')+' \u2014 L. '+o.vales.reduce(function(s,v){ return s+v.monto; },0).toFixed(2)+'</div>'; }
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
   if(o.viaticos) h += '<button data-vid="'+o.id+'" onclick="abrirViaticos(this.dataset.vid)" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">Viaticos</button>';
   if(o.checklistPdf) h += '<button onclick="event.stopPropagation();verChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">👁 Ver Checklist</button><button onclick="event.stopPropagation();descargarChecklistPDFGer(\''+o.id+'\')" style="font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer">📄 Descargar</button>';
@@ -7605,6 +7605,17 @@ function _valePersonasDe(o){
   if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
   return Math.max(1, n);
 }
+function _valeMigrarPersonas(orden){
+  // Vales guardados antes del cambio (sin el dato 'personas'): recalcularlos
+  // multiplicando por las personas relacionadas en la orden.
+  try{
+    if(!orden || !Array.isArray(orden.vales) || !orden.vales.length) return false;
+    if(orden.vales.some(function(v){ return v && v.personas; })) return false;
+    const n = _valePersonasDe(orden);
+    orden.vales.forEach(function(v){ if(v){ v.monto = (parseFloat(v.monto)||150) * n; v.personas = n; } });
+    return n > 1;
+  }catch(e){ return false; }
+}
 function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
@@ -7648,6 +7659,10 @@ function abrirValeGerencia(ordenId){
 function _abrirValeGerenciaInterno(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
+  if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
+    const _iMig = DB.logistica.findIndex(o=>o.id===ordenId);
+    if(_iMig>=0) window._fbDB.ref('monhaco/logistica/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+  }
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
@@ -8415,6 +8430,10 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
+  if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
+    const _iMig = arr.findIndex(o=>o.id===ordenId);
+    if(_iMig>=0) window._fbDB.ref('monhaco/'+(tipo==='preventivo'?'preventivos':'correctivos')+'/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+  }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
   const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
