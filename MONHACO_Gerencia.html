@@ -3130,6 +3130,7 @@ async function rcCompartirPDF(id){
 }
 
 // ── CLIENTES MONHACO + REPORTE MENSUAL POR CLIENTE ───────────────────────────
+// Solo ÓRDENES DE TRABAJO: preventivos, correctivos y cortinas (sin RC).
 const CLIENTES_MONHACO = ['ELCATEX','RETHINK','FIVE STAR','SAINT JOHN','GENESIS','FRANCIS','SAN JUAN','CEPCO','SUYAPA'];
 function _cliSelOptions(val){
   val = (val||'').trim();
@@ -3140,49 +3141,56 @@ function _cliSelOptions(val){
 }
 let _rmCliente = '';
 let _rmMes = null;
+const _RM_TIPOS = [
+  {k:'prev', t:'Preventivos',            color:'#2E83C3', emoji:'📋'},
+  {k:'corr', t:'Correctivos',            color:'#C9211E', emoji:'🔧'},
+  {k:'cort', t:'Cortinas / Niveladoras', color:'#9B59B6', emoji:'🚪'},
+];
 function _rmMesDe(o){
-  const f = String(o.fechaDano||o.fecha||'');
+  const f = String(o.fecha||'');
   if(/^\d{4}-\d{2}/.test(f)) return f.slice(0,7);
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(f);
   if(m) return m[3]+'-'+String(m[2]).padStart(2,'0');
   return '';
 }
 function _rmCliDe(o){ return String(o.cliente||'').trim().toUpperCase(); }
+function _rmArr(k){ return k==='prev'?(DB.preventivos||[]):k==='corr'?(DB.correctivos||[]):(DB.cortinas||[]); }
 function _rmOrdenes(cliente, mes){
   cliente = String(cliente||'').trim().toUpperCase();
-  const out = [];
-  const met = function(arr, tipo, color, emoji){
-    (arr||[]).filter(Boolean).forEach(function(o){
-      if(_rmCliDe(o)!==cliente || _rmMesDe(o)!==mes) return;
-      out.push({tipo:tipo, color:color, emoji:emoji, o:o});
-    });
-  };
-  met(DB.preventivos, 'Preventivo', '#2E83C3', '📋');
-  met(DB.correctivos, 'Correctivo', '#C9211E', '🔧');
-  met(DB.cortinas, 'Cortinas / Niveladoras', '#9B59B6', '🚪');
-  met((typeof _rcLista==='function')?_rcLista():[], 'Reporte de cobro', '#8a4800', '💰');
-  out.sort(function(a,b){ return String(a.o.fecha||a.o.fechaDano||'').localeCompare(String(b.o.fecha||b.o.fechaDano||'')); });
+  const out = {};
+  _RM_TIPOS.forEach(function(tp){
+    out[tp.k] = _rmArr(tp.k).filter(Boolean).filter(function(o){
+      return _rmCliDe(o)===cliente && _rmMesDe(o)===mes;
+    }).sort(function(a,b){ return String(a.fecha||'').localeCompare(String(b.fecha||'')); });
+  });
+  out.total = out.prev.length + out.corr.length + out.cort.length;
+  const todas = [].concat(out.prev, out.corr, out.cort);
+  out.completadas = todas.filter(function(o){ return o.completado || o.estado==='Completado'; }).length;
+  out.pendientes = out.total - out.completadas;
+  const eqs = new Set();
+  todas.forEach(function(o){
+    if(o.equipoId && o.equipoId!=='__cliente__') eqs.add(o.equipoId);
+    else if(o.ubicacion) eqs.add('u:'+o.ubicacion);
+  });
+  out.equipos = eqs.size;
   return out;
 }
 function _rmClientes(){
   const set = new Set(CLIENTES_MONHACO);
-  [].concat(DB.preventivos||[], DB.correctivos||[], DB.cortinas||[], (typeof _rcLista==='function')?_rcLista():[])
+  [].concat(DB.preventivos||[], DB.correctivos||[], DB.cortinas||[])
     .filter(Boolean).forEach(function(o){ const c=_rmCliDe(o); if(c) set.add(c); });
   return Array.from(set);
 }
-function _rmEquipoTxt(o, esRC){
-  if(esRC) return o.equipoTxt||'—';
+function _rmEquipoTxt(o){
   if(o.equipoId){
     const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
     if(eq) return eq.codigo+(eq.marca?' — '+eq.marca:'');
   }
   return o.clienteNombre || o.ubicacion || '—';
 }
-function _rmDescDe(x){
-  const o = x.o;
-  if(x.tipo==='Preventivo') return o.servicio || o.notas || '';
-  if(x.tipo==='Correctivo') return o.falla || o.diagnostico || '';
-  if(x.tipo==='Reporte de cobro') return o.causa || '';
+function _rmDescDe(k, o){
+  if(k==='prev') return o.servicio || o.notas || '';
+  if(k==='corr') return o.falla || o.diagnostico || '';
   return o.descripcion || '';
 }
 function abrirReporteMensual(){
@@ -3204,6 +3212,43 @@ function _rmMoverMes(n){
   _rmMes = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   renderReporteMensual();
 }
+function _rmCardHTML(tp, o, paraImagen){
+  const est = o.estado || (o.completado?'Completado':'Pendiente');
+  const comp = o.completado || est==='Completado';
+  const desc = _rmDescDe(tp.k, o);
+  const tecs = o.tecnico || (o.tecnicos && o.tecnicos.filter(Boolean).join(', ')) || '';
+  return '<div style="background:#fff;border:1px solid #e2e0d8;border-left:3px solid '+tp.color+';border-radius:10px;padding:9px 12px;margin-bottom:6px">'
+    + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">'
+    + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#eef2f8;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
+    + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(est)+'</span>'
+    + '<span style="font-size:11px;color:#9c9a90">📅 '+_hcEsc(o.fecha||'—')+'</span>'
+    + '</div>'
+    + '<div style="font-size:13px;font-weight:700;color:#1a1a18">'+_hcEsc(_rmEquipoTxt(o))+'</div>'
+    + (desc?'<div style="font-size:12px;color:#55534b;margin-top:2px">'+_hcEsc(String(desc).slice(0,160))+'</div>':'')
+    + (tecs?'<div style="font-size:11px;color:#9c9a90;margin-top:3px">👷 '+_hcEsc(tecs)+'</div>':'')
+    + '</div>';
+}
+function _rmSeccionTituloHTML(tp, n){
+  return '<div style="display:flex;align-items:center;gap:8px;background:'+tp.color+'12;border-left:4px solid '+tp.color+';border-radius:8px;padding:8px 12px;margin:14px 0 8px">'
+    + '<span style="font-size:15px">'+tp.emoji+'</span>'
+    + '<span style="font-weight:800;color:'+tp.color+';font-size:13px;text-transform:uppercase;letter-spacing:0.5px">'+tp.t+'</span>'
+    + '<span style="margin-left:auto;background:'+tp.color+';color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:2px 9px">'+n+'</span>'
+    + '</div>';
+}
+function _rmResumenHTML(datos, mes){
+  return '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);border-radius:12px;padding:14px 16px;color:#fff;margin-bottom:10px">'
+    + '<div style="font-size:16px;font-weight:800">'+_hcEsc(_rmCliente)+'</div>'
+    + '<div style="font-size:12px;color:#a9c8de;margin-top:1px">'+_hcEsc(horMesLabel(mes))+' — del 1 al último día del mes</div>'
+    + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
+    + '<div style="flex:1;min-width:70px;background:rgba(255,255,255,0.12);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:800">'+datos.total+'</div><div style="font-size:10px;color:#a9c8de;font-weight:700">ÓRDENES</div></div>'
+    + '<div style="flex:1;min-width:70px;background:rgba(255,255,255,0.12);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:800;color:#7ee787">'+datos.completadas+'</div><div style="font-size:10px;color:#a9c8de;font-weight:700">COMPLETADAS</div></div>'
+    + '<div style="flex:1;min-width:70px;background:rgba(255,255,255,0.12);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:800;color:#ffd479">'+datos.pendientes+'</div><div style="font-size:10px;color:#a9c8de;font-weight:700">EN PROCESO</div></div>'
+    + '<div style="flex:1;min-width:70px;background:rgba(255,255,255,0.12);border-radius:8px;padding:8px;text-align:center"><div style="font-size:20px;font-weight:800">'+datos.equipos+'</div><div style="font-size:10px;color:#a9c8de;font-weight:700">EQUIPOS</div></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">'
+    + _RM_TIPOS.map(function(tp){ return '<span style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.16);border-radius:10px;padding:3px 10px">'+tp.emoji+' '+datos[tp.k].length+' '+tp.t.toLowerCase()+'</span>'; }).join('')
+    + '</div></div>';
+}
 function renderReporteMensual(){
   const cont = document.getElementById('rm-cont'); if(!cont) return;
   const mes = _rmMes||horMesActual();
@@ -3217,74 +3262,51 @@ function renderReporteMensual(){
     + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'"'+(c===_rmCliente?' selected':'')+'>'+_hcEsc(c)+'</option>'; }).join('')
     + '</select>';
   if(!_rmCliente){
-    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes del mes.</div>';
+    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes de trabajo del mes.</div>';
     cont.innerHTML = h; return;
   }
-  const lista = _rmOrdenes(_rmCliente, mes);
-  const porTipo = {};
-  lista.forEach(function(x){ porTipo[x.tipo] = (porTipo[x.tipo]||0)+1; });
-  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-    + '<div style="font-weight:800;color:#1f3864;font-size:14px">'+_hcEsc(_rmCliente)+' — '+lista.length+' orden'+(lista.length===1?'':'es')+' en '+_hcEsc(horMesLabel(mes))+'</div>'
-    + '<div style="font-size:12px;color:var(--text2,#555);margin-top:3px">'+(Object.keys(porTipo).map(function(t){ return porTipo[t]+' '+t.toLowerCase(); }).join(' · ')||'—')+'</div>'
-    + '</div>';
-  if(lista.length){
-    h += '<div style="display:flex;gap:8px;margin-bottom:12px">'
+  const datos = _rmOrdenes(_rmCliente, mes);
+  h += _rmResumenHTML(datos, mes);
+  if(datos.total){
+    h += '<div style="display:flex;gap:8px;margin-bottom:4px">'
       + '<button onclick="rmCompartirPDF()" style="flex:1;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📄 Compartir PDF</button>'
       + '<button onclick="rmCompartirImagen()" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📤 Compartir imagen</button>'
       + '</div>';
+    _RM_TIPOS.forEach(function(tp){
+      const lista = datos[tp.k];
+      if(!lista.length) return;
+      h += _rmSeccionTituloHTML(tp, lista.length);
+      lista.forEach(function(o){ h += _rmCardHTML(tp, o); });
+    });
   } else {
-    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:16px 0">Sin órdenes de '+_hcEsc(_rmCliente)+' en este mes.</div>';
+    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:16px 0">Sin órdenes de trabajo de '+_hcEsc(_rmCliente)+' en este mes.</div>';
   }
-  lista.forEach(function(x){
-    const o = x.o;
-    const est = o.estado || (o.completado?'Completado':'Pendiente');
-    const comp = o.completado || est==='Completado' || est==='Cobrado';
-    h += '<div style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:3px solid '+x.color+';border-radius:10px;padding:10px 13px;margin-bottom:7px">'
-      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">'
-      + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#eef2f8;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
-      + '<span style="font-size:11px;font-weight:700;color:'+x.color+'">'+x.emoji+' '+_hcEsc(x.tipo)+'</span>'
-      + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(est)+'</span>'
-      + '</div>'
-      + '<div style="font-size:13px;font-weight:700">'+_hcEsc(_rmEquipoTxt(o, x.tipo==='Reporte de cobro'))+'</div>'
-      + (_rmDescDe(x)?'<div style="font-size:12px;color:var(--text2,#555);margin-top:2px">'+_hcEsc(String(_rmDescDe(x)).slice(0,140))+'</div>':'')
-      + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">📅 '+_hcEsc(o.fechaDano||o.fecha||'—')+(o.tecnico?' · 👷 '+_hcEsc(o.tecnico):'')+'</div>'
-      + '</div>';
-  });
   cont.innerHTML = h;
 }
-function _rmHeaderDOM(mes, lista){
-  const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : '';
-  const porTipo = {};
-  lista.forEach(function(x){ porTipo[x.tipo] = (porTipo[x.tipo]||0)+1; });
+// ── Compartir: imagen y PDF (cada tarjeta completa, sin cortes) ──────────────
+function _rmDOMBase(html, conMargen){
   const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px 14px 4px;box-sizing:border-box;';
-  d.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
-    + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Reporte mensual — '+_hcEsc(_rmCliente)+'</div>'
-    + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+_hcEsc(horMesLabel(mes))+' · '+lista.length+' orden'+(lista.length===1?'':'es')+' · MONHACO</div></div>'
-    + (logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
-    + '</div></div>'
-    + '<div style="font-size:12px;color:#55534b;font-weight:700;padding:8px 2px 4px">'+(Object.keys(porTipo).map(function(t){ return porTipo[t]+' '+t.toLowerCase(); }).join(' · ')||'')+'</div>';
+  d.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:'+(conMargen||'3px 14px')+';box-sizing:border-box;';
+  d.innerHTML = html;
   return d;
 }
-function _rmCardDOM(x, conPie){
-  const o = x.o;
-  const est = o.estado || (o.completado?'Completado':'Pendiente');
-  const comp = o.completado || est==='Completado' || est==='Cobrado';
-  const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:3px 14px '+(conPie?'14px':'3px')+';box-sizing:border-box;';
-  d.innerHTML = '<div style="border:1px solid #e2e0d8;border-left:3px solid '+x.color+';border-radius:10px;padding:9px 12px">'
-    + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px">'
-    + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#eef2f8;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
-    + '<span style="font-size:11px;font-weight:700;color:'+x.color+'">'+x.emoji+' '+_hcEsc(x.tipo)+'</span>'
-    + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(est)+'</span>'
+function _rmHeaderHTML(datos, mes){
+  const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : '';
+  return '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
+    + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Reporte mensual — '+_hcEsc(_rmCliente)+'</div>'
+    + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+_hcEsc(horMesLabel(mes))+' · MONHACO</div></div>'
+    + (logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
     + '</div>'
-    + '<div style="font-size:13px;font-weight:700;color:#1a1a18">'+_hcEsc(_rmEquipoTxt(o, x.tipo==='Reporte de cobro'))+'</div>'
-    + (_rmDescDe(x)?'<div style="font-size:12px;color:#55534b;margin-top:2px">'+_hcEsc(String(_rmDescDe(x)).slice(0,160))+'</div>':'')
-    + '<div style="font-size:11px;color:#9c9a90;margin-top:3px">📅 '+_hcEsc(o.fechaDano||o.fecha||'—')+(o.tecnico?' · 👷 '+_hcEsc(o.tecnico):'')+'</div>'
-    + '</div>'
-    + (conPie?'<div style="padding:10px 2px 0;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>':'');
-  return d;
+    + '<div style="display:flex;gap:8px;margin-top:12px">'
+    + '<div style="flex:1;background:rgba(255,255,255,0.12);border-radius:8px;padding:7px;text-align:center"><div style="font-size:18px;font-weight:800">'+datos.total+'</div><div style="font-size:9.5px;color:#a9c8de;font-weight:700">ÓRDENES</div></div>'
+    + '<div style="flex:1;background:rgba(255,255,255,0.12);border-radius:8px;padding:7px;text-align:center"><div style="font-size:18px;font-weight:800;color:#7ee787">'+datos.completadas+'</div><div style="font-size:9.5px;color:#a9c8de;font-weight:700">COMPLETADAS</div></div>'
+    + '<div style="flex:1;background:rgba(255,255,255,0.12);border-radius:8px;padding:7px;text-align:center"><div style="font-size:18px;font-weight:800;color:#ffd479">'+datos.pendientes+'</div><div style="font-size:9.5px;color:#a9c8de;font-weight:700">EN PROCESO</div></div>'
+    + '<div style="flex:1;background:rgba(255,255,255,0.12);border-radius:8px;padding:7px;text-align:center"><div style="font-size:18px;font-weight:800">'+datos.equipos+'</div><div style="font-size:9.5px;color:#a9c8de;font-weight:700">EQUIPOS</div></div>'
+    + '</div></div>';
+}
+function _rmPieHTML(){
+  return '<div style="padding:10px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
 }
 async function _rmCanvasDe(el){
   document.body.appendChild(el);
@@ -3300,16 +3322,18 @@ async function _rmCanvasDe(el){
 async function rmCompartirImagen(){
   try{
     const mes = _rmMes||horMesActual();
-    const lista = _rmOrdenes(_rmCliente, mes);
-    if(!lista.length) return;
+    const datos = _rmOrdenes(_rmCliente, mes);
+    if(!datos.total) return;
     toast('Generando imagen…');
     await _cargarHtml2Canvas();
-    const cont = _rmHeaderDOM(mes, lista);
-    lista.forEach(function(x, i){
-      const card = _rmCardDOM(x, i===lista.length-1);
-      cont.innerHTML += card.innerHTML.replace('position:fixed;left:-9999px;top:0;','');
+    let html = _rmHeaderHTML(datos, mes);
+    _RM_TIPOS.forEach(function(tp){
+      if(!datos[tp.k].length) return;
+      html += _rmSeccionTituloHTML(tp, datos[tp.k].length);
+      datos[tp.k].forEach(function(o){ html += _rmCardHTML(tp, o, true); });
     });
-    const canvas = await _rmCanvasDe(cont);
+    html += _rmPieHTML();
+    const canvas = await _rmCanvasDe(_rmDOMBase(html, '14px'));
     canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
       _entregarImagen(blob, 'Reporte_'+_rmCliente.replace(/[^\w]+/g,'_')+'_'+mes);
@@ -3319,8 +3343,8 @@ async function rmCompartirImagen(){
 async function rmCompartirPDF(){
   try{
     const mes = _rmMes||horMesActual();
-    const lista = _rmOrdenes(_rmCliente, mes);
-    if(!lista.length) return;
+    const datos = _rmOrdenes(_rmCliente, mes);
+    if(!datos.total) return;
     toast('Generando PDF…');
     await _cargarHtml2Canvas();
     await _cargarJsPDF();
@@ -3329,20 +3353,23 @@ async function rmCompartirPDF(){
     const margen = 12;
     const anchoMM = pdf.internal.pageSize.getWidth() - margen*2;
     const altoPag = pdf.internal.pageSize.getHeight();
-    // Encabezado y luego cada orden COMPLETA (si no cabe, pasa a la otra página)
-    const hCanvas = await _rmCanvasDe(_rmHeaderDOM(mes, lista));
-    const pxPorMM = hCanvas.width / anchoMM;
     let yMM = margen;
-    const hMM = hCanvas.height / pxPorMM;
-    pdf.addImage(hCanvas.toDataURL('image/jpeg',0.92), 'JPEG', margen, yMM, anchoMM, hMM);
-    yMM += hMM;
-    for(let i=0;i<lista.length;i++){
-      const c = await _rmCanvasDe(_rmCardDOM(lista[i], false));
+    const poner = async function(html){
+      const c = await _rmCanvasDe(_rmDOMBase(html));
       const cMM = c.height / (c.width / anchoMM);
       if(yMM + cMM > altoPag - margen){ pdf.addPage(); yMM = margen; }
       pdf.addImage(c.toDataURL('image/jpeg',0.92), 'JPEG', margen, yMM, anchoMM, cMM);
       yMM += cMM;
+    };
+    await poner(_rmHeaderHTML(datos, mes));
+    for(let t=0; t<_RM_TIPOS.length; t++){
+      const tp = _RM_TIPOS[t];
+      const lista = datos[tp.k];
+      if(!lista.length) continue;
+      await poner(_rmSeccionTituloHTML(tp, lista.length));
+      for(let i=0;i<lista.length;i++) await poner(_rmCardHTML(tp, lista[i], true));
     }
+    await poner(_rmPieHTML());
     const nombre = 'Reporte_'+_rmCliente.replace(/[^\w]+/g,'_')+'_'+mes;
     const blob = pdf.output('blob');
     try{
@@ -4879,6 +4906,7 @@ window._ordenesRecientes = window._ordenesRecientes || {};
 function _guardarOrdenMantResiliente(tipo, orden, intento){
   intento = intento||0;
   if(!window._fbDB || !orden || !orden.id) return;
+  if(window._borradasCache && window._borradasCache[orden.id]) return; // orden eliminada: no re-subirla
   const nodo = tipo==='prev' ? 'preventivos' : 'correctivos';
   window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
   const ref = window._fbDB.ref('monhaco/'+nodo);
@@ -4910,12 +4938,23 @@ function _guardarOrdenMantResiliente(tipo, orden, intento){
 }
 // Re-inyecta órdenes creadas aquí hace <15 min que un snapshot remoto viejo no
 // traiga (protege contra el pisado por clientes con datos desactualizados).
+// ── Órdenes eliminadas (lápidas): la protección de órdenes recientes no debe
+// resucitar una orden que Gerencia eliminó a propósito. ─────────────────────
+window._borradasCache = window._borradasCache || {};
+(function(){
+  var _bt = setInterval(function(){
+    if(!window._fbDB) return;
+    clearInterval(_bt);
+    try{ window._fbDB.ref('monhaco/_borradas').on('value', function(s){ window._borradasCache = s.val()||{}; }); }catch(e){}
+  }, 1500);
+})();
 function _protegerOrdenesRecientes(){
   try{
     const ahora = Date.now();
     Object.keys(window._ordenesRecientes||{}).forEach(function(id){
       const r = window._ordenesRecientes[id];
       if(!r || ahora - r.ts > 15*60*1000){ delete window._ordenesRecientes[id]; return; }
+      if(window._borradasCache[id]){ delete window._ordenesRecientes[id]; return; }  // eliminada a propósito
       const arr = r.tipo==='prev' ? DB.preventivos : DB.correctivos;
       if(arr && !arr.some(function(o){ return o&&o.id===id; })){
         arr.push(r.obj);
@@ -6399,13 +6438,22 @@ function completarPreventivo(id){
   renderPreventivos(); renderDashboard();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
 }
+function _marcarOrdenBorrada(id){
+  try{
+    if(window._ordenesRecientes) delete window._ordenesRecientes[id];
+    window._borradasCache = window._borradasCache || {};
+    window._borradasCache[id] = Date.now();
+    if(window._fbDB){ var u = {}; u['_borradas/'+id] = Date.now(); window._fbDB.ref('monhaco').update(u); }
+  }catch(e){}
+}
 function eliminarDelHistorial(tipo, id){
   solicitarPINAccion(()=>{
+    _marcarOrdenBorrada(id);
     if(tipo==='prev'){
       const orden = DB.preventivos.find(x=>x.id===id);
       _revertirEstadoEquipoAlEliminar(orden);
       DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
-      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='log'){
       const ordenLog = (DB.logistica||[]).find(x=>x.id===id);
@@ -6444,7 +6492,7 @@ function eliminarDelHistorial(tipo, id){
       const ordenCorr = DB.correctivos.find(x=>x.id===id);
       _revertirEstadoEquipoAlEliminar(ordenCorr);
       DB.correctivos = DB.correctivos.filter(x=>x.id!==id);
-      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     }
   }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden del historial');
@@ -6452,6 +6500,7 @@ function eliminarDelHistorial(tipo, id){
 
 function eliminarPreventivo(id){
   if(!confirm('¿Eliminar?')) return;
+  _marcarOrdenBorrada(id);
   const orden = DB.preventivos.find(p=>p.id===id);
   _revertirEstadoEquipoAlEliminar(orden);
   DB.preventivos = DB.preventivos.filter(p=>p.id!==id); saveDB(); renderPreventivos();
@@ -6590,6 +6639,7 @@ function cerrarCorrectivo(id){
 }
 function eliminarCorrectivo(id){
   if(!confirm('¿Eliminar?')) return;
+  _marcarOrdenBorrada(id);
   const orden = DB.correctivos.find(c=>c.id===id);
   _revertirEstadoEquipoAlEliminar(orden);
   DB.correctivos = DB.correctivos.filter(c=>c.id!==id); saveDB(); renderCorrectivos();

@@ -3173,6 +3173,7 @@ window._ordenesRecientes = window._ordenesRecientes || {};
 function _guardarOrdenMantResiliente(tipo, orden, intento){
   intento = intento||0;
   if(!window._fbDB || !orden || !orden.id) return;
+  if(window._borradasCache && window._borradasCache[orden.id]) return; // orden eliminada: no re-subirla
   const nodo = tipo==='prev' ? 'preventivos' : 'correctivos';
   window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
   const ref = window._fbDB.ref('montasa/'+nodo);
@@ -3204,12 +3205,23 @@ function _guardarOrdenMantResiliente(tipo, orden, intento){
 }
 // Re-inyecta órdenes creadas aquí hace <15 min que un snapshot remoto viejo no
 // traiga (protege contra el pisado por clientes con datos desactualizados).
+// ── Órdenes eliminadas (lápidas): la protección de órdenes recientes no debe
+// resucitar una orden que Gerencia eliminó a propósito. ─────────────────────
+window._borradasCache = window._borradasCache || {};
+(function(){
+  var _bt = setInterval(function(){
+    if(!window._fbDB) return;
+    clearInterval(_bt);
+    try{ window._fbDB.ref('montasa/_borradas').on('value', function(s){ window._borradasCache = s.val()||{}; }); }catch(e){}
+  }, 1500);
+})();
 function _protegerOrdenesRecientes(){
   try{
     const ahora = Date.now();
     Object.keys(window._ordenesRecientes||{}).forEach(function(id){
       const r = window._ordenesRecientes[id];
       if(!r || ahora - r.ts > 15*60*1000){ delete window._ordenesRecientes[id]; return; }
+      if(window._borradasCache[id]){ delete window._ordenesRecientes[id]; return; }  // eliminada a propósito
       const arr = r.tipo==='prev' ? DB.preventivos : DB.correctivos;
       if(arr && !arr.some(function(o){ return o&&o.id===id; })){
         arr.push(r.obj);
