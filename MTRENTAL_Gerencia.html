@@ -4934,7 +4934,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     o.fotos.forEach(function(f){ h+="<div style=\"width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0\" onclick=\"event.stopPropagation();_verFotoGer(this.querySelector('img').src)\"><img src=\""+f+"\" style=\"width:100%;height:100%;object-fit:cover\"></div>"; });
     h+="</div></div>";
   }
-  if(o.vales&&o.vales.length){
+  if(o.vales&&o.vales.length){ _valeMigrarPersonas(o);
     var vlbl={desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'};
     h+="<div style=\"background:#fff3cd;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#856404\"><strong>Vale:</strong> "+o.vales.map(function(v){return vlbl[v.tipo]||v.tipo;}).join(', ')+" \u2014 L. "+o.vales.reduce(function(s,v){return s+v.monto;},0).toFixed(2)+"</div>";
   }
@@ -9300,6 +9300,17 @@ function _valePersonasDe(o){
   if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
   return Math.max(1, n);
 }
+function _valeMigrarPersonas(orden){
+  // Vales guardados antes del cambio (sin el dato 'personas'): recalcularlos
+  // multiplicando por las personas relacionadas en la orden.
+  try{
+    if(!orden || !Array.isArray(orden.vales) || !orden.vales.length) return false;
+    if(orden.vales.some(function(v){ return v && v.personas; })) return false;
+    const n = _valePersonasDe(orden);
+    orden.vales.forEach(function(v){ if(v){ v.monto = (parseFloat(v.monto)||150) * n; v.personas = n; } });
+    return n > 1;
+  }catch(e){ return false; }
+}
 function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
@@ -9345,6 +9356,10 @@ function abrirValeGerencia(ordenId){
 function _abrirValeGerenciaInterno(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
+  if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
+    const _iMig = DB.logistica.findIndex(o=>o.id===ordenId);
+    if(_iMig>=0) window._fbDB.ref('montasa/logistica/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+  }
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
@@ -9764,6 +9779,10 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
+  if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
+    const _iMig = arr.findIndex(o=>o.id===ordenId);
+    if(_iMig>=0) window._fbDB.ref('montasa/'+(tipo==='preventivo'?'preventivos':'correctivos')+'/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+  }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
   const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
