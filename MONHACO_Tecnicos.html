@@ -1877,7 +1877,7 @@ function renderPreventivos(){
         <div style="margin-top:4px;display:flex;gap:6px;align-items:center">${bPrev(est)}${diasAbierta(p.fechaInicio||p.fecha)!=='—'?`<span style="font-size:11px;color:var(--amber);font-weight:600">📆 ${diasAbierta(p.fechaInicio||p.fecha)}</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-        <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('prev','${p.id}')">✕</button>
+        
         <button id="ct-${p.id}" class="card-toggle${_openMant.has(p.id)?' open':''}" onclick="event.stopPropagation()">▼</button>
       </div>
     </div>
@@ -1979,7 +1979,7 @@ function renderPreventivos(){
       ${est==='Completado'?_renderFotosOrden(p.fotos):''}
       ${(est==='Completado' && p.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (est==='Completado' && p.vales && p.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${est==='Completado'
-        ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
+        ? ``
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
           <canvas id="firma-${p.id}" class="firma-canvas" width="600" height="160"
@@ -2164,12 +2164,16 @@ function completarPreventivo(id){
 
 
 function eliminarPreventivo(id){
+  toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return;  // restringido a Gerencia
+  // eslint-disable-next-line no-unreachable
   if(!confirm('¿Eliminar?')) return;
   DB.preventivos = DB.preventivos.filter(p=>p.id!==id); saveDB(); renderPreventivos();
 }
 
 
 function editarOrden(tipo, id){
+  toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return;  // restringido a Gerencia
+  // eslint-disable-next-line no-unreachable
   const list = tipo==='prev' ? DB.preventivos : DB.correctivos;
   const orden = list.find(x=>x.id===id);
   if(!orden) return;
@@ -2305,7 +2309,7 @@ function renderCorrectivos(){
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-        <button class="btn btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();solicitarPIN('corr','${c.id}')">✕</button>
+        
         <button id="ct-${c.id}" class="card-toggle${_openMant.has(c.id)?' open':''}" onclick="event.stopPropagation()">▼</button>
       </div>
     </div>
@@ -2393,7 +2397,7 @@ function renderCorrectivos(){
       ${c.estado==='Completado'?_renderFotosOrden(c.fotos):''}
       ${(c.estado==='Completado' && c.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (c.estado==='Completado' && c.vales && c.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${c.estado==='Completado'
-        ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
+        ? ``
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
           <canvas id="firma-${c.id}" class="firma-canvas" width="600" height="160"
@@ -2598,6 +2602,8 @@ function cerrarCorrectivo(id){
 
 
 function eliminarCorrectivo(id){
+  toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return;  // restringido a Gerencia
+  // eslint-disable-next-line no-unreachable
   if(!confirm('¿Eliminar?')) return;
   DB.correctivos = DB.correctivos.filter(c=>c.id!==id); saveDB(); renderCorrectivos();
 }
@@ -2704,7 +2710,7 @@ function renderHistorial(){
         <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
         ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('prev','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('prev','${x.id}')">✕ Eliminar</button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"></div>
       </div>`;
     } else {
       return `<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864">
@@ -2724,13 +2730,15 @@ function renderHistorial(){
         <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
         ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${x.diagnostico}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCierre||x._f)}</div>
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;font-size:12px" onclick="editarOrdenHistorial('corr','${x.id}')">✏️ Editar</button><button class="btn btn-danger" style="flex:1;font-size:12px" onclick="eliminarDelHistorial('corr','${x.id}')">✕ Eliminar</button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"></div>
       </div>`;
     }
   }).join('');
 }
 
 function editarOrdenHistorial(tipo, id){
+  toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return;  // restringido a Gerencia
+  // eslint-disable-next-line no-unreachable
   solicitarPINAccion(()=>{
     // Search in preventivos (completado) and correctivos (cerrado) — same source as historial
     const orden = [...DB.preventivos, ...DB.correctivos].find(o=>o.id===id);
@@ -2814,6 +2822,8 @@ function editarOrdenHistorial(tipo, id){
 
 
 function eliminarDelHistorial(tipo, id){
+  toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return;  // restringido a Gerencia
+  // eslint-disable-next-line no-unreachable
   solicitarPINAccion(()=>{
     if(tipo==='prev'){
       DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
