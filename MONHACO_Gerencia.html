@@ -2270,7 +2270,10 @@ function _horMeses(){
 }
 function _horEquipos(){
   return (DB.equipos||[]).filter(function(e){
-    return e && !e.esGenerico && !e.esVehiculo && !e.esEquipoCliente && HOR_TIPOS.includes(String(e.tipo||'').toUpperCase().trim());
+    if(!e || e.esGenerico || e.esVehiculo || e.esEquipoCliente) return false;
+    if(!HOR_TIPOS.includes(String(e.tipo||'').toUpperCase().trim())) return false;
+    // Solo equipos operativos: en renta, disponibles o en mantenimiento (inactivos no)
+    return ['DISPONIBLE','EN RENTA','EN MANTENIMIENTO'].includes(String(e.estado||'DISPONIBLE').toUpperCase().trim());
   }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
 }
 function _horLecturas(mes){ return ((DB.horometros||{})[mes])||{}; }
@@ -2434,6 +2437,157 @@ async function compartirHorometros(mes){
 }
 
 // ── REPORTES DE COBRO (RC-XXXX) ──────────────────────────────────────────────
+// ── Fotos y firma DENTRO del formulario (antes de guardar) ───────────────────
+let _rcFotosTmp = [];
+let _rcFirmaTmp = '';
+function _rcFormFotosUI(){
+  const cont = document.getElementById('rc-form-fotos'); if(!cont) return;
+  let h = '<label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">📷 Fotografías del daño <span style="font-weight:400;text-transform:none">(máx. 10)</span></label>';
+  if(_rcFotosTmp.length){
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">';
+    _rcFotosTmp.forEach(function(f,i){
+      h += '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">'
+        + '<img src="'+f+'" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_rcVerFotoGrande(this.src)">'
+        + '<button onclick="event.stopPropagation();rcFormFotosEliminar('+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
+    });
+    h += '</div>';
+  }
+  if(_rcFotosTmp.length < 10){
+    const inp = function(cam){ return '<input type="file" accept="image/*"'+(cam?' capture="environment"':'')+' multiple style="display:none" onchange="event.stopPropagation();rcFormFotosAgregar(this)">'; };
+    h += '<div style="display:flex;gap:8px">'
+      + '<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2,#ccc);border-radius:8px;font-size:13px;color:#1f3864">'+inp(true)+'📷 Cámara'+(_rcFotosTmp.length>0?' ('+_rcFotosTmp.length+'/10)':'')+'</label>'
+      + '<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2,#ccc);border-radius:8px;font-size:13px;color:#1f3864">'+inp(false)+'🖼️ Galería</label>'
+      + '</div>';
+  } else {
+    h += '<div style="font-size:12px;color:var(--text3,#888);padding:6px 0">Límite de 10 fotos alcanzado</div>';
+  }
+  cont.innerHTML = h;
+}
+function rcFormFotosAgregar(input){
+  const archivos = Array.from(input.files);
+  const espacio = 10 - _rcFotosTmp.length;
+  input.value = '';
+  if(espacio<=0){ toast('Límite de 10 fotos alcanzado', true); return; }
+  const procesar = archivos.slice(0, espacio);
+  if(archivos.length>espacio) toast('Solo se agregaron '+espacio+' de '+archivos.length+' (límite 10)', true);
+  let pend = procesar.length, agregadas = 0;
+  const done = function(){ pend--; if(pend<=0){ _rcFormFotosUI(); if(agregadas>0) toast(agregadas+' foto'+(agregadas>1?'s':'')+' agregada'+(agregadas>1?'s':'')+' ✓'); } };
+  procesar.forEach(function(file){
+    const reader = new FileReader();
+    reader.onerror = done;
+    reader.onload = function(ev){
+      const img = new Image();
+      img.onerror = done;
+      img.onload = function(){
+        try{
+          const canvas = document.createElement('canvas');
+          const MAX = 1024;
+          let w = img.width, h = img.height;
+          if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+          if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          _rcFotosTmp.push(canvas.toDataURL('image/jpeg', 0.7));
+          agregadas++;
+        }catch(err){}
+        done();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function rcFormFotosEliminar(i){
+  if(!confirm('¿Eliminar esta foto?')) return;
+  _rcFotosTmp.splice(i, 1);
+  _rcFormFotosUI();
+}
+
+// ── Firma del cliente (recuadro blindado, igual que MT Rental) ──────────────
+// El campo del formulario NUNCA dibuja: al tocarlo se abre un recuadro a
+// pantalla completa (girado a horizontal en teléfonos verticales) con botón
+// Guardar — así el scroll jamás mancha la firma.
+function _rcFormFirmaUI(){
+  const cont = document.getElementById('rc-form-firma'); if(!cont) return;
+  let h = '<label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">✍️ Firma del cliente</label>';
+  if(_rcFirmaTmp){
+    h += '<div onclick="rcFirmaAbrir()" style="border:1.5px solid #27ae60;border-radius:10px;background:#fff;padding:6px;cursor:pointer;text-align:center">'
+      + '<img src="'+_rcFirmaTmp+'" style="max-width:100%;max-height:90px;object-fit:contain">'
+      + '</div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+      + '<span style="font-size:12px;color:#27ae60;font-weight:700">✓ Firma guardada — toca para rehacerla</span>'
+      + '<button onclick="event.stopPropagation();_rcFirmaTmp=\'\';_rcFormFirmaUI()" style="font-size:12px;background:none;border:1px solid var(--border2,#ccc);border-radius:6px;padding:5px 10px;cursor:pointer">🗑 Borrar</button>'
+      + '</div>';
+  } else {
+    h += '<div onclick="rcFirmaAbrir()" style="border:1.5px dashed var(--border2,#ccc);border-radius:10px;background:#fff;padding:22px 10px;cursor:pointer;text-align:center;color:var(--text3,#888);font-size:13px;font-weight:600">✍️ Toca aquí para firmar</div>';
+  }
+  cont.innerHTML = h;
+}
+function rcFirmaAbrir(){
+  const viejo = document.getElementById('rc-firma-overlay'); if(viejo) viejo.remove();
+  const esPC = !('ontouchstart' in window) && window.innerWidth > 900;
+  const portrait = window.innerHeight > window.innerWidth && !esPC;
+  const ov = document.createElement('div');
+  ov.id = 'rc-firma-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#20242c;z-index:99997;overflow:hidden';
+  // Dimensiones visibles del área de firma (apaisada)
+  const visW = (portrait ? window.innerHeight : window.innerWidth) - (esPC ? 0 : 24);
+  const visH = (portrait ? window.innerWidth : window.innerHeight) - (esPC ? 0 : 24);
+  const anchoLienzo = esPC ? Math.min(700, window.innerWidth-80) : visW - 16;
+  const altoLienzo = esPC ? 240 : Math.max(140, visH - 128);
+  const inner = '<div style="color:#fff;font-weight:700;font-size:14px;text-align:center;padding:10px 8px 6px">✍️ Firme dentro del recuadro</div>'
+    + '<canvas id="rc-firma-canvas" width="'+(anchoLienzo*2)+'" height="'+(altoLienzo*2)+'" style="display:block;margin:0 auto;background:#fff;border-radius:12px;width:'+anchoLienzo+'px;height:'+altoLienzo+'px;touch-action:none"></canvas>'
+    + '<div style="display:flex;gap:8px;justify-content:center;padding:10px 8px">'
+    + '<button onclick="rcFirmaGuardarOverlay()" style="padding:12px 22px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px">💾 Guardar firma</button>'
+    + '<button onclick="_rcFirmaLimpiarLienzo()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">🗑 Borrar</button>'
+    + '<button onclick="document.getElementById(\'rc-firma-overlay\').remove()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cancelar</button>'
+    + '</div>';
+  if(portrait){
+    // Girar el área completa a horizontal (como en las apps de técnicos)
+    ov.innerHTML = '<div id="rc-firma-wrap" style="position:absolute;left:50%;top:50%;width:'+window.innerHeight+'px;height:'+window.innerWidth+'px;transform:translate(-50%,-50%) rotate(90deg)">'+inner+'</div>';
+  } else {
+    ov.innerHTML = '<div id="rc-firma-wrap" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:'+(esPC?Math.min(760,window.innerWidth-40):window.innerWidth)+'px">'+inner+'</div>';
+  }
+  document.body.appendChild(ov);
+  const c = document.getElementById('rc-firma-canvas');
+  const ctx = c.getContext('2d');
+  ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a2a4a';
+  window._rcFirmaHayTrazo = false;
+  let dibujando = false;
+  const punto = function(ev){
+    const t = (ev.touches && ev.touches[0]) || ev;
+    const r = c.getBoundingClientRect();
+    if(portrait){
+      // El lienzo está girado 90°: mapear el puntero al sistema del lienzo
+      return { x: (t.clientY - r.top) * c.width / r.height, y: (r.right - t.clientX) * c.height / r.width };
+    }
+    return { x: (t.clientX - r.left) * c.width / r.width, y: (t.clientY - r.top) * c.height / r.height };
+  };
+  const abajo = function(ev){ ev.preventDefault(); dibujando = true; const p = punto(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const mover = function(ev){ if(!dibujando) return; ev.preventDefault(); const p = punto(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); window._rcFirmaHayTrazo = true; };
+  const arriba = function(){ dibujando = false; };
+  c.addEventListener('touchstart', abajo, {passive:false});
+  c.addEventListener('touchmove', mover, {passive:false});
+  c.addEventListener('touchend', arriba);
+  c.addEventListener('mousedown', abajo);
+  c.addEventListener('mousemove', mover);
+  c.addEventListener('mouseup', arriba);
+  c.addEventListener('mouseleave', arriba);
+}
+function _rcFirmaLimpiarLienzo(){
+  const c = document.getElementById('rc-firma-canvas'); if(!c) return;
+  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  window._rcFirmaHayTrazo = false;
+}
+function rcFirmaGuardarOverlay(){
+  const c = document.getElementById('rc-firma-canvas'); if(!c) return;
+  if(!window._rcFirmaHayTrazo){ toast('Primero firme en el recuadro', true); return; }
+  _rcFirmaTmp = c.toDataURL('image/png');
+  const ov = document.getElementById('rc-firma-overlay'); if(ov) ov.remove();
+  _rcFormFirmaUI();
+  toast('Firma guardada ✓');
+}
+
 // Las fotos del daño viven FUERA del nodo raíz, en fotosOrden_monhaco/<rcId>,
 // con el marcador nFotos en el reporte (igual que las órdenes de técnicos).
 let _rcEditando = null;
@@ -2597,6 +2751,9 @@ function rcAbrirForm(editId){
   _rcEditando = editId||null;
   const r = editId ? _rcLista().find(function(x){ return x.id===editId; }) : null;
   if(editId && !r) return;
+  if(editId && _rcFotosPend(r)){ toast('Cargando fotografías…'); _rcHidratar(r, function(){ rcAbrirForm(editId); }); return; }
+  _rcFotosTmp = (r && Array.isArray(r.fotos)) ? r.fotos.slice() : [];
+  _rcFirmaTmp = (r && r.firma) ? r.firma : '';
   const viejo = document.getElementById('rc-form-overlay'); if(viejo) viejo.remove();
   const campo = function(lbl, iid, val, ph, tipo){
     if(tipo==='textarea') return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">'+lbl+'</label><textarea id="'+iid+'" rows="3" placeholder="'+_hcEsc(ph||'')+'" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;font-family:inherit">'+_hcEsc(val||'')+'</textarea></div>';
@@ -2618,13 +2775,16 @@ function rcAbrirForm(editId){
     + campo('📅 Fecha del daño', 'rc-fecha', r?(r.fechaDano||''):new Date().toISOString().slice(0,10), '', 'date')
     + campo('⚠️ Daño y causa (mala operación)', 'rc-causa', r?r.causa:'', 'Describe el daño y cómo lo causó la operación...', 'textarea')
     + campo('👷 Técnico', 'rc-tecnico', r?r.tecnico:'', 'Técnico que atendió')
-    + (editId?'':'<div style="font-size:12px;color:var(--text3,#888);margin-bottom:8px">📷 Las fotografías del daño se agregan al abrir el reporte ya guardado.</div>')
+    + '<div id="rc-form-fotos" style="margin-bottom:12px"></div>'
+    + '<div id="rc-form-firma" style="margin-bottom:12px"></div>'
     + '<div style="display:flex;gap:8px;margin-top:6px">'
     + '<button onclick="rcGuardar()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar reporte</button>'
     + '<button onclick="document.getElementById(\'rc-form-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
     + '</div></div>';
   ov.onclick = function(){ ov.remove(); };
   document.body.appendChild(ov);
+  _rcFormFotosUI();
+  _rcFormFirmaUI();
 }
 function rcBuscarOrden(){
   const viejo = document.getElementById('rc-buscar-overlay'); if(viejo) viejo.remove();
@@ -2707,9 +2867,13 @@ function rcGuardar(){
   r.ordenId = val('rc-orden-id');
   r.ordenCorrelativo = val('rc-orden-corr');
   r.ordenTipo = val('rc-orden-tipo');
+  r.firma = _rcFirmaTmp || '';
+  r.fotos = _rcFotosTmp.slice();
+  r.nFotos = r.fotos.length;
   if(!DB.cobros || Array.isArray(DB.cobros)) DB.cobros = {};
   DB.cobros[r.id] = r;
   _rcPersistir(r);
+  _rcPersistirFotos(r);
   const ov = document.getElementById('rc-form-overlay'); if(ov) ov.remove();
   const esNuevo = !_rcEditando;
   _rcEditando = null;
@@ -2735,6 +2899,7 @@ function rcVer(id){
     + fila('Equipo', r.equipoTxt) + fila('Cliente', r.cliente) + fila('Fecha del daño', r.fechaDano)
     + (r.ordenCorrelativo?fila('Orden enlazada', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + bloque('⚠️ Daño y causa', r.causa)
+    + (r.firma?'<div style="margin-top:10px"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">✍️ Firma del cliente</div><img src="'+r.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff"></div>':'')
     + _rcFotosUIHTML(r)
     + '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
     + '<button onclick="rcCompartirPDF(\''+r.id+'\')" style="flex:1;min-width:130px;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📄 Compartir PDF</button>'
@@ -2790,6 +2955,7 @@ function _rcConstruirDOM(r){
     + (r.ordenCorrelativo?fila('Orden de reparación', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + '</div>'
     + bloque('⚠️ Daño y causa (mala operación)', r.causa)
+    + (r.firma?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">✍️ Firma del cliente</div><img src="'+r.firma+'" style="width:100%;max-height:110px;object-fit:contain;background:#fff"></div>':'')
     + fotosHTML
     + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
   return cont;
