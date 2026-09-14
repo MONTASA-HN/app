@@ -34,6 +34,7 @@ function _imprimirHTML(htmlContent){
   }
 
 #viaticos-overlay.open{display:block!important}
+#vale-overlay.open{display:block!important}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea,#viaticos-overlay input[type=number]~*{text-transform:uppercase}
 #viaticos-overlay input[type=text],#viaticos-overlay textarea{text-transform:uppercase}
 .card-demo{background:#f5eefc;border-color:#b794e0}
@@ -335,7 +336,16 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </nav>
 
 <script>
-function calcularVales(fechaInicio, fechaFin){
+function _valePersonasDe(o){
+  if(!o) return 1;
+  let n = 0;
+  if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
+  else if(o.tecnico) n += String(o.tecnico).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.operador)  n += String(o.operador).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  return Math.max(1, n);
+}
+function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   var ini = new Date(fechaInicio);
   var fin = new Date(fechaFin);
@@ -349,7 +359,10 @@ function calcularVales(fechaInicio, fechaFin){
   var mismodia = ini.toDateString() === fin.toDateString();
   if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:150});
   var acum = 0;
-  return vales.filter(function(v){ acum+=v.monto; return acum<=1500; });
+  const _lista = vales.filter(function(v){ acum+=v.monto; return acum<=1500; });
+  const _np = Math.max(1, parseInt(personas)||1);
+  _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
+  return _lista;
 }
 
 function _costoViaticosHtml(o){
@@ -896,13 +909,14 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
 
 
 function abrirValeLG(ordenId){
+  window._valeLGOrdenId = ordenId;
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
   // Auto-calcular si tiene horas registradas
   if(!orden.vales || !orden.vales.length){
     const tieneHora = s => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden));
       saveDB();
     }
   }
@@ -956,10 +970,11 @@ function abrirValeLG(ordenId){
 
 function recalcValeLG(){
   const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const _np = _valePersonasDe((DB.logistica||[]).find(o=>o.id===window._valeLGOrdenId));
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vlg-'+t);
-    if(cb && cb.checked) total += montos[t];
+    if(cb && cb.checked) total += montos[t]*_np;
   });
   const el = document.getElementById('vlg-total');
   if(el) el.textContent = 'L. '+total.toFixed(2);
@@ -970,9 +985,10 @@ function guardarValeLG(ordenId){
     const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
     if(!orden) return;
     const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+    const _np = _valePersonasDe(orden);
     orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
       const cb = document.getElementById('vlg-'+t); return cb && cb.checked;
-    }).map(t=>({tipo:t,monto:montos[t]}));
+    }).map(t=>({tipo:t,monto:montos[t]*_np,personas:_np}));
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(o=>o.id===ordenId);
@@ -3071,6 +3087,7 @@ function eliminarFotoLog(id, idx){
 </script>
 
 <div id="viaticos-overlay" style="display:none"></div>
+<div id="vale-overlay" style="display:none"></div>
 
 </body>
 </html>
