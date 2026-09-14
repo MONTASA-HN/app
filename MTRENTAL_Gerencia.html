@@ -9311,6 +9311,30 @@ function _valeMigrarPersonas(orden){
     return n > 1;
   }catch(e){ return false; }
 }
+function _valeNombresDe(o){
+  // Nombres de todas las personas relacionadas en la orden (mismos campos
+  // que _valePersonasDe, para que el conteo y las firmas coincidan)
+  const out = [];
+  const add = function(s){ String(s||'').split(',').map(function(x){return x.trim();}).filter(Boolean).forEach(function(x){ out.push(x); }); };
+  if(o){
+    if(Array.isArray(o.tecnicos)) o.tecnicos.filter(Boolean).forEach(function(x){ add(x); });
+    else if(o.tecnico) add(o.tecnico);
+    if(o.operador) add(o.operador);
+    if(o.motorista) add(o.motorista);
+  }
+  return out;
+}
+function _firmasValeHTML(orden){
+  // Sección de firmas "Recibe" para el vale impreso: una por persona
+  const nombres = _valeNombresDe(orden);
+  if(!nombres.length) return '';
+  const filas = nombres.map(function(p){
+    return '<div style="text-align:center;font-size:11px;flex:1;min-width:42%;max-width:48%"><div style="height:46px;border-bottom:1px solid #333;margin-bottom:5px"></div>'
+      + '<div style="font-weight:bold;font-size:12px">'+String(p).toUpperCase()+'</div>'
+      + '<div style="color:#555;margin-top:2px">Recibe</div></div>';
+  }).join('');
+  return '<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:28px">'+filas+'</div>';
+}
 function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
@@ -9394,6 +9418,8 @@ function _mostrarOverlayVale(ordenId){
   if(!ov) return;
   const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
   const sinHora = !tieneHora(orden.fechaInicio) || !tieneHora(orden.fechaFin);
+  const _npNota = _valePersonasDe(orden);
+  const notaPersonas = _npNota>1 ? '<div style="background:#e8f0fe;border:1px solid #b3cdf7;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1f3864">\ud83d\udc65 '+_npNota+' personas en la orden \u2014 cada vale se multiplica \u00d7 '+_npNota+'</div>' : '';
 
   const aviso = sinHora
     ? '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#856404">La orden no tiene hora registrada. Selecciona los vales manualmente.</div>'
@@ -9419,6 +9445,7 @@ function _mostrarOverlayVale(ordenId){
     + '</div>'
     + '<div style="padding:16px">'
     + aviso
+    + notaPersonas
     + checksHTML
     + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:6px;background:#856404;color:white;margin:8px 0 14px">'
     + '<span style="font-size:14px;font-weight:700">TOTAL</span>'
@@ -9439,10 +9466,11 @@ function _mostrarOverlayVale(ordenId){
 
 function recalcVales(){
   const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const _np = _valePersonasDe((DB.logistica||[]).find(o=>o.id===_valeOrdenId));
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vc-'+t);
-    if(cb && cb.checked) total += montos[t];
+    if(cb && cb.checked) total += montos[t]*_np;
   });
   const el = document.getElementById('vale-total-num');
   if(el) el.textContent = 'L. '+total.toFixed(2);
@@ -9459,9 +9487,10 @@ function _ejecutarGuardarVale(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
   const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
-  }).map(t=>({tipo:t,monto:montos[t]}));
+  }).map(t=>({tipo:t,monto:montos[t]*_np,personas:_np}));
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
@@ -9486,6 +9515,7 @@ function imprimirVale(){
   _ejecutarGuardarVale();
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
+  _valeMigrarPersonas(orden);
   const vales = orden.vales||[];
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
   const tipoLabels = {renta:'atencion de renta',entrega:'entrega de equipo',retiro:'retiro de equipo',apoyo_mantenimiento:'apoyo a mantenimiento',atencion_compras:'atencion de compras'};
@@ -9494,14 +9524,14 @@ function imprimirVale(){
   const eqDesc = eq ? eq.codigo+(eq.marca?' - '+eq.marca:'') : (orden.clienteNombre||'');
   const conceptoBase = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
 
-  // Separar múltiples personas
-  const tecnicoRaw = orden.tecnico||orden.operador||'—';
-  const personas = tecnicoRaw.split(',').map(s=>s.trim()).filter(Boolean);
-  const numPersonas = personas.length || 1;
+  // Todas las personas que reciben el dinero (técnicos, operador y motorista)
+  let personas = _valeNombresDe(orden);
+  if(!personas.length) personas = [orden.tecnico||orden.operador||'—'];
+  const numPersonas = personas.length;
 
-  // Monto por persona y total multiplicado
-  const montoPorPersona = vales.reduce((s,v)=>s+v.monto, 0);
-  const montoTotal = montoPorPersona * numPersonas;
+  // v.monto ya incluye la multiplicación por personas (v.personas)
+  const montoTotal = vales.reduce((s,v)=>s+(parseFloat(v.monto)||0), 0);
+  const montoPorPersona = vales.reduce((s,v)=>s+((parseFloat(v.monto)||0)/(parseInt(v.personas)||numPersonas)), 0);
 
   const concepto = 'VALE DE ALIMENTACION - '+conceptoBase.toUpperCase()+' POR '+tipoDesc.toUpperCase()+' CON EQUIPO '+eqDesc.toUpperCase();
   const d = new Date(orden.fechaCierre||orden.fechaInicio||'');
@@ -9560,12 +9590,8 @@ function imprimirVale(){
     +'<div style="text-align:center;font-size:7pt;color:#888;margin-top:16px;border-top:1px solid #eee;padding-top:8px">© Derechos Reservados MONTASA Handling Co.</div>'
     +'</div></body></html>';
 
-  const blob = new Blob([htmlContent],{type:'text/html'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download='Vale_Alimentacion_'+orden.correlativo+'.html'; a.click();
-  URL.revokeObjectURL(url);
-  toast('PDF descargado — abre y usa Ctrl+P ✓');
+  _imprimirHTML(htmlContent);
+  toast('Abriendo impresión — elige "Guardar como PDF" o tu impresora ✓');
 }
 
 // Helper: merge logistica preservando vales locales
@@ -9907,8 +9933,9 @@ function imprimirValeMant(){
     + '<p><strong>Inicio:</strong> '+fIni+'</p>'
     + '<p><strong>Fin:</strong> '+fFin+'</p>'
     + '<hr>'
-    + vales.map(v=>'<div class="fila"><span>'+(labels[v.tipo]||v.tipo)+'</span><span>L. '+v.monto.toFixed(2)+'</span></div>').join('')
+    + vales.map(v=>'<div class="fila"><span>'+(labels[v.tipo]||v.tipo)+(v.personas>1?' \u00d7 '+v.personas+' pers.':'')+'</span><span>L. '+v.monto.toFixed(2)+'</span></div>').join('')
     + '<div class="total"><span>TOTAL</span><span>L. '+total.toFixed(2)+'</span></div>'
+    + _firmasValeHTML(orden)
     + '</div></body></html>';
   _imprimirHTML(html);
 }
