@@ -6423,7 +6423,7 @@ function completarPreventivo(id){
   (function(){
     var _o = p;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
+      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o));
       if(_v.length){
         _o.vales = _v;
         try{ _cacheLocal(); }catch(e){}
@@ -6626,7 +6626,7 @@ function cerrarCorrectivo(id){
   (function(){
     var _o = c;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = calcularVales(_o.fechaInicio, _o.fechaFin);
+      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o));
       if(_v.length){
         _o.vales = _v;
         try{ _cacheLocal(); }catch(e){}
@@ -9021,7 +9021,16 @@ function _buildLiquidacionHTML(v, orden){
 // ══════════════════════════════════════════════════════════════════════════
 // ── SISTEMA DE VALES DE ALIMENTACIÓN ─────────────────────────────────────
 
-function calcularVales(fechaInicio, fechaFin){
+function _valePersonasDe(o){
+  if(!o) return 1;
+  let n = 0;
+  if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
+  else if(o.tecnico) n += String(o.tecnico).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.operador)  n += String(o.operador).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  return Math.max(1, n);
+}
+function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
   const fin = new Date(fechaFin);
@@ -9033,7 +9042,10 @@ function calcularVales(fechaInicio, fechaFin){
   // Desayuno, almuerzo y media noche solo pueden asignarse manualmente desde Gerencia.
   const mismodia = ini.toDateString() === fin.toDateString();
   if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:150});
-  return vales;
+  const _lista = vales;
+  const _np = Math.max(1, parseInt(personas)||1);
+  _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
+  return _lista;
 }
 
 let _valeOrdenId = null;
@@ -9064,7 +9076,7 @@ function _abrirValeGerenciaInterno(ordenId){
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden));
       saveDB();
     }
   }
@@ -9459,7 +9471,7 @@ function _abrirValeMantInterno(ordenId, tipo){
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin);
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden));
       saveDB();
     }
   }
@@ -9533,10 +9545,12 @@ function _mostrarOverlayValeMant(ordenId, tipo){
 
 function recalcValesMant(){
   const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const _arrV = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const _np = _valePersonasDe(_arrV.find(o=>o.id===_valeMantOrdenId));
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vcm-'+t);
-    if(cb && cb.checked) total += montos[t];
+    if(cb && cb.checked) total += montos[t]*_np;
   });
   const el = document.getElementById('vale-mant-total');
   if(el) el.textContent = 'L. '+total.toFixed(2);
@@ -9553,9 +9567,10 @@ function _ejecutarGuardarValeMant(){
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
   const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
-  }).map(t=>({tipo:t,monto:montos[t]}));
+  }).map(t=>({tipo:t,monto:montos[t]*_np,personas:_np}));
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';

@@ -21,7 +21,16 @@ function _cliSelOptions(val){
   CLIENTES_MONHACO.forEach(function(c){ h += '<option value="'+c+'"'+(c===val?' selected':'')+'>'+c+'</option>'; });
   return h;
 }
-function calcularVales(fechaInicio, fechaFin){
+function _valePersonasDe(o){
+  if(!o) return 1;
+  let n = 0;
+  if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
+  else if(o.tecnico) n += String(o.tecnico).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.operador)  n += String(o.operador).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  return Math.max(1, n);
+}
+function calcularVales(fechaInicio, fechaFin, personas){
   if(!fechaInicio || !fechaFin) return [];
   var ini = new Date(fechaInicio);
   var fin = new Date(fechaFin);
@@ -33,7 +42,10 @@ function calcularVales(fechaInicio, fechaFin){
   // Desayuno, almuerzo y media noche solo pueden asignarse manualmente desde Gerencia.
   var mismodia = ini.toDateString() === fin.toDateString();
   if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:150});
-  return vales;
+  const _lista = vales;
+  const _np = Math.max(1, parseInt(personas)||1);
+  _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
+  return _lista;
 }
 
 // ── VALES DE ALIMENTACIÓN — MANTENIMIENTO (Correctivos / Preventivos) ─────────
@@ -2143,7 +2155,7 @@ function completarPreventivo(id){
   (function(){
     var _o = p;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin) : [];
+      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o)) : [];
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
@@ -2604,7 +2616,7 @@ function cerrarCorrectivo(id){
   (function(){
     var _o = c;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin) : [];
+      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o)) : [];
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
