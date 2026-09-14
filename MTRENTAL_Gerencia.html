@@ -4997,6 +4997,7 @@ window._ordenesRecientes = window._ordenesRecientes || {};
 function _guardarOrdenMantResiliente(tipo, orden, intento){
   intento = intento||0;
   if(!window._fbDB || !orden || !orden.id) return;
+  if(window._borradasCache && window._borradasCache[orden.id]) return; // orden eliminada: no re-subirla
   const nodo = tipo==='prev' ? 'preventivos' : 'correctivos';
   window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
   const ref = window._fbDB.ref('montasa/'+nodo);
@@ -5028,12 +5029,23 @@ function _guardarOrdenMantResiliente(tipo, orden, intento){
 }
 // Re-inyecta órdenes creadas aquí hace <15 min que un snapshot remoto viejo no
 // traiga (protege contra el pisado por clientes con datos desactualizados).
+// ── Órdenes eliminadas (lápidas): la protección de órdenes recientes no debe
+// resucitar una orden que Gerencia eliminó a propósito. ─────────────────────
+window._borradasCache = window._borradasCache || {};
+(function(){
+  var _bt = setInterval(function(){
+    if(!window._fbDB) return;
+    clearInterval(_bt);
+    try{ window._fbDB.ref('montasa/_borradas').on('value', function(s){ window._borradasCache = s.val()||{}; }); }catch(e){}
+  }, 1500);
+})();
 function _protegerOrdenesRecientes(){
   try{
     const ahora = Date.now();
     Object.keys(window._ordenesRecientes||{}).forEach(function(id){
       const r = window._ordenesRecientes[id];
       if(!r || ahora - r.ts > 15*60*1000){ delete window._ordenesRecientes[id]; return; }
+      if(window._borradasCache[id]){ delete window._ordenesRecientes[id]; return; }  // eliminada a propósito
       const arr = r.tipo==='prev' ? DB.preventivos : DB.correctivos;
       if(arr && !arr.some(function(o){ return o&&o.id===id; })){
         arr.push(r.obj);
@@ -6467,13 +6479,22 @@ function completarPreventivo(id){
   renderPreventivos(); renderDashboard();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
 }
+function _marcarOrdenBorrada(id){
+  try{
+    if(window._ordenesRecientes) delete window._ordenesRecientes[id];
+    window._borradasCache = window._borradasCache || {};
+    window._borradasCache[id] = Date.now();
+    if(window._fbDB){ var u = {}; u['_borradas/'+id] = Date.now(); window._fbDB.ref('montasa').update(u); }
+  }catch(e){}
+}
 function eliminarDelHistorial(tipo, id){
   solicitarPINAccion(()=>{
+    _marcarOrdenBorrada(id);
     if(tipo==='prev'){
       const orden = DB.preventivos.find(x=>x.id===id);
       _revertirEstadoEquipoAlEliminar(orden);
       DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
-      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='log'){
       const ordenLog = (DB.logistica||[]).find(x=>x.id===id);
@@ -6501,7 +6522,7 @@ function eliminarDelHistorial(tipo, id){
       const ordenCorr = DB.correctivos.find(x=>x.id===id);
       _revertirEstadoEquipoAlEliminar(ordenCorr);
       DB.correctivos = DB.correctivos.filter(x=>x.id!==id);
-      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o.correlativo!==id);
+      if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     }
   }, '🗑 Eliminar orden', 'Ingresa tu PIN para eliminar esta orden del historial');
@@ -6509,6 +6530,7 @@ function eliminarDelHistorial(tipo, id){
 
 function eliminarPreventivo(id){
   if(!confirm('¿Eliminar?')) return;
+  _marcarOrdenBorrada(id);
   const orden = DB.preventivos.find(p=>p.id===id);
   _revertirEstadoEquipoAlEliminar(orden);
   DB.preventivos = DB.preventivos.filter(p=>p.id!==id); saveDB(); renderPreventivos();
@@ -6649,6 +6671,7 @@ function cerrarCorrectivo(id){
 }
 function eliminarCorrectivo(id){
   if(!confirm('¿Eliminar?')) return;
+  _marcarOrdenBorrada(id);
   const orden = DB.correctivos.find(c=>c.id===id);
   _revertirEstadoEquipoAlEliminar(orden);
   DB.correctivos = DB.correctivos.filter(c=>c.id!==id); saveDB(); renderCorrectivos();
