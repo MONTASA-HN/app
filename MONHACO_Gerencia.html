@@ -1107,6 +1107,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
   <!-- HISTORIAL -->
   <div id="tab-historial" class="section">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button onclick="abrirModuloHor()" style="flex:1;padding:12px 8px;border-radius:10px;border:1px solid #b9d2ef;background:#eef2f8;color:#1f3864;font-size:13px;font-weight:800;cursor:pointer">📟 Horómetros</button>
+      <button onclick="abrirModuloRC()" style="flex:1;padding:12px 8px;border-radius:10px;border:1px solid #f0d6ad;background:#fdf3e3;color:#8a4800;font-size:13px;font-weight:800;cursor:pointer">💰 Reportes de cobro</button>
+    </div>
     <div style="padding:4px 0 14px">
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px">
         <select id="filt-hist-equipo" style="font-size:13px">
@@ -2237,6 +2241,451 @@ function bPrev(e){
   if(e==='En espera de repuestos') return '<span class="badge" style="background:#e2d9f3;color:#4a1c7c">En espera</span>';
   return '<span class="badge" style="background:#f0efe9;color:#6b6960">Pendiente</span>';
 }
+
+// ══ MÓDULOS MONHACO: TOMA DE HORÓMETROS + REPORTES DE COBRO ═══════════════
+// Datos por registro en Firebase (sin riesgo de pisar otros nodos):
+//   monhaco/horometros/<AAAA-MM>/<equipoId> = {lectura, ts, codigo}
+//   monhaco/cobros/<id> = reporte RC-XXXX
+// false define si esta app puede capturar lecturas (solo Logística).
+const HOR_CAPTURA = false;
+const HOR_TIPOS = ['MONTACARGAS','STACKER','ELECTRO TOWER','MULAS','ELEVADORA'];
+const _HC_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+let _horMesVista = null;
+
+function _hcEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function horMesActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function horMesLabel(mes){ const p=(mes||'').split('-'); if(p.length<2) return mes||''; const n=_HC_MESES[parseInt(p[1],10)-1]||''; return n.charAt(0).toUpperCase()+n.slice(1)+' '+p[0]; }
+function _horMeses(){
+  const set = new Set(Object.keys(DB.horometros||{}));
+  set.add(horMesActual());
+  return Array.from(set).sort();
+}
+function _horEquipos(){
+  return (DB.equipos||[]).filter(function(e){
+    return e && !e.esGenerico && !e.esVehiculo && !e.esEquipoCliente && HOR_TIPOS.includes(String(e.tipo||'').toUpperCase().trim());
+  }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
+}
+function _horLecturas(mes){ return ((DB.horometros||{})[mes])||{}; }
+function _horAnterior(eq, mes){
+  // Última lectura registrada en un mes ANTERIOR; si no hay, el horómetro de flota.
+  const meses = Object.keys(DB.horometros||{}).filter(function(m){ return m < mes; }).sort().reverse();
+  for(var i=0;i<meses.length;i++){
+    const l = (DB.horometros[meses[i]]||{})[eq.id];
+    if(l && l.lectura!=null && l.lectura!=='') return parseFloat(l.lectura);
+  }
+  const h = parseFloat(eq.horometro);
+  return isNaN(h) ? null : h;
+}
+
+function renderHorometros(contId){
+  const cont = document.getElementById(contId); if(!cont) return;
+  const meses = _horMeses();
+  if(!_horMesVista || !meses.includes(_horMesVista)) _horMesVista = horMesActual();
+  const mes = _horMesVista;
+  const idxMes = meses.indexOf(mes);
+  const lecturas = _horLecturas(mes);
+  const equipos = _horEquipos();
+  const buscar = (document.getElementById('hor-buscar') ? document.getElementById('hor-buscar').value : '').toLowerCase().trim();
+  const tomados = equipos.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+  const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
+  const puedeEditar = HOR_CAPTURA && mes === horMesActual();
+
+  let h = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">';
+  h += '<button onclick="_horMover(-1)" '+(idxMes<=0?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">‹</button>';
+  h += '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">📟 '+_hcEsc(horMesLabel(mes))+(mes===horMesActual()?'':' · histórico')+'</div>';
+  h += '<button onclick="_horMover(1)" '+(idxMes>=meses.length-1?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>';
+  h += '</div>';
+  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span>'+tomados+' / '+equipos.length+' equipos</span></div>'
+    + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+    + '</div>';
+  h += '<input id="hor-buscar" placeholder="Buscar equipo..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
+  h += '<button onclick="compartirHorometros(\''+mes+'\')" style="width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px;margin-bottom:12px">📤 Compartir reporte del mes</button>';
+  if(!puedeEditar && HOR_CAPTURA) h += '<div style="font-size:12px;color:#b45309;margin-bottom:10px">🔒 Mes histórico — solo consulta. Las lecturas se capturan en el mes en curso.</div>';
+  if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">👁 Solo consulta — las lecturas se capturan desde la app de Logística MONHACO.</div>';
+
+  HOR_TIPOS.forEach(function(tipo){
+    let grupo = equipos.filter(function(e){ return String(e.tipo||'').toUpperCase().trim()===tipo; });
+    if(buscar) grupo = grupo.filter(function(e){ return String(e.codigo||'').toLowerCase().includes(buscar) || String(e.marca||'').toLowerCase().includes(buscar); });
+    if(!grupo.length) return;
+    const gTom = grupo.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+    h += '<div style="font-size:12px;font-weight:800;color:#1f3864;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">'+_hcEsc(tipo)+' <span style="color:var(--text3,#888);font-weight:600">('+gTom+'/'+grupo.length+')</span></div>';
+    grupo.forEach(function(e){
+      const l = lecturas[e.id];
+      const tiene = l && l.lectura!=null && l.lectura!=='';
+      const ant = _horAnterior(e, mes);
+      h += '<div style="display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid '+(tiene?'#bbf7d0':'var(--border2,#e2e0d8)')+';border-left:3px solid '+(tiene?'#18A303':'#c9c6bb')+';border-radius:10px;padding:9px 12px;margin-bottom:6px">'
+        + '<div style="flex:1;min-width:0"><div style="font-weight:800;color:#1f3864;font-size:14px">'+_hcEsc(e.codigo)+(tiene?' <span style="color:#18A303">✓</span>':'')+'</div>'
+        + '<div style="font-size:11px;color:var(--text3,#888)">'+_hcEsc(e.marca||'')+' · anterior: '+(ant!=null?ant.toLocaleString('en-US'):'—')+'</div></div>';
+      if(puedeEditar){
+        h += '<input type="number" inputmode="numeric" id="hor-in-'+e.id+'" value="'+(tiene?_hcEsc(l.lectura):'')+'" placeholder="hrs" '
+          + 'onchange="horGuardar(\''+e.id+'\',\''+contId+'\')" '
+          + 'style="width:96px;padding:10px 8px;border:1.5px solid '+(tiene?'#18A303':'var(--border2,#ccc)')+';border-radius:8px;font-size:15px;font-weight:700;text-align:right">';
+      } else {
+        h += '<div style="font-size:15px;font-weight:800;color:'+(tiene?'#1a5c1a':'#c9c6bb')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'—')+'</div>';
+      }
+      h += '</div>';
+    });
+  });
+  cont.innerHTML = h;
+}
+function _horMover(n){
+  const meses = _horMeses();
+  const i = meses.indexOf(_horMesVista||horMesActual()) + n;
+  if(i<0 || i>=meses.length) return;
+  _horMesVista = meses[i];
+  renderHorometros(_HC_HOR_CONT);
+}
+function horGuardar(eqId, contId){
+  const inp = document.getElementById('hor-in-'+eqId); if(!inp) return;
+  const val = inp.value.trim();
+  const mes = horMesActual();
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  if(val===''){ return; }
+  const lectura = parseFloat(val);
+  if(isNaN(lectura) || lectura < 0){ toast('Lectura inválida', true); return; }
+  const ant = _horAnterior(eq, mes);
+  if(ant!=null && lectura < ant){
+    if(!confirm('⚠️ La lectura ('+lectura.toLocaleString('en-US')+') es MENOR que la anterior ('+ant.toLocaleString('en-US')+' hrs).\n¿Guardarla de todas formas? (ej. cambio de reloj)')) { inp.value=''; return; }
+  }
+  const reg = { lectura: lectura, ts: Date.now(), codigo: eq.codigo||'' };
+  if(!DB.horometros) DB.horometros = {};
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  DB.horometros[mes][eqId] = reg;
+  try{
+    if(window._fbDB) window._fbDB.ref('monhaco/horometros/'+mes+'/'+eqId).set(reg);
+  }catch(e){}
+  // Actualizar el horómetro del equipo en la flota (búsqueda por id en el servidor)
+  eq.horometro = String(lectura);
+  _horActualizarFlota(eqId, lectura);
+  renderHorometros(contId||_HC_HOR_CONT);
+}
+function _horActualizarFlota(eqId, lectura){
+  try{
+    if(!window._fbDB) return;
+    window._fbDB.ref('monhaco/equipos').once('value').then(function(s){
+      const v = s.val(); if(!v) return;
+      let idx = -1;
+      if(Array.isArray(v)){ idx = v.findIndex(function(e){ return e && e.id===eqId; }); }
+      else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===eqId){ idx=ks[i]; break; } } }
+      if(idx===-1 || idx===undefined) return;
+      window._fbDB.ref('monhaco/equipos/'+idx+'/horometro').set(String(lectura));
+    }).catch(function(){});
+  }catch(e){}
+}
+async function compartirHorometros(mes){
+  try{
+    toast('Generando reporte…');
+    await _cargarHtml2Canvas();
+    const equipos = _horEquipos();
+    const lecturas = _horLecturas(mes);
+    const tomados = equipos.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+    const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : ((document.querySelector('img[src^="data:image/png;base64,"]')||{}).src||'');
+    let filas = '';
+    HOR_TIPOS.forEach(function(tipo){
+      const grupo = equipos.filter(function(e){ return String(e.tipo||'').toUpperCase().trim()===tipo; });
+      if(!grupo.length) return;
+      filas += '<div style="background:#eef2f8;color:#1f3864;font-weight:800;font-size:11px;letter-spacing:0.5px;padding:6px 10px;margin-top:8px;border-radius:6px">'+_hcEsc(tipo)+'</div>';
+      filas += '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 0.9fr;gap:0;font-size:10.5px;color:#9c9a90;font-weight:700;padding:5px 10px 2px"><span>EQUIPO</span><span style="text-align:right">ANTERIOR</span><span style="text-align:right">ACTUAL</span><span style="text-align:right">HORAS</span></div>';
+      grupo.forEach(function(e){
+        const l = lecturas[e.id];
+        const tiene = l && l.lectura!=null && l.lectura!=='';
+        const ant = _horAnterior(e, mes);
+        const horas = (tiene && ant!=null && parseFloat(l.lectura)>=ant) ? (parseFloat(l.lectura)-ant) : null;
+        filas += '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 0.9fr;gap:0;padding:5px 10px;border-bottom:1px solid #eeece4;font-size:12px">'
+          + '<span style="font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)+'</span>'
+          + '<span style="text-align:right;color:#6b6960">'+(ant!=null?ant.toLocaleString('en-US'):'—')+'</span>'
+          + '<span style="text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</span>'
+          + '<span style="text-align:right;font-weight:700;color:#1a5c1a">'+(horas!=null?('+'+horas.toLocaleString('en-US')):'—')+'</span>'
+          + '</div>';
+      });
+    });
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px;box-sizing:border-box;';
+    cont.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Toma de horómetros</div>'
+      + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+_hcEsc(horMesLabel(mes))+' · '+tomados+'/'+equipos.length+' equipos · MONHACO</div></div>'
+      + (logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+      + '</div></div>'
+      + filas
+      + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
+    document.body.appendChild(cont);
+    const imgs = cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(r){ img.onload=r; img.onerror=r; setTimeout(r,3000); });
+    }));
+    const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, 'Horometros_'+mes);
+    }, 'image/png');
+  }catch(err){ toast('Error al generar el reporte: '+err.message, true); }
+}
+
+// ── REPORTES DE COBRO (RC-XXXX) ──────────────────────────────────────────────
+let _rcEditando = null;
+let _HC_RC_CONT = 'rc-cont';
+let _HC_HOR_CONT = 'hor-cont';
+function _rcLista(){
+  const c = DB.cobros||{};
+  return (Array.isArray(c)?c:Object.values(c)).filter(Boolean);
+}
+function _rcSigCorrelativo(){
+  let max = 0;
+  _rcLista().forEach(function(r){ const m=/(\d+)\s*$/.exec(String(r.correlativo||'')); if(m){ const v=parseInt(m[1],10); if(v>max) max=v; } });
+  return 'RC-'+String(max+1).padStart(4,'0');
+}
+function renderCobros(contId){
+  const cont = document.getElementById(contId); if(!cont) return;
+  const lista = _rcLista().sort(function(a,b){
+    const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
+    return nb-na;
+  });
+  let h = '<button onclick="rcAbrirForm()" style="width:100%;padding:13px;background:#1f3864;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;margin-bottom:12px">➕ Nuevo reporte de cobro</button>';
+  if(!lista.length){
+    h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:16px 0">Sin reportes de cobro</div>';
+  }
+  lista.forEach(function(r){
+    const cobrado = r.estado==='Cobrado';
+    h += '<div onclick="rcVer(\''+r.id+'\')" style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:3px solid '+(cobrado?'#18A303':'#E8811A')+';border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer">'
+      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">'
+      + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#fdf3e3;color:#8a4800;padding:2px 8px;border-radius:10px">'+_hcEsc(r.correlativo)+'</span>'
+      + '<span style="font-size:11px;font-weight:700;background:'+(cobrado?'#e5f7e0':'#fdead9')+';color:'+(cobrado?'#1a5c1a':'#8a4800')+';padding:2px 8px;border-radius:10px">'+(cobrado?'✓ Cobrado':'Pendiente de cobro')+'</span>'
+      + (r.ordenCorrelativo?'<span style="font-size:11px;color:var(--text3,#888)">🔗 '+_hcEsc(r.ordenCorrelativo)+'</span>':'')
+      + '</div>'
+      + '<div style="font-size:13.5px;font-weight:700">'+_hcEsc(r.equipoTxt||'—')+' · 👤 '+_hcEsc(r.cliente||'—')+'</div>'
+      + '<div style="font-size:12px;color:var(--text2,#555);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_hcEsc(r.causa||'')+'</div>'
+      + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">📅 '+_hcEsc(r.fechaDano||r.fecha||'')+'</div>'
+      + '</div>';
+  });
+  cont.innerHTML = h;
+}
+function rcAbrirForm(editId){
+  _rcEditando = editId||null;
+  const r = editId ? _rcLista().find(function(x){ return x.id===editId; }) : null;
+  if(editId && !r) return;
+  const viejo = document.getElementById('rc-form-overlay'); if(viejo) viejo.remove();
+  const campo = function(lbl, iid, val, ph, tipo){
+    if(tipo==='textarea') return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">'+lbl+'</label><textarea id="'+iid+'" rows="3" placeholder="'+_hcEsc(ph||'')+'" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;font-family:inherit">'+_hcEsc(val||'')+'</textarea></div>';
+    return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">'+lbl+'</label><input id="'+iid+'" type="'+(tipo||'text')+'" value="'+_hcEsc(val||'')+'" placeholder="'+_hcEsc(ph||'')+'" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px"></div>';
+  };
+  const ov = document.createElement('div');
+  ov.id = 'rc-form-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:2px">💰 '+(editId?('Editar '+_hcEsc(r.correlativo)):'Nuevo reporte de cobro')+'</div>'
+    + '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:12px">Daño causado por mala operación del cliente — la reparación se cobra.</div>'
+    + '<div id="rc-orden-chip" style="margin-bottom:10px">'
+    + ((editId && r.ordenCorrelativo) ? '<span style="font-size:12px;font-weight:700;background:#eef2f8;color:#1f3864;padding:6px 12px;border-radius:10px;display:inline-block">🔗 Enlazado a '+_hcEsc(r.ordenCorrelativo)+'</span>' : '')
+    + '</div>'
+    + '<button onclick="rcBuscarOrden()" style="width:100%;padding:11px;background:#eef2f8;color:#1f3864;border:1.5px dashed #7f9bd1;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;margin-bottom:12px">🔎 Buscar orden para enlazar (en proceso o completada)</button>'
+    + '<input type="hidden" id="rc-orden-id" value="'+_hcEsc(r?r.ordenId||'':'')+'"><input type="hidden" id="rc-orden-corr" value="'+_hcEsc(r?r.ordenCorrelativo||'':'')+'"><input type="hidden" id="rc-orden-tipo" value="'+_hcEsc(r?r.ordenTipo||'':'')+'">'
+    + campo('🚜 Equipo', 'rc-equipo', r?r.equipoTxt:'', 'Ej: BC-4 — CASCADE')
+    + campo('👤 Cliente (responsable del daño)', 'rc-cliente', r?r.cliente:'', 'Nombre del cliente')
+    + campo('📅 Fecha del daño', 'rc-fecha', r?(r.fechaDano||''):new Date().toISOString().slice(0,10), '', 'date')
+    + campo('⚠️ Daño y causa (mala operación)', 'rc-causa', r?r.causa:'', 'Describe el daño y cómo lo causó la operación...', 'textarea')
+    + campo('🛠 Trabajos realizados / por realizar', 'rc-trabajos', r?r.trabajos:'', 'Reparaciones efectuadas o necesarias...', 'textarea')
+    + campo('👷 Técnico', 'rc-tecnico', r?r.tecnico:'', 'Técnico que atendió')
+    + '<div style="display:flex;gap:8px;margin-top:6px">'
+    + '<button onclick="rcGuardar()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar reporte</button>'
+    + '<button onclick="document.getElementById(\'rc-form-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '</div></div>';
+  ov.onclick = function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
+function rcBuscarOrden(){
+  const viejo = document.getElementById('rc-buscar-overlay'); if(viejo) viejo.remove();
+  const ordenes = []
+    .concat(((DB.preventivos||[]).filter(Boolean)).map(function(o){ return {t:'preventivo', o:o}; }))
+    .concat(((DB.correctivos||[]).filter(Boolean)).map(function(o){ return {t:'correctivo', o:o}; }))
+    .filter(function(x){ return x.o.estado!=='Cancelado'; })
+    .sort(function(a,b){
+      const na=parseInt((a.o.correlativo||'').replace(/[^0-9]/g,''))||0;
+      const nb=parseInt((b.o.correlativo||'').replace(/[^0-9]/g,''))||0;
+      return nb-na;
+    }).slice(0,60);
+  const ov = document.createElement('div');
+  ov.id = 'rc-buscar-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:810;display:flex;align-items:center;justify-content:center;padding:14px';
+  let items = '';
+  ordenes.forEach(function(x){
+    const o = x.o;
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    const eqTxt = eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||o.equipoTxt||'—');
+    const comp = o.completado || o.estado==='Completado';
+    items += '<div onclick="rcElegirOrden(\''+x.t+'\',\''+o.id+'\')" style="border:1px solid #e2e0d8;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer">'
+      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
+      + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(o.estado||'Pendiente')+'</span>'
+      + '<span style="font-size:11px;color:#9c9a90">'+(x.t==='preventivo'?'📋 Preventivo':'🔧 Correctivo')+'</span>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:700;margin-top:3px">'+_hcEsc(eqTxt)+'</div>'
+      + '</div>';
+  });
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:16px" onclick="event.stopPropagation()">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:15px;margin-bottom:4px">🔎 Elige la orden a enlazar</div>'
+    + '<input id="rc-b-filtro" placeholder="Filtrar por correlativo o equipo..." oninput="_rcFiltrarBusqueda(this.value)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-bottom:10px">'
+    + '<div id="rc-b-lista">'+(items||'<div style="color:#888;font-size:13px;padding:10px 0">No hay órdenes registradas.</div>')+'</div>'
+    + '<button onclick="document.getElementById(\'rc-buscar-overlay\').remove()" style="width:100%;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer;margin-top:6px">Cerrar</button>'
+    + '</div>';
+  ov.onclick = function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
+function _rcFiltrarBusqueda(txt){
+  txt = (txt||'').toLowerCase().trim();
+  const lista = document.getElementById('rc-b-lista'); if(!lista) return;
+  Array.from(lista.children).forEach(function(d){
+    d.style.display = (!txt || d.textContent.toLowerCase().includes(txt)) ? '' : 'none';
+  });
+}
+function rcElegirOrden(tipo, oid){
+  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const o = arr.find(function(x){ return x && x.id===oid; }); if(!o) return;
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+  const setV = function(id, v){ const el=document.getElementById(id); if(el && v!=null && v!=='') el.value = v; };
+  document.getElementById('rc-orden-id').value = o.id;
+  document.getElementById('rc-orden-corr').value = o.correlativo||'';
+  document.getElementById('rc-orden-tipo').value = tipo;
+  setV('rc-equipo', eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||''));
+  setV('rc-tecnico', o.tecnico || (o.tecnicos&&o.tecnicos.filter(Boolean).join(', ')) || '');
+  const rcT = document.getElementById('rc-trabajos');
+  if(rcT && !rcT.value.trim()) rcT.value = o.diagnostico || o.trabajo || o.notas || '';
+  const chip = document.getElementById('rc-orden-chip');
+  if(chip) chip.innerHTML = '<span style="font-size:12px;font-weight:700;background:#eef2f8;color:#1f3864;padding:6px 12px;border-radius:10px;display:inline-block">🔗 Enlazado a '+_hcEsc(o.correlativo||'')+'</span>';
+  const bo = document.getElementById('rc-buscar-overlay'); if(bo) bo.remove();
+}
+function rcGuardar(){
+  const val = function(id){ const el=document.getElementById(id); return el ? el.value.trim() : ''; };
+  const equipo = val('rc-equipo'), cliente = val('rc-cliente'), causa = val('rc-causa');
+  if(!equipo){ toast('Falta el equipo', true); return; }
+  if(!cliente){ toast('Falta el cliente responsable', true); return; }
+  if(!causa){ toast('Describe el daño y la causa', true); return; }
+  let r;
+  if(_rcEditando){
+    r = _rcLista().find(function(x){ return x.id===_rcEditando; });
+    if(!r) return;
+    r.editadoTs = Date.now();
+  } else {
+    r = { id: 'rc_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6), correlativo: _rcSigCorrelativo(), fecha: new Date().toISOString().slice(0,10), estado: 'Pendiente de cobro', ts: Date.now() };
+  }
+  r.equipoTxt = equipo;
+  r.cliente = cliente;
+  r.fechaDano = val('rc-fecha');
+  r.causa = causa;
+  r.trabajos = val('rc-trabajos');
+  r.tecnico = val('rc-tecnico');
+  r.ordenId = val('rc-orden-id');
+  r.ordenCorrelativo = val('rc-orden-corr');
+  r.ordenTipo = val('rc-orden-tipo');
+  if(!DB.cobros || Array.isArray(DB.cobros)) DB.cobros = {};
+  DB.cobros[r.id] = r;
+  try{ if(window._fbDB) window._fbDB.ref('monhaco/cobros/'+r.id).set(r); }catch(e){}
+  const ov = document.getElementById('rc-form-overlay'); if(ov) ov.remove();
+  _rcEditando = null;
+  renderCobros(_HC_RC_CONT);
+  toast('Reporte '+r.correlativo+' guardado ✓');
+}
+function rcVer(id){
+  const r = _rcLista().find(function(x){ return x.id===id; }); if(!r) return;
+  const viejo = document.getElementById('rc-ver-overlay'); if(viejo) viejo.remove();
+  const cobrado = r.estado==='Cobrado';
+  const fila = function(k,v){ return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #eeece4"><span style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;flex-shrink:0">'+k+'</span><span style="font-size:13px;font-weight:600;text-align:right">'+_hcEsc(v||'—')+'</span></div>'; };
+  const bloque = function(k,v){ return v?'<div style="margin-top:10px"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">'+k+'</div><div style="font-size:13px;font-weight:600;white-space:pre-wrap">'+_hcEsc(v)+'</div></div>':''; };
+  const ov = document.createElement('div');
+  ov.id = 'rc-ver-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:16px">💰 '+_hcEsc(r.correlativo)+'</div>'
+    + '<span style="font-size:11px;font-weight:700;background:'+(cobrado?'#e5f7e0':'#fdead9')+';color:'+(cobrado?'#1a5c1a':'#8a4800')+';padding:3px 10px;border-radius:10px">'+(cobrado?'✓ Cobrado':'Pendiente de cobro')+'</span>'
+    + '</div>'
+    + fila('Equipo', r.equipoTxt) + fila('Cliente', r.cliente) + fila('Fecha del daño', r.fechaDano)
+    + (r.ordenCorrelativo?fila('Orden enlazada', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
+    + bloque('⚠️ Daño y causa', r.causa) + bloque('🛠 Trabajos', r.trabajos)
+    + '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
+    + '<button onclick="rcCompartir(\''+r.id+'\')" style="flex:1;min-width:130px;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir imagen</button>'
+    + '<button onclick="rcEditarPin(\''+r.id+'\')" style="padding:12px 14px;background:#eef2f8;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">✏️ Editar</button>'
+    + (!cobrado?'<button onclick="rcMarcarCobrado(\''+r.id+'\')" style="padding:12px 14px;background:#e5f7e0;color:#1a5c1a;border:1px solid #bbf7d0;border-radius:8px;font-weight:700;cursor:pointer">✔ Cobrado</button>':'')
+    + '<button onclick="document.getElementById(\'rc-ver-overlay\').remove()" style="padding:12px 14px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
+    + '</div></div>';
+  ov.onclick = function(){ ov.remove(); };
+  document.body.appendChild(ov);
+}
+function rcEditarPin(id){
+  const cerrar = function(){ const o=document.getElementById('rc-ver-overlay'); if(o) o.remove(); };
+  if(typeof solicitarPINAccion==='function'){
+    solicitarPINAccion(function(){ cerrar(); rcAbrirForm(id); }, '✏️ Editar reporte de cobro', 'Ingresa tu PIN para editar este reporte');
+  } else { cerrar(); rcAbrirForm(id); }
+}
+function rcMarcarCobrado(id){
+  const marcar = function(){
+    const r = _rcLista().find(function(x){ return x.id===id; }); if(!r) return;
+    r.estado = 'Cobrado'; r.fechaCobro = new Date().toISOString().slice(0,10);
+    try{ if(window._fbDB) window._fbDB.ref('monhaco/cobros/'+id).set(r); }catch(e){}
+    const o = document.getElementById('rc-ver-overlay'); if(o) o.remove();
+    renderCobros(_HC_RC_CONT);
+    toast(r.correlativo+' marcado como cobrado ✓');
+  };
+  if(typeof solicitarPINAccion==='function') solicitarPINAccion(marcar, '✔ Marcar como cobrado', 'Ingresa tu PIN para confirmar el cobro');
+  else marcar();
+}
+async function rcCompartir(id){
+  try{
+    const r = _rcLista().find(function(x){ return x.id===id; }); if(!r) return;
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : ((document.querySelector('img[src^="data:image/png;base64,"]')||{}).src||'');
+    const fila = function(k,v){ return v?'<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 10px;border-bottom:1px solid #eeece4"><span style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;flex-shrink:0">'+k+'</span><span style="font-size:13px;font-weight:700;color:#1a1a18;text-align:right">'+_hcEsc(v)+'</span></div>':''; };
+    const bloque = function(k,v){ return v?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">'+k+'</div><div style="font-size:12.5px;font-weight:600;color:#1a1a18;white-space:pre-wrap">'+_hcEsc(v)+'</div></div>':''; };
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px;box-sizing:border-box;';
+    cont.innerHTML = '<div style="background:linear-gradient(135deg,#5c2e17,#8a4800);padding:16px 18px 13px;color:#fff;border-radius:12px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Reporte de cobro</div>'
+      + '<div style="font-size:13px;color:#f3d3ae;margin-top:2px;font-family:monospace;font-weight:700">'+_hcEsc(r.correlativo)+' · '+_hcEsc(r.fechaDano||r.fecha||'')+'</div></div>'
+      + (logo?'<div style="flex-shrink:0;background:#fff;border-radius:6px;padding:3px 6px"><img src="'+logo+'" style="height:38px;display:block"></div>':'')
+      + '</div></div>'
+      + '<div style="margin-top:10px">'
+      + fila('Equipo', r.equipoTxt) + fila('Cliente responsable', r.cliente) + fila('Fecha del daño', r.fechaDano)
+      + (r.ordenCorrelativo?fila('Orden de reparación', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
+      + '</div>'
+      + bloque('⚠️ Daño y causa (mala operación)', r.causa)
+      + bloque('🛠 Trabajos realizados', r.trabajos)
+      + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
+    document.body.appendChild(cont);
+    const imgs = cont.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(res){ img.onload=res; img.onerror=res; setTimeout(res,3000); });
+    }));
+    const canvas = await html2canvas(cont, {scale:2, backgroundColor:'#ffffff'});
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, String(r.correlativo||'Reporte_cobro').replace(/[^\w\-]+/g,'_'));
+    }, 'image/png');
+  }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+}
+
+// ── Lanzadores de los módulos Horómetros / Cobros (pantalla completa) ────────
+function _hcOverlay(titulo, contId, renderFn){
+  const viejo = document.getElementById('hc-overlay'); if(viejo) viejo.remove();
+  const ov = document.createElement('div');
+  ov.id = 'hc-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:var(--bg,#f4f3ee);z-index:700;overflow:auto';
+  ov.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-weight:800;font-size:16px">'+titulo+'</div>'
+    + '<button onclick="document.getElementById(\'hc-overlay\').remove();document.body.style.overflow=\'\'" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer">✕</button></div>'
+    + '<div style="max-width:680px;margin:0 auto;padding:14px" id="'+contId+'"></div>';
+  document.body.appendChild(ov);
+  renderFn();
+}
+function abrirModuloHor(){ _hcOverlay('📟 Toma de horómetros — MONHACO', 'hor-cont', function(){ renderHorometros('hor-cont'); }); }
+function abrirModuloRC(){ _hcOverlay('💰 Reportes de cobro — MONHACO', 'rc-cont', function(){ renderCobros('rc-cont'); }); }
 
 function solicitarPINAccion(callback, titulo, subtitulo){
   pinActual = '';
@@ -6673,6 +7122,8 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
+        if(remote.horometros)     DB.horometros     = remote.horometros;
+        if(remote.cobros)         DB.cobros         = remote.cobros;
         if(remote.logistica){
           DB.logistica = _mergeLogistica(remote.logistica);
           try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
@@ -6769,6 +7220,8 @@ function _iniciarConexionFirebase(esReintento){
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
+      if(d.horometros)     DB.horometros     = d.horometros;
+      if(d.cobros)         DB.cobros         = d.cobros;
       // NOTA: logística no se actualiza aquí — tiene su propio listener en montasa/logistica
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
