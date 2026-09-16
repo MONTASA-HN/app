@@ -2372,7 +2372,9 @@ function renderHorometros(contId){
       if(puedeEditar){
         h += '<input type="number" inputmode="decimal" id="hor-in-'+e.id+'" value="'+(tiene?_hcEsc(l.lectura):'')+'" placeholder="hrs" '
           + 'onchange="horGuardar(\''+e.id+'\',\''+contId+'\')" '
-          + 'style="width:96px;padding:10px 8px;border:1.5px solid '+(tiene?'#18A303':'var(--border2,#ccc)')+';border-radius:8px;font-size:15px;font-weight:700;text-align:right">';
+          + 'style="width:86px;padding:10px 8px;border:1.5px solid '+(tiene?'#18A303':'var(--border2,#ccc)')+';border-radius:8px;font-size:15px;font-weight:700;text-align:right">';
+        h += '<button id="hor-del-'+e.id+'" onclick="horBorrar(\''+e.id+'\')" title="Borrar lectura" '
+          + 'style="display:'+(tiene?'block':'none')+';padding:9px 10px;border:1px solid #f5c6c6;background:#fdeaea;color:#c00;border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">🗑</button>';
       } else {
         h += '<div style="font-size:15px;font-weight:800;color:'+(tiene?'#1a5c1a':'#c9c6bb')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'—')+'</div>';
       }
@@ -2393,7 +2395,11 @@ function horGuardar(eqId, contId){
   const val = inp.value.trim();
   const mes = horMesActual();
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
-  if(val===''){ return; }
+  if(val===''){
+    // Campo vaciado: si ya había lectura este mes, ofrecer borrarla
+    if(_horTiene(_horLecturas(mes)[eqId])) horBorrar(eqId);
+    return;
+  }
   const lectura = parseFloat(val);
   if(isNaN(lectura) || lectura < 0){ toast('Lectura inválida', true); return; }
   const ant = _horAnterior(eq, mes);
@@ -2420,9 +2426,37 @@ function _horPintarFila(eqId){
   const row = document.getElementById('hor-row-'+eqId);
   const inp = document.getElementById('hor-in-'+eqId);
   const cod = document.getElementById('hor-cod-'+eqId);
+  const del = document.getElementById('hor-del-'+eqId);
   if(row){ row.style.borderColor = tiene ? '#bbf7d0' : '#e2e0d8'; row.style.borderLeftColor = tiene ? '#18A303' : '#c9c6bb'; }
   if(inp){ inp.style.borderColor = tiene ? '#18A303' : '#ccc'; }
   if(cod){ cod.innerHTML = _hcEsc(cod.dataset.cod||'') + (tiene ? ' <span style="color:#18A303">✓</span>' : ''); }
+  if(del){ del.style.display = tiene ? 'block' : 'none'; }
+}
+// Borrar por completo la lectura del mes (para corregir, basta digitar el valor nuevo)
+function horBorrar(eqId){
+  const mes = horMesActual();
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  const l = _horLecturas(mes)[eqId];
+  if(!_horTiene(l)){ return; }
+  if(!confirm('🗑 ¿Borrar la lectura de '+(eq.codigo||'este equipo')+' ('+parseFloat(l.lectura).toLocaleString('en-US')+' hrs) de '+horMesLabel(mes)+'?')){
+    _horPintarFila(eqId);
+    const inp = document.getElementById('hor-in-'+eqId);
+    if(inp) inp.value = l.lectura;
+    return;
+  }
+  delete DB.horometros[mes][eqId];
+  try{
+    if(window._fbDB) window._fbDB.ref('monhaco/horometros/'+mes+'/'+eqId).remove();
+  }catch(e){}
+  // Regresar el horómetro de flota a la lectura anterior (o dejarlo vacío)
+  const ant = _horAnterior(eq, mes);
+  eq.horometro = ant!=null ? String(ant) : '';
+  _horActualizarFlota(eqId, eq.horometro);
+  const inp = document.getElementById('hor-in-'+eqId);
+  if(inp) inp.value = '';
+  _horPintarFila(eqId);
+  _horPintarAvance();
+  toast('Lectura de '+_hcEsc(eq.codigo)+' borrada ✓');
 }
 function _horPintarAvance(){
   const mes = _horMesVista || horMesActual();
