@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#173a5c">
-<title>MONHACO · Logística</title>
+<title>MONHACO · Logística — PRUEBA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -42,7 +42,7 @@ input,textarea,select,button{font-family:inherit}
 <div class="app-header">
   <div class="fila">
     <div>
-      <div style="font-size:17px;font-weight:800;letter-spacing:-0.2px">MONHACO · Logística</div>
+      <div style="font-size:17px;font-weight:800;letter-spacing:-0.2px">MONHACO · Logística 🧪 PRUEBA</div>
       <div id="hdr-fecha" style="font-size:12px;opacity:0.8;margin-top:2px"></div>
     </div>
     <div style="background:#fff;border-radius:8px;padding:4px 8px"><img id="hdr-logo" style="height:34px;display:block" alt="MONTASA"></div>
@@ -174,7 +174,7 @@ function _verImagenCompartir(blob){
 // true define si esta app puede capturar lecturas (solo Logística).
 // false en true: modo prueba — NUNCA escribe en las fichas reales.
 const HOR_CAPTURA = true;
-const HOR_PRUEBA = false;
+const HOR_PRUEBA = true;
 const HOR_TIPOS = ['MONTACARGAS','STACKER','ELECTRO TOWER','MULAS','ELEVADORA'];
 const _HC_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 let _horMesVista = null;
@@ -376,7 +376,7 @@ function horGuardar(eqId){
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes][eqId] = reg;
   try{
-    if(window._fbDB) window._fbDB.ref('monhaco/horometros/'+mes+'/'+eqId).set(reg);
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/'+eqId).set(reg);
   }catch(e){}
   _horPintarFila(eqId);
   _horPintarAvance();
@@ -414,7 +414,7 @@ function horBorrar(eqId){
   }
   delete DB.horometros[mes][eqId];
   try{
-    if(window._fbDB) window._fbDB.ref('monhaco/horometros/'+mes+'/'+eqId).remove();
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/'+eqId).remove();
   }catch(e){}
   const inp = document.getElementById('hor-in-'+eqId);
   if(inp) inp.value = '';
@@ -437,7 +437,7 @@ function finalizarTomaHorometros(){
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes]._cierre = { ts: ts };
   try{
-    if(window._fbDB) window._fbDB.ref('monhaco/horometros/'+mes+'/_cierre').set({ ts: ts });
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_cierre').set({ ts: ts });
   }catch(e){}
   // Fichas en memoria
   conLectura.forEach(function(e){ e.horometro = String(lecturas[e.id].lectura); });
@@ -763,7 +763,7 @@ function _rcSigCorrelativo(){
 function _rcPersistir(r){
   // Guardar el reporte SIN las fotos (van en su propio nodo)
   const copia = {}; for(const k in r){ if(k==='fotos') continue; copia[k]=r[k]; }
-  try{ if(window._fbDB) window._fbDB.ref('monhaco/cobros/'+r.id).set(copia); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref('monhaco_prueba/cobros/'+r.id).set(copia); }catch(e){}
 }
 function _rcFotosPend(r){
   return !!(r && r.id && (r.nFotos>0) && !(Array.isArray(r.fotos) && r.fotos.length));
@@ -774,7 +774,7 @@ function _rcHidratar(r, cb){
   if(c && c.length){ r.fotos = c; if(cb) cb(); return; }
   if(!window._fbDB || window._rcFotoCargando[r.id]) return;
   window._rcFotoCargando[r.id] = true;
-  window._fbDB.ref('fotosOrden_monhaco/'+r.id).once('value').then(function(s){
+  window._fbDB.ref('fotosOrden_monhaco_prueba/'+r.id).once('value').then(function(s){
     delete window._rcFotoCargando[r.id];
     const v = s.val();
     const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
@@ -785,10 +785,10 @@ function _rcHidratar(r, cb){
 function _rcPersistirFotos(r){
   if(!r || !r.id || !window._fbDB) return;
   const fotos = (r.fotos||[]).filter(Boolean);
-  window._fbDB.ref('fotosOrden_monhaco/'+r.id).set({fotos:fotos}).then(function(){
+  window._fbDB.ref('fotosOrden_monhaco_prueba/'+r.id).set({fotos:fotos}).then(function(){
     r.nFotos = fotos.length;
     window._rcFotoCache[r.id] = fotos;
-    try{ window._fbDB.ref('monhaco/cobros/'+r.id+'/nFotos').set(fotos.length); }catch(e){}
+    try{ window._fbDB.ref('monhaco_prueba/cobros/'+r.id+'/nFotos').set(fotos.length); }catch(e){}
   });
 }
 function rcFotosAgregar(id, input){
@@ -1109,8 +1109,8 @@ function rcEliminar(id){
     if(DB.cobros && !Array.isArray(DB.cobros)) delete DB.cobros[id];
     try{
       if(window._fbDB){
-        window._fbDB.ref('monhaco/cobros/'+id).remove();
-        window._fbDB.ref('fotosOrden_monhaco/'+id).remove(); // también sus fotos
+        window._fbDB.ref('monhaco_prueba/cobros/'+id).remove();
+        window._fbDB.ref('fotosOrden_monhaco_prueba/'+id).remove(); // también sus fotos
       }
     }catch(e){}
     delete window._rcFotoCache[id];
@@ -1586,13 +1586,13 @@ function lgVista(v){
     if(!_listo){ _listo = true; }
     _refrescar();
   });
-  window._fbDB.ref('monhaco/horometros').on('value', function(s){
+  window._fbDB.ref('monhaco_prueba/horometros').on('value', function(s){
     const nuevo = s.val()||{};
     // No pisar lo local durante el eco corto de Firebase
     DB.horometros = nuevo;
     _refrescar();
   });
-  window._fbDB.ref('monhaco/cobros').on('value', function(s){ DB.cobros = s.val()||{}; _refrescar(); });
+  window._fbDB.ref('monhaco_prueba/cobros').on('value', function(s){ DB.cobros = s.val()||{}; _refrescar(); });
   window._fbDB.ref('monhaco/preventivos').on('value', function(s){ DB.preventivos = _toArr(s.val()); });
   window._fbDB.ref('monhaco/correctivos').on('value', function(s){ DB.correctivos = _toArr(s.val()); });
 })();
