@@ -306,10 +306,11 @@ function _horReporteHTML(mes, editable, buscar){
 
 function renderHorometros(contId){
   const cont = document.getElementById(contId); if(!cont) return;
-  const meses = _horMeses();
-  if(!_horMesVista || !meses.includes(_horMesVista)) _horMesVista = horMesActual();
+  // Si la toma en vista ya no existe, volver al listado
+  if(_horMesVista && !((DB.horometros||{})[_horMesVista])) _horMesVista = null;
+  if(!_horMesVista){ cont.innerHTML = _horHomeHTML(); return; }
+
   const mes = _horMesVista;
-  const idxMes = meses.indexOf(mes);
   const lecturas = _horLecturas(mes);
   const equipos = _horEquipos();
   const buscar = (document.getElementById('hor-buscar') ? document.getElementById('hor-buscar').value : '').toLowerCase().trim();
@@ -317,44 +318,72 @@ function renderHorometros(contId){
   const focoBuscar = document.activeElement && document.activeElement.id==='hor-buscar';
   const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
   const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
-  // Editable: el mes en curso, o una toma creada manualmente con "Nueva toma"
-  const editable = HOR_CAPTURA && (mes === horMesActual() || _horEsManual(mes));
   const cierre = _horCierre(mes);
+  // Una toma FINALIZADA es solo lectura para siempre
+  const editable = HOR_CAPTURA && !cierre;
 
   let h = '';
-  if(HOR_PRUEBA) h += '<div style="background:#7c2d12;color:#fff;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:800;margin-bottom:10px;text-align:center">🧪 MODO PRUEBA — nada de lo que hagas aquí toca los datos reales</div>';
-  h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">';
-  h += '<button onclick="_horMover(-1)" '+(idxMes<=0?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">‹</button>';
-  h += '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">📟 '+_hcEsc(horMesLabel(mes))+(mes===horMesActual()?'':' · histórico')+'</div>';
-  h += '<button onclick="_horMover(1)" '+(idxMes>=meses.length-1?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>';
-  h += '</div>';
-  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-    + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span id="hor-prog-txt">'+tomados+' / '+equipos.length+' equipos</span></div>'
-    + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div id="hor-prog-bar" style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+  if(HOR_PRUEBA) h += '<div style="background:#7c2d12;color:#fff;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:800;margin-bottom:10px;text-align:center">\ud83e\uddea MODO PRUEBA \u2014 nada de lo que hagas aqu\u00ed toca los datos reales</div>';
+  h += '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'
+    + '<button onclick="_horIrMes(null)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:13px;color:#1f3864">\u2190 Tomas</button>'
+    + '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">\ud83d\udcdf '+_hcEsc(horMesLabel(mes))+'</div>'
+    + '<div style="width:64px"></div>'
     + '</div>';
   if(cierre){
-    h += '<div style="background:#e6f6e6;border:1px solid #bbf7d0;color:#1a5c1a;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:700;margin-bottom:10px">✅ Toma finalizada el '+_horFechaTs(cierre.ts)+' — los horómetros quedaron en la ficha de cada equipo'+(editable?'. Si corriges una lectura, vuelve a finalizar.':'')+'</div>';
+    h += '<div style="background:#e6f6e6;border:1px solid #bbf7d0;color:#1a5c1a;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:700;margin-bottom:10px">\u2705 Toma finalizada el '+_horFechaTs(cierre.ts)+' \u2014 solo lectura. Los hor\u00f3metros quedaron en la ficha de cada equipo.</div>';
+  } else {
+    h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span id="hor-prog-txt">'+tomados+' / '+equipos.length+' equipos</span></div>'
+      + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div id="hor-prog-bar" style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+      + '</div>';
+    if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">\ud83d\udc41 Toma en curso \u2014 solo consulta. Las lecturas se capturan desde la app de Log\u00edstica MONHACO.</div>';
   }
   h += '<div style="display:flex;gap:8px;margin-bottom:12px">'
-    + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📤 Compartir Excel</button>'
-    + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📥 Descargar Excel</button>'
+    + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce4 Compartir Excel</button>'
+    + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce5 Descargar Excel</button>'
     + '</div>';
-  if(HOR_CAPTURA) h += '<button onclick="horNuevaTomaAbrir()" style="width:100%;padding:11px;background:var(--surface,#fff);color:#1f3864;border:1.5px dashed #1f3864;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px;margin-bottom:12px">➕ Nueva toma de horómetros</button>';
-  if(!editable && HOR_CAPTURA) h += '<div style="font-size:12px;color:#b45309;margin-bottom:10px">🔒 Mes histórico — solo consulta. Para capturar en otro mes usa "Nueva toma de horómetros".</div>';
-  if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">👁 Solo consulta — las lecturas se capturan desde la app de Logística MONHACO.</div>';
   h += '<input id="hor-buscar" placeholder="Buscar equipo o planta..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
 
   h += _horReporteHTML(mes, editable, buscar);
 
   if(editable){
-    h += '<button onclick="finalizarTomaHorometros()" style="width:100%;padding:14px;background:#18A303;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;margin:4px 0 14px">✅ Finalizar toma de horómetros</button>';
+    h += '<button onclick="finalizarTomaHorometros()" style="width:100%;padding:14px;background:#18A303;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;margin:4px 0 14px">\u2705 Finalizar toma de hor\u00f3metros</button>';
   }
-  h += _horMiniaturasHTML(mes);
   cont.innerHTML = h;
   if(focoBuscar){
     const b = document.getElementById('hor-buscar');
     if(b){ b.focus(); try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){} }
   }
+}
+
+// ── INICIO: solo el listado — tomas en curso + miniaturas de finalizadas ─────
+function _horHomeHTML(){
+  const equipos = _horEquipos();
+  const claves = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m); });
+  const abiertas = claves.filter(function(m){ return !_horCierre(m); }).sort().reverse();
+  let h = '';
+  if(HOR_PRUEBA) h += '<div style="background:#7c2d12;color:#fff;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:800;margin-bottom:10px;text-align:center">\ud83e\uddea MODO PRUEBA \u2014 nada de lo que hagas aqu\u00ed toca los datos reales</div>';
+  h += '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">\ud83d\udcdf Toma de hor\u00f3metros</div>';
+  if(HOR_CAPTURA) h += '<button onclick="horNuevaTomaAbrir()" style="width:100%;padding:13px;background:#1f3864;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14.5px;margin-bottom:14px">\u2795 Nueva toma de hor\u00f3metros</button>';
+  if(abiertas.length){
+    h += '<div style="font-size:12.5px;font-weight:800;color:#b45309;margin:2px 0 8px">\ud83d\udfe0 Tomas en curso</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+    abiertas.forEach(function(m){
+      const lecturas = _horLecturas(m);
+      const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
+      h += '<div onclick="_horIrMes(\''+m+'\')" style="cursor:pointer;background:var(--surface,#fff);border:1.5px solid #f3c98a;border-left:4px solid #E8811A;border-radius:10px;padding:10px 12px;min-width:0">'
+        + '<div style="font-weight:800;color:#1f3864;font-size:13px">\ud83d\udcdf '+_hcEsc(horMesLabel(m))+'</div>'
+        + '<div style="font-size:11px;color:#b45309;font-weight:700;margin-top:3px">\ud83d\udfe0 En curso \u2014 '+tomados+' / '+equipos.length+' equipos</div>'
+        + '<div style="font-size:11px;color:var(--text3,#888);margin-top:2px">'+(HOR_CAPTURA?'Toca para continuar la toma':'Toca para consultar')+'</div>'
+        + '</div>';
+    });
+    h += '</div>';
+  }
+  h += _horMiniaturasHTML(null);
+  if(!abiertas.length && !claves.filter(function(m){ return _horCierre(m); }).length){
+    h += '<div style="text-align:center;color:var(--text3,#888);font-size:13px;padding:24px 0">'+(HOR_CAPTURA?'No hay tomas todav\u00eda. Crea una con \u201cNueva toma de hor\u00f3metros\u201d.':'No hay tomas de hor\u00f3metros todav\u00eda.')+'</div>';
+  }
+  return h;
 }
 
 // ── Guardado puntual: NO se re-dibuja la tabla (el re-dibujo perdía el foco y
@@ -365,6 +394,7 @@ function horGuardar(eqId){
   const val = inp.value.trim();
   const mes = _horMesVista || horMesActual();
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  if(_horCierre(mes)){ toast('Esta toma ya fue finalizada \u2014 solo lectura', true); return; }
   if(val===''){
     // Campo vaciado: si ya había lectura este mes, ofrecer borrarla
     if(_horTiene(_horLecturas(mes)[eqId])) horBorrar(eqId);
@@ -409,6 +439,7 @@ function _horPintarAvance(){
 function horBorrar(eqId){
   const mes = _horMesVista || horMesActual();
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  if(_horCierre(mes)){ toast('Esta toma ya fue finalizada \u2014 solo lectura', true); return; }
   const l = _horLecturas(mes)[eqId];
   if(!_horTiene(l)){ return; }
   if(!confirm('🗑 ¿Borrar la lectura de '+(eq.codigo||'este equipo')+' ('+parseFloat(l.lectura).toLocaleString('en-US')+' hrs) de '+horMesLabel(mes)+'?')){
@@ -434,6 +465,7 @@ function finalizarTomaHorometros(){
   const mes = _horMesVista || horMesActual();
   const lecturas = _horLecturas(mes);
   const equipos = _horEquipos();
+  if(_horCierre(mes)){ toast('Esta toma ya fue finalizada', true); return; }
   const conLectura = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); });
   if(!conLectura.length){ toast('No hay lecturas para finalizar', true); return; }
   const pend = equipos.length - conLectura.length;
@@ -446,6 +478,7 @@ function finalizarTomaHorometros(){
   }catch(e){}
   // Fichas en memoria
   conLectura.forEach(function(e){ e.horometro = String(lecturas[e.id].lectura); });
+  _horMesVista = null; // vuelve al listado: la toma queda como miniatura (solo lectura)
   if(HOR_PRUEBA){
     toast('✅ (PRUEBA) Toma finalizada — las fichas reales NO se tocaron');
     renderHorometros(_HC_HOR_CONT);
@@ -500,7 +533,7 @@ function horNuevaTomaCrear(){
   const ya = (DB.horometros||{})[mes];
   if(ya && Object.keys(ya).length){
     _horMesVista = mes;
-    toast('La toma de '+horMesLabel(mes)+' ya existe \u2014 mostr\u00e1ndola');
+    toast(_horCierre(mes) ? ('La toma de '+horMesLabel(mes)+' ya fue finalizada \u2014 solo lectura') : ('La toma de '+horMesLabel(mes)+' ya existe \u2014 mostr\u00e1ndola'));
     renderHorometros(_HC_HOR_CONT);
     return;
   }
