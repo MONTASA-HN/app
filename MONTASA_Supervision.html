@@ -3399,11 +3399,12 @@ function renderActividadReciente(){
 }
 
 function renderDashboard(){
-  const total = DB.equipos.length;
-  const disp  = DB.equipos.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
-  const renta = DB.equipos.filter(e=>e.estado==='EN RENTA').length;
-  const mant  = DB.equipos.filter(e=>e.estado==='EN MANTENIMIENTO').length;
-  const mal   = DB.equipos.filter(e=>e.estado==='MAL ESTADO').length;
+  const _flotaD = (DB.equipos||[]).filter(e=>e && !e.esGenerico && !e.esVehiculo && !e.esEquipoCliente);
+  const total = _flotaD.length;
+  const disp  = _flotaD.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length;
+  const renta = _flotaD.filter(e=>e.estado==='EN RENTA').length;
+  const mant  = _flotaD.filter(e=>e.estado==='EN MANTENIMIENTO').length;
+  const mal   = _flotaD.filter(e=>e.estado==='MAL ESTADO').length;
 
   // Flota
   document.getElementById('st-equipos-total').textContent = total;
@@ -4490,11 +4491,11 @@ function exportarExcel(){
     XLSX.utils.book_append_sheet(wb,mkSheet([
       ['Indicador','Valor'],
       ['Fecha exportación',hoy],
-      ['Total equipos',DB.equipos.length],
-      ['Disponibles',DB.equipos.filter(e=>(e.estado||'DISPONIBLE')==='DISPONIBLE').length],
-      ['En renta',DB.equipos.filter(e=>e.estado==='EN RENTA').length],
-      ['En mantenimiento',DB.equipos.filter(e=>e.estado==='EN MANTENIMIENTO').length],
-      ['Inactivos',DB.equipos.filter(e=>e.estado==='MAL ESTADO').length],
+      ['Total equipos',(DB.equipos||[]).filter(e=>e&&!e.esGenerico&&!e.esVehiculo&&!e.esEquipoCliente).length],
+      ['Disponibles',(DB.equipos||[]).filter(e=>e&&!e.esGenerico&&!e.esVehiculo&&!e.esEquipoCliente&&(e.estado||'DISPONIBLE')==='DISPONIBLE').length],
+      ['En renta',(DB.equipos||[]).filter(e=>e&&!e.esGenerico&&!e.esVehiculo&&!e.esEquipoCliente&&e.estado==='EN RENTA').length],
+      ['En mantenimiento',(DB.equipos||[]).filter(e=>e&&!e.esGenerico&&!e.esVehiculo&&!e.esEquipoCliente&&e.estado==='EN MANTENIMIENTO').length],
+      ['Inactivos',(DB.equipos||[]).filter(e=>e&&!e.esGenerico&&!e.esVehiculo&&!e.esEquipoCliente&&e.estado==='MAL ESTADO').length],
       ['Total preventivos',DB.preventivos.length],
       ['Total correctivos',DB.correctivos.length],
       ['Órdenes cerradas',(DB.ordenesCerradas||[]).length],
