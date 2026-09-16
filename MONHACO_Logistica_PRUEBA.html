@@ -214,6 +214,8 @@ function _horFechaTs(ts){
   return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
 }
 function _horTiene(l){ return !!(l && l.lectura!=null && l.lectura!==''); }
+function _horEsManual(mes){ return !!((((DB.horometros||{})[mes])||{})._creada); }
+function _horIrMes(mes){ _horMesVista = mes; renderHorometros(_HC_HOR_CONT); }
 function _horMover(n){
   const meses = _horMeses();
   const i = meses.indexOf(_horMesVista||horMesActual()) + n;
@@ -315,7 +317,8 @@ function renderHorometros(contId){
   const focoBuscar = document.activeElement && document.activeElement.id==='hor-buscar';
   const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
   const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
-  const editable = HOR_CAPTURA && mes === horMesActual();
+  // Editable: el mes en curso, o una toma creada manualmente con "Nueva toma"
+  const editable = HOR_CAPTURA && (mes === horMesActual() || _horEsManual(mes));
   const cierre = _horCierre(mes);
 
   let h = '';
@@ -336,7 +339,8 @@ function renderHorometros(contId){
     + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📤 Compartir Excel</button>'
     + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📥 Descargar Excel</button>'
     + '</div>';
-  if(!editable && HOR_CAPTURA) h += '<div style="font-size:12px;color:#b45309;margin-bottom:10px">🔒 Mes histórico — solo consulta. Las lecturas se capturan en el mes en curso.</div>';
+  if(HOR_CAPTURA) h += '<button onclick="horNuevaTomaAbrir()" style="width:100%;padding:11px;background:var(--surface,#fff);color:#1f3864;border:1.5px dashed #1f3864;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px;margin-bottom:12px">➕ Nueva toma de horómetros</button>';
+  if(!editable && HOR_CAPTURA) h += '<div style="font-size:12px;color:#b45309;margin-bottom:10px">🔒 Mes histórico — solo consulta. Para capturar en otro mes usa "Nueva toma de horómetros".</div>';
   if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">👁 Solo consulta — las lecturas se capturan desde la app de Logística MONHACO.</div>';
   h += '<input id="hor-buscar" placeholder="Buscar equipo o planta..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
 
@@ -345,6 +349,7 @@ function renderHorometros(contId){
   if(editable){
     h += '<button onclick="finalizarTomaHorometros()" style="width:100%;padding:14px;background:#18A303;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;margin:4px 0 14px">✅ Finalizar toma de horómetros</button>';
   }
+  h += _horMiniaturasHTML(mes);
   cont.innerHTML = h;
   if(focoBuscar){
     const b = document.getElementById('hor-buscar');
@@ -358,7 +363,7 @@ function renderHorometros(contId){
 function horGuardar(eqId){
   const inp = document.getElementById('hor-in-'+eqId); if(!inp) return;
   const val = inp.value.trim();
-  const mes = horMesActual();
+  const mes = _horMesVista || horMesActual();
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
   if(val===''){
     // Campo vaciado: si ya había lectura este mes, ofrecer borrarla
@@ -383,7 +388,7 @@ function horGuardar(eqId){
   toast(_hcEsc(eq.codigo)+': '+lectura.toLocaleString('en-US')+' hrs ✓ (pendiente de finalizar)');
 }
 function _horPintarFila(eqId){
-  const l = _horLecturas(horMesActual())[eqId];
+  const l = _horLecturas(_horMesVista || horMesActual())[eqId];
   const tiene = _horTiene(l);
   const inp = document.getElementById('hor-in-'+eqId);
   const del = document.getElementById('hor-del-'+eqId);
@@ -402,7 +407,7 @@ function _horPintarAvance(){
 // Borrar por completo la lectura del mes (para corregir, basta digitar el valor nuevo).
 // No toca la ficha del equipo: la ficha solo cambia al finalizar la toma.
 function horBorrar(eqId){
-  const mes = horMesActual();
+  const mes = _horMesVista || horMesActual();
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
   const l = _horLecturas(mes)[eqId];
   if(!_horTiene(l)){ return; }
@@ -426,7 +431,7 @@ function horBorrar(eqId){
 // ── FINALIZAR LA TOMA: fija la fecha HASTA y actualiza la ficha (horómetro)
 //    de cada equipo con lectura. Es el ÚNICO punto que toca las fichas. ──────
 function finalizarTomaHorometros(){
-  const mes = horMesActual();
+  const mes = _horMesVista || horMesActual();
   const lecturas = _horLecturas(mes);
   const equipos = _horEquipos();
   const conLectura = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); });
@@ -468,6 +473,65 @@ function finalizarTomaHorometros(){
     }
   }catch(e){}
   renderHorometros(_HC_HOR_CONT);
+}
+
+
+// ── NUEVA TOMA (mes manual) + MINIATURAS de tomas finalizadas ────────────────
+function horNuevaTomaAbrir(){
+  if(document.getElementById('hor-nueva-ov')) return;
+  const ov = document.createElement('div');
+  ov.id = 'hor-nueva-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;max-width:340px;width:100%;box-sizing:border-box">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:4px">\u2795 Nueva toma de hor\u00f3metros</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:12px">Elige el mes de la toma</div>'
+    + '<input type="month" id="hor-nuevo-mes" value="'+horMesActual()+'" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;margin-bottom:14px;background:#fff">'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="document.getElementById(\'hor-nueva-ov\').remove()" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '<button onclick="horNuevaTomaCrear()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">Crear toma</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+function horNuevaTomaCrear(){
+  const inp = document.getElementById('hor-nuevo-mes');
+  const mes = ((inp && inp.value) || '').trim();
+  if(!/^\d{4}-\d{2}$/.test(mes)){ toast('Elige un mes v\u00e1lido', true); return; }
+  const ov = document.getElementById('hor-nueva-ov'); if(ov) ov.remove();
+  const ya = (DB.horometros||{})[mes];
+  if(ya && Object.keys(ya).length){
+    _horMesVista = mes;
+    toast('La toma de '+horMesLabel(mes)+' ya existe \u2014 mostr\u00e1ndola');
+    renderHorometros(_HC_HOR_CONT);
+    return;
+  }
+  const marca = { ts: Date.now() };
+  if(!DB.horometros) DB.horometros = {};
+  DB.horometros[mes] = { _creada: marca };
+  try{
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_creada').set(marca);
+  }catch(e){}
+  _horMesVista = mes;
+  renderHorometros(_HC_HOR_CONT);
+  toast('Toma de '+horMesLabel(mes)+' creada \u2713 \u2014 lista para capturar');
+}
+function _horMiniaturasHTML(mesVista){
+  // Cada toma finalizada queda guardada como miniatura; al tocarla se abre su reporte
+  const meses = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m) && _horCierre(m); }).sort().reverse();
+  if(!meses.length) return '';
+  const equipos = _horEquipos();
+  let cards = '';
+  meses.forEach(function(m){
+    const lecturas = _horLecturas(m);
+    const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
+    const activa = m === mesVista;
+    cards += '<div onclick="_horIrMes(\''+m+'\')" style="cursor:pointer;background:'+(activa?'#eef6ee':'var(--surface,#fff)')+';border:1.5px solid '+(activa?'#18A303':'#bbf7d0')+';border-radius:10px;padding:10px 12px;min-width:0">'
+      + '<div style="font-weight:800;color:#1f3864;font-size:13px">\ud83d\udcdf '+_hcEsc(horMesLabel(m))+'</div>'
+      + '<div style="font-size:11px;color:#1a5c1a;font-weight:700;margin-top:3px">\u2705 Finalizada el '+_horFechaTs(_horCierre(m).ts)+'</div>'
+      + '<div style="font-size:11px;color:var(--text3,#888);margin-top:2px">'+tomados+' equipos con lectura</div>'
+      + '</div>';
+  });
+  return '<div style="font-size:12.5px;font-weight:800;color:#1f3864;margin:6px 0 8px">\ud83d\udcda Tomas finalizadas</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+cards+'</div>';
 }
 
 // ── COMPARTIR / DESCARGAR COMO EXCEL (formato oficial: una hoja por planta) ──
