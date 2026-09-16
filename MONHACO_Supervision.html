@@ -1777,6 +1777,7 @@ const HOR_CAPTURA = false;
 const HOR_TIPOS = ['MONTACARGAS','STACKER','ELECTRO TOWER','MULAS','ELEVADORA'];
 const _HC_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 let _horMesVista = null;
+let _horVistaModo = null; // 'toma' (captura por equipo) | 'reporte' (formato control de horometraje)
 
 function _hcEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function horMesActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
@@ -1795,41 +1796,74 @@ function _horEquipos(){
   }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
 }
 function _horLecturas(mes){ return ((DB.horometros||{})[mes])||{}; }
-function _horAnterior(eq, mes){
-  // Última lectura registrada en un mes ANTERIOR; si no hay, el horómetro de flota.
+function _horAnteriorReg(eq, mes){
+  // Última lectura registrada en un mes ANTERIOR (con su fecha); si no hay, el horómetro de flota.
   const meses = Object.keys(DB.horometros||{}).filter(function(m){ return m < mes; }).sort().reverse();
   for(var i=0;i<meses.length;i++){
     const l = (DB.horometros[meses[i]]||{})[eq.id];
-    if(l && l.lectura!=null && l.lectura!=='') return parseFloat(l.lectura);
+    if(l && l.lectura!=null && l.lectura!=='') return { lectura: parseFloat(l.lectura), ts: l.ts||null };
   }
   const h = parseFloat(eq.horometro);
-  return isNaN(h) ? null : h;
+  return isNaN(h) ? null : { lectura: h, ts: null };
+}
+function _horAnterior(eq, mes){ const r = _horAnteriorReg(eq, mes); return r ? r.lectura : null; }
+function _horFechaTs(ts){
+  if(!ts) return '—';
+  const d = new Date(ts); if(isNaN(d)) return '—';
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+function _horTiene(l){ return !!(l && l.lectura!=null && l.lectura!==''); }
+function _horModo(m){ _horVistaModo = m; renderHorometros(_HC_HOR_CONT); }
+function _horMover(n){
+  const meses = _horMeses();
+  const i = meses.indexOf(_horMesVista||horMesActual()) + n;
+  if(i<0 || i>=meses.length) return;
+  _horMesVista = meses[i];
+  renderHorometros(_HC_HOR_CONT);
 }
 
 function renderHorometros(contId){
   const cont = document.getElementById(contId); if(!cont) return;
   const meses = _horMeses();
   if(!_horMesVista || !meses.includes(_horMesVista)) _horMesVista = horMesActual();
+  if(!_horVistaModo) _horVistaModo = HOR_CAPTURA ? 'toma' : 'reporte';
   const mes = _horMesVista;
   const idxMes = meses.indexOf(mes);
   const lecturas = _horLecturas(mes);
   const equipos = _horEquipos();
   const buscar = (document.getElementById('hor-buscar') ? document.getElementById('hor-buscar').value : '').toLowerCase().trim();
-  const tomados = equipos.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+  // Conservar el foco del buscador (el re-dibujo lo perdía y no dejaba escribir)
+  const focoBuscar = document.activeElement && document.activeElement.id==='hor-buscar';
+  const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
   const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
   const puedeEditar = HOR_CAPTURA && mes === horMesActual();
+  const modo = _horVistaModo;
 
   let h = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">';
   h += '<button onclick="_horMover(-1)" '+(idxMes<=0?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">‹</button>';
   h += '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">📟 '+_hcEsc(horMesLabel(mes))+(mes===horMesActual()?'':' · histórico')+'</div>';
   h += '<button onclick="_horMover(1)" '+(idxMes>=meses.length-1?'disabled style="opacity:0.3;':'style="')+'padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>';
   h += '</div>';
-  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-    + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span>'+tomados+' / '+equipos.length+' equipos</span></div>'
-    + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+  // Selector de vista: toma (captura) / reporte (formato control de horometraje)
+  const segOn = 'flex:1;padding:10px;border-radius:8px;border:1px solid #1f3864;background:#1f3864;color:#fff;font-weight:800;font-size:13px;cursor:pointer';
+  const segOff = 'flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2,#ddd);background:#fff;color:#55534b;font-weight:700;font-size:13px;cursor:pointer';
+  h += '<div style="display:flex;gap:8px;margin-bottom:10px">'
+    + '<button onclick="_horModo(\'toma\')" style="'+(modo==='toma'?segOn:segOff)+'">📟 Toma</button>'
+    + '<button onclick="_horModo(\'reporte\')" style="'+(modo==='reporte'?segOn:segOff)+'">📋 Reporte</button>'
     + '</div>';
-  h += '<input id="hor-buscar" placeholder="Buscar equipo..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
+  h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span id="hor-prog-txt">'+tomados+' / '+equipos.length+' equipos</span></div>'
+    + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div id="hor-prog-bar" style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+    + '</div>';
   h += '<button onclick="compartirHorometros(\''+mes+'\')" style="width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px;margin-bottom:12px">📤 Compartir reporte del mes</button>';
+
+  if(modo === 'reporte'){
+    h += _horReporteHTML(mes, false);
+    cont.innerHTML = h;
+    return;
+  }
+
+  h += '<input id="hor-buscar" placeholder="Buscar equipo..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
   if(!puedeEditar && HOR_CAPTURA) h += '<div style="font-size:12px;color:#b45309;margin-bottom:10px">🔒 Mes histórico — solo consulta. Las lecturas se capturan en el mes en curso.</div>';
   if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">👁 Solo consulta — las lecturas se capturan desde la app de Logística MONHACO.</div>';
 
@@ -1837,17 +1871,17 @@ function renderHorometros(contId){
     let grupo = equipos.filter(function(e){ return String(e.tipo||'').toUpperCase().trim()===tipo; });
     if(buscar) grupo = grupo.filter(function(e){ return String(e.codigo||'').toLowerCase().includes(buscar) || String(e.marca||'').toLowerCase().includes(buscar); });
     if(!grupo.length) return;
-    const gTom = grupo.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+    const gTom = grupo.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
     h += '<div style="font-size:12px;font-weight:800;color:#1f3864;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">'+_hcEsc(tipo)+' <span style="color:var(--text3,#888);font-weight:600">('+gTom+'/'+grupo.length+')</span></div>';
     grupo.forEach(function(e){
       const l = lecturas[e.id];
-      const tiene = l && l.lectura!=null && l.lectura!=='';
+      const tiene = _horTiene(l);
       const ant = _horAnterior(e, mes);
-      h += '<div style="display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid '+(tiene?'#bbf7d0':'var(--border2,#e2e0d8)')+';border-left:3px solid '+(tiene?'#18A303':'#c9c6bb')+';border-radius:10px;padding:9px 12px;margin-bottom:6px">'
-        + '<div style="flex:1;min-width:0"><div style="font-weight:800;color:#1f3864;font-size:14px">'+_hcEsc(e.codigo)+(tiene?' <span style="color:#18A303">✓</span>':'')+'</div>'
+      h += '<div id="hor-row-'+e.id+'" style="display:flex;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid '+(tiene?'#bbf7d0':'var(--border2,#e2e0d8)')+';border-left:3px solid '+(tiene?'#18A303':'#c9c6bb')+';border-radius:10px;padding:9px 12px;margin-bottom:6px">'
+        + '<div style="flex:1;min-width:0"><div id="hor-cod-'+e.id+'" data-cod="'+_hcEsc(e.codigo)+'" style="font-weight:800;color:#1f3864;font-size:14px">'+_hcEsc(e.codigo)+(tiene?' <span style="color:#18A303">✓</span>':'')+'</div>'
         + '<div style="font-size:11px;color:var(--text3,#888)">'+_hcEsc(e.marca||'')+' · anterior: '+(ant!=null?ant.toLocaleString('en-US'):'—')+'</div></div>';
       if(puedeEditar){
-        h += '<input type="number" inputmode="numeric" id="hor-in-'+e.id+'" value="'+(tiene?_hcEsc(l.lectura):'')+'" placeholder="hrs" '
+        h += '<input type="number" inputmode="decimal" id="hor-in-'+e.id+'" value="'+(tiene?_hcEsc(l.lectura):'')+'" placeholder="hrs" '
           + 'onchange="horGuardar(\''+e.id+'\',\''+contId+'\')" '
           + 'style="width:96px;padding:10px 8px;border:1.5px solid '+(tiene?'#18A303':'var(--border2,#ccc)')+';border-radius:8px;font-size:15px;font-weight:700;text-align:right">';
       } else {
@@ -1857,14 +1891,14 @@ function renderHorometros(contId){
     });
   });
   cont.innerHTML = h;
+  if(focoBuscar){
+    const b = document.getElementById('hor-buscar');
+    if(b){ b.focus(); try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){} }
+  }
 }
-function _horMover(n){
-  const meses = _horMeses();
-  const i = meses.indexOf(_horMesVista||horMesActual()) + n;
-  if(i<0 || i>=meses.length) return;
-  _horMesVista = meses[i];
-  renderHorometros(_HC_HOR_CONT);
-}
+
+// ── Guardado puntual: NO se re-dibuja la lista (el re-dibujo perdía el foco y
+//    no dejaba seguir digitando); solo se pinta la fila y el avance. ─────────
 function horGuardar(eqId, contId){
   const inp = document.getElementById('hor-in-'+eqId); if(!inp) return;
   const val = inp.value.trim();
@@ -1887,7 +1921,28 @@ function horGuardar(eqId, contId){
   // Actualizar el horómetro del equipo en la flota (búsqueda por id en el servidor)
   eq.horometro = String(lectura);
   _horActualizarFlota(eqId, lectura);
-  renderHorometros(contId||_HC_HOR_CONT);
+  _horPintarFila(eqId);
+  _horPintarAvance();
+  toast(_hcEsc(eq.codigo)+': '+lectura.toLocaleString('en-US')+' hrs ✓');
+}
+function _horPintarFila(eqId){
+  const l = _horLecturas(horMesActual())[eqId];
+  const tiene = _horTiene(l);
+  const row = document.getElementById('hor-row-'+eqId);
+  const inp = document.getElementById('hor-in-'+eqId);
+  const cod = document.getElementById('hor-cod-'+eqId);
+  if(row){ row.style.borderColor = tiene ? '#bbf7d0' : '#e2e0d8'; row.style.borderLeftColor = tiene ? '#18A303' : '#c9c6bb'; }
+  if(inp){ inp.style.borderColor = tiene ? '#18A303' : '#ccc'; }
+  if(cod){ cod.innerHTML = _hcEsc(cod.dataset.cod||'') + (tiene ? ' <span style="color:#18A303">✓</span>' : ''); }
+}
+function _horPintarAvance(){
+  const mes = _horMesVista || horMesActual();
+  const lecturas = _horLecturas(mes);
+  const equipos = _horEquipos();
+  const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
+  const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
+  const tx = document.getElementById('hor-prog-txt'); if(tx) tx.textContent = tomados+' / '+equipos.length+' equipos';
+  const br = document.getElementById('hor-prog-bar'); if(br){ br.style.width = pct+'%'; br.style.background = pct>=100?'#18A303':'#2d6a9f'; }
 }
 function _horActualizarFlota(eqId, lectura){
   try{
@@ -1902,42 +1957,88 @@ function _horActualizarFlota(eqId, lectura){
     }).catch(function(){});
   }catch(e){}
 }
+
+// ── REPORTE «CONTROL DE HOROMETRAJE» (formato oficial por planta) ────────────
+function _horPlantas(equipos){
+  const map = {};
+  equipos.forEach(function(e){
+    const p = String(e.ubicacion||'SIN PLANTA').toUpperCase().trim() || 'SIN PLANTA';
+    (map[p] = map[p] || []).push(e);
+  });
+  return map;
+}
+function _horTablaPlantaHTML(planta, grupo, mes, lecturas){
+  const th = 'padding:7px 8px;border:1px solid #8ea4c2;background:#dce6f1;color:#1f3864;font-weight:800;font-size:10.5px;text-align:center;white-space:nowrap';
+  const td = 'padding:6px 8px;border:1px solid #cfccc2;font-size:12px;color:#1a1a18;white-space:nowrap';
+  let filas = '';
+  grupo.forEach(function(e){
+    const l = lecturas[e.id];
+    const tiene = _horTiene(l);
+    const antR = _horAnteriorReg(e, mes);
+    filas += '<tr>'
+      + '<td style="'+td+';font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)+'</td>'
+      + '<td style="'+td+'">'+_hcEsc(e.ubicacion||'—')+'</td>'
+      + '<td style="'+td+';text-align:center">'+_hcEsc(e.capacidad||'—')+'</td>'
+      + '<td style="'+td+';text-align:center">'+_hcEsc(horMesLabel(mes))+'</td>'
+      + '<td style="'+td+';text-align:center">'+(antR&&antR.ts?_horFechaTs(antR.ts):'—')+'</td>'
+      + '<td style="'+td+';text-align:center">'+(tiene?_horFechaTs(l.ts):'—')+'</td>'
+      + '<td style="'+td+';text-align:right">'+(antR?antR.lectura.toLocaleString('en-US'):'—')+'</td>'
+      + '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</td>'
+      + '</tr>';
+  });
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:0 0 6px">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:13px;text-transform:uppercase;letter-spacing:0.3px">CONTROL DE HOROMETRAJE '+_hcEsc(planta)+'</div>'
+    + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_horFechaTs(Date.now())+'</div></div>'
+    + '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:660px;background:#fff">'
+    + '<tr>'
+    + '<th rowspan="2" style="'+th+'">EQUIPO</th>'
+    + '<th rowspan="2" style="'+th+'">PLANTA</th>'
+    + '<th rowspan="2" style="'+th+'">CAPACIDAD</th>'
+    + '<th rowspan="2" style="'+th+'">MES</th>'
+    + '<th colspan="2" style="'+th+'">FECHA</th>'
+    + '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>INICIO</th>'
+    + '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>FINAL</th>'
+    + '</tr>'
+    + '<tr><th style="'+th+'">DESDE</th><th style="'+th+'">HASTA</th></tr>'
+    + filas
+    + '</table></div>';
+}
+function _horReporteHTML(mes, paraImagen){
+  const equipos = _horEquipos();
+  const lecturas = _horLecturas(mes);
+  const plantas = _horPlantas(equipos);
+  const nombres = Object.keys(plantas).sort();
+  if(!nombres.length) return '<div style="text-align:center;color:var(--text3,#888);padding:20px 0;font-size:13px">Sin equipos para el reporte</div>';
+  let h = '';
+  nombres.forEach(function(p){
+    if(paraImagen){
+      h += '<div style="margin-top:14px">'+_horTablaPlantaHTML(p, plantas[p], mes, lecturas)+'</div>';
+    } else {
+      h += '<div style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-radius:10px;padding:12px;margin-bottom:12px">'
+        + _horTablaPlantaHTML(p, plantas[p], mes, lecturas)
+        + '</div>';
+    }
+  });
+  return h;
+}
+
 async function compartirHorometros(mes){
   try{
     toast('Generando reporte…');
     await _cargarHtml2Canvas();
     const equipos = _horEquipos();
     const lecturas = _horLecturas(mes);
-    const tomados = equipos.filter(function(e){ return lecturas[e.id] && lecturas[e.id].lectura!=null && lecturas[e.id].lectura!==''; }).length;
+    const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
     const logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : ((document.querySelector('img[src^="data:image/png;base64,"]')||{}).src||'');
-    let filas = '';
-    HOR_TIPOS.forEach(function(tipo){
-      const grupo = equipos.filter(function(e){ return String(e.tipo||'').toUpperCase().trim()===tipo; });
-      if(!grupo.length) return;
-      filas += '<div style="background:#eef2f8;color:#1f3864;font-weight:800;font-size:11px;letter-spacing:0.5px;padding:6px 10px;margin-top:8px;border-radius:6px">'+_hcEsc(tipo)+'</div>';
-      filas += '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 0.9fr;gap:0;font-size:10.5px;color:#9c9a90;font-weight:700;padding:5px 10px 2px"><span>EQUIPO</span><span style="text-align:right">ANTERIOR</span><span style="text-align:right">ACTUAL</span><span style="text-align:right">HORAS</span></div>';
-      grupo.forEach(function(e){
-        const l = lecturas[e.id];
-        const tiene = l && l.lectura!=null && l.lectura!=='';
-        const ant = _horAnterior(e, mes);
-        const horas = (tiene && ant!=null && parseFloat(l.lectura)>=ant) ? (parseFloat(l.lectura)-ant) : null;
-        filas += '<div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 0.9fr;gap:0;padding:5px 10px;border-bottom:1px solid #eeece4;font-size:12px">'
-          + '<span style="font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)+'</span>'
-          + '<span style="text-align:right;color:#6b6960">'+(ant!=null?ant.toLocaleString('en-US'):'—')+'</span>'
-          + '<span style="text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</span>'
-          + '<span style="text-align:right;font-weight:700;color:#1a5c1a">'+(horas!=null?('+'+horas.toLocaleString('en-US')):'—')+'</span>'
-          + '</div>';
-      });
-    });
     const cont = document.createElement('div');
-    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:460px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px;box-sizing:border-box;';
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:840px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:16px;box-sizing:border-box;';
     cont.innerHTML = '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
-      + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Toma de horómetros</div>'
+      + '<div style="min-width:0"><div style="font-size:18px;font-weight:700">Control de horometraje</div>'
       + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+_hcEsc(horMesLabel(mes))+' · '+tomados+'/'+equipos.length+' equipos · MONHACO</div></div>'
-      + (logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+      + (logo?'<div style="flex-shrink:0;background:#fff;border-radius:8px;padding:5px 9px"><img src="'+logo+'" style="height:40px;display:block"></div>':'')
       + '</div></div>'
-      + filas
+      + _horReporteHTML(mes, true)
       + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
     document.body.appendChild(cont);
     const imgs = cont.querySelectorAll('img');
@@ -1949,7 +2050,7 @@ async function compartirHorometros(mes){
     document.body.removeChild(cont);
     canvas.toBlob(function(blob){
       if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      _entregarImagen(blob, 'Horometros_'+mes);
+      _entregarImagen(blob, 'Control_Horometraje_'+mes);
     }, 'image/png');
   }catch(err){ toast('Error al generar el reporte: '+err.message, true); }
 }
@@ -2904,7 +3005,6 @@ async function rmCompartirPDF(){
     setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
   }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
 }
-
 // ── MÓDULO LOGÍSTICA (carpetas: Horómetros / Reportes de cobro) ──────────────
 function _hcRenderCarpetas(){
   const cont = document.getElementById('hc-carpetas'); if(!cont) return;
