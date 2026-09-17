@@ -351,10 +351,19 @@ function _valeMigrarPersonas(orden){
   // multiplicando por las personas relacionadas en la orden.
   try{
     if(!orden || !Array.isArray(orden.vales) || !orden.vales.length) return false;
-    if(orden.vales.some(function(v){ return v && v.personas; })) return false;
+    // Resincronizar SIEMPRE con las personas actuales de la orden: si se
+    // agregaron o quitaron operadores/motorista/técnicos después de generar
+    // el vale, el monto se recalcula (monto base = monto / personas previas).
     const n = _valePersonasDe(orden);
-    orden.vales.forEach(function(v){ if(v){ v.monto = (parseFloat(v.monto)||150) * n; v.personas = n; } });
-    return n > 1;
+    let cambio = false;
+    orden.vales.forEach(function(v){
+      if(!v) return;
+      const prev = parseInt(v.personas)||1;
+      const base = (parseFloat(v.monto)||150) / prev;
+      const nuevo = base * n;
+      if(parseInt(v.personas) !== n || v.monto !== nuevo){ v.monto = nuevo; v.personas = n; cambio = true; }
+    });
+    return cambio;
   }catch(e){ return false; }
 }
 function _valeNombresDe(o){
