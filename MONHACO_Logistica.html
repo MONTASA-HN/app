@@ -1668,11 +1668,18 @@ function lgVista(v){
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
   window._fbDB = firebase.database();
   let _listo = false;
+  window._uiUltimoToque = 0;
+  try{
+    document.addEventListener('touchstart', function(){ window._uiUltimoToque = Date.now(); }, {capture:true, passive:true});
+    document.addEventListener('mousedown', function(){ window._uiUltimoToque = Date.now(); }, true);
+  }catch(e){}
   function _refrescar(){
-    // NO re-dibujar mientras el usuario escribe (el re-dibujo borraba los
-    // horómetros a medio digitar y no dejaba ingresar la lectura).
+    // NO re-dibujar mientras el usuario escribe o está tocando un botón
+    // (el re-dibujo destruía el botón antes del clic y borraba lo digitado).
     const _a = document.activeElement;
     if(_a && /^(INPUT|TEXTAREA|SELECT)$/.test(_a.tagName)) return;
+    const _rest = 900 - (Date.now() - (window._uiUltimoToque||0));
+    if(_rest > 0){ clearTimeout(window._refT); window._refT = setTimeout(_refrescar, _rest + 80); return; }
     const oculto = function(id){ const el=document.getElementById(id); return el && el.style.display==='none'; };
     if(!oculto('hor-cont')) renderHorometros('hor-cont');
     if(!oculto('rc-cont')) renderCobros('rc-cont');
