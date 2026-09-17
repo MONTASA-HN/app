@@ -342,7 +342,7 @@ function _valePersonasDe(o){
   let n = 0;
   if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
   else if(o.tecnico) n += String(o.tecnico).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
-  if(o.operador)  n += String(o.operador).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  ['operador','operador2','operador3','operador4','operador5'].forEach(function(k){ if(o[k]) n += String(o[k]).split(',').map(function(s){return s.trim();}).filter(Boolean).length; });
   if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
   return Math.max(1, n);
 }
@@ -365,7 +365,7 @@ function _valeNombresDe(o){
   if(o){
     if(Array.isArray(o.tecnicos)) o.tecnicos.filter(Boolean).forEach(function(x){ add(x); });
     else if(o.tecnico) add(o.tecnico);
-    if(o.operador) add(o.operador);
+    ['operador','operador2','operador3','operador4','operador5'].forEach(function(k){ if(o[k]) add(o[k]); });
     if(o.motorista) add(o.motorista);
   }
   return out;
@@ -726,7 +726,7 @@ function renderOrdenesLog(){
           ${_ubLinkHTML(o)}${_contactoHTML(o)}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${o.motorista&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
-          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${o.operador}</div>`:''}
+          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}">▼</span>
       </div>
@@ -785,30 +785,20 @@ function renderOrdenesLog(){
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
-        ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
+        ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- 3 Operadores para apoyo en plantel -->
-        ${(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')==='plantel')?`
-        <div class="form-group"><label>Operador 1</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+        <!-- 5 Operadores para apoyo a mantenimiento (pueden trabajar en simultáneo) -->
+        ${(o.tipoLogistica==='apoyo_mantenimiento')?['operador','operador2','operador3','operador4','operador5'].map((k,i)=>`
+        <div class="form-group"><label>Operador ${i+1}${i>0?' (opcional)':''}</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','${k}',this.value)">
             <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
-          </select></div>
-        <div class="form-group"><label>Operador 2</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador2',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador2===op?'selected':''}>${op}</option>`).join('')}
-          </select></div>
-        <div class="form-group"><label>Operador 3</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador3',this.value)">
-            <option value="">— Seleccionar —</option>
-            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador3===op?'selected':''}>${op}</option>`).join('')}
-          </select></div>`:``}
+            ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o[k]===op?'selected':''}>${op}</option>`).join('')}
+          </select></div>`).join(''):``}
         <!-- Motorista: solo fuera del plantel -->
         ${((o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
@@ -910,7 +900,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Tipo</div><div style="font-weight:600">'+tipoLbl+'</div></div>';
   h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Estado</div><div style="font-weight:600">'+(o.estado||'Completado')+'</div></div>';
   if(eqLabel&&eqLabel!=='—') h += '<div style="grid-column:1/-1"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Equipo</div><div style="font-weight:600">'+eqLabel+'</div></div>';
-  if(o.operador)         h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Operador</div><div style="font-weight:600">'+o.operador+'</div></div>';
+  if(o.operador)         h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Operador(es)</div><div style="font-weight:600">'+[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')+'</div></div>';
   if(o.motorista)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Motorista</div><div style="font-weight:600">'+o.motorista+'</div></div>';
   if(o.prioridad)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Prioridad</div><div style="font-weight:600">'+o.prioridad+'</div></div>';
   if(o.equipoCompra)     h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Vehículo</div><div style="font-weight:600">'+o.equipoCompra+'</div></div>';
