@@ -8250,7 +8250,8 @@ function _iniciarConexionFirebase(esReintento){
     window._fbListenersRegistrados = true;
 
     // Listener dedicado para logística — siempre actualizado independientemente del _ts
-    window._fbDB.ref('monhaco/logistica').on('value', snapLog => {
+    window._fbDB.ref('monhaco/logistica').on('value', function(snapLog){
+      if(window._uiDeferir && window._uiDeferir('fb-log', arguments.callee, arguments)) return;
       const logData = snapLog.val();
       if(Array.isArray(logData)){
         // Merge preservando campos locales que Firebase no almacena (vales, etc.)
@@ -8273,7 +8274,29 @@ function _iniciarConexionFirebase(esReintento){
       }
     });
 
-    FB_REF.on('value', snap => {
+    // ── TOQUES: no re-dibujar en medio de un toque — el re-dibujo destruía el
+    //    botón antes de ejecutar el clic y había que tocar varias veces. ──────
+    if(!window._uiDeferir){
+      window._uiUltimoToque = 0;
+      try{
+        document.addEventListener('touchstart', function(){ window._uiUltimoToque = Date.now(); }, {capture:true, passive:true});
+        document.addEventListener('mousedown', function(){ window._uiUltimoToque = Date.now(); }, true);
+      }catch(e){}
+      window._uiDeferTimers = {}; window._uiDeferPend = {};
+      window._uiDeferir = function(key, fn, args){
+        const restante = 900 - (Date.now() - (window._uiUltimoToque||0));
+        if(restante <= 0) return false;
+        window._uiDeferPend[key] = [fn, args];
+        clearTimeout(window._uiDeferTimers[key]);
+        window._uiDeferTimers[key] = setTimeout(function(){
+          const p = window._uiDeferPend[key]; delete window._uiDeferPend[key];
+          if(p) p[0].apply(null, p[1]);
+        }, restante + 80);
+        return true;
+      };
+    }
+    FB_REF.on('value', function(snap){
+      if(window._uiDeferir && window._uiDeferir('fb-root', arguments.callee, arguments)) return;
       const d = snap.val();
       if(!d || !d._ts) return;
       // Always accept Firebase data — removed stale timestamp check that caused fluctuation
