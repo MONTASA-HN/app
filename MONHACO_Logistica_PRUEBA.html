@@ -574,6 +574,11 @@ function finalizarTomaCliente(cli){
   const mes = _horMesVista || horMesActual();
   const ck = _horCliKey(cli);
   if(_horCierreCli(mes, ck)){ toast('La toma de '+cli+' ya fue finalizada', true); return; }
+  const fir = _horFirmas(mes)[ck] || {};
+  const faltanF = [];
+  if(!fir.sup) faltanF.push('SUPERVISOR');
+  if(!fir.ger) faltanF.push('GERENTE');
+  if(faltanF.length){ toast('Para finalizar la toma de '+cli+' falta la firma de: '+faltanF.join(' y '), true); return; }
   const lecturas = _horLecturas(mes);
   const grupo = (_horClientes(_horEquiposVista(mes))[String(cli).toUpperCase().trim()])||[];
   const conLectura = grupo.filter(function(e){ return _horTiene(lecturas[e.id]); });
@@ -594,6 +599,9 @@ function finalizarTomaHorometros(){
   const mes = _horMesVista || horMesActual();
   const pendientes = _horClientesPendientes(mes);
   if(!pendientes.length){ toast('Todos los clientes ya est\u00e1n finalizados', true); return; }
+  const firmasT = _horFirmas(mes);
+  const sinFirma = pendientes.filter(function(c){ const f = firmasT[_horCliKey(c)] || {}; return !(f.sup && f.ger); });
+  if(sinFirma.length){ toast('Faltan firmas de supervisor y gerente en: '+sinFirma.join(', '), true); return; }
   const lecturas = _horLecturas(mes);
   const grupos = _horClientes(_horEquiposVista(mes));
   const conLectura = [];
