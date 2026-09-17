@@ -8722,6 +8722,23 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   </div>`}`;
 }
 
+// ── LISTAS ESTÁNDAR PARA VIÁTICOS (personas y descripciones de factura) ──
+const TECNICOS_VIAT = ['Rances Pineda','Angel Cardona','Maynor Paz','Cristian Barrera','Jose Escoto','Ramon Moreno','Sergio Madrid'];
+const _VIAT_DESC = ['COMBUSTIBLE','ALIMENTACION','VALE DE ALIMENTACION','DEPOSITO BANCARIO','PEAJE YOJOA','PEAJE SIGUATEPEQUE','PEAJE ZAMBRANO'];
+function _viatPersonal(){
+  const ops = (typeof OPERADORES_LOGISTICA!=='undefined') ? OPERADORES_LOGISTICA : [];
+  const mots = (typeof MOTORISTAS_LOGISTICA!=='undefined') ? MOTORISTAS_LOGISTICA : [];
+  return Array.from(new Set([].concat(TECNICOS_VIAT, ops, mots))).sort(function(a,b){ return String(a).localeCompare(String(b)); });
+}
+function _viatOpts(val, lista){
+  const esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  const v = String(val||'').trim();
+  let h = '<option value="">— Seleccionar —</option>', esta = false;
+  lista.forEach(function(n){ if(n===v) esta = true; h += '<option '+(n===v?'selected':'')+'>'+esc(n)+'</option>'; });
+  if(v && !esta) h += '<option selected>'+esc(v)+'</option>'; // conservar valores viejos fuera de la lista
+  return h;
+}
+
 function renderPersonaRow(p, i){
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px" id="vp-row-${i}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -8729,7 +8746,7 @@ function renderPersonaRow(p, i){
       ${i>0?`<button onclick="quitarPersonaViaticos(${i})" style="background:none;border:none;color:#e74c3c;font-size:16px;cursor:pointer">✕</button>`:''}
     </div>
     <div class="form-group"><label>Nombre</label>
-      <input type="text" id="vp-nombre-${i}" value="${p.nombre||''}" placeholder="Nombre completo">
+      <select id="vp-nombre-${i}">${_viatOpts(p.nombre, _viatPersonal())}</select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
       <div class="form-group"><label>Fecha</label>
@@ -8787,7 +8804,7 @@ function renderLiquidacionForm(v, montoSol, readOnly){
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
         <div class="form-group"><label>Descripción</label>
-          <input type="text" id="vlf-desc-${i}" value="${f.descripcion||''}" placeholder="Ej: Gasolinera UNO" oninput="recalcFacturas()">
+          <select id="vlf-desc-${i}" onchange="recalcFacturas()">${_viatOpts(f.descripcion, _VIAT_DESC)}</select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
           <div class="form-group"><label>Fecha</label>
