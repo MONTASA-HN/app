@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#173a5c">
-
 <title>MONHACO · Logística — PRUEBA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -199,6 +198,11 @@ function _horEquipos(){
 function _horLecturas(mes){ return ((DB.horometros||{})[mes])||{}; }
 function _horCierre(mes){ return (((DB.horometros||{})[mes])||{})._cierre || null; }
 function _horAnteriorReg(eq, mes){
+  // Equipos manuales: su "anterior" es el que se digitó al agregarlos
+  if(eq && eq._eqManual){
+    const hm = parseFloat(eq.anterior);
+    return isNaN(hm) ? null : { lectura: hm, ts: null };
+  }
   // Última lectura registrada en un mes ANTERIOR (con su fecha); si no hay, el horómetro de flota.
   const meses = Object.keys(DB.horometros||{}).filter(function(m){ return m < mes; }).sort().reverse();
   for(var i=0;i<meses.length;i++){
@@ -215,6 +219,30 @@ function _horFechaTs(ts){
   return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
 }
 function _horTiene(l){ return !!(l && l.lectura!=null && l.lectura!==''); }
+function _horEqManuales(mes){ return ((((DB.horometros||{})[mes])||{})._manuales)||{}; }
+function _horEquiposVista(mes){
+  // Flota MONHACO + equipos agregados manualmente a esta toma (ej. de MT Rental)
+  const man = _horEqManuales(mes);
+  const extra = Object.keys(man).map(function(k){
+    const m = man[k]||{};
+    return { id:k, codigo:m.codigo||'', cliente:m.cliente||'', ubicacion:m.ubicacion||'', capacidad:m.capacidad||'', anterior:m.anterior, _eqManual:true };
+  });
+  return _horEquipos().concat(extra).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
+}
+function _horEqDe(mes, eqId){
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; });
+  if(eq) return eq;
+  const m = _horEqManuales(mes)[eqId];
+  return m ? { id:eqId, codigo:m.codigo||'', cliente:m.cliente||'', ubicacion:m.ubicacion||'', capacidad:m.capacidad||'', anterior:m.anterior, _eqManual:true } : null;
+}
+function _horClientes(equipos){
+  const map = {};
+  equipos.forEach(function(e){
+    const c = String(e.cliente||'SIN CLIENTE').toUpperCase().trim() || 'SIN CLIENTE';
+    (map[c] = map[c] || []).push(e);
+  });
+  return map;
+}
 function _horEsManual(mes){ return !!((((DB.horometros||{})[mes])||{})._creada); }
 function _horIrMes(mes){ _horMesVista = mes; renderHorometros(_HC_HOR_CONT); }
 function _horMover(n){
@@ -257,7 +285,10 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
       celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</td>';
     }
     filas += '<tr>'
-      + '<td style="'+td+';font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)+'</td>'
+      + '<td style="'+td+';font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)
+      + (e._eqManual ? ' <span style="font-size:9px;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 4px;font-weight:800">MANUAL</span>'
+        + (editable ? ' <span onclick="horEqManualQuitar(\''+e.id+'\')" title="Quitar equipo manual" style="cursor:pointer;color:#c00;font-weight:800">✕</span>' : '') : '')
+      + '</td>'
       + '<td style="'+td+'">'+_hcEsc(e.ubicacion||'—')+'</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(e.capacidad||'—')+'</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(horMesLabel(mes))+'</td>'
@@ -270,6 +301,10 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
   const colFinal = editable
     ? '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>FINAL</th><th rowspan="2" style="'+th+'"></th>'
     : '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>FINAL</th>';
+  const firmas = '<div style="display:flex;gap:36px;margin:30px 10px 8px;max-width:560px">'
+    + '<div style="flex:1;text-align:center"><div style="border-bottom:1.5px solid #333;height:36px"></div><div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">SUPERVISOR</div></div>'
+    + '<div style="flex:1;text-align:center"><div style="border-bottom:1.5px solid #333;height:36px"></div><div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">GERENTE</div></div>'
+    + '</div>';
   return '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:0 0 6px">'
     + '<div style="font-weight:800;color:#1f3864;font-size:13px;text-transform:uppercase;letter-spacing:0.3px">CONTROL DE HOROMETRAJE '+_hcEsc(planta)+'</div>'
     + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_horFechaTs(Date.now())+'</div></div>'
@@ -285,15 +320,16 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
     + '</tr>'
     + '<tr><th style="'+th+'">DESDE</th><th style="'+th+'">HASTA</th></tr>'
     + filas
-    + '</table></div>';
+    + '</table></div>'
+    + firmas;
 }
 function _horReporteHTML(mes, editable, buscar){
-  let equipos = _horEquipos();
+  let equipos = _horEquiposVista(mes);
   const lecturas = _horLecturas(mes);
   if(buscar) equipos = equipos.filter(function(e){
-    return String(e.codigo||'').toLowerCase().includes(buscar) || String(e.ubicacion||'').toLowerCase().includes(buscar) || String(e.marca||'').toLowerCase().includes(buscar);
+    return String(e.codigo||'').toLowerCase().includes(buscar) || String(e.ubicacion||'').toLowerCase().includes(buscar) || String(e.cliente||'').toLowerCase().includes(buscar) || String(e.marca||'').toLowerCase().includes(buscar);
   });
-  const plantas = _horPlantas(equipos);
+  const plantas = _horClientes(equipos);
   const nombres = Object.keys(plantas).sort();
   if(!nombres.length) return '<div style="text-align:center;color:var(--text3,#888);padding:20px 0;font-size:13px">Sin equipos para mostrar</div>';
   let h = '';
@@ -313,7 +349,7 @@ function renderHorometros(contId){
 
   const mes = _horMesVista;
   const lecturas = _horLecturas(mes);
-  const equipos = _horEquipos();
+  const equipos = _horEquiposVista(mes);
   const buscar = (document.getElementById('hor-buscar') ? document.getElementById('hor-buscar').value : '').toLowerCase().trim();
   // Conservar el foco del buscador (el re-dibujo lo perdía y no dejaba escribir)
   const focoBuscar = document.activeElement && document.activeElement.id==='hor-buscar';
@@ -343,7 +379,8 @@ function renderHorometros(contId){
     + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce4 Compartir Excel</button>'
     + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce5 Descargar Excel</button>'
     + '</div>';
-  h += '<input id="hor-buscar" placeholder="Buscar equipo o planta..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
+  if(editable) h += '<button onclick="horEqManualAbrir()" style="width:100%;padding:11px;background:var(--surface,#fff);color:#856404;border:1.5px dashed #b45309;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px;margin-bottom:10px">✚ Agregar equipo manual (MT Rental u otro)</button>';
+  h += '<input id="hor-buscar" placeholder="Buscar equipo o cliente..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
 
   h += _horReporteHTML(mes, editable, buscar);
 
@@ -359,7 +396,6 @@ function renderHorometros(contId){
 
 // ── INICIO: solo el listado — tomas en curso + miniaturas de finalizadas ─────
 function _horHomeHTML(){
-  const equipos = _horEquipos();
   const claves = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m); });
   const abiertas = claves.filter(function(m){ return !_horCierre(m); }).sort().reverse();
   let h = '';
@@ -371,6 +407,7 @@ function _horHomeHTML(){
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
     abiertas.forEach(function(m){
       const lecturas = _horLecturas(m);
+      const equipos = _horEquiposVista(m);
       const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
       h += '<div onclick="_horIrMes(\''+m+'\')" style="cursor:pointer;background:var(--surface,#fff);border:1.5px solid #f3c98a;border-left:4px solid #E8811A;border-radius:10px;padding:10px 12px;min-width:0">'
         + '<div style="font-weight:800;color:#1f3864;font-size:13px">\ud83d\udcdf '+_hcEsc(horMesLabel(m))+'</div>'
@@ -394,7 +431,7 @@ function horGuardar(eqId){
   const inp = document.getElementById('hor-in-'+eqId); if(!inp) return;
   const val = inp.value.trim();
   const mes = _horMesVista || horMesActual();
-  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  const eq = _horEqDe(mes, eqId); if(!eq) return;
   if(_horCierre(mes)){ toast('Esta toma ya fue finalizada \u2014 solo lectura', true); return; }
   if(val===''){
     // Campo vaciado: si ya había lectura este mes, ofrecer borrarla
@@ -429,7 +466,7 @@ function _horPintarFila(eqId){
 function _horPintarAvance(){
   const mes = _horMesVista || horMesActual();
   const lecturas = _horLecturas(mes);
-  const equipos = _horEquipos();
+  const equipos = _horEquiposVista(mes);
   const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
   const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
   const tx = document.getElementById('hor-prog-txt'); if(tx) tx.textContent = tomados+' / '+equipos.length+' equipos';
@@ -439,7 +476,7 @@ function _horPintarAvance(){
 // No toca la ficha del equipo: la ficha solo cambia al finalizar la toma.
 function horBorrar(eqId){
   const mes = _horMesVista || horMesActual();
-  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }); if(!eq) return;
+  const eq = _horEqDe(mes, eqId); if(!eq) return;
   if(_horCierre(mes)){ toast('Esta toma ya fue finalizada \u2014 solo lectura', true); return; }
   const l = _horLecturas(mes)[eqId];
   if(!_horTiene(l)){ return; }
@@ -465,7 +502,7 @@ function horBorrar(eqId){
 function finalizarTomaHorometros(){
   const mes = _horMesVista || horMesActual();
   const lecturas = _horLecturas(mes);
-  const equipos = _horEquipos();
+  const equipos = _horEquiposVista(mes);
   if(_horCierre(mes)){ toast('Esta toma ya fue finalizada', true); return; }
   const conLectura = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); });
   if(!conLectura.length){ toast('No hay lecturas para finalizar', true); return; }
@@ -477,8 +514,8 @@ function finalizarTomaHorometros(){
   try{
     if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_cierre').set({ ts: ts });
   }catch(e){}
-  // Fichas en memoria
-  conLectura.forEach(function(e){ e.horometro = String(lecturas[e.id].lectura); });
+  // Fichas en memoria (los equipos manuales no tienen ficha en la flota MONHACO)
+  conLectura.filter(function(e){ return !e._eqManual; }).forEach(function(e){ e.horometro = String(lecturas[e.id].lectura); });
   _horMesVista = null; // vuelve al listado: la toma queda como miniatura (solo lectura)
   if(HOR_PRUEBA){
     toast('✅ (PRUEBA) Toma finalizada — las fichas reales NO se tocaron');
@@ -491,7 +528,7 @@ function finalizarTomaHorometros(){
       window._fbDB.ref('monhaco/equipos').once('value').then(function(s){
         const v = s.val(); if(!v) return null;
         const updates = {};
-        conLectura.forEach(function(e){
+        conLectura.filter(function(e){ return !e._eqManual; }).forEach(function(e){
           let idx = -1;
           if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===e.id; }); }
           else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===e.id){ idx=ks[i]; break; } } }
@@ -552,10 +589,10 @@ function _horMiniaturasHTML(mesVista){
   // Cada toma finalizada queda guardada como miniatura; al tocarla se abre su reporte
   const meses = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m) && _horCierre(m); }).sort().reverse();
   if(!meses.length) return '';
-  const equipos = _horEquipos();
   let cards = '';
   meses.forEach(function(m){
     const lecturas = _horLecturas(m);
+    const equipos = _horEquiposVista(m);
     const tomados = equipos.filter(function(e){ return _horTiene(lecturas[e.id]); }).length;
     const activa = m === mesVista;
     cards += '<div onclick="_horIrMes(\''+m+'\')" style="cursor:pointer;background:'+(activa?'#eef6ee':'var(--surface,#fff)')+';border:1.5px solid '+(activa?'#18A303':'#bbf7d0')+';border-radius:10px;padding:10px 12px;min-width:0">'
@@ -566,6 +603,70 @@ function _horMiniaturasHTML(mesVista){
   });
   return '<div style="font-size:12.5px;font-weight:800;color:#1f3864;margin:6px 0 8px">\ud83d\udcda Tomas finalizadas</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+cards+'</div>';
+}
+
+
+// ── EQUIPOS MANUALES por toma (ej. equipos de MT Rental rentados a clientes MONHACO) ──
+function horEqManualAbrir(){
+  if(document.getElementById('hor-man-ov')) return;
+  const ov = document.createElement('div');
+  ov.id = 'hor-man-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  const inp = 'width:100%;box-sizing:border-box;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff';
+  const lbl = 'font-size:11px;font-weight:700;color:#55534b;margin:10px 0 4px;text-transform:uppercase;letter-spacing:0.4px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;max-width:360px;width:100%;box-sizing:border-box;max-height:92vh;overflow-y:auto">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:16px">\u271a Agregar equipo manual</div>'
+    + '<div style="font-size:12px;color:#888;margin-top:3px">Solo para esta toma \u2014 no se agrega a la flota MONHACO</div>'
+    + '<div style="'+lbl+'">C\u00f3digo del equipo *</div><input id="hman-codigo" placeholder="Ej: MT-118" style="'+inp+'">'
+    + '<div style="'+lbl+'">Cliente *</div><input id="hman-cliente" placeholder="Ej: ELCATEX" style="'+inp+'">'
+    + '<div style="'+lbl+'">Capacidad</div><input id="hman-capacidad" placeholder="Ej: 5,500 LBS" style="'+inp+'">'
+    + '<div style="'+lbl+'">Planta / ubicaci\u00f3n</div><input id="hman-ubic" placeholder="Ej: CHOLOMA, CORTES" style="'+inp+'">'
+    + '<div style="'+lbl+'">Horometraje inicio (anterior)</div><input id="hman-ant" type="number" inputmode="decimal" placeholder="hrs" style="'+inp+'">'
+    + '<div style="display:flex;gap:8px;margin-top:16px">'
+    + '<button onclick="document.getElementById(\'hor-man-ov\').remove()" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '<button onclick="horEqManualCrear()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">Agregar</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+function horEqManualCrear(){
+  const mes = _horMesVista || horMesActual();
+  const val = function(id){ return ((document.getElementById(id)||{}).value||'').trim(); };
+  const codigo = val('hman-codigo').toUpperCase();
+  const cliente = val('hman-cliente').toUpperCase();
+  if(!codigo){ toast('Falta el c\u00f3digo del equipo', true); return; }
+  if(!cliente){ toast('Falta el cliente', true); return; }
+  const reg = {
+    codigo: codigo, cliente: cliente,
+    capacidad: val('hman-capacidad'), ubicacion: val('hman-ubic').toUpperCase(),
+    anterior: val('hman-ant'), ts: Date.now()
+  };
+  const id = 'man_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  if(!DB.horometros) DB.horometros = {};
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  if(!DB.horometros[mes]._manuales) DB.horometros[mes]._manuales = {};
+  DB.horometros[mes]._manuales[id] = reg;
+  try{
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_manuales/'+id).set(reg);
+  }catch(e){}
+  const ov = document.getElementById('hor-man-ov'); if(ov) ov.remove();
+  renderHorometros(_HC_HOR_CONT);
+  toast('Equipo '+_hcEsc(codigo)+' agregado a la toma \u2713');
+}
+function horEqManualQuitar(eqId){
+  const mes = _horMesVista || horMesActual();
+  if(_horCierre(mes)){ toast('Esta toma ya fue finalizada \u2014 solo lectura', true); return; }
+  const m = _horEqManuales(mes)[eqId]; if(!m) return;
+  if(!confirm('\u2715 \u00bfQuitar el equipo manual '+(m.codigo||'')+' de esta toma? Tambi\u00e9n se borra su lectura.')) return;
+  delete DB.horometros[mes]._manuales[eqId];
+  if(DB.horometros[mes][eqId]) delete DB.horometros[mes][eqId];
+  try{
+    if(window._fbDB){
+      window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_manuales/'+eqId).remove();
+      window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/'+eqId).remove();
+    }
+  }catch(e){}
+  renderHorometros(_HC_HOR_CONT);
+  toast('Equipo manual quitado \u2713');
 }
 
 // ── COMPARTIR / DESCARGAR COMO EXCEL (formato oficial: una hoja por planta) ──
@@ -588,10 +689,10 @@ function _horNombreHoja(planta){
 }
 function _horLibroXLSX(mes){
   const X = window._XLSXS;
-  const equipos = _horEquipos();
+  const equipos = _horEquiposVista(mes);
   const lecturas = _horLecturas(mes);
   const cierre = _horCierre(mes);
-  const plantas = _horPlantas(equipos);
+  const plantas = _horClientes(equipos);
   const nombres = Object.keys(plantas).sort();
   const hoy = new Date();
   const fechaTxt = (_HC_MESES[hoy.getMonth()].charAt(0).toUpperCase()+_HC_MESES[hoy.getMonth()].slice(1))+' '+hoy.getDate()+'-'+hoy.getFullYear();
@@ -631,6 +732,13 @@ function _horLibroXLSX(mes){
         (tiene ? { v: parseFloat(l.lectura), t:'n', s: S_NUM } : { v:'SIN TOMA', s: S_SIN }),
       ]);
     });
+    filas.push([]);
+    // Firmas para uso del cliente
+    const S_LINEA = { border:{ bottom:{style:'thin', color:{rgb:'000000'}} } };
+    const S_FIRMA = { font:{bold:true, sz:9, color:{rgb:AZUL}}, alignment:{horizontal:'center'} };
+    filas.push([]);
+    filas.push(['', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '', '', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '']);
+    filas.push(['', {v:'SUPERVISOR',s:S_FIRMA}, {v:'',s:S_FIRMA}, '', '', {v:'GERENTE',s:S_FIRMA}, {v:'',s:S_FIRMA}, '']);
     filas.push([]);
     filas.push([{ v:'Nota:', s:{font:{bold:true, sz:10}} }]);
     filas.push([{ v:'Los montacargas incluyen los siguientes accesorios:', s:{font:{sz:10}} }]);
