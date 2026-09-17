@@ -2344,7 +2344,7 @@ function _construirCamposOrden(tipo, o, eq){
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
     const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
     campos.push(['Tipo de orden', tipoLbl]);
-    campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ')||'—']);
+    campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')||'—']);
     if(o.motorista) campos.push(['Motorista', o.motorista]);
     if(o.equipoCompra) campos.push(['🚗 Vehículo de traslado', o.equipoCompra]);
     campos.push(['Descripción', o.descripcion||'—']);
@@ -4314,7 +4314,7 @@ function renderPersonal(){
     return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
   });
   logCerradasMes.forEach(o => {
-    const asignados = [o.operador, o.operador2, o.operador3, o.motorista].filter(Boolean);
+    const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
     const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
@@ -4816,7 +4816,7 @@ function _renderOrdenesLog(el, tipoFiltro){
     const ec = o.cerrado?'#27ae60':o.estado==='Cancelado'?'#888':o.estado==='En proceso'?'#f39c12':'#e74c3c';
     const estadoLbl = o.cerrado?'Completado':(o.estado||'Pendiente');
     const hi = o.fechaInicio?o.fechaInicio.slice(11,16):'—';
-    const op = o.operador?'<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+o.operador+(o.operador2?', '+o.operador2:'')+(o.operador3?', '+o.operador3:'')+'</span>':'';
+    const op = o.operador?'<span style="color:var(--text3)">🧑‍💼 Operador</span><span>'+[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')+'</span>':'';
     const mot = o.motorista&&(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?'<span style="color:var(--text3)">🚗 Motorista</span><span>'+o.motorista+'</span>':'';
     const isCerrada = o.cerrado||o.estado==='Cancelado';
     const isOpen = openSubgrupos.has('ger-log-'+o.id);
@@ -9391,7 +9391,7 @@ function _valePersonasDe(o){
   let n = 0;
   if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
   else if(o.tecnico) n += String(o.tecnico).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
-  if(o.operador)  n += String(o.operador).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
+  ['operador','operador2','operador3','operador4','operador5'].forEach(function(k){ if(o[k]) n += String(o[k]).split(',').map(function(s){return s.trim();}).filter(Boolean).length; });
   if(o.motorista) n += String(o.motorista).split(',').map(function(s){return s.trim();}).filter(Boolean).length;
   return Math.max(1, n);
 }
@@ -9414,7 +9414,7 @@ function _valeNombresDe(o){
   if(o){
     if(Array.isArray(o.tecnicos)) o.tecnicos.filter(Boolean).forEach(function(x){ add(x); });
     else if(o.tecnico) add(o.tecnico);
-    if(o.operador) add(o.operador);
+    ['operador','operador2','operador3','operador4','operador5'].forEach(function(k){ if(o[k]) add(o[k]); });
     if(o.motorista) add(o.motorista);
   }
   return out;
