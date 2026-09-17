@@ -235,6 +235,8 @@ function _horEqDe(mes, eqId){
   const m = _horEqManuales(mes)[eqId];
   return m ? { id:eqId, codigo:m.codigo||'', cliente:m.cliente||'', ubicacion:m.ubicacion||'', capacidad:m.capacidad||'', anterior:m.anterior, _eqManual:true } : null;
 }
+function _horCliKey(c){ return String(c||'SIN CLIENTE').toUpperCase().trim().replace(/[.#$\/\[\]]/g,'_') || 'SIN CLIENTE'; }
+function _horFirmas(mes){ return ((((DB.horometros||{})[mes])||{})._firmas)||{}; }
 function _horClientes(equipos){
   const map = {};
   equipos.forEach(function(e){
@@ -289,7 +291,6 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
       + (e._eqManual ? ' <span style="font-size:9px;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 4px;font-weight:800">MANUAL</span>'
         + (editable ? ' <span onclick="horEqManualQuitar(\''+e.id+'\')" title="Quitar equipo manual" style="cursor:pointer;color:#c00;font-weight:800">✕</span>' : '') : '')
       + '</td>'
-      + '<td style="'+td+'">'+_hcEsc(e.ubicacion||'—')+'</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(e.capacidad||'—')+'</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(horMesLabel(mes))+'</td>'
       + '<td style="'+td+';text-align:center">'+(antR&&antR.ts?_horFechaTs(antR.ts):'—')+'</td>'
@@ -301,17 +302,39 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
   const colFinal = editable
     ? '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>FINAL</th><th rowspan="2" style="'+th+'"></th>'
     : '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>FINAL</th>';
-  const firmas = '<div style="display:flex;gap:36px;margin:30px 10px 8px;max-width:560px">'
-    + '<div style="flex:1;text-align:center"><div style="border-bottom:1.5px solid #333;height:36px"></div><div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">SUPERVISOR</div></div>'
-    + '<div style="flex:1;text-align:center"><div style="border-bottom:1.5px solid #333;height:36px"></div><div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">GERENTE</div></div>'
+  const ck = _horCliKey(planta);
+  const regs = _horFirmas(mes)[ck] || {};
+  const slot = function(rol, titulo){
+    const img = regs[rol];
+    if(img){
+      return '<div style="flex:1;text-align:center;min-width:0">'
+        + '<div '+(editable?'onclick="horFirmaAbrir(\''+ck+'\',\''+rol+'\')" style="cursor:pointer;"':'style=""')+'>'
+        + '<img src="'+img+'" style="max-width:100%;max-height:64px;object-fit:contain;border-bottom:1.5px solid #333;display:block;margin:0 auto"></div>'
+        + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo
+        + (editable?' <span onclick="horFirmaBorrar(\''+ck+'\',\''+rol+'\')" style="cursor:pointer;color:#c00">🗑</span>':'')+'</div></div>';
+    }
+    if(editable){
+      return '<div style="flex:1;text-align:center;min-width:0">'
+        + '<div onclick="horFirmaAbrir(\''+ck+'\',\''+rol+'\')" style="cursor:pointer;border:1.5px dashed #b9c4d6;border-radius:8px;padding:14px 6px;color:#8ea4c2;font-size:12px;font-weight:700;background:#fff">✍️ Firmar</div>'
+        + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo+'</div></div>';
+    }
+    return '<div style="flex:1;text-align:center;min-width:0"><div style="border-bottom:1.5px solid #333;height:36px"></div>'
+      + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo+'</div></div>';
+  };
+  const btnAgregar = editable
+    ? '<button onclick="horEqManualAbrir(\''+_hcEsc(planta).replace(/'/g,"\\'")+'\')" style="width:100%;margin-top:8px;padding:10px;background:var(--surface,#fff);color:#856404;border:1.5px dashed #b45309;border-radius:8px;font-weight:800;cursor:pointer;font-size:12.5px">✚ Agregar equipo a '+_hcEsc(planta)+'</button>'
+    : '';
+  const firmas = btnAgregar
+    + '<div style="display:flex;gap:36px;margin:24px 10px 8px;max-width:560px">'
+    + slot('sup', 'SUPERVISOR')
+    + slot('ger', 'GERENTE')
     + '</div>';
   return '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:0 0 6px">'
     + '<div style="font-weight:800;color:#1f3864;font-size:13px;text-transform:uppercase;letter-spacing:0.3px">CONTROL DE HOROMETRAJE '+_hcEsc(planta)+'</div>'
     + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_horFechaTs(Date.now())+'</div></div>'
-    + '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:'+(editable?'720':'660')+'px;background:#fff">'
+    + '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:'+(editable?'620':'560')+'px;background:#fff">'
     + '<tr>'
     + '<th rowspan="2" style="'+th+'">EQUIPO</th>'
-    + '<th rowspan="2" style="'+th+'">PLANTA</th>'
     + '<th rowspan="2" style="'+th+'">CAPACIDAD</th>'
     + '<th rowspan="2" style="'+th+'">MES</th>'
     + '<th colspan="2" style="'+th+'">FECHA</th>'
@@ -376,15 +399,15 @@ function renderHorometros(contId){
     if(!HOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">\ud83d\udc41 Toma en curso \u2014 solo consulta. Las lecturas se capturan desde la app de Log\u00edstica MONHACO.</div>';
   }
   h += '<div style="display:flex;gap:8px;margin-bottom:12px">'
-    + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce4 Compartir Excel</button>'
-    + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce5 Descargar Excel</button>'
+    + '<button onclick="compartirHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce4 Compartir PDF</button>'
+    + '<button onclick="compartirHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">\ud83d\udce5 Descargar PDF</button>'
     + '</div>';
-  if(editable) h += '<button onclick="horEqManualAbrir()" style="width:100%;padding:11px;background:var(--surface,#fff);color:#856404;border:1.5px dashed #b45309;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px;margin-bottom:10px">✚ Agregar equipo manual (MT Rental u otro)</button>';
   h += '<input id="hor-buscar" placeholder="Buscar equipo o cliente..." value="'+_hcEsc(buscar)+'" oninput="renderHorometros(\''+contId+'\')" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
 
   h += _horReporteHTML(mes, editable, buscar);
 
   if(editable){
+    h += '<button onclick="horEqManualAbrir()" style="width:100%;padding:11px;background:var(--surface,#fff);color:#856404;border:1.5px dashed #b45309;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px;margin:2px 0 10px">✚ Agregar equipo de otro cliente</button>';
     h += '<button onclick="finalizarTomaHorometros()" style="width:100%;padding:14px;background:#18A303;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;margin:4px 0 14px">\u2705 Finalizar toma de hor\u00f3metros</button>';
   }
   cont.innerHTML = h;
@@ -607,8 +630,9 @@ function _horMiniaturasHTML(mesVista){
 
 
 // ── EQUIPOS MANUALES por toma (ej. equipos de MT Rental rentados a clientes MONHACO) ──
-function horEqManualAbrir(){
+function horEqManualAbrir(clientePre){
   if(document.getElementById('hor-man-ov')) return;
+  window._horManCliPre = clientePre || '';
   const ov = document.createElement('div');
   ov.id = 'hor-man-ov';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
@@ -618,13 +642,14 @@ function horEqManualAbrir(){
     + '<div style="font-weight:800;color:#1f3864;font-size:16px">\u271a Agregar equipo manual</div>'
     + '<div style="font-size:12px;color:#888;margin-top:3px">Solo para esta toma \u2014 no se agrega a la flota MONHACO</div>'
     + '<div style="'+lbl+'">C\u00f3digo del equipo *</div><input id="hman-codigo" placeholder="Ej: MT-118" style="'+inp+'">'
-    + '<div style="'+lbl+'">Cliente *</div><input id="hman-cliente" placeholder="Ej: ELCATEX" style="'+inp+'">'
+    + '<div style="'+lbl+'">Cliente *</div><input id="hman-cliente" value="'+_hcEsc(window._horManCliPre||'')+'" placeholder="Ej: ELCATEX" style="'+inp+'">'
     + '<div style="'+lbl+'">Capacidad</div><input id="hman-capacidad" placeholder="Ej: 5,500 LBS" style="'+inp+'">'
     + '<div style="'+lbl+'">Planta / ubicaci\u00f3n</div><input id="hman-ubic" placeholder="Ej: CHOLOMA, CORTES" style="'+inp+'">'
     + '<div style="'+lbl+'">Horometraje inicio (anterior)</div><input id="hman-ant" type="number" inputmode="decimal" placeholder="hrs" style="'+inp+'">'
-    + '<div style="display:flex;gap:8px;margin-top:16px">'
-    + '<button onclick="document.getElementById(\'hor-man-ov\').remove()" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
-    + '<button onclick="horEqManualCrear()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">Agregar</button>'
+    + '<div id="hman-conteo" style="font-size:12px;color:#1a5c1a;font-weight:700;margin-top:10px;min-height:16px"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:8px">'
+    + '<button onclick="document.getElementById(\'hor-man-ov\').remove();renderHorometros(_HC_HOR_CONT)" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Listo</button>'
+    + '<button onclick="horEqManualCrear()" style="flex:1.4;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">➕ Agregar y seguir</button>'
     + '</div></div>';
   document.body.appendChild(ov);
 }
@@ -648,7 +673,12 @@ function horEqManualCrear(){
   try{
     if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_manuales/'+id).set(reg);
   }catch(e){}
-  const ov = document.getElementById('hor-man-ov'); if(ov) ov.remove();
+  // El recuadro queda abierto para agregar el siguiente (10 o los que sean)
+  window._horManConteo = (window._horManConteo||0) + 1;
+  ['hman-codigo','hman-capacidad','hman-ant'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+  const cEl = document.getElementById('hman-conteo');
+  if(cEl) cEl.textContent = '\u2713 '+codigo+' agregado ('+window._horManConteo+' en esta tanda)';
+  const cod = document.getElementById('hman-codigo'); if(cod) cod.focus();
   renderHorometros(_HC_HOR_CONT);
   toast('Equipo '+_hcEsc(codigo)+' agregado a la toma \u2713');
 }
@@ -667,6 +697,89 @@ function horEqManualQuitar(eqId){
   }catch(e){}
   renderHorometros(_HC_HOR_CONT);
   toast('Equipo manual quitado \u2713');
+}
+
+
+// ── FIRMAS DIGITALES por hoja de cliente (Supervisor / Gerente) ──────────────
+function horFirmaAbrir(ck, rol){
+  const mes = _horMesVista || horMesActual();
+  const viejo = document.getElementById('hor-firma-overlay'); if(viejo) viejo.remove();
+  const esPC = !('ontouchstart' in window) && window.innerWidth > 900;
+  const portrait = window.innerHeight > window.innerWidth && !esPC;
+  const ov = document.createElement('div');
+  ov.id = 'hor-firma-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#20242c;z-index:99997;overflow:hidden';
+  const visW = (portrait ? window.innerHeight : window.innerWidth) - (esPC ? 0 : 24);
+  const visH = (portrait ? window.innerWidth : window.innerHeight) - (esPC ? 0 : 24);
+  const anchoLienzo = esPC ? Math.min(700, window.innerWidth-80) : visW - 16;
+  const altoLienzo = esPC ? 240 : Math.max(140, visH - 128);
+  const titulo = rol==='sup' ? 'SUPERVISOR' : 'GERENTE';
+  const inner = '<div style="color:#fff;font-weight:700;font-size:14px;text-align:center;padding:10px 8px 6px">\u270d\ufe0f Firma del '+titulo+' \u2014 firme dentro del recuadro</div>'
+    + '<canvas id="hor-firma-canvas" width="'+(anchoLienzo*2)+'" height="'+(altoLienzo*2)+'" style="display:block;margin:0 auto;background:#fff;border-radius:12px;width:'+anchoLienzo+'px;height:'+altoLienzo+'px;touch-action:none"></canvas>'
+    + '<div style="display:flex;gap:8px;justify-content:center;padding:10px 8px">'
+    + '<button onclick="horFirmaGuardar(\''+ck+'\',\''+rol+'\')" style="padding:12px 22px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px">\ud83d\udcbe Guardar firma</button>'
+    + '<button onclick="_horFirmaLimpiar()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">\ud83d\uddd1 Borrar</button>'
+    + '<button onclick="document.getElementById(\'hor-firma-overlay\').remove()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cancelar</button>'
+    + '</div>';
+  if(portrait){
+    ov.innerHTML = '<div style="position:absolute;left:50%;top:50%;width:'+window.innerHeight+'px;height:'+window.innerWidth+'px;transform:translate(-50%,-50%) rotate(90deg)">'+inner+'</div>';
+  } else {
+    ov.innerHTML = '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:'+(esPC?Math.min(760,window.innerWidth-40):window.innerWidth)+'px">'+inner+'</div>';
+  }
+  document.body.appendChild(ov);
+  const c = document.getElementById('hor-firma-canvas');
+  const ctx = c.getContext('2d');
+  ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a2a4a';
+  window._horFirmaHayTrazo = false;
+  let dibujando = false;
+  const punto = function(ev){
+    const t = (ev.touches && ev.touches[0]) || ev;
+    const r = c.getBoundingClientRect();
+    if(portrait){
+      return { x: (t.clientY - r.top) * c.width / r.height, y: (r.right - t.clientX) * c.height / r.width };
+    }
+    return { x: (t.clientX - r.left) * c.width / r.width, y: (t.clientY - r.top) * c.height / r.height };
+  };
+  const abajo = function(ev){ ev.preventDefault(); dibujando = true; const p = punto(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const mover = function(ev){ if(!dibujando) return; ev.preventDefault(); const p = punto(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); window._horFirmaHayTrazo = true; };
+  const arriba = function(){ dibujando = false; };
+  c.addEventListener('touchstart', abajo, {passive:false});
+  c.addEventListener('touchmove', mover, {passive:false});
+  c.addEventListener('touchend', arriba);
+  c.addEventListener('mousedown', abajo);
+  c.addEventListener('mousemove', mover);
+  c.addEventListener('mouseup', arriba);
+  c.addEventListener('mouseleave', arriba);
+}
+function _horFirmaLimpiar(){
+  const c = document.getElementById('hor-firma-canvas'); if(!c) return;
+  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  window._horFirmaHayTrazo = false;
+}
+function horFirmaGuardar(ck, rol){
+  const c = document.getElementById('hor-firma-canvas'); if(!c) return;
+  if(!window._horFirmaHayTrazo){ toast('Firme dentro del recuadro antes de guardar', true); return; }
+  const mes = _horMesVista || horMesActual();
+  const data = c.toDataURL('image/png');
+  if(!DB.horometros) DB.horometros = {};
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  if(!DB.horometros[mes]._firmas) DB.horometros[mes]._firmas = {};
+  if(!DB.horometros[mes]._firmas[ck]) DB.horometros[mes]._firmas[ck] = {};
+  DB.horometros[mes]._firmas[ck][rol] = data;
+  try{
+    if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_firmas/'+ck+'/'+rol).set(data);
+  }catch(e){}
+  const ov = document.getElementById('hor-firma-overlay'); if(ov) ov.remove();
+  renderHorometros(_HC_HOR_CONT);
+  toast('Firma guardada \u2713');
+}
+function horFirmaBorrar(ck, rol){
+  if(!confirm('\u00bfBorrar esta firma?')) return;
+  const mes = _horMesVista || horMesActual();
+  try{ delete DB.horometros[mes]._firmas[ck][rol]; }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_firmas/'+ck+'/'+rol).remove(); }catch(e){}
+  renderHorometros(_HC_HOR_CONT);
+  toast('Firma borrada');
 }
 
 // ── COMPARTIR / DESCARGAR COMO EXCEL (formato oficial: una hoja por planta) ──
@@ -712,18 +825,17 @@ function _horLibroXLSX(mes){
     const grupo = plantas[planta];
     const filas = [];
     filas.push([]); // fila 1
-    filas.push(['','','','','','',{ v:'FECHA', s:{font:{bold:true, sz:10}} }, { v:fechaTxt, s:{font:{sz:10}} }]); // fila 2
+    filas.push(['','','','','',{ v:'FECHA', s:{font:{bold:true, sz:10}} }, { v:fechaTxt, s:{font:{sz:10}} }]); // fila 2
     filas.push([]); // fila 3
     filas.push([{ v:'CONTROL DE HOROMETRAJE '+planta, s:S_TITULO }]); // fila 4
-    filas.push([{v:'EQUIPO',s:S_HDR},{v:'PLANTA',s:S_HDR},{v:'CAPACIDAD',s:S_HDR},{v:'MES',s:S_HDR},{v:'FECHA',s:S_HDR},{v:'',s:S_HDR},{v:'HOROMETRAJE INICIO',s:S_HDR},{v:'HOROMETRAJE FINAL',s:S_HDR}]); // fila 5
-    filas.push([{v:'',s:S_HDR},{v:'',s:S_HDR},{v:'',s:S_HDR},{v:'',s:S_HDR},{v:'DESDE',s:S_HDR},{v:'HASTA',s:S_HDR},{v:'',s:S_HDR},{v:'',s:S_HDR}]); // fila 6
+    filas.push([{v:'EQUIPO',s:S_HDR},{v:'CAPACIDAD',s:S_HDR},{v:'MES',s:S_HDR},{v:'FECHA',s:S_HDR},{v:'',s:S_HDR},{v:'HOROMETRAJE INICIO',s:S_HDR},{v:'HOROMETRAJE FINAL',s:S_HDR}]); // fila 5
+    filas.push([{v:'',s:S_HDR},{v:'',s:S_HDR},{v:'',s:S_HDR},{v:'DESDE',s:S_HDR},{v:'HASTA',s:S_HDR},{v:'',s:S_HDR},{v:'',s:S_HDR}]); // fila 6
     grupo.forEach(function(e){
       const l = lecturas[e.id];
       const tiene = _horTiene(l);
       const antR = _horAnteriorReg(e, mes);
       filas.push([
         { v: e.codigo||'', s: S_EQ },
-        { v: e.ubicacion||'', s: S_TXT },
         { v: e.capacidad||'', s: S_CEN },
         { v: horMesLabel(mes), s: S_CEN },
         { v: (antR&&antR.ts)?_horFechaTs(antR.ts):'', s: S_CEN },
@@ -737,8 +849,9 @@ function _horLibroXLSX(mes){
     const S_LINEA = { border:{ bottom:{style:'thin', color:{rgb:'000000'}} } };
     const S_FIRMA = { font:{bold:true, sz:9, color:{rgb:AZUL}}, alignment:{horizontal:'center'} };
     filas.push([]);
-    filas.push(['', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '', '', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '']);
-    filas.push(['', {v:'SUPERVISOR',s:S_FIRMA}, {v:'',s:S_FIRMA}, '', '', {v:'GERENTE',s:S_FIRMA}, {v:'',s:S_FIRMA}, '']);
+    // Si hay firma digital, dejar constancia; las líneas quedan para la impresión
+    filas.push(['', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '', {v:'',s:S_LINEA}, {v:'',s:S_LINEA}, '']);
+    filas.push(['', {v:'SUPERVISOR',s:S_FIRMA}, {v:'',s:S_FIRMA}, '', {v:'GERENTE',s:S_FIRMA}, {v:'',s:S_FIRMA}, '']);
     filas.push([]);
     filas.push([{ v:'Nota:', s:{font:{bold:true, sz:10}} }]);
     filas.push([{ v:'Los montacargas incluyen los siguientes accesorios:', s:{font:{sz:10}} }]);
@@ -749,54 +862,177 @@ function _horLibroXLSX(mes){
     const ws = X.utils.aoa_to_sheet(filas);
     // Combinaciones como en el formato: título + encabezado de dos filas
     ws['!merges'] = [
-      { s:{r:3,c:0}, e:{r:3,c:7} },  // título A4:H4
+      { s:{r:3,c:0}, e:{r:3,c:6} },  // título A4:G4
       { s:{r:4,c:0}, e:{r:5,c:0} },  // EQUIPO
-      { s:{r:4,c:1}, e:{r:5,c:1} },  // PLANTA
-      { s:{r:4,c:2}, e:{r:5,c:2} },  // CAPACIDAD
-      { s:{r:4,c:3}, e:{r:5,c:3} },  // MES
-      { s:{r:4,c:4}, e:{r:4,c:5} },  // FECHA (desde/hasta)
-      { s:{r:4,c:6}, e:{r:5,c:6} },  // HOROMETRAJE INICIO
-      { s:{r:4,c:7}, e:{r:5,c:7} },  // HOROMETRAJE FINAL
+      { s:{r:4,c:1}, e:{r:5,c:1} },  // CAPACIDAD
+      { s:{r:4,c:2}, e:{r:5,c:2} },  // MES
+      { s:{r:4,c:3}, e:{r:4,c:4} },  // FECHA (desde/hasta)
+      { s:{r:4,c:5}, e:{r:5,c:5} },  // HOROMETRAJE INICIO
+      { s:{r:4,c:6}, e:{r:5,c:6} },  // HOROMETRAJE FINAL
     ];
-    ws['!cols'] = [{wch:11},{wch:22},{wch:13},{wch:16},{wch:12},{wch:12},{wch:15},{wch:15}];
+    ws['!cols'] = [{wch:14},{wch:13},{wch:16},{wch:12},{wch:12},{wch:15},{wch:15}];
     ws['!rows'] = [null,null,null,{hpt:22},{hpt:24},{hpt:16}];
     X.utils.book_append_sheet(wb, ws, _horNombreHoja(planta));
   });
   return wb;
 }
-async function _horEntregarXLSX(wb, nombre, modo){
-  const X = window._XLSXS;
-  const out = X.write(wb, { bookType:'xlsx', type:'array' });
-  const MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  const blob = new Blob([out], { type: MIME });
+async function _horEntregarPDF(blob, nombre, modo){
+  const MIME = 'application/pdf';
   if(modo !== 'descargar'){
     try{
-      const file = new File([blob], nombre+'.xlsx', { type: MIME });
+      const file = new File([blob], nombre+'.pdf', { type: MIME });
       if(navigator.canShare && navigator.canShare({files:[file]})){
         await navigator.share({files:[file], title: nombre});
-        toast('📤 Excel compartido ✓');
+        toast('\ud83d\udce4 PDF compartido \u2713');
         return;
       }
     }catch(err){ if(err && err.name==='AbortError') return; }
+    // Respaldo: abrirlo para verlo/compartirlo desde el visor
+    const url0 = URL.createObjectURL(blob);
+    const w = window.open(url0, '_blank');
+    if(w){ toast('\ud83d\udcc4 PDF abierto en otra pesta\u00f1a'); setTimeout(function(){ URL.revokeObjectURL(url0); }, 60000); return; }
   }
-  // Descarga directa al dispositivo (o respaldo si no se puede compartir)
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = nombre+'.xlsx'; a.click();
+  a.href = url; a.download = nombre+'.pdf'; a.click();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
-  toast('📥 Excel descargado en el dispositivo');
+  toast('\ud83d\udce5 PDF descargado en el dispositivo');
 }
 async function compartirHorometros(mes, modo){
   try{
-    toast('Generando Excel…');
-    await _cargarXLSXEstilos();
-    const wb = _horLibroXLSX(mes);
-    if(!wb.SheetNames.length){ toast('Sin equipos para el reporte', true); return; }
-    window._horWB = wb;
-    await _horEntregarXLSX(wb, 'Control_Horometraje_'+horMesLabel(mes).replace(/ /g,'_')+(HOR_PRUEBA?'_PRUEBA':''), modo||'compartir');
-  }catch(err){ toast('Error al generar el Excel: '+err.message, true); }
-}
+    toast('Generando PDF\u2026');
+    await _cargarJsPDF();
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({ unit:'mm', format:'letter' });
+    const W = pdf.internal.pageSize.getWidth();   // 215.9
+    const H = pdf.internal.pageSize.getHeight();  // 279.4
+    const M = 12;
+    const AZUL = [31,56,100], GRIS = [207,204,194], RELL = [220,230,241];
 
+    const equipos = _horEquiposVista(mes);
+    if(!equipos.length){ toast('Sin equipos para el reporte', true); return; }
+    const lecturas = _horLecturas(mes);
+    const cierre = _horCierre(mes);
+    const firmas = _horFirmas(mes);
+    const grupos = _horClientes(equipos);
+    const nombres = Object.keys(grupos).sort();
+    const hoyTxt = _horFechaTs(Date.now());
+
+    // Columnas (ancho total = W - 2M = 191.9)
+    const cols = [
+      { t:'EQUIPO', w:32, a:'left' },
+      { t:'CAPACIDAD', w:27, a:'center' },
+      { t:'MES', w:30, a:'center' },
+      { t:'DESDE', w:24, a:'center' },
+      { t:'HASTA', w:24, a:'center' },
+      { t:'HOROMETRAJE\nINICIO', w:27.45, a:'right' },
+      { t:'HOROMETRAJE\nFINAL', w:27.45, a:'right' },
+    ];
+    const FILA = 7.4, HDR = 11;
+
+    function encabezadoTabla(y){
+      let x = M;
+      pdf.setFillColor(RELL[0],RELL[1],RELL[2]);
+      pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]);
+      pdf.rect(M, y, W-2*M, HDR, 'FD');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(7.4); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+      // FECHA agrupa DESDE/HASTA
+      cols.forEach(function(c, i){
+        if(i===3){ pdf.text('FECHA', x + 24, y + 3.6, {align:'center'}); }
+        const lineas = c.t.split('\n');
+        lineas.forEach(function(tx, li){
+          const ty = (i===3||i===4) ? y + 8.6 : (lineas.length>1 ? y + 4.6 + li*3.4 : y + 6.8);
+          const tx2 = c.a==='center' ? x + c.w/2 : (c.a==='right' ? x + c.w - 2 : x + 2);
+          if(i===3||i===4){ pdf.text(c.t, x + c.w/2, ty, {align:'center'}); }
+          else pdf.text(tx, tx2, ty, {align: c.a==='left'?'left':(c.a==='right'?'right':'center')});
+        });
+        pdf.line(x, y, x, y+HDR);
+        x += c.w;
+      });
+      pdf.line(x, y, x, y+HDR);
+      // línea que separa FECHA de DESDE/HASTA
+      pdf.line(M+cols[0].w+cols[1].w+cols[2].w, y+5.4, M+cols[0].w+cols[1].w+cols[2].w+48, y+5.4);
+      return y + HDR;
+    }
+
+    function nuevaPagSi(y, alto){
+      if(y + alto <= H - M) return y;
+      pdf.addPage();
+      return M + 4;
+    }
+
+    let y = M + 2;
+    nombres.forEach(function(cli, gi){
+      const grupo = grupos[cli];
+      // Espacio mínimo para título + encabezado + 2 filas
+      y = nuevaPagSi(y, 14 + HDR + FILA*2);
+      if(gi > 0 && y > M + 4) y += 4;
+      // Título + fecha
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+      pdf.text('CONTROL DE HOROMETRAJE '+cli, M, y+4);
+      pdf.setFontSize(8); pdf.setTextColor(85,83,75);
+      pdf.text('FECHA: '+hoyTxt, W-M, y+4, {align:'right'});
+      y += 8;
+      y = encabezadoTabla(y);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(8.2);
+      grupo.forEach(function(e){
+        y = nuevaPagSi(y, FILA);
+        if(y === M + 4){ y = encabezadoTabla(y); pdf.setFont('helvetica','normal'); pdf.setFontSize(8.2); }
+        const l = lecturas[e.id];
+        const tiene = _horTiene(l);
+        const antR = _horAnteriorReg(e, mes);
+        const vals = [
+          String(e.codigo||'') + (e._eqManual ? ' *' : ''),
+          String(e.capacidad||'\u2014'),
+          horMesLabel(mes),
+          (antR&&antR.ts)?_horFechaTs(antR.ts):'\u2014',
+          (tiene&&cierre)?_horFechaTs(cierre.ts):'\u2014',
+          antR ? antR.lectura.toLocaleString('en-US') : '\u2014',
+          tiene ? parseFloat(l.lectura).toLocaleString('en-US') : 'SIN TOMA',
+        ];
+        let x = M;
+        pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]);
+        pdf.rect(M, y, W-2*M, FILA);
+        vals.forEach(function(vtx, i){
+          const c = cols[i];
+          if(i===0){ pdf.setFont('helvetica','bold'); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]); }
+          else if(i===6 && !tiene){ pdf.setFont('helvetica','bold'); pdf.setTextColor(192,0,0); }
+          else { pdf.setFont('helvetica','normal'); pdf.setTextColor(26,26,24); }
+          const tx2 = c.a==='center' ? x + c.w/2 : (c.a==='right' ? x + c.w - 2 : x + 2);
+          pdf.text(String(vtx), tx2, y + 5, {align: c.a==='left'?'left':(c.a==='right'?'right':'center')});
+          pdf.line(x, y, x, y+FILA);
+          x += c.w;
+        });
+        pdf.line(x, y, x, y+FILA);
+        y += FILA;
+      });
+      // Firmas (digitales si existen)
+      const regs = firmas[_horCliKey(cli)] || {};
+      const ALTO_F = 30;
+      y = nuevaPagSi(y, ALTO_F + 14);
+      y += 6;
+      const wF = 62, x1 = M + 14, x2 = W - M - 14 - wF;
+      [['sup','SUPERVISOR',x1], ['ger','GERENTE',x2]].forEach(function(par){
+        const img = regs[par[0]];
+        if(img){
+          try{ pdf.addImage(img, 'PNG', par[2], y, wF, 20, undefined, 'FAST'); }catch(e){}
+        }
+        pdf.setDrawColor(60,60,60);
+        pdf.line(par[2], y+21, par[2]+wF, y+21);
+        pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+        pdf.text(par[1], par[2]+wF/2, y+25.5, {align:'center'});
+      });
+      y += ALTO_F;
+    });
+
+    // Pie
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(156,154,144);
+    pdf.text('Documento generado desde el sistema interno de Montasa Handling Co. \u2014 '+hoyTxt+(HOR_PRUEBA?' \u2014 PRUEBA':''), W/2, H-6, {align:'center'});
+
+    const blob = pdf.output('blob');
+    await _horEntregarPDF(blob, 'Control_Horometraje_'+horMesLabel(mes).replace(/ /g,'_')+(HOR_PRUEBA?'_PRUEBA':''), modo||'compartir');
+  }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
+}
 // ── REPORTES DE COBRO (RC-XXXX) ──────────────────────────────────────────────
 // ── Fotos y firma DENTRO del formulario (antes de guardar) ───────────────────
 let _rcFotosTmp = [];
