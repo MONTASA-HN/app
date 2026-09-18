@@ -686,6 +686,45 @@ function renderDashboardLog(){
 }
 
 // ── ÓRDENES LOGÍSTICA ─────────────────────────────────────────────────────
+// ── UBICACIÓN POR GPS: captura y enlace de mapas (orden + ficha del equipo) ──
+function _gpsCapturar(cb){
+  if(!navigator.geolocation){ toast('Este dispositivo no tiene GPS disponible', true); return; }
+  toast('📍 Obteniendo ubicación…');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
+    cb('https://www.google.com/maps?q='+lat+','+lng);
+  }, function(err){
+    toast('No se pudo obtener el GPS ('+((err&&err.message)||'sin permiso')+') — activa la ubicación e intenta de nuevo', true);
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:30000 });
+}
+function _gpsFichaLink(equipoId, link){
+  // El punto GPS de la orden viaja a la ficha del equipo (botón de mapa en flota)
+  if(!equipoId || equipoId==='__cliente__' || !link) return;
+  if(typeof _setUbLinkEquipo==='function'){ _setUbLinkEquipo(equipoId, link); return; }
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===equipoId; });
+  if(eq && !eq.esGenerico) eq.ubicacionLink = link;
+  try{
+    if(!window._fbDB) return;
+    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+      const v = s.val(); if(!v) return;
+      let idx = -1;
+      if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
+      else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
+      if(idx===-1 || idx===undefined) return;
+      window._fbDB.ref('montasa/equipos/'+idx+'/ubicacionLink').set(link);
+    }).catch(function(){});
+  }catch(e){}
+}
+function _gpsOrdenLog(id){
+  _gpsCapturar(function(link){
+    actualizarLog(id, 'ubicacionLink', link);
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(o && o.equipoId) _gpsFichaLink(o.equipoId, link);
+    toast('📍 Ubicación guardada en la orden' + (o&&o.equipoId?' y en la ficha del equipo':''));
+    try{ renderOrdenesLog(); }catch(e){}
+  });
+}
+
 function renderOrdenesLog(){
   const el = document.getElementById('ordenes-log-list');
   if(!el) return;
@@ -793,6 +832,7 @@ function renderOrdenesLog(){
         })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
+        <div class="form-group"><label>📍 Ubicación del trabajo</label><button onclick="event.stopPropagation();_gpsOrdenLog('${o.id}')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>${o.ubicacionLink?`<a href="${o.ubicacionLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">🗺 Ver en el mapa</a>`:``}</div>
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
         ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
