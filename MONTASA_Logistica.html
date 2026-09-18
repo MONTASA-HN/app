@@ -687,6 +687,42 @@ function renderDashboardLog(){
 
 // ── ÓRDENES LOGÍSTICA ─────────────────────────────────────────────────────
 // ── UBICACIÓN POR GPS: captura y enlace de mapas (orden + ficha del equipo) ──
+function _gpsQuitarLog(id){
+  if(!confirm('¿Quitar la ubicación capturada de esta orden?\n\nSi el punto también quedó en la ficha del equipo, se quitará de ahí. Luego pueden capturarla de nuevo.')) return;
+  const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+  const viejo = o ? (o.ubicacionLink||'') : '';
+  actualizarLog(id, 'ubicacionLink', '');
+  if(o && viejo && o.equipoId){
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    if(eq && eq.ubicacionLink===viejo) _gpsFichaBorrar(o.equipoId);
+  }
+  toast('🗑 Ubicación quitada — pueden capturarla de nuevo');
+  try{ renderOrdenesLog(); }catch(e){}
+}
+function _gpsFichaBorrar(equipoId){
+  if(!equipoId || equipoId==='__cliente__') return;
+  const eq = (DB.equipos||[]).find(function(e){ return e && e.id===equipoId; });
+  if(eq) eq.ubicacionLink = '';
+  try{
+    if(!window._fbDB) return;
+    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+      const v = s.val(); if(!v) return;
+      let idx = -1;
+      if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
+      else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
+      if(idx===-1 || idx===undefined) return;
+      window._fbDB.ref('montasa/equipos/'+idx+'/ubicacionLink').set('');
+    }).catch(function(){});
+  }catch(e){}
+}
+function _gpsCompartirLink(link){
+  if(!link) return;
+  if(navigator.share){ navigator.share({ title: 'Ubicación del trabajo', url: link }).catch(function(){}); return; }
+  try{
+    navigator.clipboard.writeText(link).then(function(){ toast('📋 Link copiado — pégalo en WhatsApp o donde lo necesites'); })
+      .catch(function(){ prompt('Copia el link de la ubicación:', link); });
+  }catch(e){ prompt('Copia el link de la ubicación:', link); }
+}
 function _gpsCapturar(cb){
   if(!navigator.geolocation){ toast('Este dispositivo no tiene GPS disponible', true); return; }
   toast('📍 Obteniendo ubicación…');
@@ -832,7 +868,7 @@ function renderOrdenesLog(){
         })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-        <div class="form-group"><label>📍 Ubicación del trabajo</label><button onclick="event.stopPropagation();_gpsOrdenLog('${o.id}')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>${o.ubicacionLink?`<a href="${o.ubicacionLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">🗺 Ver en el mapa</a>`:``}</div>
+        <div class="form-group"><label>📍 Ubicación del trabajo</label><button onclick="event.stopPropagation();_gpsOrdenLog('${o.id}')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>${o.ubicacionLink?`<a href="${o.ubicacionLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">🗺 Ver en el mapa</a><button data-l="${o.ubicacionLink}" onclick="event.stopPropagation();_gpsCompartirLink(this.dataset.l)" style="display:block;width:100%;padding:9px;background:#eef7ee;color:#1a5c1a;border:1px solid #bfe3bf;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">📋 Copiar / compartir link</button><button onclick="event.stopPropagation();_gpsQuitarLog('${o.id}')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>`:``}</div>
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
         ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
