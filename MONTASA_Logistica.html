@@ -746,6 +746,7 @@ function _gpsCompartirLink(link){
       .catch(function(){ prompt('Copia el link de la ubicación:', link); });
   }catch(e){ prompt('Copia el link de la ubicación:', link); }
 }
+const _GPS_TALLER_SPS = 'https://maps.app.goo.gl/iXbWDRPh7HG77Ski6'; // Taller MONTASA, San Pedro Sula
 function _gpsCapturar(cb){
   if(!navigator.geolocation){ toast('Este dispositivo no tiene GPS disponible', true); return; }
   toast('📍 Obteniendo ubicación…');
@@ -1605,6 +1606,11 @@ function cerrarOrdenLog(id){
   o.fechaCierre = new Date().toISOString().slice(0,10);
   // Restituir equipo a DISPONIBLE si era renta
   if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
+  // Retiro FUERA del plantel: el equipo vuelve al taller → su ficha queda con el link del taller SPS
+  if(o.tipoLogistica === 'retiro' && (o.ubicacionLog||'fuera')==='fuera' && !esCancelado){
+    _gpsFichaLink(o.equipoId, _GPS_TALLER_SPS);
+    if(o.equipoId2) _gpsFichaLink(o.equipoId2, _GPS_TALLER_SPS);
+  }
   // Update horometro in equipos
   const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
                     o.tipoLogistica==='retiro' ? o.horometroRetorno :
