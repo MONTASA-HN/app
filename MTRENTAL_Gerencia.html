@@ -7286,6 +7286,20 @@ solTipoChange = function(){ _solTipoChangeOrigUbL.apply(this, arguments); try{_u
 function solUbicacionLogChange2(){
   // En plantel solo cambia el vehículo y el km — equipos siempre visibles
 }
+function _gpsAutofillSol(selId, inpId, wrapId){
+  try{
+    const val = (document.getElementById(selId)||{}).value || '';
+    if(!val || val==='__otro__' || val==='__cliente__') return;
+    const eqSel = (DB.equipos||[]).find(function(e){ return e && (((e.codigo||'').trim()===val.trim()) || e.id===val); });
+    const inp = document.getElementById(inpId);
+    if(eqSel && eqSel.ubicacionLink && inp && !inp.value){
+      inp.value = eqSel.ubicacionLink;
+      const wrap = document.getElementById(wrapId);
+      if(wrap) wrap.style.display = 'block';
+      if(typeof toast==='function') toast('📍 Link de ubicación tomado de la ficha de '+(eqSel.codigo||'equipo'));
+    }
+  }catch(e){}
+}
 function solEquipoChange(){
   const val = document.getElementById('sol-equipo')?.value || '';
   const manual = document.getElementById('sol-equipo-manual');
@@ -7304,6 +7318,9 @@ function solEquipoChange(){
         sel2.appendChild(opt);
       });
   }
+  // Ficha con link de ubicación → colocarlo en la solicitud automáticamente
+  _gpsAutofillSol('sol-equipo','sol-ublink','sol-ublink-wrap');
+  _gpsAutofillSol('sol-equipo-B','sol-ublink2','sol-ublink-wrap2');
 }
 
 function actualizarBtnWA(){
