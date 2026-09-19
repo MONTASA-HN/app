@@ -2328,7 +2328,7 @@ function _mergeLogViaticos(remotos){
 // ══════════════════════════════════════════════════════════════════════════
 const GESTORES_VIATICOS = [
   {nombre:"FRANCISCO NOE NARVAES FONSECA",  id:"0501-1981-08196", cuenta:"2020575644", depto:"Logística"},
-  {nombre:"MIGUEL ANGEL ORELLANA LOPEZ",    id:"0501-1990-12530", cuenta:"2025575655", depto:"Logística"},
+  {nombre:"MIGUEL ANGEL ORELLANA LOPEZ",    id:"0501-1990-12530", cuenta:"2020575655", depto:"Logística"},
   {nombre:"JONATHAN JOSUE MARTINEZ LOPEZ",  id:"0501-1997-07479", cuenta:"2020575530", depto:"Taller"},
   {nombre:"ANGEL GABRIEL CARDONA PAZ",      id:"0501-1997-03637", cuenta:"2020575527", depto:"Taller"},
   {nombre:"DENIS RIGOBERTO LINARES REYES",  id:"0509-1994-00146", cuenta:"2020575543", depto:"Taller"},
@@ -2382,16 +2382,24 @@ function abrirViaticos(ordenId){
   const ov = document.getElementById('viaticos-overlay');
   if(!ov) return;
 
-  // Calculate totals
-  const personas = v.personas||[];
+  // Totales POR CATEGORÍA sumando TODAS las solicitudes de la orden (1, 2, 3, ...)
+  const _sols = _viatSolicitudes(orden);
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0,km:0};
-  const _pjR = _viatPeajes(v, d.peajes);
-  const cpU = _pjR.c;
-  const tPeaj = _pjR.t;
-  const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
-  const tComb = v.combustible||0;
-  const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
-  const tOtros = v.otros_gastos||0;
+  let tAlim=0, tPeaj=0, tComb=0, tHosp=0, tOtros=0;
+  const _perMap = {};
+  _sols.forEach(function(sv){
+    (sv.personas||[]).forEach(function(pp){
+      const a=(pp.desayuno||0)+(pp.almuerzo||0)+(pp.cena||0)+(pp.media_noche||0);
+      tAlim+=a; tHosp+=(pp.hospedaje||0);
+      const nom=(pp.nombre||'—');
+      _perMap[nom]=(_perMap[nom]||0)+a;
+    });
+    const dd = DESTINOS_VIATICOS.find(x=>x.nombre===sv.destino)||{peajes:0};
+    tPeaj += _viatPeajes(sv, dd.peajes).t;
+    tComb += (sv.combustible||0);
+    tOtros += (sv.otros_gastos||0);
+  });
+  const personas = Object.keys(_perMap).map(function(n){ return {nombre:n, alim:_perMap[n]}; });
   const tTotal = tAlim + tPeaj + tComb + tHosp + tOtros;
 
   function row(label, value, highlight){
@@ -2429,14 +2437,13 @@ function abrirViaticos(ordenId){
       ${row('⛽ Combustible', tComb)}
       ${tHosp ? row('🏨 Hospedaje', tHosp) : ''}
       ${tOtros ? row('📎 Otros gastos', tOtros) : ''}
-      ${(orden.viaticosExtra&&orden.viaticosExtra.length) ? _viatSolicitudes(orden).map((sv,si)=>row('📋 Solicitud '+(si+1), (typeof _calcTotalSol==='function'?_calcTotalSol(sv):_calcCostoViaticos(sv)))).join('') : ''}
-      ${row('💰 TOTAL ASIGNADO', (orden.viaticosExtra&&orden.viaticosExtra.length) ? _viatTotalAsignado(orden) : tTotal, true)}
+      ${row('💰 TOTAL ASIGNADO'+(_sols.length>1?' ('+_sols.length+' solicitudes)':''), _viatTotalAsignado(orden) || tTotal, true)}
       <!-- Personal -->
       ${personas.length ? `
       <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Personal viajando</div>
       ${personas.map(p=>`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:13px">
         <span>${p.nombre||'—'}</span>
-        <span style="color:var(--text2)">L. ${((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)).toFixed(0)}</span>
+        <span style="color:var(--text2)">L. ${p.alim.toFixed(0)}</span>
       </div>`).join('')}` : ''}
     </div>
   </div>
