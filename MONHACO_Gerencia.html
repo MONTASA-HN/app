@@ -5504,7 +5504,7 @@ function _renderOrdenesLog(el, tipoFiltro){
     card += '</div>';
     // Costo de viaje (si tiene viáticos)
     card += _ubLinkHTML(o) + _contactoHTML(o);
-    const _costo = _calcCostoViaticos(o.viaticos);
+    const _costo = _viatTotalAsignado(o);
     if(_costo>0) card += '<div style="font-size:11px;font-weight:700;color:#1f3864;margin-top:4px">💰 Costo viaje: L. '+_costo.toFixed(2)+'</div>';
     else if(o.viaticos) card += '<div style="font-size:11px;color:#2d6a9f;margin-top:4px">📋 Viáticos solicitados</div>';
     // Km recorridos (si aplica)
@@ -5600,7 +5600,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.fechaCierre) h+="<div style=\"font-size:11px;color:var(--text3);margin-bottom:10px\">\ud83d\udcc5 Cerrado: "+fmtDT(o.fechaCierre)+"</div>";
   if(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))
     h+="<div style=\"background:#e8f4e8;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px\"><span style=\"color:#1a5c1a;font-weight:600\">\ud83d\udee3 Km recorridos: "+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+" km</span></div>";
-  var _cv=_calcCostoViaticos(o.viaticos);
+  var _cv=_viatTotalAsignado(o);
   if(_cv>0) h+="<div style=\"background:#dce6f1;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px;font-weight:700;color:#1f3864\">\ud83d\udcb0 Costo viaje: L. "+_cv.toFixed(2)+"</div>";
   if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
     h+="<div style=\"display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;background:#dce6f1;border-radius:6px;padding:12px\"><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS EQUIPO</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hEq+"</div></div><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS OPERADOR</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hOp+"</div></div></div>";
@@ -6774,7 +6774,7 @@ function _buildCardRV(x, eq, eqLabel, ESTADOS_COLOR){
   cRV += `</div>`;
   cRV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.notas||x.placa||'Revisión Físico-Técnica'}</div>`;
   cRV += `<div style="font-size:11px;color:var(--text3)">✅ Revisión · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
-  if(x.viaticos){ const tvjRV=_calcCostoViaticos(x.viaticos); cRV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjRV.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvjRV=_viatTotalAsignado(x); cRV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjRV.toFixed(2)}</div>`; }
   cRV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenRV?'⌃':'⌄'}</span></div>`;
   if(isOpenRV){
     cRV += _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR);
@@ -6822,7 +6822,7 @@ function _buildCardEV(x, eq, eqLabel, ESTADOS_COLOR){
   cEV += `<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${x.modelo||x.serie||'Evaluación de Equipo'}</div>`;
   cEV += `<div style="font-size:11px;color:var(--text3)">📄 Evaluación · 📅 ${x.fecha||'—'} · 👷 ${tecs}</div>`;
   if(x.cliente) cEV += `<div style="font-size:11px;color:var(--text3)">👤 ${x.cliente}</div>`;
-  if(x.viaticos){ const tvjEV=_calcCostoViaticos(x.viaticos); cEV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjEV.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvjEV=_viatTotalAsignado(x); cEV+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvjEV.toFixed(2)}</div>`; }
   cEV += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">${isOpenEV?'⌃':'⌄'}</span></div>`;
   if(isOpenEV){
     cEV += _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR);
@@ -6879,7 +6879,7 @@ function _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
   if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
   if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
   if(x.vales&&x.vales.length){ const tv=x.vales.reduce((s,v)=>s+v.monto,0); card+=`<div style="font-size:11px;color:#856404">🍽 Vale: L. ${tv.toFixed(2)}</div>`; }
-  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvj=_viatTotalAsignado(x); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
   card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
   if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'P');
   card += `</div>`;
@@ -6907,7 +6907,7 @@ function _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos){
   card += _ubLinkHTML(x) + _contactoHTML(x);
   if(x.inicioTrabajo||x.fechaInicio){ const t=tiempos; let hl=`📅 ${fmtDT(x.inicioTrabajo||x.fechaInicio)||'—'}`; if(t.total!=='—') hl+=` · ⏱ ${t.total}`; card+=`<div style="font-size:11px;color:var(--text3)">${hl}</div>`; }
   if(tecnicos!=='—') card += `<div style="font-size:11px;color:var(--text3)">👷 ${tecnicos}</div>`;
-  if(x.viaticos){ const tvj=_calcCostoViaticos(x.viaticos); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
+  if(x.viaticos){ const tvj=_viatTotalAsignado(x); card+=`<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ${tvj.toFixed(2)}</div>`; }
   card += `</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0;pointer-events:none">${isOpen?'⌃':'⌄'}</span></div>`;
   if(isOpen) card += _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, 'C');
   card += `</div>`;
@@ -7111,7 +7111,7 @@ function guardarPreventivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
       window._editandoOrden = null;
     }
@@ -7310,7 +7310,7 @@ function guardarCorrectivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente','cliente','nFotos'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; }
       window._editandoOrden = null;
     }
@@ -8907,6 +8907,55 @@ function _renderListaSegunTipo(tipo){
   else renderHistorial();
 }
 
+// ── VIÁTICOS: VARIAS SOLICITUDES POR ORDEN, UNA SOLA LIQUIDACIÓN ─────────────
+// orden.viaticos = solicitud 1 (+ facturas de la liquidación única)
+// orden.viaticosExtra = [solicitud 2, solicitud 3, ...]
+let _viatSolIdx = null; // null = solicitud 1 · número = índice en viaticosExtra · '__nueva__' = adicional nueva
+function _viatSolicitudes(o){
+  const out = [];
+  if(o && o.viaticos) out.push(o.viaticos);
+  ((o && o.viaticosExtra) || []).forEach(function(x){ if(x) out.push(x); });
+  return out;
+}
+function _viatTotalAsignado(o){
+  const f = (typeof _calcTotalSol === 'function') ? _calcTotalSol : _calcCostoViaticos;
+  return _viatSolicitudes(o).reduce(function(s, v){ return s + (f(v)||0); }, 0);
+}
+function _viatSolActiva(orden){
+  if(_viatSolIdx === '__nueva__'){
+    const sols = _viatSolicitudes(orden);
+    if(!sols.length) return {};
+    const base = JSON.parse(JSON.stringify(sols[sols.length-1]));
+    delete base.facturas; // la liquidación es una sola y vive en la solicitud 1
+    delete base.fecha_doc;
+    return base;
+  }
+  if(typeof _viatSolIdx === 'number') return (orden.viaticosExtra||[])[_viatSolIdx] || {};
+  return orden.viaticos || null;
+}
+function _viatVerSolicitud(idx){
+  const orden = _getViaticosOrden(); if(!orden) return;
+  if(idx === '__nueva__'){ _viatSolIdx = '__nueva__'; _viaticosReadOnly = false; }
+  else if(idx < 0){ _viatSolIdx = null; _viaticosReadOnly = !!orden.viaticos; }
+  else { _viatSolIdx = idx; _viaticosReadOnly = true; }
+  _viaticosMode = 'solicitud';
+  renderModalViaticos(orden);
+}
+function _viatChipsHTML(orden){
+  const sols = _viatSolicitudes(orden);
+  const f = (typeof _calcTotalSol === 'function') ? _calcTotalSol : _calcCostoViaticos;
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  sols.forEach(function(v, i){
+    const act = (i===0 && _viatSolIdx===null) || (i>0 && _viatSolIdx===(i-1));
+    h += '<button onclick="_viatVerSolicitud('+(i===0?-1:(i-1))+')" style="padding:8px 12px;border-radius:16px;border:1px solid #b9d2ef;font-size:12px;font-weight:700;cursor:pointer;background:'+(act?'#1f3864':'#eef2f8')+';color:'+(act?'#fff':'#1f3864')+'">Solicitud '+(i+1)+' · L. '+(f(v)||0).toFixed(2)+'</button>';
+  });
+  if(_viatSolIdx === '__nueva__') h += '<span style="padding:8px 12px;border-radius:16px;border:1px dashed #1f3864;background:#1f3864;color:#fff;font-size:12px;font-weight:700">Nueva solicitud…</span>';
+  else h += '<button onclick="_viatVerSolicitud(\'__nueva__\')" style="padding:8px 12px;border-radius:16px;border:1px dashed #1f3864;background:var(--surface,#fff);color:#1f3864;font-size:12px;font-weight:700;cursor:pointer">➕ Solicitud adicional</button>';
+  h += '</div>';
+  if(sols.length > 1 || _viatSolIdx === '__nueva__') h += '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;color:#1a5c1a"><b>Total asignado a la orden ('+sols.length+' solicitud'+(sols.length===1?'':'es')+'): L. '+_viatTotalAsignado(orden).toFixed(2)+'</b> — la liquidación se compara contra este total.</div>';
+  return h;
+}
+
 function abrirViaticos(ordenId, tipo){
   tipo = tipo || 'logistica';
   const orden = _getViaticosArray(tipo).find(o=>o.id===ordenId);
@@ -8929,6 +8978,7 @@ function _abrirViaticosInterno(orden, tipo){
   _viaticosOrdenId = orden.id;
   _viaticosTipo = tipo || 'logistica';
   _viaticosData = orden.viaticos || null;
+  _viatSolIdx = null;
   _viaticosMode = 'solicitud';
   _viaticosReadOnly = !!(orden.viaticos); // read-only if viaticos already saved
   renderModalViaticos(orden);
@@ -8938,7 +8988,14 @@ function eliminarViaticosConPin(){
   solicitarPINAccion(()=>{
     const orden = _getViaticosOrden();
     if(!orden) return;
-    delete orden.viaticos;
+    if(typeof _viatSolIdx === 'number' && orden.viaticosExtra){
+      orden.viaticosExtra.splice(_viatSolIdx, 1);
+      if(!orden.viaticosExtra.length) delete orden.viaticosExtra;
+      _viatSolIdx = null;
+    } else {
+      delete orden.viaticos;
+      delete orden.viaticosExtra;
+    }
     saveDB();
     cerrarViaticos();
     _renderListaSegunTipo(_viaticosTipo);
@@ -8963,7 +9020,7 @@ function cerrarViaticos(){
 function renderModalViaticos(orden){
   const ov = document.getElementById('viaticos-overlay');
   if(!ov) return;
-  const v = _viaticosData || {};
+  const v = (_viaticosMode==='liquidacion') ? (orden.viaticos||{}) : (_viatSolActiva(orden) || _viaticosData || {});
   const esFutura = !v.gestor_nombre; // No hay solicitud previa
 
   // Calcular automáticamente alimentación según horarios
@@ -9034,7 +9091,8 @@ function renderModalViaticos(orden){
       </button>
     </div>
     <div style="padding:16px" id="viaticos-content">
-      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen, !!(v.facturas && v.facturas.some(f=>f.monto)))}
+      ${_viaticosMode==='solicitud' && orden.viaticos ? _viatChipsHTML(orden) : ''}
+      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, (orden.viaticos ? _viatTotalAsignado(orden) : tGen), !!(v.facturas && v.facturas.some(f=>f.monto)))}
     </div>
   </div>
   </div>`;
@@ -9397,7 +9455,7 @@ function editarLiquidacionConPin(){
   const v = orden.viaticos;
   // Total solicitado con la fórmula canónica (incluye media noche, hospedaje,
   // otros gastos y peajes reales) — respeta los montos editados a mano.
-  const montoSol = _calcTotalSol(v);
+  const montoSol = _viatTotalAsignado(orden) || _calcTotalSol(v);
   const liqContainer = document.getElementById('vliq-container');
   if(liqContainer) liqContainer.innerHTML = renderLiquidacionForm(v, montoSol, false);
 }
@@ -9409,7 +9467,8 @@ function recalcFacturas(){
   }
   document.getElementById('vliq-total')&&(document.getElementById('vliq-total').textContent='L. '+total.toFixed(2));
   // diff
-  const montoSol = _viaticosData ? _calcTotalSol(_viaticosData) : 0;
+  const _ordRF = (typeof _getViaticosOrden==='function') ? _getViaticosOrden() : null;
+  const montoSol = (_ordRF && _ordRF.viaticos) ? _viatTotalAsignado(_ordRF) : (_viaticosData ? _calcTotalSol(_viaticosData) : 0);
   const diff = montoSol - total;
   const el = document.getElementById('vliq-diff');
   if(el){ el.textContent='L. '+diff.toFixed(2); el.style.color=diff>0?'#ff9999':'#99ffaa'; }
@@ -9513,9 +9572,19 @@ function guardarViaticos(){
   const formData = _leerFormSolicitud();
   const orden = _getViaticosOrden();
   if(!orden) return;
-  const existingFacturas = (_viaticosData||{}).facturas || [];
-  orden.viaticos = {...formData, facturas: existingFacturas};
-  _viaticosData = orden.viaticos;
+  if(_viatSolIdx === '__nueva__'){
+    if(!orden.viaticosExtra) orden.viaticosExtra = [];
+    orden.viaticosExtra.push({...formData, ts: Date.now()});
+    _viatSolIdx = orden.viaticosExtra.length - 1;
+    _viaticosReadOnly = true;
+  } else if(typeof _viatSolIdx === 'number'){
+    if(!orden.viaticosExtra) orden.viaticosExtra = [];
+    orden.viaticosExtra[_viatSolIdx] = {...(orden.viaticosExtra[_viatSolIdx]||{}), ...formData};
+  } else {
+    const existingFacturas = (_viaticosData||{}).facturas || [];
+    orden.viaticos = {...formData, facturas: existingFacturas};
+    _viaticosData = orden.viaticos;
+  }
   saveDB();
   if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
   cerrarViaticos();
@@ -9575,6 +9644,14 @@ async function _descargarDocPDF(htmlContent, nombreArchivo, apaisado){
     var margen=20, usableW=pw-margen*2, usableH=ph-margen*2;
     var pxPorPt=canvas.width/usableW;
     var altoPagPx=Math.floor(usableH*pxPorPt);
+    // Si el contenido apenas pasa de una hoja, se encoge para quedar en UNA sola
+    if(canvas.height > altoPagPx && canvas.height <= altoPagPx*1.75){
+      var escala1h = altoPagPx / canvas.height;
+      var w1h = usableW * escala1h;
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG', margen + (usableW - w1h)/2, margen, w1h, usableH);
+      pdf.save(nombreArchivo);
+      return;
+    }
     var y=0, primera=true;
     while(y<canvas.height){
       var sliceH=Math.min(altoPagPx, canvas.height-y);
@@ -9599,8 +9676,18 @@ async function generarPDFViaticos(tipo){
   if(_viaticosMode==='solicitud'){
     if(document.getElementById('v-destino')){
       const formData=_leerFormSolicitud();
-      orden.viaticos={...(_viaticosData||{}),...formData};
-      _viaticosData=orden.viaticos;
+      if(_viatSolIdx === '__nueva__'){
+        if(!orden.viaticosExtra) orden.viaticosExtra = [];
+        orden.viaticosExtra.push({...formData, ts: Date.now()});
+        _viatSolIdx = orden.viaticosExtra.length - 1;
+        _viaticosReadOnly = true;
+      } else if(typeof _viatSolIdx === 'number'){
+        if(!orden.viaticosExtra) orden.viaticosExtra = [];
+        orden.viaticosExtra[_viatSolIdx] = {...(orden.viaticosExtra[_viatSolIdx]||{}), ...formData};
+      } else {
+        orden.viaticos={...(_viaticosData||{}),...formData};
+        _viaticosData=orden.viaticos;
+      }
       saveDB();
     }
   } else {
@@ -9615,7 +9702,7 @@ async function generarPDFViaticos(tipo){
 if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(orden.id); // persistir viáticos de órdenes de logística
 
   // Usar los datos recién guardados
-  const v = orden.viaticos||{};
+  const v = (_viaticosMode==='solicitud') ? (_viatSolActiva(orden) || orden.viaticos || {}) : (orden.viaticos||{});
   toast('Generando PDF...');
 
   try{
@@ -9754,7 +9841,7 @@ function _buildLiquidacionHTML(v, orden){
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
-  const montoSol=tAlim+tTr+tPeaj+(v.combustible||0)+tHosp+(v.otros_gastos||0);
+  const montoSol=_viatTotalAsignado(orden) || (tAlim+tTr+tPeaj+(v.combustible||0)+tHosp+(v.otros_gastos||0));
   const facturas=v.facturas||[];
   const totalFact=facturas.reduce((s,f)=>s+(f&&f.monto||0),0);
   const diff=montoSol-totalFact;
