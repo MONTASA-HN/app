@@ -715,6 +715,29 @@ function _gpsFichaBorrar(equipoId){
     }).catch(function(){});
   }catch(e){}
 }
+function _gpsBloqueLog(o, tipo){
+  if(!(o && o.tipoLogistica==='entrega' && (o.ubicacionLog||'fuera')==='fuera')) return ''; // solo entregas fuera del plantel
+  const esc = String(o.ubicacionLink||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  let h = '<div class="form-group"><label>📍 Ubicación del trabajo</label>';
+  if(!o.ubicacionLink){
+    h += '<button onclick="event.stopPropagation();_gpsOrdenLog(\''+o.id+'\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>';
+    h += '<div style="font-size:11px;color:var(--text3,#888)">Obligatoria para cerrar la orden. El punto se guarda en la orden y en la ficha del equipo.</div>';
+  } else {
+    h += '<a href="'+esc+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;margin-bottom:6px">🗺 Ver en el mapa</a>';
+    h += '<button data-l="'+esc+'" onclick="event.stopPropagation();_gpsCompartirLink(this.dataset.l)" style="display:block;width:100%;padding:9px;background:#eef7ee;color:#1a5c1a;border:1px solid #bfe3bf;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">📋 Copiar / compartir link</button>';
+    h += '<button onclick="event.stopPropagation();_gpsQuitarLog(\''+o.id+'\')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>';
+    h += '<div style="font-size:11px;color:var(--text3,#888)">Punto guardado en la orden y en la ficha del equipo. Si está equivocado: quítalo y captúralo de nuevo.</div>';
+  }
+  return h + '</div>';
+}
+function _gpsAutoLinkOrden(entry){
+  // La orden nueva hereda el link de ubicación que ya tenga la ficha del equipo
+  try{
+    if(!entry || entry.ubicacionLink || !entry.equipoId || entry.equipoId==='__cliente__') return;
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===entry.equipoId; });
+    if(eq && eq.ubicacionLink) entry.ubicacionLink = eq.ubicacionLink;
+  }catch(e){}
+}
 function _gpsCompartirLink(link){
   if(!link) return;
   if(navigator.share){ navigator.share({ title: 'Ubicación del trabajo', url: link }).catch(function(){}); return; }
@@ -868,7 +891,7 @@ function renderOrdenesLog(){
         })()}
         <!-- Campos según tipo de orden -->
         ${renderCamposTipo(o)}
-        <div class="form-group"><label>📍 Ubicación del trabajo</label><button onclick="event.stopPropagation();_gpsOrdenLog('${o.id}')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>${o.ubicacionLink?`<a href="${o.ubicacionLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none">🗺 Ver en el mapa</a><button data-l="${o.ubicacionLink}" onclick="event.stopPropagation();_gpsCompartirLink(this.dataset.l)" style="display:block;width:100%;padding:9px;background:#eef7ee;color:#1a5c1a;border:1px solid #bfe3bf;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">📋 Copiar / compartir link</button><button onclick="event.stopPropagation();_gpsQuitarLog('${o.id}')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>`:``}</div>
+        ${_gpsBloqueLog(o)}
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
         ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
@@ -1552,6 +1575,9 @@ function cerrarOrdenLog(id){
          parseFloat(o.horometroRetorno) < parseFloat(o.horometroSalida)){
         faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
       }
+    }
+    if(o.tipoLogistica==='entrega' && (o.ubicacionLog||'fuera')==='fuera' && !o.ubicacionLink){
+      faltantes.push('📍 Ubicación GPS del punto de entrega (usa el botón Capturar)');
     }
     if(((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera')||o.tipoLogistica==='atencion_compras'){
       if(!o.kmSalida) faltantes.push('Kilometraje de salida');
