@@ -411,7 +411,7 @@ function calcularVales(fechaInicio, fechaFin, personas){
 }
 
 function _costoViaticosHtml(o){
-  var cv = _calcCostoViaticos(o.viaticos);
+  var cv = _viatTotalAsignado(o);
   if(cv>0) return "<div style=\"font-size:11px;font-weight:700;color:#1f3864;margin-top:2px\">\ud83d\udcb0 Costo viaje: L. "+cv.toFixed(2)+"</div>";
   if(o.viaticos) return "<div style=\"font-size:11px;color:#2d6a9f;margin-top:2px\">\ud83d\udccb Vi\u00e1ticos solicitados</div>";
   return "";
@@ -2361,6 +2361,18 @@ let _viaticosOrdenId = null;
 let _viaticosMode = 'solicitud'; // 'solicitud' | 'liquidacion'
 let _viaticosData = null;
 
+// ── VIÁTICOS: total asignado = suma de todas las solicitudes de la orden ────
+function _viatSolicitudes(o){
+  const out = [];
+  if(o && o.viaticos) out.push(o.viaticos);
+  ((o && o.viaticosExtra) || []).forEach(function(x){ if(x) out.push(x); });
+  return out;
+}
+function _viatTotalAsignado(o){
+  const f = (typeof _calcTotalSol === 'function') ? _calcTotalSol : _calcCostoViaticos;
+  return _viatSolicitudes(o).reduce(function(s, v){ return s + (f(v)||0); }, 0);
+}
+
 function abrirViaticos(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
@@ -2417,7 +2429,8 @@ function abrirViaticos(ordenId){
       ${row('⛽ Combustible', tComb)}
       ${tHosp ? row('🏨 Hospedaje', tHosp) : ''}
       ${tOtros ? row('📎 Otros gastos', tOtros) : ''}
-      ${row('💰 TOTAL DEL VIAJE', tTotal, true)}
+      ${(orden.viaticosExtra&&orden.viaticosExtra.length) ? _viatSolicitudes(orden).map((sv,si)=>row('📋 Solicitud '+(si+1), (typeof _calcTotalSol==='function'?_calcTotalSol(sv):_calcCostoViaticos(sv)))).join('') : ''}
+      ${row('💰 TOTAL ASIGNADO', (orden.viaticosExtra&&orden.viaticosExtra.length) ? _viatTotalAsignado(orden) : tTotal, true)}
       <!-- Personal -->
       ${personas.length ? `
       <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Personal viajando</div>
@@ -2513,7 +2526,7 @@ function renderModalViaticos(orden){
       </button>
     </div>
     <div style="padding:16px" id="viaticos-content">
-      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, tGen)}
+      ${_viaticosMode==='solicitud' ? renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen) : renderLiquidacionForm(v, (orden.viaticos ? _viatTotalAsignado(orden) : tGen))}
     </div>
   </div>
   </div>`;
@@ -2855,7 +2868,8 @@ function recalcFacturas(){
   }
   document.getElementById('vliq-total')&&(document.getElementById('vliq-total').textContent='L. '+total.toFixed(2));
   // diff
-  const montoSol = _viaticosData ? _calcTotalSol(_viaticosData) : 0;
+  const _oRF = (DB.logistica||[]).find(function(x){ return x && x.id===_viaticosOrdenId; });
+  const montoSol = (_oRF && _oRF.viaticos) ? _viatTotalAsignado(_oRF) : (_viaticosData ? _calcTotalSol(_viaticosData) : 0);
   const diff = montoSol - total;
   const el = document.getElementById('vliq-diff');
   if(el){ el.textContent='L. '+diff.toFixed(2); el.style.color=diff>0?'#ff9999':'#99ffaa'; }
@@ -3018,6 +3032,13 @@ async function _descargarDocPDF(htmlContent, nombreArchivo, apaisado){
     var margen=20, usableW=pw-margen*2, usableH=ph-margen*2;
     var pxPorPt=canvas.width/usableW;
     var altoPagPx=Math.floor(usableH*pxPorPt);
+    if(canvas.height > altoPagPx && canvas.height <= altoPagPx*1.75){
+      var escala1h = altoPagPx / canvas.height;
+      var w1h = usableW * escala1h;
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG', margen + (usableW - w1h)/2, margen, w1h, usableH);
+      pdf.save(nombreArchivo);
+      return;
+    }
     var y=0, primera=true;
     while(y<canvas.height){
       var sliceH=Math.min(altoPagPx, canvas.height-y);
@@ -3195,7 +3216,7 @@ function _buildLiquidacionHTML(v, orden){
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
-  const montoSol=tAlim+tTr+tPeaj+(v.combustible||0)+tHosp+(v.otros_gastos||0);
+  const montoSol=_viatTotalAsignado(orden) || (tAlim+tTr+tPeaj+(v.combustible||0)+tHosp+(v.otros_gastos||0));
   const facturas=v.facturas||[];
   const totalFact=facturas.reduce((s,f)=>s+(f&&f.monto||0),0);
   const diff=montoSol-totalFact;
