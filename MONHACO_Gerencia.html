@@ -6596,11 +6596,12 @@ function _renderCarpetasMant(el){
   const CARPETAS = [
     {tipo:'P',  icon:'📋', label:'Preventivos',               color:'#2E83C3'},
     {tipo:'C',  icon:'🔧', label:'Correctivos',               color:'#C9211E'},
+    {tipo:'DEL',icon:'🗑', label:'Eliminadas',                color:'#888888'},
     {tipo:'CT', icon:'🚪', label:'Cortinas /\nNiveladoras',    color:'#9B59B6'},
   ];
   el.innerHTML = `<div class="carpeta-grid">
     ${CARPETAS.map(c=>{
-      const CNTS = {P:(DB.preventivos||[]).length, C:(DB.correctivos||[]).length, CT:(DB.cortinas||[]).length};
+      const CNTS = {DEL:_papeleraLista().length, P:(DB.preventivos||[]).length, C:(DB.correctivos||[]).length, CT:(DB.cortinas||[]).length};
       const cnt = CNTS[c.tipo]||0;
       return `
       <div class="carpeta-item" style="--carpeta-color:${c.color};position:relative" onclick="_abrirCarpetaMant('${c.tipo}')">
@@ -6635,6 +6636,13 @@ function _renderOrdenesMant(el, tipo){
     'RV': {icon:'✅', label:'Revisión Físico-Técnica',  color:'#18A303'},
     'EV': {icon:'📄', label:'Evaluación de Equipo',     color:'#E8811A'},
   };
+  if(tipo==='DEL'){
+    el.innerHTML = '<div class="carpeta-back" onclick="_cerrarCarpetaMant()">← <span>Volver a carpetas</span></div>'
+      + '<div class="carpeta-titulo" style="border-bottom:2px solid #888;padding-bottom:8px">🗑 Órdenes eliminadas</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Se conservan '+_PAPELERA_MESES+' meses. Incluye órdenes de mantenimiento y de logística. Las fotografías no se conservan.</div>'
+      + _papeleraCardsHTML();
+    return;
+  }
   const info = INFO[tipo];
 
   const ESTADOS_COLOR = {
@@ -7196,6 +7204,125 @@ function completarPreventivo(id){
   renderPreventivos(); renderDashboard();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
 }
+const _RAIZ_APP = 'monhaco';
+// ── PAPELERA: historial de órdenes eliminadas (se conservan 2 meses) ─────────
+const _PAPELERA_MESES = 2;
+const _PAPELERA_LBL = {prev:'Preventivo', corr:'Correctivo', log:'Logística', rv:'Revisión F-T', ev:'Evaluación', ct:'Cortina/Niveladora'};
+function _papeleraLimpiar(){
+  const lim = Date.now() - _PAPELERA_MESES*30*24*60*60*1000;
+  const p = DB.papelera || {};
+  let cambio = false;
+  Object.keys(p).forEach(function(k){
+    if(!p[k] || !p[k]._delTs || p[k]._delTs < lim){ delete p[k]; cambio = true; }
+  });
+  if(cambio){
+    DB.papelera = p;
+    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera').set(p); }catch(e){}
+  }
+  return p;
+}
+function _papeleraGuardar(orden, tipo){
+  try{
+    if(!orden || !orden.id) return;
+    if(!DB.papelera) DB.papelera = {};
+    // Copia sin fotos (pesan demasiado para conservarlas 2 meses)
+    const copia = {};
+    Object.keys(orden).forEach(function(k){
+      if(k==='fotos' || k==='foto' || k==='fotosPend' || k==='checklistPdf') return;
+      if(orden[k] !== undefined) copia[k] = orden[k];
+    });
+    copia._delTs = Date.now();
+    copia._delTipo = tipo || 'prev';
+    copia._delPor = 'Gerencia';
+    copia._nFotos = (orden.fotos && orden.fotos.length) ? orden.fotos.length : 0;
+    DB.papelera[orden.id] = copia;
+    _papeleraLimpiar();
+    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera/'+orden.id).set(copia); }catch(e){}
+  }catch(e){}
+}
+function _papeleraLista(){
+  const p = _papeleraLimpiar();
+  return Object.keys(p).map(function(k){ return p[k]; })
+    .filter(Boolean)
+    .sort(function(a,b){ return (b._delTs||0) - (a._delTs||0); });
+}
+function _papeleraRestaurar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.papelera||{})[id];
+    if(!o){ toast('La orden ya no está en la papelera', true); return; }
+    const t = o._delTipo || 'prev';
+    const limpia = {};
+    Object.keys(o).forEach(function(k){ if(k!=='_delTs' && k!=='_delTipo' && k!=='_delPor' && k!=='_nFotos') limpia[k]=o[k]; });
+    const destino = {prev:'preventivos', corr:'correctivos', log:'logistica', rv:'revisiones', ev:'evaluaciones', ct:'cortinas'}[t];
+    if(!destino){ toast('No se pudo identificar el tipo de orden', true); return; }
+    if(!DB[destino]) DB[destino] = [];
+    if(DB[destino].some(function(x){ return x && x.id===limpia.id; })){ toast('Esa orden ya existe en el sistema', true); return; }
+    DB[destino].push(limpia);
+    // Quitar la lápida para que la sincronización no la vuelva a borrar
+    try{
+      if(window._borradasCache) delete window._borradasCache[id];
+      if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/_borradas/'+id).remove();
+    }catch(e){}
+    delete DB.papelera[id];
+    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera/'+id).remove(); }catch(e){}
+    saveDB();
+    if(t==='log' && window._fbDB && window._fbReady){
+      const cleanList = (DB.logistica||[]).map(function(x){
+        if(!x) return null;
+        const c=Object.assign({},x);
+        Object.keys(c).forEach(function(k){ if(c[k]===undefined) delete c[k]; });
+        return c;
+      }).filter(Boolean);
+      window._fbDB.ref(_RAIZ_APP).update({logistica: cleanList, _ts: Date.now()});
+    }
+    toast('↩️ Orden '+(limpia.correlativo||'')+' restaurada ✓');
+    try{ _carpetaMant = 'DEL'; renderHistorial(); }catch(e){}
+    try{ renderLogistica(); }catch(e){}
+  }, '↩️ Restaurar orden', 'Ingresa tu PIN para devolver esta orden al sistema');
+}
+function _papeleraEliminarDef(id){
+  solicitarPINAccion(function(){
+    if(!confirm('¿Eliminar DEFINITIVAMENTE esta orden de la papelera?\n\nEsta acción no se puede deshacer.')) return;
+    if(DB.papelera) delete DB.papelera[id];
+    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera/'+id).remove(); }catch(e){}
+    saveDB();
+    toast('Orden eliminada definitivamente');
+    try{ _carpetaMant = 'DEL'; renderHistorial(); }catch(e){}
+  }, '🗑 Eliminar definitivamente', 'Ingresa tu PIN para borrar esta orden de la papelera');
+}
+function _papeleraCardsHTML(){
+  const lista = _papeleraLista();
+  if(!lista.length) return '<div class="empty">No hay órdenes eliminadas en los últimos '+_PAPELERA_MESES+' meses</div>';
+  const _fd = function(ts){
+    if(!ts) return '—';
+    const d = new Date(ts);
+    return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  };
+  return lista.map(function(o){
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    const eqLbl = eq ? (eq.codigo+(eq.marca?' – '+eq.marca:'')) : (o.clienteNombre||o.equipoTxt||'—');
+    const trabajo = o.servicio || o.falla || o.descripcion || o.notas || o.diagnostico || '—';
+    const tipoLbl = _PAPELERA_LBL[o._delTipo] || 'Orden';
+    return '<div class="card" style="padding:12px 14px;border-left:3px solid #c9211e;margin-bottom:8px;opacity:0.95">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">'
+      + '<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#fdeaea;color:#c9211e;padding:2px 7px;border-radius:10px">'+(o.correlativo||'—')+'</span>'
+      + '<span style="font-size:11px;font-weight:700;background:#f5f5f5;color:#666;padding:2px 8px;border-radius:10px;border:1px solid #ddd">'+tipoLbl+'</span>'
+      + (o.estado?'<span style="font-size:11px;color:var(--text3)">'+o.estado+'</span>':'')
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">'+String(trabajo).slice(0,90)+'</div>'
+      + '<div style="font-size:11px;color:var(--text3)">🔧 '+eqLbl+'</div>'
+      + (o.tecnico||o.operador?'<div style="font-size:11px;color:var(--text3)">👷 '+(o.tecnico||o.operador)+'</div>':'')
+      + '<div style="font-size:11px;color:#c9211e;margin-top:3px">🗑 Eliminada el <b>'+_fd(o._delTs)+'</b>'+(o._nFotos?' · '+o._nFotos+' foto(s) no conservadas':'')+'</div>'
+      + '</div></div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
+      + '<button onclick="_papeleraRestaurar(\''+o.id+'\')" style="flex:1;min-width:140px;padding:9px;background:#18A303;color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">↩️ Restaurar (PIN)</button>'
+      + '<button onclick="_papeleraEliminarDef(\''+o.id+'\')" style="flex:1;min-width:140px;padding:9px;background:#fdeaea;color:#c00;border:1px solid #f3c1c1;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">🗑 Borrar definitivo</button>'
+      + '</div></div>';
+  }).join('');
+}
+
 function _marcarOrdenBorrada(id){
   try{
     if(window._ordenesRecientes) delete window._ordenesRecientes[id];
@@ -7209,12 +7336,14 @@ function eliminarDelHistorial(tipo, id){
     _marcarOrdenBorrada(id);
     if(tipo==='prev'){
       const orden = DB.preventivos.find(x=>x.id===id);
+      _papeleraGuardar(orden, 'prev');
       _revertirEstadoEquipoAlEliminar(orden);
       DB.preventivos = DB.preventivos.filter(x=>x.id!==id);
       if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='log'){
       const ordenLog = (DB.logistica||[]).find(x=>x.id===id);
+      _papeleraGuardar(ordenLog, 'log');
       _revertirEstadoEquipoAlEliminar(ordenLog);
       DB.logistica = (DB.logistica||[]).filter(x=>x.id!==id);
       saveDB();
@@ -7236,18 +7365,22 @@ function eliminarDelHistorial(tipo, id){
         renderLogistica(); renderHistorial(); toast('Orden eliminada ✓');
       }
     } else if(tipo==='ct'){
+      _papeleraGuardar((DB.cortinas||[]).find(x=>x&&x.id===id), 'ct');
       DB.cortinas = (DB.cortinas||[]).filter(x=>x.id!==id);
       saveDB();
       _delCortina(id);
       fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='rv'){
+      _papeleraGuardar((DB.revisiones||[]).find(x=>x&&x.id===id), 'rv');
       DB.revisiones = (DB.revisiones||[]).filter(x=>x.id!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else if(tipo==='ev'){
+      _papeleraGuardar((DB.evaluaciones||[]).find(x=>x&&x.id===id), 'ev');
       DB.evaluaciones = (DB.evaluaciones||[]).filter(x=>x.id!==id);
       saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else {
       const ordenCorr = DB.correctivos.find(x=>x.id===id);
+      _papeleraGuardar(ordenCorr, 'corr');
       _revertirEstadoEquipoAlEliminar(ordenCorr);
       DB.correctivos = DB.correctivos.filter(x=>x.id!==id);
       if(DB.ordenesCerradas) DB.ordenesCerradas = DB.ordenesCerradas.filter(o=>o && o.id!==id && o.correlativo!==id);
@@ -7260,6 +7393,7 @@ function eliminarPreventivo(id){
   if(!confirm('¿Eliminar?')) return;
   _marcarOrdenBorrada(id);
   const orden = DB.preventivos.find(p=>p.id===id);
+  _papeleraGuardar(orden, 'prev');
   _revertirEstadoEquipoAlEliminar(orden);
   DB.preventivos = DB.preventivos.filter(p=>p.id!==id); saveDB(); renderPreventivos();
 }
@@ -8633,6 +8767,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.ordenesCerradas)DB.ordenesCerradas= remote.ordenesCerradas;
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
         if(remote.solicitudes)    DB.solicitudes    = remote.solicitudes;
+        if(remote.papelera)       DB.papelera       = remote.papelera;
         if(remote.horometros)     DB.horometros     = remote.horometros;
         if(remote.horometros_externos) DB.horometrosExternos = remote.horometros_externos;
         if(remote.cobros)         DB.cobros         = remote.cobros;
@@ -8755,6 +8890,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
+      if(d.papelera)       DB.papelera       = d.papelera;
       if(d.horometros)     DB.horometros     = d.horometros;
       if(d.horometros_externos) DB.horometrosExternos = d.horometros_externos;
       if(d.cobros)         DB.cobros         = d.cobros;
@@ -10350,6 +10486,8 @@ function _reabrirOrdenMant(tipo, id){
 function _elimLG(id){
   solicitarPINAccion(function(){
     const ordenAEliminar = (DB.logistica||[]).find(function(x){ return x.id===id; });
+    _papeleraGuardar(ordenAEliminar, 'log');
+    _marcarOrdenBorrada(id);
     _revertirEstadoEquipoAlEliminar(ordenAEliminar);
     DB.logistica = (DB.logistica||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
