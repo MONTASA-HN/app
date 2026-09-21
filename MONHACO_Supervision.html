@@ -6094,16 +6094,27 @@ function eliminarDelHistorial(tipo, id){
       DB.logistica = (DB.logistica||[]).filter(x=>x.id!==id);
       saveDB();
       if(window._fbDB && window._fbReady){
-        const cleanList = (DB.logistica||[]).map(o=>{
-          if(!o) return null;
-          const c=Object.assign({},o);
-          Object.keys(c).forEach(k=>{ if(c[k]===undefined) delete c[k]; });
-          return c;
-        }).filter(Boolean);
-        window._fbDB.ref('monhaco').update({
-          logistica: cleanList,
-          _ts: Date.now(),
-          _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'ger'
+        // BORRADO SEGURO: partir de la lista REAL del servidor y quitar SOLO
+        // esta orden (escribir la copia local completa borraba las órdenes
+        // creadas mientras tanto en otros dispositivos).
+        window._fbDB.ref('monhaco/logistica').once('value').then(function(snap){
+          const remoto = snap.val();
+          const remArr = (Array.isArray(remoto)?remoto:Object.values(remoto||{})).filter(function(o){ return o && o.id; });
+          const idsRem = new Set(remArr.map(function(o){ return o.id; }));
+          const locales = (DB.logistica||[]).filter(function(o){ return o && o.id && !idsRem.has(o.id); });
+          const cleanList = remArr.concat(locales)
+            .filter(function(o){ return o && o.id !== id; })
+            .map(function(o){
+              const c=Object.assign({},o);
+              Object.keys(c).forEach(function(k){ if(c[k]===undefined) delete c[k]; });
+              return c;
+            });
+          DB.logistica = cleanList;
+          return window._fbDB.ref('monhaco').update({
+            logistica: cleanList,
+            _ts: Date.now(),
+            _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'ger'
+          });
         }).then(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
           .catch(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });
       } else {
