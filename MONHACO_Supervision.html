@@ -261,7 +261,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 .foto-preview{width:100%;border-radius:var(--radius);margin-top:8px;display:none;position:relative}
 .foto-preview img{width:100%;border-radius:var(--radius);border:1px solid var(--border);display:block}
 .foto-preview-del{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.pin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center;padding:24px}
+.pin-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99998;align-items:center;justify-content:center;padding:24px}
 .pin-overlay.open{display:flex}
 .pin-box{background:var(--surface);border-radius:var(--radius);padding:24px;width:100%;max-width:320px;text-align:center}
 .pin-title{font-weight:600;font-size:16px;margin-bottom:6px}
@@ -3698,6 +3698,16 @@ function _hcAbrir(cual){
 function _hcVolver(){ _hcRenderCarpetas(); window.scrollTo(0,0); }
 
 function solicitarPINAccion(callback, titulo, subtitulo){
+  // Respaldo: esta app puede no llevar teclado de PIN en pantalla (o traerlo
+  // vacío). En ese caso se pide con el cuadro del sistema; sin esto la función
+  // reventaba y el botón que la llamaba no hacía nada.
+  if(!document.getElementById('pin-overlay') || !document.querySelector('.pin-key')){
+    const _p = prompt(subtitulo || 'Ingresa tu PIN:');
+    if(_p === null) return;
+    if(String(_p).trim() !== (typeof PIN_CORRECTO !== 'undefined' ? PIN_CORRECTO : '1624')){ alert('⚠️ PIN incorrecto.'); return; }
+    if(typeof callback === 'function') callback();
+    return;
+  }
   pinActual = '';
   pinCallback = callback;
   actualizarPinDots();

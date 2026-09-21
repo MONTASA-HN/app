@@ -1402,14 +1402,22 @@ function _srCorrelativoParaOrden(oid){
 // al guardar o al cerrar el formulario: el PIN se vuelve a pedir cada vez.
 let _srExtraOK = null;
 function _srNuevaExtra(tipo, oid){
-  const seguir = function(){ _srExtraOK = oid; _srElegir(tipo, oid); };
+  // El formulario se cierra ANTES de pedir el PIN (si no, el teclado del PIN
+  // queda atrapado debajo) y se vuelve a abrir ya autorizado.
+  const ov = document.getElementById('sr-overlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+  const seguir = function(){
+    abrirSolRepuesto();
+    setTimeout(function(){ _srExtraOK = oid; _srElegir(tipo, oid); }, 80);
+  };
   if(typeof solicitarPINAccion === 'function'){
     solicitarPINAccion(seguir, '🔑 Nueva lista de repuestos',
       'Ingresa tu PIN para autorizar otra solicitud de repuestos en esta misma orden');
   } else {
     const pin = prompt('Ingresa el PIN para crear otra lista de repuestos:');
     if(pin === null) return;
-    if(pin !== '1624'){ alert('⚠️ PIN incorrecto.'); return; }
+    if(String(pin).trim() !== '1624'){ alert('⚠️ PIN incorrecto.'); return; }
     seguir();
   }
 }
@@ -2178,6 +2186,16 @@ function solicitarPIN(tipo, id){
 
 
 function solicitarPINAccion(callback, titulo, subtitulo){
+  // Respaldo: esta app puede no llevar teclado de PIN en pantalla (o traerlo
+  // vacío). En ese caso se pide con el cuadro del sistema; sin esto la función
+  // reventaba y el botón que la llamaba no hacía nada.
+  if(!document.getElementById('pin-overlay') || !document.querySelector('.pin-key')){
+    const _p = prompt(subtitulo || 'Ingresa tu PIN:');
+    if(_p === null) return;
+    if(String(_p).trim() !== (typeof PIN_CORRECTO !== 'undefined' ? PIN_CORRECTO : '1624')){ alert('⚠️ PIN incorrecto.'); return; }
+    if(typeof callback === 'function') callback();
+    return;
+  }
   pinActual = '';
   pinCallback = callback;
   actualizarPinDots();
