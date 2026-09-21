@@ -1107,6 +1107,21 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div id="notif-mant-list"></div>
   </div>
 
+  <!-- MAPA DE LA FLOTA -->
+  <div id="tab-mapa" class="section">
+    <div style="font-size:22px;font-weight:600;margin-bottom:4px">🗺 Mapa de la flota</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Última ubicación conocida de cada equipo, según el link de su ficha</div>
+    <div id="mapa-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <input id="mapa-buscar" type="text" placeholder="Buscar por código, cliente o marca…" oninput="_mapaRefrescar(false)"
+      style="width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;font-size:13px;margin-bottom:8px">
+    <div id="mapa-cont" style="height:62vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border2);background:#e9eef3"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="_mapaRefrescar(true)" style="flex:1;padding:9px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">🔄 Centrar y actualizar</button>
+    </div>
+    <div id="mapa-resumen" style="font-size:12.5px;color:var(--text2);margin-top:8px"></div>
+    <div id="mapa-sinub"></div>
+  </div>
+
   <!-- HISTORIAL -->
   
   <!-- LOGÍSTICA MONHACO: horómetros + reportes de cobro -->
@@ -1480,6 +1495,8 @@ function _setUbLinkEquipo(equipoId, link){
   const eq = DB.equipos.find(e=>e.id===equipoId);
   if(!eq || eq.esEquipoCliente || eq.esGenerico) return;
   eq.ubicacionLink = link||'';
+  // Sello de fecha: el mapa de la flota avisa cuando el punto ya está viejo
+  eq.ubicacionTs = link ? Date.now() : 0;
   saveDB();
   _syncEquipoCampoFB(equipoId, 'ubicacionLink', link||'');
 }
@@ -1929,6 +1946,230 @@ function _bannerExito(msg){
   clearTimeout(b._t); b._t = setTimeout(function(){ if(b) b.remove(); }, 30000);
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 🗺 MAPA DE LA FLOTA — dónde está cada equipo según el link de su ficha
+// El link capturado con el botón trae las coordenadas adentro
+// (https://www.google.com/maps?q=15.512345,-88.025678), así que el mapa las
+// lee sin necesidad de ningún servicio de pago. Leaflet + OpenStreetMap.
+// ══════════════════════════════════════════════════════════════════════════
+const _MAPA_DIAS_VIEJO = 60;   // a partir de aquí el punto se marca como viejo
+let _mapaObj = null, _mapaCapa = null, _mapaFiltro = 'todos', _mapaListo = false;
+
+// Saca lat/lng de los formatos de link que se usan (Google Maps, Waze, coords sueltas)
+function _gpsCoordsDeLink(link){
+  const t = String(link||'').trim();
+  if(!t) return null;
+  const m = t.match(/[?&](?:q|query|ll|daddr|destination|center)=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i)
+        || t.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/)
+        || t.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if(!m) return null;
+  const la = parseFloat(m[1]), ln = parseFloat(m[2]);
+  if(!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) return null;
+  if(la === 0 && ln === 0) return null;
+  return { lat: la, lng: ln };
+}
+function _mapaColorEstado(est){
+  const s = String(est||'').toUpperCase();
+  if(s === 'DISPONIBLE')       return '#2d6a2d';
+  if(s === 'EN RENTA')         return '#1f5488';
+  if(s === 'EN MANTENIMIENTO') return '#e0a800';
+  if(s === 'MAL ESTADO')       return '#c9211e';
+  return '#6b6b6b';
+}
+function _mapaDiasDe(eq){
+  const ts = parseInt(eq && eq.ubicacionTs) || 0;
+  if(!ts) return null;
+  return Math.floor((Date.now() - ts) / 86400000);
+}
+function _mapaTextoAntiguedad(dias){
+  if(dias === null) return 'sin fecha de captura';
+  if(dias <= 0) return 'actualizado hoy';
+  if(dias === 1) return 'actualizado ayer';
+  return 'actualizado hace ' + dias + ' días';
+}
+// Reparte los equipos entre los que se pueden ubicar y los que no
+function _mapaEquipos(){
+  const con = [], sin = [];
+  (DB.equipos||[]).forEach(function(e){
+    if(!e || e.esGenerico) return;
+    const est = String(e.estado||'').toUpperCase();
+    if(est === 'VENDIDO' || est === 'DADO DE BAJA') return;
+    const c = _gpsCoordsDeLink(e.ubicacionLink);
+    const dias = _mapaDiasDe(e);
+    if(c) con.push({ eq:e, lat:c.lat, lng:c.lng, dias:dias, viejo:(dias !== null && dias > _MAPA_DIAS_VIEJO) });
+    else  sin.push({ eq:e, link:String(e.ubicacionLink||'') });
+  });
+  con.sort(function(a,b){ return String(a.eq.codigo||'').localeCompare(String(b.eq.codigo||'')); });
+  sin.sort(function(a,b){ return String(a.eq.codigo||'').localeCompare(String(b.eq.codigo||'')); });
+  return { con: con, sin: sin };
+}
+function _mapaPasaFiltro(it){
+  const est = String(it.eq.estado||'').toUpperCase();
+  const q = String((document.getElementById('mapa-buscar')||{}).value||'').trim().toUpperCase();
+  if(q){
+    const heno = (String(it.eq.codigo||'') + ' ' + String(it.eq.cliente||'') + ' ' + String(it.eq.marca||'') + ' ' + String(it.eq.modelo||'')).toUpperCase();
+    if(heno.indexOf(q) < 0) return false;
+  }
+  if(_mapaFiltro === 'todos')  return true;
+  if(_mapaFiltro === 'viejos') return !!it.viejo;
+  return est === _mapaFiltro;
+}
+function _mapaSetFiltro(f){ _mapaFiltro = f; _mapaPintarChips(); _mapaRefrescar(true); }
+function _mapaPintarChips(){
+  const cont = document.getElementById('mapa-chips');
+  if(!cont) return;
+  const d = _mapaEquipos();
+  const cuenta = function(f){
+    return d.con.filter(function(it){
+      const est = String(it.eq.estado||'').toUpperCase();
+      if(f === 'todos') return true;
+      if(f === 'viejos') return !!it.viejo;
+      return est === f;
+    }).length;
+  };
+  const chips = [['todos','Todos'],['EN RENTA','🔵 En renta'],['DISPONIBLE','🟢 Disponibles'],
+                 ['EN MANTENIMIENTO','🟠 En mantenimiento'],['MAL ESTADO','🔴 Mal estado'],
+                 ['viejos','⚠ Sin actualizar']];
+  cont.innerHTML = chips.map(function(c){
+    const n = cuenta(c[0]);
+    if(!n && c[0] !== 'todos') return '';
+    const on = _mapaFiltro === c[0];
+    return '<button onclick="_mapaSetFiltro(\'' + c[0] + '\')" style="padding:6px 11px;border-radius:14px;border:1px solid '
+      + (on ? '#1f5488' : 'var(--border2)') + ';background:' + (on ? '#1f5488' : 'var(--surface)') + ';color:'
+      + (on ? '#fff' : 'var(--text2)') + ';font-size:12px;font-weight:700;cursor:pointer">' + c[1] + ' ' + n + '</button>';
+  }).join('');
+}
+function _mapaPopupHTML(it){
+  const e = it.eq;
+  const esc = function(t){ return String(t==null?'':t).replace(/[<>"]/g,''); };
+  const col = _mapaColorEstado(e.estado);
+  const coord = it.lat.toFixed(6) + ',' + it.lng.toFixed(6);
+  return '<div style="font-family:DM Sans,Arial,sans-serif;min-width:190px">'
+    + '<div style="font-weight:800;font-size:15px;color:#1f3864">' + esc(e.codigo) + '</div>'
+    + (e.marca || e.modelo ? '<div style="font-size:12px;color:#666;margin-bottom:5px">' + esc(e.marca||'') + ' ' + esc(e.modelo||'') + '</div>' : '')
+    + '<div style="font-size:12px;margin:4px 0"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + col + ';margin-right:5px"></span><b>' + esc(e.estado||'—') + '</b></div>'
+    + (e.cliente ? '<div style="font-size:12px;margin-bottom:4px">📍 ' + esc(e.cliente) + '</div>' : '')
+    + '<div style="font-size:11.5px;color:' + (it.viejo ? '#a32d2d' : '#777') + ';margin-bottom:8px">' + (it.viejo ? '⚠️ ' : '🕒 ') + _mapaTextoAntiguedad(it.dias) + '</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    + '<a href="https://www.google.com/maps/dir/?api=1&destination=' + coord + '" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:7px 9px;background:#1f5488;color:#fff;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">🧭 Cómo llegar</a>'
+    + '<a href="https://waze.com/ul?ll=' + coord + '&navigate=yes" target="_blank" rel="noopener" style="padding:7px 9px;background:#eef4fb;color:#1f3864;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">Waze</a>'
+    + '</div></div>';
+}
+function _mapaRefrescar(ajustar){
+  _mapaPintarChips();
+  const d = _mapaEquipos();
+  const vis = d.con.filter(_mapaPasaFiltro);
+  // Marcadores
+  if(_mapaObj && _mapaCapa && window.L){
+    _mapaCapa.clearLayers();
+    const pts = [];
+    vis.forEach(function(it){
+      const col = _mapaColorEstado(it.eq.estado);
+      const mk = L.circleMarker([it.lat, it.lng], { radius:9, color:'#fff', weight:2, fillColor:col, fillOpacity:1 });
+      // Con pocos equipos en pantalla se deja el código siempre visible
+      mk.bindTooltip((it.viejo ? '⚠ ' : '') + String(it.eq.codigo||''),
+        { permanent: vis.length <= 25, direction:'top', offset:[0,-9], className:'mapa-tip' });
+      mk.bindPopup(_mapaPopupHTML(it));
+      mk.addTo(_mapaCapa);
+      pts.push([it.lat, it.lng]);
+    });
+    if(ajustar && pts.length){
+      try{
+        if(pts.length === 1) _mapaObj.setView(pts[0], 15);
+        else _mapaObj.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
+      }catch(e){}
+    }
+  }
+  _mapaRefrescarListas(d, vis);
+}
+function _mapaRefrescarListas(d, vis){
+  d = d || _mapaEquipos();
+  vis = vis || d.con.filter(_mapaPasaFiltro);
+  const esc = function(t){ return String(t==null?'':t).replace(/[<>"]/g,''); };
+  const viejos = d.con.filter(function(it){ return it.viejo; }).length;
+  const res = document.getElementById('mapa-resumen');
+  if(res){
+    res.innerHTML = '<b>' + d.con.length + '</b> equipo' + (d.con.length===1?'':'s') + ' ubicado' + (d.con.length===1?'':'s')
+      + (vis.length !== d.con.length ? ' · mostrando <b>' + vis.length + '</b>' : '')
+      + (viejos ? ' · <span style="color:#a32d2d">⚠️ ' + viejos + ' con más de ' + _MAPA_DIAS_VIEJO + ' días sin actualizar</span>' : '')
+      + ' · <b>' + d.sin.length + '</b> sin ubicación';
+  }
+  const sinEl = document.getElementById('mapa-sinub');
+  if(sinEl){
+    if(!d.sin.length){ sinEl.innerHTML = ''; }
+    else {
+      const chip = function(it){
+        const col = _mapaColorEstado(it.eq.estado);
+        return '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:4px 10px;font-size:12px">'
+          + '<span style="width:8px;height:8px;border-radius:50%;background:' + col + '"></span>'
+          + '<b>' + esc(it.eq.codigo) + '</b>'
+          + (it.eq.cliente ? '<span style="color:var(--text3)">· ' + esc(it.eq.cliente) + '</span>' : '')
+          + (it.link ? '<a href="' + esc(it.link) + '" target="_blank" rel="noopener" title="Tiene un link que no trae coordenadas: hay que recapturar con el botón 📍" style="color:#8a6d00;text-decoration:none">🔗</a>' : '')
+          + '</span>';
+      };
+      // Los que están EN RENTA sin ubicación son los que importan: están fuera
+      // del plantel y no se sabe dónde. El resto (taller, bodega) va colapsado.
+      const fuera = d.sin.filter(function(it){ return String(it.eq.estado||'').toUpperCase() === 'EN RENTA'; });
+      const resto = d.sin.filter(function(it){ return String(it.eq.estado||'').toUpperCase() !== 'EN RENTA'; });
+      sinEl.innerHTML =
+        (fuera.length
+          ? '<div style="font-weight:800;font-size:13px;color:#a32d2d;margin:14px 0 4px">⚠️ En renta y sin ubicación (' + fuera.length + ')</div>'
+            + '<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">Están fuera del plantel pero no tienen punto en el mapa: pide que capturen la ubicación con el botón 📍 en la próxima orden.</div>'
+            + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' + fuera.map(chip).join('') + '</div>'
+          : '')
+        + (resto.length
+          ? '<button onclick="_mapaToggleSin()" style="width:100%;margin-top:10px;padding:9px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left">'
+            + (_mapaSinAbierto ? '▾' : '▸') + ' Otros ' + resto.length + ' equipos sin ubicación registrada</button>'
+            + '<div id="mapa-sin-resto" style="display:' + (_mapaSinAbierto ? 'flex' : 'none') + ';flex-wrap:wrap;gap:6px;margin-top:8px">' + resto.map(chip).join('') + '</div>'
+          : '');
+    }
+  }
+}
+let _mapaSinAbierto = false;
+function _mapaToggleSin(){
+  _mapaSinAbierto = !_mapaSinAbierto;
+  _mapaRefrescarListas();
+}
+function _mapaCargarLeaflet(){
+  if(window.L && window.L.map) return Promise.resolve();
+  return new Promise(function(res, rej){
+    if(!document.getElementById('leaflet-css')){
+      const css = document.createElement('link');
+      css.id = 'leaflet-css'; css.rel = 'stylesheet';
+      css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+      const st = document.createElement('style');
+      st.textContent = '.mapa-tip{background:rgba(255,255,255,.92);border:1px solid #cfd8e3;border-radius:6px;padding:1px 5px;font:700 11px "DM Sans",Arial;color:#1f3864;box-shadow:none}.mapa-tip:before{display:none}';
+      document.head.appendChild(st);
+    }
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    sc.onload = function(){ res(); };
+    sc.onerror = function(){ rej(new Error('sin conexión')); };
+    document.head.appendChild(sc);
+  });
+}
+function renderMapaFlota(){
+  const cont = document.getElementById('mapa-cont');
+  if(!cont) return;
+  _mapaPintarChips();
+  _mapaCargarLeaflet().then(function(){
+    if(!_mapaObj){
+      _mapaObj = L.map(cont, { zoomControl:true }).setView([15.50, -88.03], 8);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(_mapaObj);
+      _mapaCapa = L.layerGroup().addTo(_mapaObj);
+      _mapaListo = true;
+    }
+    setTimeout(function(){ try{ _mapaObj.invalidateSize(); }catch(e){} _mapaRefrescar(true); }, 150);
+  }).catch(function(){
+    cont.innerHTML = '<div style="padding:26px 18px;text-align:center;color:var(--text2);font-size:13px;line-height:1.6">'
+      + '📡 <b>No se pudo cargar el mapa</b><br>Necesitas conexión a internet para verlo.<br>'
+      + '<span style="font-size:12px;color:var(--text3)">La lista de equipos de abajo sí funciona sin conexión.</span></div>';
+    _mapaRefrescarListas();
+  });
+}
+
 function showTab(id, el){
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1948,6 +2189,7 @@ function showTab(id, el){
   if(id === 'personal')  renderPersonal();
   if(id === 'dashboard') renderDashboard();
   if(id === 'notificaciones') renderNotificacionesTab();
+  if(id === 'mapa') renderMapaFlota();
   window.scrollTo(0, 0);
 }
 
@@ -2114,7 +2356,11 @@ function guardarDesdeModal(){
     e.estado      = document.getElementById('det-estado').value;
     e.ubicacion   = document.getElementById('det-ubicacion').value.trim();
     const _dUbG = document.getElementById('det-ublink');
-    if(_dUbG) e.ubicacionLink = _normalizarUbLink(_dUbG.value);
+    if(_dUbG){
+      const _ubNuevo = _normalizarUbLink(_dUbG.value);
+      if(_ubNuevo !== (e.ubicacionLink||'')) e.ubicacionTs = _ubNuevo ? Date.now() : 0;
+      e.ubicacionLink = _ubNuevo;
+    }
     e.cliente     = document.getElementById('det-cliente').value.trim();
     e.horometro   = document.getElementById('det-horometro').value.trim();
     e.intervaloMantMeses = parseInt(document.getElementById('det-intervalo-mant').value)||3;
@@ -5538,10 +5784,10 @@ function _calcCostoViaticos(v){
   var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
   var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
   // Peajes según destino y vehículo
-  var PEAJES_MAP = {TRUJILLO:0,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:0,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:0,'LA CEIBA':0,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:0,CORTES:0};
+  var PEAJES_MAP = {TRUJILLO:0,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:0,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:0,'LA CEIBA':0,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:0,CORTES:0,'SANTA ANA, EL SALVADOR':0,'LAGO DE YOJOA (PENA BLANCA)':2,POTRERILLOS:0,VILLANUEVA:0};
   // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): forzar 0 aunque el viático
   // guardado traiga un número viejo de peajes.
-  var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA'];
+  var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA','VILLANUEVA','POTRERILLOS','SANTA ANA, EL SALVADOR'];
   var numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
   var cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
   var tPeaj = numPeajes * cpU;
@@ -9007,10 +9253,32 @@ const GESTORES_VIATICOS = [
   {nombre:"ELKIN ISAAC PEREZ HERNANDEZ",    id:"0501-1999-13499", cuenta:"2010067666",  depto:"Taller"},
   {nombre:"MIGUEL ANTONIO ORELLANA LOPEZ",  id:"0501-1990-12443", cuenta:"2020575525", depto:"Gerencia"},
 ];
+// ── Destinos fuera de Honduras: la tabla nacional de alimentación y hospedaje
+// no aplica, y hay gastos de frontera que van en "otros gastos" ─────────────
+const DESTINOS_INTERNACIONALES = ['SANTA ANA, EL SALVADOR'];
+function _viatEsInternacional(dest){
+  return DESTINOS_INTERNACIONALES.indexOf(String(dest||'').trim().toUpperCase()) >= 0;
+}
+function _viatAvisoIntlHTML(dest){
+  if(!_viatEsInternacional(dest)) return '';
+  return '<div style="background:#fff8e1;border:1px solid #f0d488;border-left:4px solid #e0a800;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#6b5200">'
+    + '<b>🌎 Viaje internacional — '+String(dest)+'</b><br>'
+    + 'La alimentación y el hospedaje NO se calculan con la tabla nacional: captura los montos a mano. '
+    + 'Recuerda incluir los gastos de frontera (migración, permiso vehicular, seguro) en «Otros gastos».'
+    + '</div>';
+}
+function _viatAvisoIntl(dest){
+  const el = document.getElementById('v-intl');
+  if(!el) return;
+  const h = _viatAvisoIntlHTML(dest);
+  el.innerHTML = h;
+  el.style.display = h ? 'block' : 'none';
+}
 const DESTINOS_VIATICOS = [
   {nombre:"TRUJILLO",            km:767, peajes:0},
   {nombre:"CHOLUTECA",           km:756, peajes:6},
   {nombre:"DANLI",               km:735, peajes:6},
+  {nombre:"SANTA ANA, EL SALVADOR", km:730, peajes:0},
   {nombre:"COYOLITO",            km:693, peajes:4},
   {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
   {nombre:"TOCOA",               km:630, peajes:0},
@@ -9024,7 +9292,10 @@ const DESTINOS_VIATICOS = [
   {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
   {nombre:"SANTA BARBARA",       km:221, peajes:2},
   {nombre:"TELA",                km:200, peajes:0},
+  {nombre:"LAGO DE YOJOA (PENA BLANCA)", km:200, peajes:2},
   {nombre:"CORTES",              km:116, peajes:0},
+  {nombre:"POTRERILLOS",         km:96,  peajes:0},
+  {nombre:"VILLANUEVA",          km:54,  peajes:0},
 ];
 
 let _viaticosOrdenId = null;
@@ -9290,6 +9561,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
       </select>
     </div>
   </div>
+  <div id="v-intl" style="display:${_viatEsInternacional(v.destino)?'block':'none'}">${_viatAvisoIntlHTML(v.destino)}</div>
   <div class="form-group"><label>Motivo del viaje</label>
     <input type="text" id="v-motivo" value="${v.motivo||''}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
   </div>
@@ -9524,6 +9796,7 @@ function actualizarDestino(){
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===sel.value)||{km:0,peajes:0};
   document.getElementById('v-km') && (document.getElementById('v-km').textContent = d.km+' km');
   document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').textContent = d.peajes);
+  _viatAvisoIntl(sel.value);
   recalcViaticos();
 }
 
@@ -10812,6 +11085,9 @@ function _verFotoGrande(src){
   </button>
   <button class="nav-btn" onclick="showTab('notificaciones',this)">
     <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="nav-badge" id="badge-notif-mant"></span></span>Notificaciones
+  </button>
+  <button class="nav-btn" onclick="showTab('mapa',this)">
+    <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Mapa
   </button>
 </nav>
 
