@@ -1052,6 +1052,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
 
       <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
+            <div id="sol-diasrenta-wrap" class="form-group" style="display:none">
+        <label>⏱ Días de renta (calendario) — opcional</label>
+        <input id="sol-diasrenta" type="number" min="1" inputmode="numeric" placeholder="Ej: 30 — se avisará 3 días hábiles antes del vencimiento">
+      </div>
       <div id="sol-ublink-wrap" class="form-group" style="display:none">
         <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
         <input id="sol-ublink" type="url" inputmode="url" placeholder="Pega aquí el link de la ubicación del cliente">
@@ -1459,6 +1463,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
 
       <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
+            <div id="sol-diasrenta-wrap2" class="form-group" style="display:none">
+        <label>⏱ Días de renta (calendario) — opcional</label>
+        <input id="sol-diasrenta2" type="number" min="1" inputmode="numeric" placeholder="Ej: 30 — se avisará 3 días hábiles antes del vencimiento">
+      </div>
       <div id="sol-ublink-wrap2" class="form-group" style="display:none">
         <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
         <input id="sol-ublink2" type="url" inputmode="url" placeholder="Pega aquí el link de la ubicación del cliente">
@@ -4935,6 +4943,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     h+="<div style=\"background:#e8f4e8;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px\"><span style=\"color:#1a5c1a;font-weight:600\">\ud83d\udee3 Km recorridos: "+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+" km</span></div>";
   var _cv=_viatTotalAsignado(o);
   if(_cv>0) h+="<div style=\"background:#dce6f1;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px;font-weight:700;color:#1f3864\">\ud83d\udcb0 Costo viaje: L. "+_cv.toFixed(2)+"</div>";
+  h+=_rentaDiasHTML(o);
   if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
     h+="<div style=\"display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;background:#dce6f1;border-radius:6px;padding:12px\"><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS EQUIPO</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hEq+"</div></div><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS OPERADOR</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hOp+"</div></div></div>";
   if(o.foto) h+="<div style=\"margin-bottom:12px\"><img src=\""+o.foto+"\" style=\"width:100%;max-height:200px;object-fit:cover;border-radius:8px;cursor:zoom-in\" onclick=\"event.stopPropagation();_verFotoGer(this.src)\"></div>";
@@ -4962,6 +4971,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
 function _botonesActLG(o){
   let h = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">';
   const oid = o.id;
+  h += _rentaDiasHTML(o);
   if(!o.cerrado && o.estado!=='Cancelado'){
     h += '<button onclick="event.stopPropagation();abrirViaticos(\'' + oid + '\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>';
   } else if(o.viaticos){
@@ -5215,11 +5225,83 @@ function actualizarBadgeNotifMant(){
   }
 }
 
+// ── DÍAS DE RENTA: vencimientos y avisos (solo Gerencia MT Rental) ───────────
+function _fechaLocalNR(x){ if(!x) return null; const m=String(x).slice(0,10).split('-'); if(m.length<3||!(+m[0])) return null; return new Date(+m[0], +m[1]-1, +m[2]); }
+function _rentaVenceDe(o){
+  const n = parseInt(o&&o.diasRenta)||0;
+  const ini = o ? _fechaLocalNR(o.fechaCierre) : null;
+  if(!n || !ini) return null;
+  const v = new Date(ini); v.setDate(v.getDate()+n); return v;
+}
+function _rentaDiasHTML(o){
+  if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
+  const n = parseInt(o.diasRenta)||0;
+  const v = _rentaVenceDe(o);
+  const venceTxt = v ? ' · vence el <b>'+('0'+v.getDate()).slice(-2)+'/'+('0'+(v.getMonth()+1)).slice(-2)+'/'+v.getFullYear()+'</b>' : (n?' · el conteo inicia al cerrar la orden':'');
+  return '<div style="background:#fdf3e3;border:1px solid #f0d6ad;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#8a4800;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>⏱ Días de renta: <b>'+(n||'—')+'</b>'+venceTxt+'</span><button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaDiasEditar(this.dataset.rid)" style="font-size:11px;background:#1f3864;color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">✏️ Ajustar (PIN)</button></div>';
+}
+function _rentaDiasEditar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    const val = prompt('Días de renta (calendario) para '+(o.correlativo||'la orden')+':', o.diasRenta||'');
+    if(val === null) return;
+    const n = parseInt(val)||0;
+    if(n>0) o.diasRenta = n; else delete o.diasRenta;
+    saveDB();
+    if(typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(o.id);
+    toast('⏱ Días de renta actualizados ✓');
+    try{ renderLogistica(); }catch(e){}
+    try{ renderNotificacionesTab(); }catch(e){}
+  }, '⏱ Días de renta', 'Ingresa tu PIN para ajustar los días de renta (extensión de la renta)');
+}
+function _rentaVencimientos(){
+  const out = [];
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  (DB.logistica||[]).forEach(function(o){
+    if(!o || !o.cerrado || o.estado==='Cancelado') return;
+    if(!(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return;
+    const vence = _rentaVenceDe(o);
+    if(!vence) return;
+    const ini = _fechaLocalNR(o.fechaCierre);
+    // Si ya se cerró un RETIRO posterior del mismo equipo, la renta terminó
+    const retirado = (DB.logistica||[]).some(function(r){
+      if(!r || !r.cerrado || r.tipoLogistica!=='retiro' || !r.equipoId || r.equipoId!==o.equipoId) return false;
+      const fc = _fechaLocalNR(r.fechaCierre);
+      return fc && ini && fc >= ini;
+    });
+    if(retirado) return;
+    // Días hábiles (sin sáb/dom) desde mañana hasta la fecha de vencimiento
+    let habiles = 0; const d = new Date(hoy);
+    while(d < vence){ d.setDate(d.getDate()+1); const w=d.getDay(); if(w!==0 && w!==6 && d<=vence) habiles++; }
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    const codigo = eq ? eq.codigo : (o.clienteNombre||'equipo');
+    if(vence <= hoy) out.push({ o:o, codigo:codigo, vence:vence, vencida:true, dias: Math.round((hoy-vence)/86400000) });
+    else if(habiles <= 3) out.push({ o:o, codigo:codigo, vence:vence, vencida:false, dias: habiles });
+  });
+  out.sort(function(a,b){ return a.vence - b.vence; });
+  return out;
+}
+function _rentaVencimientosHTML(){
+  return _rentaVencimientos().map(function(r){
+    const f = ('0'+r.vence.getDate()).slice(-2)+'/'+('0'+(r.vence.getMonth()+1)).slice(-2)+'/'+r.vence.getFullYear();
+    const badge = r.vencida
+      ? (r.dias===0 ? '⚠️ Vence HOY' : '⚠️ VENCIDA hace '+r.dias+' día'+(r.dias===1?'':'s'))
+      : ('En '+r.dias+' día'+(r.dias===1?'':'s')+' hábil'+(r.dias===1?'':'es'));
+    return '<div class="notif-item '+(r.vencida?'notif-urgent':'')+'">'
+      +'<div class="notif-item-top"><span class="notif-codigo">🚚 '+r.codigo+'</span>'
+      +'<span class="notif-days-badge" style="'+(r.vencida?'background:#fbe0e0;color:#a32d2d':'background:#fdead9;color:#8a4800')+';margin-left:auto">'+badge+'</span></div>'
+      +'<div class="notif-line">La renta del equipo <b>'+r.codigo+'</b> (orden <b>'+(r.o.correlativo||'—')+'</b> · '+(parseInt(r.o.diasRenta)||0)+' días) '+(r.vencida?'venció':'vence')+' el <b>'+f+'</b> — mandar a retirar.</div>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="margin-top:8px;padding:8px 12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✏️ Ajustar días (PIN)</button>'
+      +'</div>';
+  }).join('');
+}
 function renderNotificacionesTab(){
   const el = document.getElementById('notif-mant-list');
   if(!el) return;
   const notifs = calcularNotificacionesMant();
-  el.innerHTML = notifs.length ? notifs.map(n=>{
+  const _rvHTML = _rentaVencimientosHTML();
+  el.innerHTML = _rvHTML + (notifs.length ? notifs.map(n=>{
     if(n.esVehiculo){
       const urgente = n.kmRestantes <= 0;
       const kmTexto = urgente
@@ -5252,7 +5334,7 @@ function renderNotificacionesTab(){
       <div class="notif-line">Último mantenimiento: <b>${n.ultimoServicio}</b> — orden <b>${n.ultimoCorrelativo}</b></div>
       ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
     </div>`;
-  }).join('') : '<div class="empty">Sin mantenimientos próximos por ahora</div>';
+  }).join('') : (_rvHTML ? '' : '<div class="empty">Sin mantenimientos ni vencimientos próximos por ahora</div>'));
 }
 
 function marcarNotifCompletada(notifKey){
@@ -6551,7 +6633,7 @@ function guardarPreventivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','viaticosExtra','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','diasRenta','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
       window._editandoOrden = null;
     }
@@ -6753,7 +6835,7 @@ function guardarCorrectivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','viaticosExtra','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','diasRenta','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; }
       window._editandoOrden = null;
     }
@@ -7337,6 +7419,11 @@ function _normalizarUbLink(t){
   if(/^[\w.-]+\.[a-z]{2,}([\/?#]|$)/i.test(t)) return 'https://'+t;
   return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(t);
 }
+function _leerDiasRentaForm(){
+  var a=document.getElementById('sol-diasrenta'), b=document.getElementById('sol-diasrenta2');
+  var v=parseInt((a&&a.value?a.value:'') || (b&&b.value?b.value:''))||0;
+  return v>0 ? v : 0;
+}
 function _leerUbLinkForm(){
   var a=document.getElementById('sol-ublink'), b=document.getElementById('sol-ublink2');
   return _normalizarUbLink((a&&a.value?a.value:'') || (b&&b.value?b.value:''));
@@ -7383,6 +7470,10 @@ function _ubLinkToggle(){
       var a=document.getElementById('sol-ubicacion'), b=document.getElementById('sol-ubicacion2b');
       show = !!((a&&a.value!=='plantel')||(b&&b.value!=='plantel'));
     }
+    var showDR = (tipo==='renta'||tipo==='entrega');
+    var dr1=document.getElementById('sol-diasrenta-wrap'), dr2=document.getElementById('sol-diasrenta-wrap2');
+    if(dr1) dr1.style.display=showDR?'block':'none';
+    if(dr2) dr2.style.display=showDR?'block':'none';
     var w1=document.getElementById('sol-ublink-wrap'), w2=document.getElementById('sol-ublink-wrap2');
     if(w1) w1.style.display=show?'block':'none';
     if(w2) w2.style.display=show?'block':'none';
@@ -7536,7 +7627,7 @@ async function enviarSolicitudWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     ubicacionLog = ubicacionLog2;
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -7702,7 +7793,7 @@ async function copiarMensajeWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -7763,6 +7854,8 @@ function clearSolicitudForm(){
   const txt = document.getElementById('sol-equipo-txt');
   if(txt) txt.value = '';
   const _ubl1 = document.getElementById('sol-ublink'); if(_ubl1) _ubl1.value='';
+  const _dr1 = document.getElementById('sol-diasrenta'); if(_dr1) _dr1.value='';
+  const _dr2 = document.getElementById('sol-diasrenta2'); if(_dr2) _dr2.value='';
   const _ubl2 = document.getElementById('sol-ublink2'); if(_ubl2) _ubl2.value='';
   const _ctc1 = document.getElementById('sol-contacto'); if(_ctc1) _ctc1.value='';
   const _ctc2 = document.getElementById('sol-contacto2'); if(_ctc2) _ctc2.value='';
