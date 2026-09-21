@@ -8382,6 +8382,38 @@ function _srSigCorrelativo(){
   const n=mx+1;
   return 'SR-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
 }
+// Correlativo de la SR: la primera de la orden toma el siguiente de la serie
+// general (SR-0057); las adicionales cuelgan de ella (SR-0057-2, SR-0057-3…).
+function _srCorrelativoParaOrden(oid){
+  const ya = _srDeOrden(oid);
+  if(!ya.length) return _srSigCorrelativo();
+  const prim = ya.slice().sort(function(a,b){ return (a.ts||0)-(b.ts||0); })[0];
+  // El correlativo base es SR-0057; si la primera ya venía sufijada se le quita
+  // el sufijo (nunca el número de la serie, que también va después del guion).
+  const mb = String((prim&&prim.correlativo)||'').match(/^(SR-\d{3,})(?:-\d+)?$/);
+  const base = mb ? mb[1] : _srSigCorrelativo();
+  let mx = 1;
+  ya.forEach(function(r){
+    const m = String(r.correlativo||'').match(/^SR-\d{3,}-(\d+)$/);
+    if(m) mx = Math.max(mx, parseInt(m[1],10));
+  });
+  return base + '-' + (mx+1);
+}
+// Orden autorizada con PIN para crear una solicitud ADICIONAL. Se limpia sola
+// al guardar o al cerrar el formulario: el PIN se vuelve a pedir cada vez.
+let _srExtraOK = null;
+function _srNuevaExtra(tipo, oid){
+  const seguir = function(){ _srExtraOK = oid; _srElegir(tipo, oid); };
+  if(typeof solicitarPINAccion === 'function'){
+    solicitarPINAccion(seguir, '🔑 Nueva lista de repuestos',
+      'Ingresa tu PIN para autorizar otra solicitud de repuestos en esta misma orden');
+  } else {
+    const pin = prompt('Ingresa el PIN para crear otra lista de repuestos:');
+    if(pin === null) return;
+    if(pin !== '1624'){ alert('⚠️ PIN incorrecto.'); return; }
+    seguir();
+  }
+}
 function _srBuscarOrdenPorCorr(txt){
   const t=String(txt||'').trim().toUpperCase();
   if(!t) return null;
@@ -8416,7 +8448,7 @@ function _srFilaHTML(it){
     +'</div>';
 }
 function abrirSolRepuesto(editId){
-  _srOrdenSel=null; _srEditando=null;
+  _srOrdenSel=null; _srEditando=null; _srExtraOK=null;
   const viejo=document.getElementById('sr-overlay'); if(viejo) viejo.remove();
   let srEdit=null;
   if(editId){
@@ -8534,22 +8566,27 @@ function _srElegir(tipo, oid){
   const o = arr.find(function(x){ return x && x.id===oid; });
   if(!o) return;
   const esc0=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
-  // Una solicitud por orden: si ya existe, no se crea otra — se ve o se edita la existente
+  // Se pueden hacer VARIAS solicitudes para la misma orden: la segunda en
+  // adelante hay que autorizarla con el PIN (se pide cada vez).
   const ya=_srDeOrden(oid);
-  if(ya.length){
+  if(ya.length && _srExtraOK !== oid){
     _srOrdenSel=null;
     const cont0=document.getElementById('sr-resultados');
     if(cont0) cont0.style.display='none';
     const fw=document.getElementById('sr-filas-wrap');
     if(fw) fw.style.display='none';
-    const sr0=ya[0];
+    const yaOrd = ya.slice().sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+    const ult = yaOrd[yaOrd.length-1];
     const info0=document.getElementById('sr-info');
     info0.style.display='block';
-    info0.innerHTML='<div style="font-weight:800;color:#8a6d00;margin-bottom:6px">⚠️ La orden '+esc0(o.correlativo)+' ya tiene la solicitud '+esc0(sr0.correlativo)+' ('+(sr0.items||[]).length+' repuestos)</div>'
-      +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">No se puede crear otra solicitud para la misma orden. '+((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'Para agregar o quitar repuestos, edítala con PIN.':'Si faltan repuestos, pide a Gerencia o Supervisión que la editen.')+'</div>'
-      +'<div style="display:flex;gap:8px">'
-      +'<button onclick="_srVerModal(\''+sr0.id+'\')" style="flex:1;padding:11px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:800;cursor:pointer">👁 Ver '+esc0(sr0.correlativo)+'</button>'
-      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-overlay\').remove();_srEditarPin(\''+sr0.id+'\')" style="flex:1;padding:11px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️ Editar (PIN)</button>':'')
+    info0.innerHTML='<div style="font-weight:800;color:#8a6d00;margin-bottom:6px">🔩 La orden '+esc0(o.correlativo)+' ya tiene '+yaOrd.length+' solicitud'+(yaOrd.length===1?'':'es')+' de repuestos</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
+      + yaOrd.map(function(x){ return '<button onclick="_srVerModal(\''+x.id+'\')" style="padding:8px 11px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer">👁 '+esc0(x.correlativo)+' · '+(x.items||[]).length+' ítems</button>'; }).join('')
+      +'</div>'
+      +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Si durante el trabajo salieron más repuestos, crea otra lista para esta misma orden. Se numera como <b>'+esc0(_srCorrelativoParaOrden(oid))+'</b> y necesita tu PIN.</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button onclick="_srNuevaExtra(\''+tipo+'\',\''+oid+'\')" style="flex:1;min-width:170px;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">➕ Nueva lista de repuestos (PIN)</button>'
+      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-overlay\').remove();_srEditarPin(\''+ult.id+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️ Editar '+esc0(ult.correlativo)+'</button>':'')
       +'</div>';
     return;
   }
@@ -8606,10 +8643,12 @@ function _srGuardar(){
     return;
   }
   if(!_srOrdenSel){ toast('Primero busca y selecciona la orden de trabajo', true); return; }
-  if(_srDeOrden(_srOrdenSel.o.id).length){ toast('Esta orden ya tiene una solicitud de repuestos — edítala en lugar de crear otra', true); return; }
+  if(_srDeOrden(_srOrdenSel.o.id).length && _srExtraOK !== _srOrdenSel.o.id){
+    toast('Esta orden ya tiene una solicitud — usa "Nueva lista de repuestos (PIN)"', true); return;
+  }
   const d=_srDatosOrden(_srOrdenSel.o);
   const sr={ id:'sr'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-    correlativo:_srSigCorrelativo(),
+    correlativo:_srCorrelativoParaOrden(_srOrdenSel.o.id),
     ordenId:_srOrdenSel.o.id, ordenCorrelativo:_srOrdenSel.o.correlativo, ordenTipo:_srOrdenSel.tipo,
     esCliente:d.esCliente, equipoTxt:d.equipoTxt, marca:d.marca, modelo:d.modelo, serie:d.serie, tecnico:d.tecnico,
     items:items, fecha:new Date().toISOString().slice(0,10), ts:Date.now() };
@@ -8624,6 +8663,7 @@ function _srGuardar(){
       saveDB();
       if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(_srOrdenSel.tipo==='prev'?'prev':'corr', o);
     }catch(e){}
+    _srExtraOK = null;   // el PIN vale para UNA solicitud: la siguiente lo vuelve a pedir
     const ovv=document.getElementById('sr-overlay'); if(ovv) ovv.remove();
     renderRepuestos();
     toast('Solicitud '+sr.correlativo+' guardada ✓');
