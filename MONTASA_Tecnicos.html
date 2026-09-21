@@ -2582,6 +2582,20 @@ function validarFechasOrden(fechaInicio, fechaFin, inicioTrabajo, finTrabajo){
 }
 
 
+// ── VEHÍCULO PERSONAL: opción genérica que NO pertenece a la flota ──────────
+const _VEH_PERSONAL = 'VEHICULO PERSONAL';
+function _optsVehiculos(sel){
+  // Vehículos de la flota (sin los de mal estado) + la opción "vehículo personal"
+  const esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  const v = String(sel||'');
+  let h = (DB.equipos||[]).filter(function(e){ return e && e.esVehiculo && (e.estado||'DISPONIBLE')!=='MAL ESTADO'; })
+    .map(function(e){ return '<option value="'+esc(e.codigo)+'"'+(v===e.codigo?' selected':'')+'>'+esc(e.codigo)+'</option>'; }).join('');
+  h += '<option value="'+_VEH_PERSONAL+'"'+(v===_VEH_PERSONAL?' selected':'')+'>🚗 '+_VEH_PERSONAL+'</option>';
+  // Conservar un valor guardado que ya no exista en la flota
+  if(v && v!==_VEH_PERSONAL && !(DB.equipos||[]).some(function(e){ return e && e.codigo===v; })) h += '<option value="'+esc(v)+'" selected>'+esc(v)+'</option>';
+  return h;
+}
+
 function renderPreventivos(){
   const prevBuscar = (document.getElementById('prev-buscar')?.value||'').toLowerCase();
   let list = [...DB.preventivos].sort((a,b)=>{
@@ -2723,7 +2737,7 @@ function renderPreventivos(){
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
         <select onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','vehiculo',this.value)">
           <option value="">— Seleccionar vehículo —</option>
-          ${DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').map(v=>`<option value="${v.codigo}" ${p.vehiculo===v.codigo?'selected':''}>${v.codigo}</option>`).join('')}
+          ${_optsVehiculos(p.vehiculo)}
         </select>
       </div>
       </div>
@@ -3306,7 +3320,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
         <select onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','vehiculo',this.value)">
           <option value="">— Seleccionar vehículo —</option>
-          ${DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').map(v=>`<option value="${v.codigo}" ${c.vehiculo===v.codigo?'selected':''}>${v.codigo}</option>`).join('')}
+          ${_optsVehiculos(c.vehiculo)}
         </select>
       </div>
       `:''}
@@ -4865,7 +4879,7 @@ function renderEvaluaciones(){
         card += `<div class="form-group"><label>🚗 Vehículo de traslado <span style="color:#c9211e">*</span></label>
           <select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','vehiculo',this.value)">
             <option value="">— Seleccionar —</option>
-            ${DB.equipos.filter(e=>e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO').map(x=>`<option value="${x.codigo}" ${v.vehiculo===x.codigo?'selected':''}>${x.codigo}</option>`).join('')}
+            ${_optsVehiculos(v.vehiculo)}
           </select></div>`;
         card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px">
         </div>`;

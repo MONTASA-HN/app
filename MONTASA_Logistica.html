@@ -1401,6 +1401,20 @@ function _rentaFinHTML(o){
     + '<div style="padding:11px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-weight:700;color:'+(f?'#8a4800':'var(--text3)')+'">'+val+'</div>'
     + '<div style="font-size:11px;color:var(--text3);margin-top:3px">C\u00e1lculo autom\u00e1tico: fecha de inicio + '+n+' d\u00edas \u2014 solo lectura</div></div>';
 }
+// ── VEHÍCULO PERSONAL: opción genérica que NO pertenece a la flota ──────────
+const _VEH_PERSONAL = 'VEHICULO PERSONAL';
+function _optsVehiculos(sel){
+  // Vehículos de la flota (sin los de mal estado) + la opción "vehículo personal"
+  const esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  const v = String(sel||'');
+  let h = (DB.equipos||[]).filter(function(e){ return e && e.esVehiculo && (e.estado||'DISPONIBLE')!=='MAL ESTADO'; })
+    .map(function(e){ return '<option value="'+esc(e.codigo)+'"'+(v===e.codigo?' selected':'')+'>'+esc(e.codigo)+'</option>'; }).join('');
+  h += '<option value="'+_VEH_PERSONAL+'"'+(v===_VEH_PERSONAL?' selected':'')+'>🚗 '+_VEH_PERSONAL+'</option>';
+  // Conservar un valor guardado que ya no exista en la flota
+  if(v && v!==_VEH_PERSONAL && !(DB.equipos||[]).some(function(e){ return e && e.codigo===v; })) h += '<option value="'+esc(v)+'" selected>'+esc(v)+'</option>';
+  return h;
+}
+
 function renderCamposTipo(o){
   var tipo = o.tipoLogistica||'';
   var isEntrega = tipo==='entrega';
@@ -1439,9 +1453,8 @@ function renderCamposTipo(o){
 
   // Vehículo y km — solo fuera del plantel (y compras/apoyo)
   if(!esPlantel && (isMovimiento || tipo==='atencion_compras' || isApoyo)){
-    var VEHICULOS = DB.equipos.filter(function(e){return e.esVehiculo&&(e.estado||'DISPONIBLE')!=='MAL ESTADO';});
     html += '<div class="form-group"><label>Vehículo de traslado</label><select onchange="event.stopPropagation();actualizarLog(\''+id+'\',\'equipoCompra\',this.value)"><option value="">— Seleccionar vehículo —</option>';
-    VEHICULOS.forEach(function(v){ html += '<option value="'+v.codigo+'" '+(o.equipoCompra===v.codigo?'selected':'')+'>'+v.codigo+'</option>'; });
+    html += _optsVehiculos(o.equipoCompra);
     html += '</select></div>';
     html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje del vehículo</div>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:12px">';
@@ -2622,6 +2635,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
         <option value="PICK-UP" ${v.vehiculo==='PICK-UP'?'selected':''}>PICK-UP (PATRULLA) — L.22/peaje</option>
         <option value="CAMION GRANDE" ${v.vehiculo==='CAMION GRANDE'?'selected':''}>CAMIÓN GRANDE (CM-35) — L.134/peaje</option>
         <option value="GRUA" ${v.vehiculo==='GRUA'?'selected':''}>GRÚA (GR-01) — L.134/peaje</option>
+        <option value="VEHICULO PERSONAL" ${v.vehiculo==='VEHICULO PERSONAL'?'selected':''}>🚗 VEHÍCULO PERSONAL — L.22/peaje</option>
       </select>
     </div>
   </div>
@@ -3148,7 +3162,7 @@ function _buildSolicitudHTML(v, orden){
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
   const tGen=tAlim+tTr+tPeaj+comb+tHosp+otros;
-  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':(v.vehiculo==='GRUA'?'GR-01':'PATRULLA');
+  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':(v.vehiculo==='GRUA'?'GR-01':(v.vehiculo==='VEHICULO PERSONAL'?'PERSONAL':'PATRULLA'));
 
   const personaRows=personas.map(p=>`
     <tr>
