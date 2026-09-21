@@ -8345,7 +8345,7 @@ function _agendarDesdeOrden(correlativo, tecnicos, fechaVal, actividad, dur){
 
 // ══ REPUESTOS — solicitudes de repuestos vinculadas a órdenes de trabajo ═════
 // Datos en montasa/repuestos/<id> — escritura POR SOLICITUD individual.
-const SR_MAX_FILAS = 40;
+const SR_MAX_FILAS = 80;
 const SR_EDITAR = true; // editar SR con PIN: solo Gerencia y Supervisión
 function _srLista(){ const r=DB.repuestos||{}; return (Array.isArray(r)?r:Object.values(r)).filter(Boolean); }
 function _srDeOrden(oid){ return _srLista().filter(r=>r.ordenId===oid); }
@@ -8403,9 +8403,11 @@ function abrirSolRepuesto(editId){
   let filas='';
   if(srEdit){
     (srEdit.items||[]).forEach(function(it){ filas+=_srFilaHTML(it); });
-    filas+=_srFilaHTML(); filas+=_srFilaHTML();
+    // Filas vacías de sobra para seguir agregando repuestos sin tocar el botón
+    const _vac = Math.max(3, Math.min(SR_MAX_FILAS-(srEdit.items||[]).length, 10-(srEdit.items||[]).length));
+    for(let i=0;i<_vac;i++) filas+=_srFilaHTML();
   } else {
-    for(let i=0;i<5;i++) filas+=_srFilaHTML();
+    for(let i=0;i<10;i++) filas+=_srFilaHTML();
   }
   const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
   ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:16px;margin:12px 0" onclick="event.stopPropagation()">'
@@ -8419,13 +8421,15 @@ function abrirSolRepuesto(editId){
     +'<div id="sr-filas-wrap" style="display:'+(srEdit?'block':'none')+'">'
     +'<div style="display:grid;grid-template-columns:56px 1fr 110px;gap:6px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px"><span>Cant.</span><span>Descripción</span><span>No. de parte</span></div>'
     +'<div id="sr-filas">'+filas+'</div>'
-    +'<button onclick="_srAgregarFila()" style="width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin-top:6px">➕ Agregar fila</button>'
+    +'<button id="sr-btn-fila" onclick="_srAgregarFila()" style="width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin-top:6px">➕ Agregar 5 filas</button>'
+    +'<div id="sr-contador" style="font-size:11px;color:var(--text3);text-align:center;margin-top:5px"></div>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:14px">'
     +'<button onclick="_srGuardar()" style="flex:1;padding:13px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer">'+(srEdit?'💾 Guardar cambios':'💾 Guardar solicitud')+'</button>'
     +'<button onclick="document.getElementById(\'sr-overlay\').remove()" style="padding:13px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
     +'</div></div>';
   document.body.appendChild(ov);
+  _srContador();
   if(srEdit){
     const info=document.getElementById('sr-info');
     info.style.display='block';
@@ -8438,8 +8442,21 @@ function abrirSolRepuesto(editId){
 }
 function _srAgregarFila(){
   const cont=document.getElementById('sr-filas');
-  if(cont.querySelectorAll('.sr-fila').length>=SR_MAX_FILAS){ toast('Máximo '+SR_MAX_FILAS+' filas', true); return; }
-  cont.insertAdjacentHTML('beforeend', _srFilaHTML());
+  let hay=cont.querySelectorAll('.sr-fila').length;
+  if(hay>=SR_MAX_FILAS){ toast('Máximo '+SR_MAX_FILAS+' filas por solicitud', true); return; }
+  // Se agregan de 5 en 5: con tope de 80 renglones, una por una es eterno
+  const cuantas=Math.min(5, SR_MAX_FILAS-hay);
+  let h=''; for(let i=0;i<cuantas;i++) h+=_srFilaHTML();
+  cont.insertAdjacentHTML('beforeend', h);
+  _srContador();
+}
+function _srContador(){
+  const cont=document.getElementById('sr-filas'); if(!cont) return;
+  const n=cont.querySelectorAll('.sr-fila').length;
+  const c=document.getElementById('sr-contador');
+  if(c) c.textContent=n+' de '+SR_MAX_FILAS+' filas disponibles (las vacías se ignoran)';
+  const b=document.getElementById('sr-btn-fila');
+  if(b) b.style.display = (n>=SR_MAX_FILAS) ? 'none' : '';
 }
 function _srOrdenesActivas(){
   const out=[];
@@ -8524,7 +8541,7 @@ function _srElegir(tipo, oid){
     +(d.modelo?'<div><b>Modelo:</b> '+esc(d.modelo)+'</div>':'')
     +(d.serie?'<div><b>Serie:</b> '+esc(d.serie)+'</div>':'')
     +'<div><b>Técnico:</b> '+esc(d.tecnico||'—')+'</div>';
-  document.getElementById('sr-filas-wrap').style.display='block';
+  document.getElementById('sr-filas-wrap').style.display='block'; _srContador();
 }
 function _srEditarPin(id){
   if(typeof solicitarPINAccion==='function'){
@@ -8661,73 +8678,124 @@ function _srH2C(){
   if(window.html2canvas) return Promise.resolve();
   return new Promise(function(res,rej){ var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; sc.onload=res; sc.onerror=function(){rej(new Error('sin conexión para el generador'));}; document.head.appendChild(sc); });
 }
+// Librerías para el PDF de la solicitud (html2canvas + jsPDF). Autónomo: no
+// depende de _cargarLibPDF, que no existe en todas las apps.
+function _srPDFLibs(){
+  function carga(src, ok){
+    return new Promise(function(res,rej){
+      if(ok()) return res();
+      var s=document.createElement('script'); s.src=src;
+      s.onload=function(){ res(); };
+      s.onerror=function(){ rej(new Error('sin conexión para el generador de PDF')); };
+      document.head.appendChild(s);
+    });
+  }
+  return carga('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function(){ return !!window.html2canvas; })
+    .then(function(){ return carga('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }); });
+}
 async function _srEntregar(blob, nombre){
+  var arch = (nombre||'solicitud')+'.pdf';
   try{
-    const file=new File([blob], (nombre||'solicitud')+'.png', {type:'image/png'});
+    var file=new File([blob], arch, {type:'application/pdf'});
     if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title:nombre||'Solicitud'});
-      toast('📤 Imagen compartida ✓'); return;
+      await navigator.share({files:[file], title:nombre||'Solicitud de repuestos'});
+      toast('📤 PDF compartido ✓'); return;
     }
   }catch(err){ if(err && err.name==='AbortError') return; }
   try{
-    if(navigator.clipboard && window.ClipboardItem){
-      await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-      toast('📋 Imagen copiada — pégala donde quieras'); return;
-    }
-  }catch(err){}
-  const url=URL.createObjectURL(blob);
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px';
-  ov.innerHTML='<div style="color:#fff;font-weight:700;font-size:14px;text-align:center">Mantén presionada la imagen para compartirla o guardarla</div>'
-    +'<img src="'+url+'" style="max-width:100%;max-height:72vh;border-radius:10px;background:#fff">'
-    +'<button style="padding:12px 26px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cerrar</button>';
-  ov.querySelector('button').onclick=function(){ ov.remove(); URL.revokeObjectURL(url); };
-  document.body.appendChild(ov);
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=arch;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+    toast('📄 PDF descargado ✓');
+  }catch(err){ toast('No se pudo entregar el PDF', true); }
 }
 async function compartirSolRepuesto(id){
   try{
     const r=_srLista().find(function(x){ return x.id===id; });
     if(!r){ toast('Solicitud no encontrada', true); return; }
-    toast('Generando imagen…');
-    await _srH2C();
+    const items=(r.items||[]);
+    toast('Generando PDF…');
+    await _srPDFLibs();
     const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
     const logo=_srLogo();
-    const cont=document.createElement('div');
-    cont.style.cssText='position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:14px;box-sizing:border-box;';
-    cont.innerHTML='<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:16px 18px 13px;color:#fff;border-radius:12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:14px">'
-      +'<div style="min-width:0"><div style="font-size:20px;font-weight:700">Solicitud de Repuestos</div>'
-      +'<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+esc(r.correlativo)+' · Orden '+esc(r.ordenCorrelativo)+'</div></div>'
-      +(logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:44px;display:block"></div>':'')
+    const ANCHO=860;              // hoja carta vertical, texto legible impreso
+    const P1=28, PN=36;           // renglones por hoja (la 1ª lleva el encabezado grande)
+    // Paginado POR RENGLONES: así ninguna fila se corta a la mitad
+    const hojas=[];
+    if(items.length<=P1){ hojas.push(items); }
+    else {
+      hojas.push(items.slice(0,P1));
+      for(let i=P1;i<items.length;i+=PN) hojas.push(items.slice(i,i+PN));
+    }
+    const T=hojas.length;
+    const encGrande=''
+      +'<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:22px 24px 18px;color:#fff;border-radius:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:18px">'
+      +'<div style="min-width:0"><div style="font-size:27px;font-weight:700">Solicitud de Repuestos</div>'
+      +'<div style="font-size:16px;color:#a9c8de;margin-top:3px">'+esc(r.correlativo)+' · Orden '+esc(r.ordenCorrelativo)+'</div></div>'
+      +(logo?'<div style="flex-shrink:0"><img src="'+logo+'" style="height:60px;display:block"></div>':'')
       +'</div>'
-      +'<div style="font-size:11.5px;color:#cfe0f0;margin-top:10px;line-height:1.7;border-top:1px solid rgba(255,255,255,0.18);padding-top:8px">'
+      +'<div style="font-size:14px;color:#cfe0f0;margin-top:14px;line-height:1.8;border-top:1px solid rgba(255,255,255,0.18);padding-top:11px">'
       +'<span style="color:#8fb3d4">'+(r.esCliente?'CLIENTE':'EQUIPO')+'</span> <b style="color:#fff">'+esc(r.equipoTxt)+'</b>'
       +(r.marca?' &nbsp;·&nbsp; <span style="color:#8fb3d4">MARCA</span> <b style="color:#fff">'+esc(r.marca)+'</b>':'')
       +(r.modelo?' &nbsp;·&nbsp; <span style="color:#8fb3d4">MODELO</span> <b style="color:#fff">'+esc(r.modelo)+'</b>':'')
       +(r.serie?'<br><span style="color:#8fb3d4">SERIE</span> <b style="color:#fff">'+esc(r.serie)+'</b>':'')
       +(r.tecnico?' &nbsp;·&nbsp; <span style="color:#8fb3d4">TÉCNICO</span> <b style="color:#fff">'+esc(r.tecnico)+'</b>':'')
       +' &nbsp;·&nbsp; <span style="color:#8fb3d4">FECHA</span> <b style="color:#fff">'+esc(r.fecha)+'</b>'
-      +'</div>'
-      +'</div>'
-      +'<div style="margin-top:12px">'
-      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-      +'<tr><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;width:46px">Cant.</th><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;text-align:left">Descripción</th><th style="border:1px solid #d9d7cf;padding:6px;background:#eef2f8;color:#1f3864;width:96px;text-align:left">No. parte</th></tr>'
-      +(r.items||[]).map(function(it){ return '<tr><td style="border:1px solid #e2e0d8;padding:6px;text-align:center">'+esc(it.cant)+'</td><td style="border:1px solid #e2e0d8;padding:6px">'+esc(it.desc)+'</td><td style="border:1px solid #e2e0d8;padding:6px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
-      +'</table></div>'
-      +'<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')+'</div>';
-    document.body.appendChild(cont);
-    const imgs=cont.querySelectorAll('img');
-    await Promise.all(Array.from(imgs).map(function(img){
-      if(img.complete && img.naturalWidth>0) return Promise.resolve();
-      return new Promise(function(x){ img.onload=x; img.onerror=x; setTimeout(x,3000); });
-    }));
-    const canvas=await html2canvas(cont,{scale:2,backgroundColor:'#ffffff'});
-    document.body.removeChild(cont);
-    canvas.toBlob(function(blob){
-      if(!blob){ toast('No se pudo generar la imagen', true); return; }
-      _srEntregar(blob, r.correlativo);
-    },'image/png');
-  }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+      +' &nbsp;·&nbsp; <span style="color:#8fb3d4">RENGLONES</span> <b style="color:#fff">'+items.length+'</b>'
+      +'</div></div>';
+    const encChico=''
+      +'<div style="background:#173a5c;padding:12px 18px;color:#fff;border-radius:10px;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      +'<div style="font-size:15px;font-weight:700">Solicitud de Repuestos '+esc(r.correlativo)
+      +' <span style="font-weight:400;color:#a9c8de">· Orden '+esc(r.ordenCorrelativo)+' · '+esc(r.equipoTxt)+'</span></div>'
+      +(logo?'<img src="'+logo+'" style="height:38px;display:block;flex-shrink:0">':'')
+      +'</div>';
+    const cabTabla=''
+      +'<tr><th style="border:1px solid #d9d7cf;padding:8px 6px;background:#eef2f8;color:#1f3864;width:38px">#</th>'
+      +'<th style="border:1px solid #d9d7cf;padding:8px 6px;background:#eef2f8;color:#1f3864;width:60px">Cant.</th>'
+      +'<th style="border:1px solid #d9d7cf;padding:8px;background:#eef2f8;color:#1f3864;text-align:left">Descripción</th>'
+      +'<th style="border:1px solid #d9d7cf;padding:8px;background:#eef2f8;color:#1f3864;width:170px;text-align:left">No. de parte</th></tr>';
+    const jsPDF=window.jspdf.jsPDF;
+    const pdf=new jsPDF({orientation:'portrait',unit:'pt',format:'letter'});
+    const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    const margen=20, usableW=pw-margen*2, usableH=ph-margen*2;
+    let base=0;
+    for(let h=0; h<T; h++){
+      const chunk=hojas[h];
+      const cont=document.createElement('div');
+      cont.style.cssText='position:fixed;left:-12000px;top:0;width:'+ANCHO+'px;background:#fff;font-family:DM Sans,Arial,sans-serif;padding:26px 28px;box-sizing:border-box;';
+      cont.innerHTML=(h===0?encGrande:encChico)
+        +'<div style="margin-top:'+(h===0?18:14)+'px"><table style="width:100%;border-collapse:collapse;font-size:14px">'
+        +cabTabla
+        +chunk.map(function(it,i){ return '<tr>'
+            +'<td style="border:1px solid #e2e0d8;padding:7px 6px;text-align:center;color:#9c9a90">'+(base+i+1)+'</td>'
+            +'<td style="border:1px solid #e2e0d8;padding:7px 6px;text-align:center;font-weight:700">'+esc(it.cant)+'</td>'
+            +'<td style="border:1px solid #e2e0d8;padding:7px 8px">'+esc(it.desc)+'</td>'
+            +'<td style="border:1px solid #e2e0d8;padding:7px 8px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
+        +'</table></div>'
+        +'<div style="padding:14px 2px 2px;display:flex;justify-content:space-between;color:#9c9a90;font-size:12px">'
+        +'<span>'+(h===T-1?('Documento generado desde el sistema interno de Montasa Handling Co. — '+new Date().toLocaleDateString('es-HN')):('Continúa en la hoja '+(h+2)))+'</span>'
+        +'<span>'+(T>1?('Hoja '+(h+1)+' de '+T):'')+'</span>'
+        +'</div>';
+      document.body.appendChild(cont);
+      try{
+        const imgs=cont.querySelectorAll('img');
+        await Promise.all(Array.from(imgs).map(function(img){
+          if(img.complete && img.naturalWidth>0) return Promise.resolve();
+          return new Promise(function(x){ img.onload=x; img.onerror=x; setTimeout(x,3000); });
+        }));
+        const canvas=await html2canvas(cont,{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:ANCHO,width:ANCHO});
+        const pxPorPt=canvas.width/usableW;
+        let alto=canvas.height/pxPorPt, ancho=usableW, x=margen;
+        if(alto>usableH){ const k=usableH/alto; alto=usableH; ancho=usableW*k; x=margen+(usableW-ancho)/2; }
+        if(h>0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',x,margen,ancho,alto);
+      } finally { if(cont.parentNode) document.body.removeChild(cont); }
+      base+=chunk.length;
+    }
+    _srEntregar(pdf.output('blob'), r.correlativo);
+  }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
 }
 function supShowTab(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
