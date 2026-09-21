@@ -425,10 +425,10 @@ function _calcCostoViaticos(v){
   var tTr = personas.reduce(function(s,p){ return s+(parseFloat(p.transporte)||0); },0);
   var tHosp = personas.reduce(function(s,p){ return s+(parseFloat(p.hospedaje)||0); },0);
   // Peajes según destino y vehículo
-  var PEAJES_MAP = {TRUJILLO:0,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:0,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:0,'LA CEIBA':0,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:0,CORTES:0};
+  var PEAJES_MAP = {TRUJILLO:0,CHOLUTECA:6,DANLI:6,COYOLITO:4,'SAN LORENZO, VALLE':4,TOCOA:0,OLANCHO:6,TEGUCIGALPA:6,'GRACIAS LEMPIRA':4,COPAN:0,'LA CEIBA':0,COMAYAGUA:4,'SANTA ROSA DE COPAN':4,SIGUATEPEQUE:4,'SANTA BARBARA':2,TELA:0,CORTES:0,'SANTA ANA, EL SALVADOR':0,'LAGO DE YOJOA (PENA BLANCA)':2,POTRERILLOS:0,VILLANUEVA:0};
   // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): forzar 0 aunque el viático
   // guardado traiga un número viejo de peajes.
-  var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA'];
+  var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA','VILLANUEVA','POTRERILLOS','SANTA ANA, EL SALVADOR'];
   var _pjc = _viatPeajes(v, (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
   var numPeajes = _pjc.n;
   var cpU = _pjc.c;
@@ -2393,10 +2393,32 @@ const GESTORES_VIATICOS = [
   {nombre:"ELKIN ISAAC PEREZ HERNANDEZ",    id:"0501-1999-13499", cuenta:"2010067666",  depto:"Taller"},
   {nombre:"MIGUEL ANTONIO ORELLANA LOPEZ",  id:"0501-1990-12443", cuenta:"2020575525", depto:"Gerencia"},
 ];
+// ── Destinos fuera de Honduras: la tabla nacional de alimentación y hospedaje
+// no aplica, y hay gastos de frontera que van en "otros gastos" ─────────────
+const DESTINOS_INTERNACIONALES = ['SANTA ANA, EL SALVADOR'];
+function _viatEsInternacional(dest){
+  return DESTINOS_INTERNACIONALES.indexOf(String(dest||'').trim().toUpperCase()) >= 0;
+}
+function _viatAvisoIntlHTML(dest){
+  if(!_viatEsInternacional(dest)) return '';
+  return '<div style="background:#fff8e1;border:1px solid #f0d488;border-left:4px solid #e0a800;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#6b5200">'
+    + '<b>🌎 Viaje internacional — '+String(dest)+'</b><br>'
+    + 'La alimentación y el hospedaje NO se calculan con la tabla nacional: captura los montos a mano. '
+    + 'Recuerda incluir los gastos de frontera (migración, permiso vehicular, seguro) en «Otros gastos».'
+    + '</div>';
+}
+function _viatAvisoIntl(dest){
+  const el = document.getElementById('v-intl');
+  if(!el) return;
+  const h = _viatAvisoIntlHTML(dest);
+  el.innerHTML = h;
+  el.style.display = h ? 'block' : 'none';
+}
 const DESTINOS_VIATICOS = [
   {nombre:"TRUJILLO",            km:767, peajes:0},
   {nombre:"CHOLUTECA",           km:756, peajes:6},
   {nombre:"DANLI",               km:735, peajes:6},
+  {nombre:"SANTA ANA, EL SALVADOR", km:730, peajes:0},
   {nombre:"COYOLITO",            km:693, peajes:4},
   {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
   {nombre:"TOCOA",               km:630, peajes:0},
@@ -2410,7 +2432,10 @@ const DESTINOS_VIATICOS = [
   {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
   {nombre:"SANTA BARBARA",       km:221, peajes:2},
   {nombre:"TELA",                km:200, peajes:0},
+  {nombre:"LAGO DE YOJOA (PENA BLANCA)", km:200, peajes:2},
   {nombre:"CORTES",              km:116, peajes:0},
+  {nombre:"POTRERILLOS",         km:96,  peajes:0},
+  {nombre:"VILLANUEVA",          km:54,  peajes:0},
 ];
 
 let _viaticosOrdenId = null;
@@ -2487,6 +2512,7 @@ function abrirViaticos(ordenId){
           <div><span style="color:var(--text3)">KM total</span><br><strong>${d.km} km</strong></div>
         </div>
       </div>
+      ${_viatAvisoIntlHTML(v.destino)}
       <!-- Totales -->
       ${row('🍽 Total alimentación', tAlim)}
       ${row('🛣 Total peajes', tPeaj)}
@@ -2640,6 +2666,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
       </select>
     </div>
   </div>
+  <div id="v-intl" style="display:${_viatEsInternacional(v.destino)?'block':'none'}">${_viatAvisoIntlHTML(v.destino)}</div>
   <div class="form-group"><label>Motivo del viaje</label>
     <input type="text" id="v-motivo" value="${v.motivo||''}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
   </div>
@@ -2842,6 +2869,7 @@ function actualizarDestino(){
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===sel.value)||{km:0,peajes:0};
   document.getElementById('v-km') && (document.getElementById('v-km').textContent = d.km+' km');
   document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').value = d.peajes);
+  _viatAvisoIntl(sel.value);
   recalcViaticos();
 }
 
@@ -2892,7 +2920,7 @@ function _viatPeajes(v, destPeajes){
   if(tieneManual){
     n = (v.num_peajes!=null && v.num_peajes!=='') ? (parseFloat(v.num_peajes)||0) : (destPeajes||0);
   } else {
-    const SIN = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA'];
+    const SIN = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA','VILLANUEVA','POTRERILLOS','SANTA ANA, EL SALVADOR'];
     n = SIN.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (destPeajes||0));
   }
   return { n:n, c:c, t:n*c };

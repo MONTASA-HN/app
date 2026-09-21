@@ -96,10 +96,32 @@ function calcularVales(fechaInicio, fechaFin, personas){
 let _valeMantOrdenId = null;
 let _valeMantTipo = null; // 'correctivo' o 'preventivo'
 
+// ── Destinos fuera de Honduras: la tabla nacional de alimentación y hospedaje
+// no aplica, y hay gastos de frontera que van en "otros gastos" ─────────────
+const DESTINOS_INTERNACIONALES = ['SANTA ANA, EL SALVADOR'];
+function _viatEsInternacional(dest){
+  return DESTINOS_INTERNACIONALES.indexOf(String(dest||'').trim().toUpperCase()) >= 0;
+}
+function _viatAvisoIntlHTML(dest){
+  if(!_viatEsInternacional(dest)) return '';
+  return '<div style="background:#fff8e1;border:1px solid #f0d488;border-left:4px solid #e0a800;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:#6b5200">'
+    + '<b>🌎 Viaje internacional — '+String(dest)+'</b><br>'
+    + 'La alimentación y el hospedaje NO se calculan con la tabla nacional: captura los montos a mano. '
+    + 'Recuerda incluir los gastos de frontera (migración, permiso vehicular, seguro) en «Otros gastos».'
+    + '</div>';
+}
+function _viatAvisoIntl(dest){
+  const el = document.getElementById('v-intl');
+  if(!el) return;
+  const h = _viatAvisoIntlHTML(dest);
+  el.innerHTML = h;
+  el.style.display = h ? 'block' : 'none';
+}
 const DESTINOS_VIATICOS = [
   {nombre:"TRUJILLO",            km:767, peajes:0},
   {nombre:"CHOLUTECA",           km:756, peajes:6},
   {nombre:"DANLI",               km:735, peajes:6},
+  {nombre:"SANTA ANA, EL SALVADOR", km:730, peajes:0},
   {nombre:"COYOLITO",            km:693, peajes:4},
   {nombre:"SAN LORENZO, VALLE",  km:683, peajes:4},
   {nombre:"TOCOA",               km:630, peajes:0},
@@ -113,7 +135,10 @@ const DESTINOS_VIATICOS = [
   {nombre:"SIGUATEPEQUE",        km:273, peajes:4},
   {nombre:"SANTA BARBARA",       km:221, peajes:2},
   {nombre:"TELA",                km:200, peajes:0},
+  {nombre:"LAGO DE YOJOA (PENA BLANCA)", km:200, peajes:2},
   {nombre:"CORTES",              km:116, peajes:0},
+  {nombre:"POTRERILLOS",         km:96,  peajes:0},
+  {nombre:"VILLANUEVA",          km:54,  peajes:0},
 ];
 
 function _getOrdenPorTipoViaticos(id, tipo){
