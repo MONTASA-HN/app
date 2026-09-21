@@ -1116,9 +1116,13 @@ function _sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj){
 }
 
 function _cambiarEstadoEquipoAuto(equipoId, nuevoEstado){
-  if(!equipoId) return;
+  if(!equipoId || equipoId==='__cliente__') return;
   const eq = DB.equipos.find(e=>e.id===equipoId);
   if(!eq) return;
+  if(nuevoEstado==='DISPONIBLE'){
+    const _act = (eq.estado||'').toUpperCase();
+    if(_act==='EN MANTENIMIENTO' || _act==='MAL ESTADO') return;
+  }
   eq.estado = nuevoEstado;
   saveDB();
   _syncEquipoCampoFB(equipoId, 'estado', nuevoEstado);
@@ -5177,11 +5181,11 @@ async function enviarSolicitudWA(){
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); /* el link de la ficha se conserva hasta el CIERRE del retiro (pasa al taller SPS) */ }
+      /* retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE */
     }
     if(equipoId2Val){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); /* el link de la ficha se conserva hasta el CIERRE del retiro */ }
+      /* retiro: el 2° equipo también se libera al CIERRE */
     }
     _guardarLogisticaResiliente(ordenId);
   } else {
@@ -5341,11 +5345,11 @@ async function copiarMensajeWA(){
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); /* el link de la ficha se conserva hasta el CIERRE del retiro (pasa al taller SPS) */ }
+      /* retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE */
     }
     if(equipoId2Val){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); /* el link de la ficha se conserva hasta el CIERRE del retiro */ }
+      /* retiro: el 2° equipo también se libera al CIERRE */
     }
     _guardarLogisticaResiliente(ordenId);
   } else {
@@ -7901,15 +7905,30 @@ function imprimirValeMant(){
 }
 
 function _cambiarEstadoEquipo(equipoId, nuevoEstado){
-  if(!equipoId) return;
-  const eq = DB.equipos.find(e=>e.id===equipoId);
+  if(!equipoId || equipoId==='__cliente__') return;
+  var eq = DB.equipos.find(function(e){ return e && e.id===equipoId; });
   if(!eq) return;
+  // Respetar estados que indican que el equipo NO está listo para rentar
+  if(nuevoEstado==='DISPONIBLE'){
+    var act = (eq.estado||'').toUpperCase();
+    if(act==='EN MANTENIMIENTO' || act==='MAL ESTADO') return;
+  }
   eq.estado = nuevoEstado;
   saveDB();
-  if(window._fbDB && window._fbReady){
-    const idx = DB.equipos.findIndex(e=>e.id===equipoId);
-    if(idx>=0) window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
-  }
+  // Persistir en la FICHA del equipo (montasa/equipos/<idx>/estado). El nodo
+  // 'montasa/estados' no lo lee ninguna app: escribir solo ahí hacía que el
+  // estado volviera a EN RENTA al recargar.
+  try{
+    if(!window._fbDB || !window._fbReady) return;
+    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+      var v = s.val(); if(!v) return;
+      var idx = -1;
+      if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
+      else { var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
+      if(idx===-1 || idx===undefined) return;
+      window._fbDB.ref('montasa/equipos/'+idx+'/estado').set(nuevoEstado);
+    }).catch(function(){});
+  }catch(e){}
 }
 
 

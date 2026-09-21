@@ -1642,8 +1642,12 @@ function cerrarOrdenLog(id){
   o.cerrado = true;
   o.estado = 'Completado';
   o.fechaCierre = new Date().toISOString().slice(0,10);
-  // Restituir equipo a DISPONIBLE si era renta
-  if(o.tipoLogistica === 'renta') _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
+  // Al cerrar: el equipo vuelve a estar DISPONIBLE (renta terminada o retirado
+  // del cliente). No aplica a entregas: el equipo se queda donde el cliente.
+  if(!esCancelado && (o.tipoLogistica === 'renta' || o.tipoLogistica === 'retiro')){
+    _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
+    if(o.equipoId2) _cambiarEstadoEquipo(o.equipoId2, 'DISPONIBLE');
+  }
   // Retiro FUERA del plantel: el equipo vuelve al taller → su ficha queda con el link del taller SPS
   if(o.tipoLogistica === 'retiro' && (o.ubicacionLog||'fuera')==='fuera' && !esCancelado){
     _gpsFichaLink(o.equipoId, _GPS_TALLER_SPS);
@@ -3358,14 +3362,30 @@ function editarOrdenCerradaLog(id){
 
 
 function _cambiarEstadoEquipo(equipoId, nuevoEstado){
-  if(!equipoId) return;
-  var eq = DB.equipos.find(function(e){ return e.id===equipoId; });
+  if(!equipoId || equipoId==='__cliente__') return;
+  var eq = DB.equipos.find(function(e){ return e && e.id===equipoId; });
   if(!eq) return;
+  // Respetar estados que indican que el equipo NO está listo para rentar
+  if(nuevoEstado==='DISPONIBLE'){
+    var act = (eq.estado||'').toUpperCase();
+    if(act==='EN MANTENIMIENTO' || act==='MAL ESTADO') return;
+  }
   eq.estado = nuevoEstado;
   saveDB();
-  if(window._fbDB && window._fbReady){
-    window._fbDB.ref('montasa/estados/'+equipoId).set(nuevoEstado);
-  }
+  // Persistir en la FICHA del equipo (montasa/equipos/<idx>/estado). El nodo
+  // 'montasa/estados' no lo lee ninguna app: escribir solo ahí hacía que el
+  // estado volviera a EN RENTA al recargar.
+  try{
+    if(!window._fbDB || !window._fbReady) return;
+    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+      var v = s.val(); if(!v) return;
+      var idx = -1;
+      if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
+      else { var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
+      if(idx===-1 || idx===undefined) return;
+      window._fbDB.ref('montasa/equipos/'+idx+'/estado').set(nuevoEstado);
+    }).catch(function(){});
+  }catch(e){}
 }
 
 // ── FOTOS LOGÍSTICA (patrón idéntico a Técnicos) ────────────────────────────
