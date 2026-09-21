@@ -5213,10 +5213,14 @@ function calcularNotificacionesMant(){
 
 function actualizarBadgeNotifMant(){
   const notifs = calcularNotificacionesMant().filter(n=>!n.completada);
+  // Los vencimientos de renta (logística) también cuentan en el badge rojo
+  let _nLog = 0;
+  try{ _nLog = (typeof _rentaVencimientos==='function') ? _rentaVencimientos().length : 0; }catch(e){}
+  const total = notifs.length + _nLog;
   const badge = document.getElementById('badge-notif-mant');
   if(badge){
-    if(notifs.length){
-      badge.textContent = notifs.length>99?'99+':notifs.length;
+    if(total){
+      badge.textContent = total>99?'99+':total;
       badge.classList.add('visible');
     } else {
       badge.textContent = '';
@@ -5229,7 +5233,10 @@ function actualizarBadgeNotifMant(){
 function _fechaLocalNR(x){ if(!x) return null; const m=String(x).slice(0,10).split('-'); if(m.length<3||!(+m[0])) return null; return new Date(+m[0], +m[1]-1, +m[2]); }
 function _rentaVenceDe(o){
   const n = parseInt(o&&o.diasRenta)||0;
-  const ini = o ? _fechaLocalNR(o.fechaCierre) : null;
+  // La renta se cuenta desde la FECHA DE INICIO de la orden (igual que el campo
+  // "Finalización de renta" de la orden de trabajo); si aún no hay fecha de
+  // inicio, se usa el cierre como respaldo.
+  const ini = o ? (_fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre)) : null;
   if(!n || !ini) return null;
   const v = new Date(ini); v.setDate(v.getDate()+n); return v;
 }
@@ -5237,7 +5244,7 @@ function _rentaDiasHTML(o){
   if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
   const n = parseInt(o.diasRenta)||0;
   const v = _rentaVenceDe(o);
-  const venceTxt = v ? ' · vence el <b>'+('0'+v.getDate()).slice(-2)+'/'+('0'+(v.getMonth()+1)).slice(-2)+'/'+v.getFullYear()+'</b>' : (n?' · el conteo inicia al cerrar la orden':'');
+  const venceTxt = v ? ' · finaliza el <b>'+('0'+v.getDate()).slice(-2)+'/'+('0'+(v.getMonth()+1)).slice(-2)+'/'+v.getFullYear()+'</b>' : (n?' · falta la fecha de inicio de la orden':'');
   return '<div style="background:#fdf3e3;border:1px solid #f0d6ad;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#8a4800;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>⏱ Días de renta: <b>'+(n||'—')+'</b>'+venceTxt+'</span><button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaDiasEditar(this.dataset.rid)" style="font-size:11px;background:#1f3864;color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">✏️ Ajustar (PIN)</button></div>';
 }
 function _rentaDiasEditar(id){
@@ -5253,6 +5260,7 @@ function _rentaDiasEditar(id){
     toast('⏱ Días de renta actualizados ✓');
     try{ renderLogistica(); }catch(e){}
     try{ renderNotificacionesTab(); }catch(e){}
+    try{ actualizarBadgeNotifMant(); }catch(e){}
   }, '⏱ Días de renta', 'Ingresa tu PIN para ajustar los días de renta (extensión de la renta)');
 }
 function _rentaVencimientos(){
@@ -5260,15 +5268,17 @@ function _rentaVencimientos(){
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   (DB.logistica||[]).forEach(function(o){
     if(!o || !o.cerrado || o.estado==='Cancelado') return;
-    if(!(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return;
+    // Solo ENTREGAS de equipo: en las rentas el operador está en sitio y avisa
+    if(o.tipoLogistica!=='entrega') return;
     const vence = _rentaVenceDe(o);
     if(!vence) return;
-    const ini = _fechaLocalNR(o.fechaCierre);
-    // Si ya se cerró un RETIRO posterior del mismo equipo, la renta terminó
+    const ini = _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+    // Basta con que EXISTA una orden de retiro del equipo (aunque esté pendiente):
+    // ya se mandó a retirar, el aviso deja de tener sentido.
     const retirado = (DB.logistica||[]).some(function(r){
-      if(!r || !r.cerrado || r.tipoLogistica!=='retiro' || !r.equipoId || r.equipoId!==o.equipoId) return false;
-      const fc = _fechaLocalNR(r.fechaCierre);
-      return fc && ini && fc >= ini;
+      if(!r || r.tipoLogistica!=='retiro' || r.estado==='Cancelado' || !r.equipoId || r.equipoId!==o.equipoId) return false;
+      const fr = _fechaLocalNR(r.fechaCierre) || _fechaLocalNR(r.fechaInicio) || _fechaLocalNR(r.fecha);
+      return !fr || !ini || fr >= ini;
     });
     if(retirado) return;
     // Días hábiles (sin sáb/dom) desde mañana hasta la fecha de vencimiento

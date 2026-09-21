@@ -840,7 +840,7 @@ function renderOrdenesLog(){
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
-      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Días de renta: <strong>${o.diasRenta}</strong> <span style="color:var(--text3)">(solo lectura — se ajusta en Gerencia)</span></div>`:''}
+      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Renta: <strong>${o.diasRenta} días</strong>${_rentaFinTexto(o)?` · finaliza el <strong>${_rentaFinTexto(o)}</strong>`:''}</div>`:''}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
@@ -1022,6 +1022,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.prioridad)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Prioridad</div><div style="font-weight:600">'+o.prioridad+'</div></div>';
   if(o.equipoCompra)     h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Vehículo</div><div style="font-weight:600">'+o.equipoCompra+'</div></div>';
   if(o.diasRenta)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Días de renta</div><div style="font-weight:600">'+o.diasRenta+' días</div></div>';
+  if(o.diasRenta && _rentaFinTexto(o)) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Finalización de renta</div><div style="font-weight:600">'+_rentaFinTexto(o)+'</div></div>';
   if(o.kmSalida)         h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Km salida</div><div style="font-weight:600">'+o.kmSalida+' km</div></div>';
   if(o.kmRetorno)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Km retorno</div><div style="font-weight:600">'+o.kmRetorno+' km</div></div>';
   if(o.horometroSalida)  h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Horómetro salida</div><div style="font-weight:600">'+o.horometroSalida+' hrs</div></div>';
@@ -1374,6 +1375,32 @@ function _esVehiculoOrdenLog(o){
   const e = (DB.equipos||[]).find(function(x){ return x && x.id===o.equipoId; });
   return !!(e && e.esVehiculo);
 }
+// ── FINALIZACIÓN DE RENTA: fecha de inicio de la orden + días de renta ──────
+function _rentaFinFecha(o){
+  const n = parseInt(o && o.diasRenta)||0;
+  const ini = (o && o.fechaInicio) ? String(o.fechaInicio).slice(0,10) : '';
+  if(!n || !ini || ini.length<10) return null;
+  const pz = ini.split('-');
+  const d = new Date(+pz[0], +pz[1]-1, +pz[2]);
+  if(isNaN(d)) return null;
+  d.setDate(d.getDate()+n);
+  return d;
+}
+function _rentaFinTexto(o){
+  const d = _rentaFinFecha(o);
+  if(!d) return '';
+  return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+}
+function _rentaFinHTML(o){
+  if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
+  const n = parseInt(o.diasRenta)||0;
+  if(!n) return '';
+  const f = _rentaFinTexto(o);
+  const val = f || '— (falta la fecha de inicio)';
+  return '<div class="form-group"><label>\ud83d\udcc5 Finalizaci\u00f3n de renta ('+n+' d\u00edas)</label>'
+    + '<div style="padding:11px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-weight:700;color:'+(f?'#8a4800':'var(--text3)')+'">'+val+'</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:3px">C\u00e1lculo autom\u00e1tico: fecha de inicio + '+n+' d\u00edas \u2014 solo lectura</div></div>';
+}
 function renderCamposTipo(o){
   var tipo = o.tipoLogistica||'';
   var isEntrega = tipo==='entrega';
@@ -1389,6 +1416,7 @@ function renderCamposTipo(o){
   var eq2Label = eq2 ? (eq2.codigo||'Equipo 2') : '';
   var id = o.id;
   var html = '';
+  if(isRenta || isEntrega) html += _rentaFinHTML(o);
 
   // Badge de ubicación para entrega/retiro
   if(isMovimiento){
