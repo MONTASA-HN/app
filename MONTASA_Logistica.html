@@ -910,6 +910,13 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o[k]===op?'selected':''}>${op}</option>`).join('')}
           </select></div>`).join(''):``}
         <!-- Motorista: solo fuera del plantel -->
+        ${(o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))?`
+        <div class="form-group"><label>Operador (opcional — puede ir un técnico o un operador)</label>
+          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+            <option value="">— Sin operador —</option>
+            ${_viatPersonal().map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
+          </select>
+        </div>`:``}
         ${((o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
@@ -1566,6 +1573,7 @@ function cerrarOrdenLog(id){
   }
   if(!esCancelado){
     if(o.tipoLogistica==='renta' && _esVehiculoOrdenLog(o)){
+      if(!o.motorista) faltantes.push('Motorista');
       if(!o.kmSalida) faltantes.push('Kilometraje de salida');
       if(!o.kmRetorno) faltantes.push('Kilometraje de retorno');
       if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)){
