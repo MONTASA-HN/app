@@ -2013,6 +2013,16 @@ function actualizarCampoOrden(tipo, id, campo, valor){
     }
   }
   orden[campo] = valor;
+  // Si se escriben los datos del equipo de cliente, se registra en la flota
+  // (categoría "Equipos de cliente") y la orden queda enlazada a su ficha.
+  if(['clienteNombre','clienteMarca','clienteModelo','clienteSerie'].includes(campo)){
+    const _nom=(orden.clienteNombre||'').trim(), _mar=(orden.clienteMarca||'').trim(),
+          _mod=(orden.clienteModelo||'').trim(), _ser=(orden.clienteSerie||'').trim();
+    if(_nom && _mar && _mod && typeof _guardarEquipoCliente==='function'){
+      const _nid=_guardarEquipoCliente(_nom,_mar,_mod,_ser);
+      if(_nid && (orden.equipoId==='__cliente__' || !orden.equipoId)) orden.equipoId=_nid;
+    }
+  }
   // Auto-set fechaInicio when estado changes to "En proceso" — update inline without re-render
   if(campo==='estado' && valor==='En proceso' && !orden.fechaInicio){
     orden.fechaInicio = new Date().toISOString().slice(0,16);
