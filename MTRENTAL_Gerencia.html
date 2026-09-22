@@ -1550,6 +1550,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div id="notif-mant-list"></div>
   </div>
 
+
+<!-- TOMA DE HORÓMETROS (MT RENTAL) -->
+<div id="tab-horometros" class="section">
+  <div id="mthor-cont"></div>
+</div>
+
   <!-- MAPA DE LA FLOTA -->
   <div id="tab-mapa" class="section">
     <div style="font-size:22px;font-weight:600;margin-bottom:4px">🗺 Mapa de la flota</div>
@@ -3476,6 +3482,629 @@ function renderMapaFlota(){
   });
 }
 
+// ══ MT RENTAL: TOMA DE HORÓMETROS (módulo extra) ═══════════════════════════
+// Réplica del módulo de MONHACO, con una diferencia: aquí NO se divide por
+// clientes — es un solo listado con toda la flota (en renta, disponibles y en
+// mantenimiento) incluyendo los vehículos, que se miden en km en vez de horas.
+// Datos por registro en Firebase (nunca pisa otros nodos):
+//   montasa/horometros/<AAAA-MM>/<equipoId> = {lectura, ts, codigo}
+//   montasa/horometros/<AAAA-MM>/_cierre    = {ts}      ← al finalizar la toma
+//   montasa/horometros/<AAAA-MM>/_firmas    = {ope, ger}
+// false define si esta app puede capturar (solo Logística MT).
+const MTHOR_CAPTURA = false;
+const MTHOR_ESTADOS = ['DISPONIBLE','EN RENTA','EN MANTENIMIENTO'];
+const _MTH_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MTHOR_CONT = 'mthor-cont';
+let _mthMesVista = null;
+
+function _mthEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function mthMesActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function mthMesLabel(mes){
+  const p=(mes||'').split('-'); if(p.length<2) return mes||'';
+  const n=_MTH_MESES[parseInt(p[1],10)-1]||'';
+  return n.charAt(0).toUpperCase()+n.slice(1)+' '+p[0];
+}
+function _mthFechaTs(ts){
+  if(!ts) return '—';
+  const d = new Date(ts); if(isNaN(d)) return '—';
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+// Un solo listado: toda la flota viva, vehículos incluidos
+function _mthEquipos(){
+  return (DB.equipos||[]).filter(function(e){
+    if(!e || e.esGenerico || e.esEquipoCliente) return false;
+    return MTHOR_ESTADOS.includes(String(e.estado||'DISPONIBLE').toUpperCase().trim());
+  }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
+}
+function _mthUnidad(e){ return (e && e.esVehiculo) ? 'km' : 'hrs'; }
+function _mthLecturas(mes){ return ((DB.horometros||{})[mes])||{}; }
+function _mthCierre(mes){ return (((DB.horometros||{})[mes])||{})._cierre || null; }
+function _mthFirmas(mes){ return ((((DB.horometros||{})[mes])||{})._firmas)||{}; }
+function _mthTiene(l){ return !!(l && l.lectura!=null && l.lectura!==''); }
+function _mthEqDe(eqId){ return (DB.equipos||[]).find(function(e){ return e && e.id===eqId; }) || null; }
+function _mthMeses(){
+  const set = new Set(Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m); }));
+  set.add(mthMesActual());
+  return Array.from(set).sort();
+}
+function _mthAnteriorReg(eq, mes){
+  // Última lectura de un mes ANTERIOR; si no hay, la de la ficha del equipo
+  const meses = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m) && m < mes; }).sort().reverse();
+  for(var i=0;i<meses.length;i++){
+    const l = (DB.horometros[meses[i]]||{})[eq.id];
+    if(l && l.lectura!=null && l.lectura!=='') return { lectura: parseFloat(l.lectura), ts: l.ts||null };
+  }
+  const h = parseFloat((eq||{}).horometro);
+  return isNaN(h) ? null : { lectura: h, ts: null };
+}
+function _mthIrMes(mes){ _mthMesVista = mes; renderMtHorometros(); }
+
+// ── TABLA ÚNICA ────────────────────────────────────────────────────────────
+function _mthTablaHTML(equipos, mes, lecturas, editable){
+  const cierre = _mthCierre(mes);
+  const th = 'padding:7px 8px;border:1px solid #8ea4c2;background:#dce6f1;color:#1f3864;font-weight:800;font-size:10.5px;text-align:center;white-space:nowrap';
+  const td = 'padding:6px 8px;border:1px solid #cfccc2;font-size:12px;color:#1a1a18;white-space:nowrap';
+  let filas = '';
+  equipos.forEach(function(e){
+    const l = lecturas[e.id];
+    const tiene = _mthTiene(l);
+    const antR = _mthAnteriorReg(e, mes);
+    const uni = _mthUnidad(e);
+    let celFinal;
+    if(editable){
+      celFinal = '<td style="'+td+';text-align:center;padding:3px 4px">'
+        + '<input type="number" inputmode="decimal" id="mth-in-'+e.id+'" value="'+(tiene?_mthEsc(l.lectura):'')+'" placeholder="'+uni+'" '
+        + 'onchange="mthGuardar(\''+e.id+'\')" '
+        + 'style="width:92px;padding:8px 6px;border:1.5px solid '+(tiene?'#18A303':'#ccc')+';border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td>'
+        + '<td style="'+td+';text-align:center;padding:3px 4px">'
+        + '<button id="mth-del-'+e.id+'" onclick="mthBorrar(\''+e.id+'\')" title="Borrar lectura" '
+        + 'style="display:'+(tiene?'inline-block':'none')+';padding:7px 9px;border:1px solid #f5c6c6;background:#fdeaea;color:#c00;border-radius:6px;font-size:13px;cursor:pointer">🗑</button></td>';
+    } else {
+      celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'
+        + (tiene?(parseFloat(l.lectura).toLocaleString('en-US')+' '+uni):'SIN TOMA')+'</td>';
+    }
+    filas += '<tr>'
+      + '<td style="'+td+';font-weight:800;color:#1f3864">'+_mthEsc(e.codigo)
+      + (e.esVehiculo?' <span style="font-size:9px;background:#e8f0fe;color:#1a56db;border-radius:4px;padding:1px 4px;font-weight:800">KM</span>':'')
+      + '</td>'
+      + '<td style="'+td+'">'+_mthEsc(e.cliente||'—')+'</td>'
+      + '<td style="'+td+';text-align:center">'+_mthEsc(e.capacidad||e.tipo||'—')+'</td>'
+      + '<td style="'+td+';text-align:center">'+_mthEsc(mthMesLabel(mes))+'</td>'
+      + '<td style="'+td+';text-align:center">'+(antR&&antR.ts?_mthFechaTs(antR.ts):'—')+'</td>'
+      + '<td id="mth-hasta-'+e.id+'" style="'+td+';text-align:center">'+((tiene&&cierre)?_mthFechaTs(cierre.ts):'—')+'</td>'
+      + '<td style="'+td+';text-align:right">'+(antR?antR.lectura.toLocaleString('en-US'):'—')+'</td>'
+      + celFinal
+      + '</tr>';
+  });
+  const colFinal = editable
+    ? '<th rowspan="2" style="'+th+'">LECTURA<br>FINAL</th><th rowspan="2" style="'+th+'"></th>'
+    : '<th rowspan="2" style="'+th+'">LECTURA<br>FINAL</th>';
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:0 0 6px">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:13px;text-transform:uppercase;letter-spacing:0.3px">CONTROL DE HOROMETRAJE — MT RENTAL</div>'
+    + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_mthFechaTs(Date.now())+'</div></div>'
+    + '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:'+(editable?'720':'660')+'px;background:#fff">'
+    + '<tr>'
+    + '<th rowspan="2" style="'+th+'">EQUIPO</th>'
+    + '<th rowspan="2" style="'+th+'">CLIENTE / UBICACIÓN</th>'
+    + '<th rowspan="2" style="'+th+'">CAPACIDAD</th>'
+    + '<th rowspan="2" style="'+th+'">MES</th>'
+    + '<th colspan="2" style="'+th+'">FECHA</th>'
+    + '<th rowspan="2" style="'+th+'">LECTURA<br>INICIO</th>'
+    + colFinal
+    + '</tr>'
+    + '<tr><th style="'+th+'">DESDE</th><th style="'+th+'">HASTA</th></tr>'
+    + filas
+    + '</table></div>';
+}
+// ── FIRMAS: gerente de mantenimiento + operador que hizo la toma ────────────
+function _mthFirmasHTML(mes, editable){
+  const regs = _mthFirmas(mes);
+  const slot = function(rol, titulo){
+    const img = regs[rol];
+    if(img){
+      return '<div style="flex:1;text-align:center;min-width:0">'
+        + '<div '+(editable?'onclick="mthFirmaAbrir(\''+rol+'\')" style="cursor:pointer;"':'style=""')+'>'
+        + '<img src="'+img+'" style="max-width:100%;max-height:64px;object-fit:contain;border-bottom:1.5px solid #333;display:block;margin:0 auto"></div>'
+        + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo
+        + (editable?' <span onclick="mthFirmaBorrar(\''+rol+'\')" style="cursor:pointer;color:#c00">🗑</span>':'')+'</div></div>';
+    }
+    if(editable){
+      return '<div style="flex:1;text-align:center;min-width:0">'
+        + '<div onclick="mthFirmaAbrir(\''+rol+'\')" style="cursor:pointer;border:1.5px dashed #b9c4d6;border-radius:8px;padding:14px 6px;color:#8ea4c2;font-size:12px;font-weight:700;background:#fff">✍️ Firmar</div>'
+        + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo+'</div></div>';
+    }
+    return '<div style="flex:1;text-align:center;min-width:0"><div style="border-bottom:1.5px solid #333;height:36px"></div>'
+      + '<div style="font-size:11px;font-weight:800;color:#1f3864;margin-top:5px;letter-spacing:0.5px">'+titulo+'</div></div>';
+  };
+  return '<div style="display:flex;gap:36px;margin:24px 10px 8px;max-width:600px">'
+    + slot('ope', 'OPERADOR')
+    + slot('ger', 'GERENTE DE MANTENIMIENTO')
+    + '</div>';
+}
+
+function renderMtHorometros(){
+  const cont = document.getElementById(MTHOR_CONT); if(!cont) return;
+  if(_mthMesVista && !((DB.horometros||{})[_mthMesVista])) _mthMesVista = null;
+  if(!_mthMesVista){ cont.innerHTML = _mthHomeHTML(); return; }
+
+  const mes = _mthMesVista;
+  const lecturas = _mthLecturas(mes);
+  const todos = _mthEquipos();
+  const buscar = (document.getElementById('mth-buscar') ? document.getElementById('mth-buscar').value : '').toLowerCase().trim();
+  const focoBuscar = document.activeElement && document.activeElement.id==='mth-buscar';
+  const tomados = todos.filter(function(e){ return _mthTiene(lecturas[e.id]); }).length;
+  const pct = todos.length ? Math.round(tomados/todos.length*100) : 0;
+  const cierre = _mthCierre(mes);
+  const editable = MTHOR_CAPTURA && !cierre;
+
+  let equipos = todos;
+  if(buscar) equipos = equipos.filter(function(e){
+    return String(e.codigo||'').toLowerCase().includes(buscar)
+      || String(e.cliente||'').toLowerCase().includes(buscar)
+      || String(e.marca||'').toLowerCase().includes(buscar)
+      || String(e.tipo||'').toLowerCase().includes(buscar);
+  });
+
+  let h = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'
+    + '<button onclick="_mthIrMes(null)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:13px;color:#1f3864">← Tomas</button>'
+    + '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">📟 '+_mthEsc(mthMesLabel(mes))+'</div>'
+    + '<div style="width:64px"></div></div>';
+  if(cierre){
+    h += '<div style="background:#e6f6e6;border:1px solid #bbf7d0;color:#1a5c1a;border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:700;margin-bottom:10px">✅ Toma finalizada el '+_mthFechaTs(cierre.ts)+' — solo lectura. Las lecturas quedaron en la ficha de cada equipo.</div>';
+  } else {
+    h += '<div style="background:var(--surface2,#f0efe9);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:#1f3864;margin-bottom:6px"><span>Avance de la toma</span><span id="mth-prog-txt">'+tomados+' / '+todos.length+' equipos</span></div>'
+      + '<div style="background:#dcd9cf;border-radius:6px;height:10px;overflow:hidden"><div id="mth-prog-bar" style="background:'+(pct>=100?'#18A303':'#2d6a9f')+';height:100%;border-radius:6px;width:'+pct+'%"></div></div>'
+      + '</div>';
+    if(!MTHOR_CAPTURA) h += '<div style="font-size:12px;color:var(--text3,#888);margin-bottom:10px">👁 Toma en curso — solo consulta. Las lecturas se capturan desde la app de Logística MT Rental.</div>';
+  }
+  h += '<div style="display:flex;gap:8px;margin-bottom:12px">'
+    + '<button onclick="compartirMtHorometros(\''+mes+'\',\'compartir\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📤 Compartir PDF</button>'
+    + '<button onclick="compartirMtHorometros(\''+mes+'\',\'descargar\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px">📥 Descargar PDF</button>'
+    + '</div>';
+  h += '<input id="mth-buscar" placeholder="Buscar equipo, cliente o marca..." value="'+_mthEsc(buscar)+'" oninput="renderMtHorometros()" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ddd);border-radius:8px;font-size:14px;margin-bottom:10px">';
+  h += '<div style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-radius:10px;padding:12px;margin-bottom:12px">';
+  h += equipos.length
+    ? _mthTablaHTML(equipos, mes, lecturas, editable) + _mthFirmasHTML(mes, editable)
+    : '<div style="text-align:center;color:var(--text3,#888);padding:20px 0;font-size:13px">Sin equipos para mostrar</div>';
+  h += '</div>';
+  if(MTHOR_CAPTURA && !cierre){
+    h += '<button onclick="finalizarTomaMtHorometros()" style="width:100%;padding:14px;background:#18A303;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;margin:4px 0 14px">✅ Finalizar toma</button>';
+  } else if(cierre && MTHOR_CAPTURA){
+    h += '<button onclick="compartirMtHorometros(\''+mes+'\',\'compartir\')" style="width:100%;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13.5px;margin-bottom:12px">📤 Compartir PDF de la toma</button>';
+  }
+  cont.innerHTML = h;
+  if(focoBuscar){
+    const b = document.getElementById('mth-buscar');
+    if(b){ b.focus(); try{ b.setSelectionRange(b.value.length, b.value.length); }catch(e){} }
+  }
+}
+// ── INICIO: tomas en curso + miniaturas de finalizadas ─────────────────────
+function _mthHomeHTML(){
+  const claves = Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m); });
+  const abiertas = claves.filter(function(m){ return !_mthCierre(m); }).sort().reverse();
+  const cerradas = claves.filter(function(m){ return !!_mthCierre(m); }).sort().reverse();
+  let h = '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:10px">📟 Toma de horómetros</div>';
+  if(MTHOR_CAPTURA) h += '<button onclick="mthNuevaTomaAbrir()" style="width:100%;padding:13px;background:#1f3864;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14.5px;margin-bottom:14px">➕ Nueva toma de horómetros</button>';
+  if(abiertas.length){
+    h += '<div style="font-size:12.5px;font-weight:800;color:#b45309;margin:2px 0 8px">🟠 Tomas en curso</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+    abiertas.forEach(function(m){
+      const lecturas = _mthLecturas(m);
+      const equipos = _mthEquipos();
+      const tomados = equipos.filter(function(e){ return _mthTiene(lecturas[e.id]); }).length;
+      h += '<div onclick="_mthIrMes(\''+m+'\')" style="cursor:pointer;background:var(--surface,#fff);border:1.5px solid #f3c98a;border-left:4px solid #E8811A;border-radius:10px;padding:10px 12px;min-width:0">'
+        + '<div style="font-weight:800;color:#1f3864;font-size:13px">📟 '+_mthEsc(mthMesLabel(m))+'</div>'
+        + '<div style="font-size:11px;color:#b45309;font-weight:700;margin-top:3px">🟠 En curso — '+tomados+' / '+equipos.length+' equipos</div>'
+        + '<div style="font-size:11px;color:var(--text3,#888);margin-top:2px">'+(MTHOR_CAPTURA?'Toca para continuar la toma':'Toca para consultar')+'</div>'
+        + '</div>';
+    });
+    h += '</div>';
+  }
+  if(cerradas.length){
+    h += '<div style="font-size:12.5px;font-weight:800;color:#1a5c1a;margin:2px 0 8px">✅ Tomas finalizadas</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+    cerradas.forEach(function(m){
+      const lecturas = _mthLecturas(m);
+      const equipos = _mthEquipos();
+      const tomados = equipos.filter(function(e){ return _mthTiene(lecturas[e.id]); }).length;
+      const c = _mthCierre(m);
+      h += '<div onclick="_mthIrMes(\''+m+'\')" style="cursor:pointer;background:var(--surface,#fff);border:1.5px solid #bbf7d0;border-left:4px solid #18A303;border-radius:10px;padding:10px 12px;min-width:0">'
+        + '<div style="font-weight:800;color:#1f3864;font-size:13px">📟 '+_mthEsc(mthMesLabel(m))+'</div>'
+        + '<div style="font-size:11px;color:#1a5c1a;font-weight:700;margin-top:3px">✅ '+tomados+' equipos · '+_mthFechaTs(c&&c.ts)+'</div>'
+        + '<div style="font-size:11px;color:var(--text3,#888);margin-top:2px">Toca para ver el reporte</div>'
+        + '</div>';
+    });
+    h += '</div>';
+  }
+  if(!abiertas.length && !cerradas.length){
+    h += '<div style="text-align:center;color:var(--text3,#888);font-size:13px;padding:24px 0">'+(MTHOR_CAPTURA?'No hay tomas todavía. Crea una con “Nueva toma de horómetros”.':'No hay tomas de horómetros todavía.')+'</div>';
+  }
+  return h;
+}
+// ── CAPTURA ────────────────────────────────────────────────────────────────
+function mthGuardar(eqId){
+  const inp = document.getElementById('mth-in-'+eqId); if(!inp) return;
+  const val = inp.value.trim();
+  const mes = _mthMesVista || mthMesActual();
+  const eq = _mthEqDe(eqId); if(!eq) return;
+  if(_mthCierre(mes)){ toast('Esta toma ya fue finalizada — solo lectura', true); return; }
+  if(val===''){
+    if(_mthTiene(_mthLecturas(mes)[eqId])) mthBorrar(eqId);
+    return;
+  }
+  const lectura = parseFloat(val);
+  if(isNaN(lectura) || lectura < 0){ toast('Lectura inválida', true); return; }
+  const uni = _mthUnidad(eq);
+  const antR = _mthAnteriorReg(eq, mes);
+  if(antR && lectura < antR.lectura){
+    if(!confirm('⚠️ La lectura ('+lectura.toLocaleString('en-US')+') es MENOR que la anterior ('+antR.lectura.toLocaleString('en-US')+' '+uni+').\n¿Guardarla de todas formas? (ej. cambio de reloj)')){ inp.value=''; return; }
+  }
+  const reg = { lectura: lectura, ts: Date.now(), codigo: eq.codigo||'' };
+  if(!DB.horometros) DB.horometros = {};
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  DB.horometros[mes][eqId] = reg;
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/'+eqId).set(reg); }catch(e){}
+  _mthPintarFila(eqId);
+  _mthPintarAvance();
+  toast(_mthEsc(eq.codigo)+': '+lectura.toLocaleString('en-US')+' '+uni+' ✓ (pendiente de finalizar)');
+}
+function _mthPintarFila(eqId){
+  const l = _mthLecturas(_mthMesVista || mthMesActual())[eqId];
+  const tiene = _mthTiene(l);
+  const inp = document.getElementById('mth-in-'+eqId);
+  const del = document.getElementById('mth-del-'+eqId);
+  if(inp){ inp.style.borderColor = tiene ? '#18A303' : '#ccc'; }
+  if(del){ del.style.display = tiene ? 'inline-block' : 'none'; }
+}
+function _mthPintarAvance(){
+  const mes = _mthMesVista || mthMesActual();
+  const lecturas = _mthLecturas(mes);
+  const equipos = _mthEquipos();
+  const tomados = equipos.filter(function(e){ return _mthTiene(lecturas[e.id]); }).length;
+  const pct = equipos.length ? Math.round(tomados/equipos.length*100) : 0;
+  const tx = document.getElementById('mth-prog-txt'); if(tx) tx.textContent = tomados+' / '+equipos.length+' equipos';
+  const br = document.getElementById('mth-prog-bar'); if(br){ br.style.width = pct+'%'; br.style.background = pct>=100?'#18A303':'#2d6a9f'; }
+}
+function mthBorrar(eqId){
+  const mes = _mthMesVista || mthMesActual();
+  const eq = _mthEqDe(eqId); if(!eq) return;
+  if(_mthCierre(mes)){ toast('Esta toma ya fue finalizada — solo lectura', true); return; }
+  const l = _mthLecturas(mes)[eqId];
+  if(!_mthTiene(l)) return;
+  if(!confirm('🗑 ¿Borrar la lectura de '+(eq.codigo||'este equipo')+' ('+parseFloat(l.lectura).toLocaleString('en-US')+' '+_mthUnidad(eq)+') de '+mthMesLabel(mes)+'?')){
+    const inp = document.getElementById('mth-in-'+eqId);
+    if(inp) inp.value = l.lectura;
+    _mthPintarFila(eqId);
+    return;
+  }
+  delete DB.horometros[mes][eqId];
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/'+eqId).remove(); }catch(e){}
+  const inp = document.getElementById('mth-in-'+eqId);
+  if(inp) inp.value = '';
+  _mthPintarFila(eqId);
+  _mthPintarAvance();
+  toast('Lectura de '+_mthEsc(eq.codigo)+' borrada ✓');
+}
+// ── NUEVA TOMA ─────────────────────────────────────────────────────────────
+function mthNuevaTomaAbrir(){
+  if(document.getElementById('mth-nueva-ov')) return;
+  const ov = document.createElement('div');
+  ov.id = 'mth-nueva-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;max-width:340px;width:100%;box-sizing:border-box">'
+    + '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:4px">➕ Nueva toma de horómetros</div>'
+    + '<div style="font-size:12px;color:#888;margin-bottom:12px">Elige el mes de la toma</div>'
+    + '<input type="month" id="mth-nuevo-mes" value="'+mthMesActual()+'" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-weight:700;margin-bottom:14px;background:#fff">'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="document.getElementById(\'mth-nueva-ov\').remove()" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '<button onclick="mthNuevaTomaCrear()" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">Crear toma</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+function mthNuevaTomaCrear(){
+  const inp = document.getElementById('mth-nuevo-mes');
+  const mes = ((inp && inp.value) || '').trim();
+  if(!/^\d{4}-\d{2}$/.test(mes)){ toast('Elige un mes válido', true); return; }
+  const ov = document.getElementById('mth-nueva-ov'); if(ov) ov.remove();
+  const ya = (DB.horometros||{})[mes];
+  if(ya && Object.keys(ya).length){
+    _mthMesVista = mes;
+    toast(_mthCierre(mes) ? ('La toma de '+mthMesLabel(mes)+' ya fue finalizada — solo lectura') : ('La toma de '+mthMesLabel(mes)+' ya existe — mostrándola'));
+    renderMtHorometros();
+    return;
+  }
+  const marca = { ts: Date.now() };
+  if(!DB.horometros) DB.horometros = {};
+  DB.horometros[mes] = { _creada: marca };
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_creada').set(marca); }catch(e){}
+  _mthMesVista = mes;
+  renderMtHorometros();
+  toast('Toma de '+mthMesLabel(mes)+' creada ✓ — lista para capturar');
+}
+// ── FINALIZAR: sella la toma y pasa las lecturas a la ficha de cada equipo ──
+function _mthFichasActualizar(conLectura, lecturas){
+  conLectura.forEach(function(e){ e.horometro = String(lecturas[e.id].lectura); });
+  if(!conLectura.length) return Promise.resolve(0);
+  try{
+    if(!window._fbDB) return Promise.resolve(0);
+    return window._fbDB.ref('montasa/equipos').once('value').then(function(sn){
+      const v = sn.val(); if(!v) return 0;
+      const updates = {};
+      conLectura.forEach(function(e){
+        let idx = -1;
+        if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===e.id; }); }
+        else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===e.id){ idx=ks[i]; break; } } }
+        if(idx!==-1 && idx!==undefined) updates[idx+'/horometro'] = String(lecturas[e.id].lectura);
+      });
+      if(Object.keys(updates).length) return window._fbDB.ref('montasa/equipos').update(updates).then(function(){ return conLectura.length; });
+      return 0;
+    });
+  }catch(e){ return Promise.resolve(0); }
+}
+function finalizarTomaMtHorometros(){
+  const mes = _mthMesVista || mthMesActual();
+  if(_mthCierre(mes)){ toast('Esta toma ya fue finalizada', true); return; }
+  const fir = _mthFirmas(mes);
+  const faltan = [];
+  if(!fir.ope) faltan.push('OPERADOR');
+  if(!fir.ger) faltan.push('GERENTE DE MANTENIMIENTO');
+  if(faltan.length){ toast('Para finalizar la toma falta la firma de: '+faltan.join(' y '), true); return; }
+  const lecturas = _mthLecturas(mes);
+  const equipos = _mthEquipos();
+  const conLectura = equipos.filter(function(e){ return _mthTiene(lecturas[e.id]); });
+  if(!conLectura.length){ toast('No hay lecturas para finalizar', true); return; }
+  const pend = equipos.length - conLectura.length;
+  if(!confirm('¿Finalizar la toma de '+mthMesLabel(mes)+'?\n\nLas lecturas de '+conLectura.length+' equipos se guardarán en la ficha de cada uno y la hoja quedará en solo lectura.'+(pend?('\n\n(Ojo: quedan '+pend+' equipos sin toma)'):''))) return;
+  const ts = Date.now();
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  DB.horometros[mes]._cierre = { ts: ts };
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_cierre').set({ ts: ts }); }catch(e){}
+  _mthFichasActualizar(conLectura, lecturas).then(function(n){
+    toast('✅ Toma finalizada — '+n+' fichas actualizadas');
+    try{ if(typeof saveDB==='function') saveDB(); }catch(e){}
+  });
+  renderMtHorometros();
+}
+// ── FIRMAS ─────────────────────────────────────────────────────────────────
+function mthFirmaAbrir(rol){
+  const viejo = document.getElementById('mth-firma-overlay'); if(viejo) viejo.remove();
+  const esPC = !('ontouchstart' in window) && window.innerWidth > 900;
+  const portrait = window.innerHeight > window.innerWidth && !esPC;
+  const ov = document.createElement('div');
+  ov.id = 'mth-firma-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#20242c;z-index:99997;overflow:hidden';
+  const visW = (portrait ? window.innerHeight : window.innerWidth) - (esPC ? 0 : 24);
+  const visH = (portrait ? window.innerWidth : window.innerHeight) - (esPC ? 0 : 24);
+  const anchoLienzo = esPC ? Math.min(700, window.innerWidth-80) : visW - 16;
+  const altoLienzo = esPC ? 240 : Math.max(140, visH - 128);
+  const titulo = rol==='ope' ? 'OPERADOR' : 'GERENTE DE MANTENIMIENTO';
+  const inner = '<div style="color:#fff;font-weight:700;font-size:14px;text-align:center;padding:10px 8px 6px">✍️ Firma del '+titulo+' — firme dentro del recuadro</div>'
+    + '<canvas id="mth-firma-canvas" width="'+(anchoLienzo*2)+'" height="'+(altoLienzo*2)+'" style="display:block;margin:0 auto;background:#fff;border-radius:12px;width:'+anchoLienzo+'px;height:'+altoLienzo+'px;touch-action:none"></canvas>'
+    + '<div style="display:flex;gap:8px;justify-content:center;padding:10px 8px">'
+    + '<button onclick="mthFirmaGuardar(\''+rol+'\')" style="padding:12px 22px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px">💾 Guardar firma</button>'
+    + '<button onclick="_mthFirmaLimpiar()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">🗑 Borrar</button>'
+    + '<button onclick="document.getElementById(\'mth-firma-overlay\').remove()" style="padding:12px 16px;background:#3a3f49;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Cancelar</button>'
+    + '</div>';
+  if(portrait){
+    ov.innerHTML = '<div style="position:absolute;left:50%;top:50%;width:'+window.innerHeight+'px;height:'+window.innerWidth+'px;transform:translate(-50%,-50%) rotate(90deg)">'+inner+'</div>';
+  } else {
+    ov.innerHTML = '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:'+(esPC?Math.min(760,window.innerWidth-40):window.innerWidth)+'px">'+inner+'</div>';
+  }
+  document.body.appendChild(ov);
+  const c = document.getElementById('mth-firma-canvas');
+  const ctx = c.getContext('2d');
+  ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1a2a4a';
+  window._mthFirmaHayTrazo = false;
+  let dibujando = false;
+  const punto = function(ev){
+    const t = (ev.touches && ev.touches[0]) || ev;
+    const r = c.getBoundingClientRect();
+    if(portrait){
+      return { x: (t.clientY - r.top) * c.width / r.height, y: (r.right - t.clientX) * c.height / r.width };
+    }
+    return { x: (t.clientX - r.left) * c.width / r.width, y: (t.clientY - r.top) * c.height / r.height };
+  };
+  const abajo = function(ev){ ev.preventDefault(); dibujando = true; const p = punto(ev); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const mover = function(ev){ if(!dibujando) return; ev.preventDefault(); const p = punto(ev); ctx.lineTo(p.x, p.y); ctx.stroke(); window._mthFirmaHayTrazo = true; };
+  const arriba = function(){ dibujando = false; };
+  c.addEventListener('touchstart', abajo, {passive:false});
+  c.addEventListener('touchmove', mover, {passive:false});
+  c.addEventListener('touchend', arriba);
+  c.addEventListener('mousedown', abajo);
+  c.addEventListener('mousemove', mover);
+  c.addEventListener('mouseup', arriba);
+  c.addEventListener('mouseleave', arriba);
+}
+function _mthFirmaLimpiar(){
+  const c = document.getElementById('mth-firma-canvas'); if(!c) return;
+  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  window._mthFirmaHayTrazo = false;
+}
+function mthFirmaGuardar(rol){
+  const c = document.getElementById('mth-firma-canvas'); if(!c) return;
+  if(!window._mthFirmaHayTrazo){ toast('Firme dentro del recuadro antes de guardar', true); return; }
+  const mes = _mthMesVista || mthMesActual();
+  if(_mthCierre(mes)){ toast('Esa toma ya fue finalizada — solo lectura', true); return; }
+  const data = c.toDataURL('image/png');
+  if(!DB.horometros) DB.horometros = {};
+  if(!DB.horometros[mes]) DB.horometros[mes] = {};
+  if(!DB.horometros[mes]._firmas) DB.horometros[mes]._firmas = {};
+  DB.horometros[mes]._firmas[rol] = data;
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_firmas/'+rol).set(data); }catch(e){}
+  const ov = document.getElementById('mth-firma-overlay'); if(ov) ov.remove();
+  renderMtHorometros();
+  toast('Firma guardada ✓');
+}
+function mthFirmaBorrar(rol){
+  if(!confirm('¿Borrar esta firma?')) return;
+  const mes = _mthMesVista || mthMesActual();
+  try{ delete DB.horometros[mes]._firmas[rol]; }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_firmas/'+rol).remove(); }catch(e){}
+  renderMtHorometros();
+  toast('Firma borrada');
+}
+// ── PDF ────────────────────────────────────────────────────────────────────
+async function _mthEntregarPDF(blob, nombre, modo){
+  if(modo !== 'descargar'){
+    try{
+      const file = new File([blob], nombre+'.pdf', { type:'application/pdf' });
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: nombre});
+        toast('📤 PDF compartido ✓');
+        return;
+      }
+    }catch(err){ if(err && err.name==='AbortError') return; }
+    const url0 = URL.createObjectURL(blob);
+    const w = window.open(url0, '_blank');
+    if(w){ toast('📄 PDF abierto en otra pestaña'); setTimeout(function(){ URL.revokeObjectURL(url0); }, 60000); return; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre+'.pdf'; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  toast('📥 PDF descargado en el dispositivo');
+}
+function compartirMtHorometros(mes, modo){ _mthGenerarPDF(mes, modo||'compartir'); }
+async function _mthGenerarPDF(mes, modo){
+  try{
+    toast('Generando PDF…');
+    await _cargarLibPDF();
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({ unit:'mm', format:'letter' });
+    const W = pdf.internal.pageSize.getWidth();
+    const H = pdf.internal.pageSize.getHeight();
+    const M = 12;
+    const AZUL = [31,56,100], GRIS = [207,204,194], RELL = [220,230,241];
+    const equipos = _mthEquipos();
+    if(!equipos.length){ toast('Sin equipos para el reporte', true); return; }
+    const lecturas = _mthLecturas(mes);
+    const cierre = _mthCierre(mes);
+    const firmas = _mthFirmas(mes);
+    const hoyTxt = _mthFechaTs(Date.now());
+    const cols = [
+      { t:'EQUIPO', w:26, a:'left' },
+      { t:'CLIENTE / UBICACION', w:46, a:'left' },
+      { t:'CAPACIDAD', w:22, a:'center' },
+      { t:'MES', w:26, a:'center' },
+      { t:'DESDE', w:20, a:'center' },
+      { t:'HASTA', w:20, a:'center' },
+      { t:'LECTURA\nINICIO', w:15.95, a:'right' },
+      { t:'LECTURA\nFINAL', w:15.95, a:'right' },
+    ];
+    const FILA = 7.0, HDR = 11;
+    function encabezadoTabla(y){
+      let x = M;
+      pdf.setFillColor(RELL[0],RELL[1],RELL[2]);
+      pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]);
+      pdf.rect(M, y, W-2*M, HDR, 'FD');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(6.8); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+      cols.forEach(function(c, i){
+        const lineas = c.t.split('\n');
+        if(i===4 || i===5){
+          if(i===4) pdf.text('FECHA', x + 20, y + 4.4, {align:'center'});
+          pdf.text(c.t, x + c.w/2, y + 9.4, {align:'center'});
+        } else {
+          lineas.forEach(function(tx, li){
+            const ty = lineas.length>1 ? y + 4.6 + li*3.4 : y + 6.8;
+            const tx2 = c.a==='center' ? x + c.w/2 : (c.a==='right' ? x + c.w - 2 : x + 2);
+            pdf.text(tx, tx2, ty, {align: c.a==='left'?'left':(c.a==='right'?'right':'center')});
+          });
+        }
+        pdf.line(x, y, x, y+HDR);
+        x += c.w;
+      });
+      pdf.line(x, y, x, y+HDR);
+      const xF = M+cols[0].w+cols[1].w+cols[2].w+cols[3].w;
+      pdf.line(xF, y+6.2, xF+40, y+6.2);
+      return y + HDR;
+    }
+    function nuevaPagSi(y, alto){
+      if(y + alto <= H - M) return y;
+      pdf.addPage();
+      return M + 4;
+    }
+    let y = M + 2;
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+    pdf.text('CONTROL DE HOROMETRAJE — MT RENTAL', M, y+4);
+    pdf.setFontSize(8); pdf.setTextColor(85,83,75);
+    pdf.text('FECHA: '+hoyTxt, W-M, y+4, {align:'right'});
+    y += 8;
+    y = encabezadoTabla(y);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7.6);
+    equipos.forEach(function(e){
+      y = nuevaPagSi(y, FILA);
+      if(y === M + 4){ y = encabezadoTabla(y); pdf.setFont('helvetica','normal'); pdf.setFontSize(7.6); }
+      const l = lecturas[e.id];
+      const tiene = _mthTiene(l);
+      const antR = _mthAnteriorReg(e, mes);
+      const uni = _mthUnidad(e);
+      const vals = [
+        String(e.codigo||''),
+        String(e.cliente||'—').slice(0,30),
+        String(e.capacidad||e.tipo||'—').slice(0,14),
+        mthMesLabel(mes),
+        (antR&&antR.ts)?_mthFechaTs(antR.ts):'—',
+        (tiene&&cierre)?_mthFechaTs(cierre.ts):'—',
+        antR ? antR.lectura.toLocaleString('en-US') : '—',
+        tiene ? parseFloat(l.lectura).toLocaleString('en-US') : 'SIN TOMA',
+      ];
+      let x = M;
+      pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]);
+      pdf.rect(M, y, W-2*M, FILA);
+      vals.forEach(function(vtx, i){
+        const c = cols[i];
+        if(i===0){ pdf.setFont('helvetica','bold'); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]); }
+        else if(i===7 && !tiene){ pdf.setFont('helvetica','bold'); pdf.setTextColor(192,0,0); }
+        else { pdf.setFont('helvetica','normal'); pdf.setTextColor(26,26,24); }
+        const tx2 = c.a==='center' ? x + c.w/2 : (c.a==='right' ? x + c.w - 2 : x + 2);
+        pdf.text(String(vtx), tx2, y + 4.8, {align: c.a==='left'?'left':(c.a==='right'?'right':'center')});
+        pdf.line(x, y, x, y+FILA);
+        x += c.w;
+      });
+      pdf.line(x, y, x, y+FILA);
+      y += FILA;
+    });
+    // Firmas
+    const ALTO_F = 30;
+    y = nuevaPagSi(y, ALTO_F + 14);
+    y += 6;
+    const wF = 62, x1 = M + 14, x2 = W - M - 14 - wF;
+    [['ope','OPERADOR',x1], ['ger','GERENTE DE MANTENIMIENTO',x2]].forEach(function(par){
+      const img = firmas[par[0]];
+      if(img){ try{ pdf.addImage(img, 'PNG', par[2], y, wF, 20, undefined, 'FAST'); }catch(e){} }
+      pdf.setDrawColor(60,60,60);
+      pdf.line(par[2], y+21, par[2]+wF, y+21);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(7.4); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+      pdf.text(par[1], par[2]+wF/2, y+25.5, {align:'center'});
+    });
+    y += ALTO_F;
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(156,154,144);
+    pdf.text('Documento generado desde el sistema interno de Montasa Handling Co. — '+hoyTxt, W/2, H-6, {align:'center'});
+    const blob = pdf.output('blob');
+    await _mthEntregarPDF(blob, 'Control_Horometraje_MTRental_'+mthMesLabel(mes).replace(/ /g,'_'), modo||'compartir');
+  }catch(err){ toast('Error al generar el PDF: '+err.message, true); }
+}
+
+// El nodo montasa/horometros tiene su propio listener: así la toma se ve al
+// instante en las dos apps sin depender del snapshot de la raíz.
+let _mthSuscrito = false;
+function _mthSuscribir(){
+  if(_mthSuscrito) return;
+  if(!window._fbDB){ setTimeout(_mthSuscribir, 800); return; }
+  _mthSuscrito = true;
+  try{
+    window._fbDB.ref('montasa/horometros').on('value', function(sn){
+      DB.horometros = sn.val() || {};
+      const act = document.activeElement;
+      if(act && /^mth-in-/.test(act.id||'')) return;   // no estorbar mientras capturan
+      const cont = document.getElementById(MTHOR_CONT);
+      if(cont && cont.offsetParent !== null) renderMtHorometros();
+    });
+  }catch(e){ _mthSuscrito = false; }
+}
+setTimeout(_mthSuscribir, 1500);
+
 function showTab(id, el){
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -3496,6 +4125,7 @@ function showTab(id, el){
   if(id === 'dashboard') renderDashboard();
   if(id === 'notificaciones') renderNotificacionesTab();
   if(id === 'mapa') renderMapaFlota();
+  if(id === 'horometros'){ _mthSuscribir(); renderMtHorometros(); }
   window.scrollTo(0, 0);
 }
 
@@ -11048,6 +11678,9 @@ function _verFotoGrande(src){
   <button class="nav-btn" onclick="showTab('mapa',this)">
     <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Mapa
   </button>
+  <button class="nav-btn" onclick="showTab('horometros',this)">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></svg>Horómetros
+  </button>
 </nav>
 
 <!-- ── Menú hamburguesa (teléfono) ── -->
@@ -11066,6 +11699,7 @@ function _verFotoGrande(src){
   <button class="ger-menu-item" onclick="_gerMenuGo(7,'notificaciones')"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Notificaciones<span class="mi-badge" id="mi-badge-notif"></span></button>
   <button class="ger-menu-item" onclick="_gerMenuGo(8,'repuestos')"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><circle cx="19" cy="19" r="3.2"/></svg>Repuestos</button>
   <button class="ger-menu-item" onclick="_gerMenuGo(9,'mapa')"><svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Mapa</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(10,'horometros')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></svg>Horómetros</button>
 </div>
 <script>
 function _gerMenuToggle(force){
