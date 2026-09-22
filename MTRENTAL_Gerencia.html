@@ -4466,6 +4466,43 @@ function onSelectEquipoCliente(tipo){
   setVal('nombre',eq.clienteNombre||eq.cliente||''); setVal('marca',eq.marca||''); setVal('modelo',eq.modelo||eq.desc||''); setVal('serie',eq.serie||'');
   if(fields) fields.style.display='block';
 }
+
+// ── Reparación: órdenes con datos de equipo de cliente pero sin ficha en la
+//    flota (las que se llenaron desde Supervisión antes del arreglo). Corre una
+//    sola vez por sesión, cuando Firebase ya cargó. ────────────────────────────
+function _repararEquiposCliente(){
+  if(window._repEqCliHecho) return;
+  if(!window._fbDB || !window._fbReady){ setTimeout(_repararEquiposCliente, 1500); return; }
+  window._repEqCliHecho = true;
+  try{
+    var creados = 0, enlazadas = 0;
+    [['prev', DB.preventivos||[]], ['corr', DB.correctivos||[]]].forEach(function(par){
+      par[1].forEach(function(o){
+        if(!o) return;
+        var nom=(o.clienteNombre||'').trim(), mar=(o.clienteMarca||'').trim(),
+            mod=(o.clienteModelo||'').trim(), ser=(o.clienteSerie||'').trim();
+        if(!nom || !mar || !mod) return;
+        var tieneFicha = o.equipoId && o.equipoId!=='__cliente__'
+          && (DB.equipos||[]).some(function(e){ return e && e.id===o.equipoId; });
+        if(tieneFicha) return;
+        var antes = (DB.equipos||[]).length;
+        var nid = _guardarEquipoCliente(nom, mar, mod, ser);
+        if(!nid) return;
+        if((DB.equipos||[]).length > antes) creados++;
+        o.equipoId = nid;
+        enlazadas++;
+        try{ if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(par[0], o); }catch(e){}
+      });
+    });
+    if(enlazadas){
+      try{ saveDB(); }catch(e){}
+      try{ renderEquipos(); }catch(e){}
+      try{ toast('🔧 '+creados+' equipo'+(creados===1?'':'s')+' de cliente registrado'+(creados===1?'':'s')+' en la flota · '+enlazadas+' orden'+(enlazadas===1?'':'es')+' enlazada'+(enlazadas===1?'':'s')); }catch(e){}
+    }
+  }catch(e){}
+}
+setTimeout(_repararEquiposCliente, 5000);
+
 function _guardarEquipoCliente(nombre, marca, modelo, serie){
   if(!nombre||!marca||!modelo) return null;
   const existe=(DB.equipos||[]).find(e=>e.esEquipoCliente&&((serie&&e.serie&&e.serie.trim()===serie.trim())||(e.clienteNombre===nombre&&e.marca===marca&&(e.modelo||e.desc)===modelo)));
