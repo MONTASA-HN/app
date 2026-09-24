@@ -4476,19 +4476,53 @@ function _repararEquiposCliente(){
   window._repEqCliHecho = true;
   try{
     var creados = 0, enlazadas = 0;
+    var _vend = (DB.vendidos||[]).filter(Boolean);
+    // Datos del equipo del cliente para una orden: primero los campos propios de
+    // la orden; si no, los del registro de Vendidos al que apunta (equipos que
+    // vendimos y a los que seguimos dando servicio).
+    var _datosCli = function(o){
+      var nom=(o.clienteNombre||o.cliente||'').trim(),
+          mar=(o.clienteMarca||'').trim(),
+          mod=(o.clienteModelo||'').trim(),
+          ser=(o.clienteSerie||'').trim(),
+          cod='';
+      if(!(nom && mar && mod) && o.equipoId && o.equipoId!=='__cliente__'){
+        var v = _vend.find(function(x){ return x && x.id===o.equipoId; });
+        if(v){
+          nom = nom || String(v.clienteVenta||'').trim();
+          mar = mar || String(v.marca||'').trim();
+          mod = mod || String(v.modelo||'').trim();
+          ser = ser || String(v.serie||'').trim();
+          cod = String(v.codigo||'').trim();
+        }
+      }
+      return { nom:nom, mar:mar, mod:mod, ser:ser, cod:cod };
+    };
     [['prev', DB.preventivos||[]], ['corr', DB.correctivos||[]]].forEach(function(par){
       par[1].forEach(function(o){
         if(!o) return;
-        var nom=(o.clienteNombre||'').trim(), mar=(o.clienteMarca||'').trim(),
-            mod=(o.clienteModelo||'').trim(), ser=(o.clienteSerie||'').trim();
-        if(!nom || !mar || !mod) return;
         var tieneFicha = o.equipoId && o.equipoId!=='__cliente__'
           && (DB.equipos||[]).some(function(e){ return e && e.id===o.equipoId; });
         if(tieneFicha) return;
+        var d = _datosCli(o);
+        if(!d.nom || !d.mar || !d.mod) return;
         var antes = (DB.equipos||[]).length;
-        var nid = _guardarEquipoCliente(nom, mar, mod, ser);
+        var nid = _guardarEquipoCliente(d.nom, d.mar, d.mod, d.ser);
         if(!nid) return;
-        if((DB.equipos||[]).length > antes) creados++;
+        var nuevo = (DB.equipos||[]).length > antes;
+        if(nuevo) creados++;
+        // Equipo que nosotros vendimos: la ficha conserva su código original
+        // (E-11, MT-40…) para reconocerlo. El registro de Vendidos no se toca.
+        if(d.cod){
+          var f = (DB.equipos||[]).find(function(e){ return e && e.id===nid; });
+          // Si la ficha se identifica por la serie, se le pone el código con el
+          // que lo conocemos (E-11) para reconocerlo de un vistazo.
+          if(f && f.codigo !== d.cod){
+            f.codigo = d.cod;
+            f.observaciones = 'Equipo de cliente — vendido por nosotros (era '+d.cod+')';
+            try{ saveAllEquipos(); }catch(e){}
+          }
+        }
         o.equipoId = nid;
         enlazadas++;
         try{ if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(par[0], o); }catch(e){}
@@ -11848,7 +11882,5 @@ setTimeout(_gerFabDot, 1500);
 })();
 </script>
 
-<script src="autocorrector.js"></script>
-<script>Autocorrector.vigilar();</script>
 </body>
 </html>
