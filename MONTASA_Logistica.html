@@ -1348,8 +1348,17 @@ function _gpsFichaBorrar(equipoId){
     }).catch(function(){});
   }catch(e){}
 }
+// ¿La orden lleva captura de ubicación GPS (obligatoria para cerrar)?
+//  · entregas fuera del plantel
+//  · rentas de EQUIPO (no las de vehículo, que llevan km y motorista)
+function _gpsAplicaLog(o){
+  if(!o) return false;
+  if(o.tipoLogistica==='entrega') return (o.ubicacionLog||'fuera')==='fuera';
+  if(o.tipoLogistica==='renta') return !_esVehiculoOrdenLog(o);
+  return false;
+}
 function _gpsBloqueLog(o, tipo){
-  if(!(o && o.tipoLogistica==='entrega' && (o.ubicacionLog||'fuera')==='fuera')) return ''; // solo entregas fuera del plantel
+  if(!_gpsAplicaLog(o)) return '';
   const esc = String(o.ubicacionLink||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
   let h = '<div class="form-group"><label>📍 Ubicación del trabajo</label>';
   if(!o.ubicacionLink){
@@ -2271,8 +2280,8 @@ function cerrarOrdenLog(id){
         faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
       }
     }
-    if(o.tipoLogistica==='entrega' && (o.ubicacionLog||'fuera')==='fuera' && !o.ubicacionLink){
-      faltantes.push('📍 Ubicación GPS del punto de entrega (usa el botón Capturar)');
+    if(_gpsAplicaLog(o) && !o.ubicacionLink){
+      faltantes.push('📍 Ubicación GPS del punto de '+(o.tipoLogistica==='renta'?'la renta':'entrega')+' (usa el botón Capturar)');
     }
     if(((o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera')||o.tipoLogistica==='atencion_compras'){
       if(!o.kmSalida) faltantes.push('Kilometraje de salida');
