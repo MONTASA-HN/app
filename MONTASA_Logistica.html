@@ -1473,7 +1473,7 @@ function renderOrdenesLog(){
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
-      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Renta: <strong>${o.diasRenta} días</strong>${_rentaFinTexto(o)?` · finaliza el <strong>${_rentaFinTexto(o)}</strong>`:''}</div>`:''}
+      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Renta: <strong>${o.diasRenta} días</strong>${_rentaIniTexto(o)?` · desde el <strong>${_rentaIniTexto(o)}</strong>`:''}${_rentaFinTexto(o)?` · finaliza el <strong>${_rentaFinTexto(o)}</strong>`:''}</div>`:''}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
@@ -1654,8 +1654,10 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.motorista)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Motorista</div><div style="font-weight:600">'+o.motorista+'</div></div>';
   if(o.prioridad)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Prioridad</div><div style="font-weight:600">'+o.prioridad+'</div></div>';
   if(o.equipoCompra)     h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Vehículo</div><div style="font-weight:600">'+o.equipoCompra+'</div></div>';
+  if(o.diasRenta && _rentaIniTexto(o)) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Inicio de renta</div><div style="font-weight:600">'+_rentaIniTexto(o)+'</div></div>';
   if(o.diasRenta)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Días de renta</div><div style="font-weight:600">'+o.diasRenta+' días</div></div>';
   if(o.diasRenta && _rentaFinTexto(o)) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Finalización de renta</div><div style="font-weight:600">'+_rentaFinTexto(o)+'</div></div>';
+  if(o.retiroCancelado) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Retiro</div><div style="font-weight:600;color:#a32d2d">🚫 Cancelado — '+String(o.retiroCancelado.motivo||'').replace(/[<>]/g,'')+(o.retiroCancelado.nota?': '+String(o.retiroCancelado.nota).replace(/[<>]/g,''):'')+'</div></div>';
   if(o.kmSalida)         h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Km salida</div><div style="font-weight:600">'+o.kmSalida+' km</div></div>';
   if(o.kmRetorno)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Km retorno</div><div style="font-weight:600">'+o.kmRetorno+' km</div></div>';
   if(o.horometroSalida)  h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Horómetro salida</div><div style="font-weight:600">'+o.horometroSalida+' hrs</div></div>';
@@ -2008,10 +2010,17 @@ function _esVehiculoOrdenLog(o){
   const e = (DB.equipos||[]).find(function(x){ return x && x.id===o.equipoId; });
   return !!(e && e.esVehiculo);
 }
-// ── FINALIZACIÓN DE RENTA: fecha de inicio de la orden + días de renta ──────
+// ── FINALIZACIÓN DE RENTA: inicio de la renta + días de renta ──────────────
+// Inicio de la renta: el que se puso en la solicitud (inicioRenta); las órdenes
+// viejas no lo traen y usan la fecha de inicio de la orden.
+function _rentaIniTexto(o){
+  const x = (o && o.inicioRenta) ? String(o.inicioRenta).slice(0,10) : '';
+  if(x.length<10) return '';
+  const pz = x.split('-'); return pz[2]+'/'+pz[1]+'/'+pz[0];
+}
 function _rentaFinFecha(o){
   const n = parseInt(o && o.diasRenta)||0;
-  const ini = (o && o.fechaInicio) ? String(o.fechaInicio).slice(0,10) : '';
+  const ini = (o && (o.inicioRenta || o.fechaInicio)) ? String(o.inicioRenta || o.fechaInicio).slice(0,10) : '';
   if(!n || !ini || ini.length<10) return null;
   const pz = ini.split('-');
   const d = new Date(+pz[0], +pz[1]-1, +pz[2]);
@@ -2030,9 +2039,10 @@ function _rentaFinHTML(o){
   if(!n) return '';
   const f = _rentaFinTexto(o);
   const val = f || '— (falta la fecha de inicio)';
+  const iT = _rentaIniTexto(o);
   return '<div class="form-group"><label>\ud83d\udcc5 Finalizaci\u00f3n de renta ('+n+' d\u00edas)</label>'
     + '<div style="padding:11px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-weight:700;color:'+(f?'#8a4800':'var(--text3)')+'">'+val+'</div>'
-    + '<div style="font-size:11px;color:var(--text3);margin-top:3px">C\u00e1lculo autom\u00e1tico: fecha de inicio + '+n+' d\u00edas \u2014 solo lectura</div></div>';
+    + '<div style="font-size:11px;color:var(--text3);margin-top:3px">C\u00e1lculo autom\u00e1tico: '+(iT?'inicio de la renta ('+iT+')':'fecha de inicio de la orden')+' + '+n+' d\u00edas \u2014 solo lectura</div></div>';
 }
 // ── VEHÍCULO PERSONAL: opción genérica que NO pertenece a la flota ──────────
 const _VEH_PERSONAL = 'VEHICULO PERSONAL';

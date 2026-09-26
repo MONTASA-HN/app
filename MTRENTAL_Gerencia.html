@@ -1053,8 +1053,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
       <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
             <div id="sol-diasrenta-wrap" class="form-group" style="display:none">
-        <label>⏱ Días de renta (calendario) — opcional</label>
-        <input id="sol-diasrenta" type="number" min="1" inputmode="numeric" placeholder="Ej: 30 — se avisará 3 días hábiles antes del vencimiento">
+        <label>⏱ Renta — inicio y días (calendario) — opcional</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Inicio de la renta</div><input id="sol-iniciorenta" type="date"></div>
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Días de renta</div><input id="sol-diasrenta" type="number" min="1" inputmode="numeric" placeholder="Ej: 30"></div>
+        </div>
+        <div style="font-size:11px;color:#777;margin-top:4px">Si pones días, el inicio es obligatorio. Finaliza = inicio de la renta + días (se avisa 3 días hábiles antes).</div>
       </div>
       <div id="sol-ublink-wrap" class="form-group" style="display:none">
         <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
@@ -1464,8 +1468,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 
       <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
             <div id="sol-diasrenta-wrap2" class="form-group" style="display:none">
-        <label>⏱ Días de renta (calendario) — opcional</label>
-        <input id="sol-diasrenta2" type="number" min="1" inputmode="numeric" placeholder="Ej: 30 — se avisará 3 días hábiles antes del vencimiento">
+        <label>⏱ Renta — inicio y días (calendario) — opcional</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Inicio de la renta</div><input id="sol-iniciorenta2" type="date"></div>
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Días de renta</div><input id="sol-diasrenta2" type="number" min="1" inputmode="numeric" placeholder="Ej: 30"></div>
+        </div>
+        <div style="font-size:11px;color:#777;margin-top:4px">Si pones días, el inicio es obligatorio. Finaliza = inicio de la renta + días (se avisa 3 días hábiles antes).</div>
       </div>
       <div id="sol-ublink-wrap2" class="form-group" style="display:none">
         <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
@@ -2016,6 +2024,10 @@ function _dedupeVendidos(arr){
 // el mismo código reasignado (ej: MT-54 activo KBG18 vs MT-54 vendido KBG25).
 function _estaVendido(e){
   if(!e) return false;
+  // Un equipo de CLIENTE no es un equipo vendido de la flota: es la ficha con la
+  // que le damos servicio a lo que ya vendimos. Coincide en serie con el
+  // registro de venta a propósito, y NO debe quitarse de la flota.
+  if(e.esEquipoCliente) return false;
   const serie = (e.serie||'').trim().toUpperCase();
   return (DB.vendidos||[]).some(v=>{
     if(!v) return false;
@@ -4472,7 +4484,9 @@ function onSelectEquipoCliente(tipo){
 //    sola vez por sesión, cuando Firebase ya cargó. ────────────────────────────
 function _repararEquiposCliente(){
   if(window._repEqCliHecho) return;
-  if(!window._fbDB || !window._fbReady){ setTimeout(_repararEquiposCliente, 1500); return; }
+  // _equiposFBok: hasta que no se leyeron los equipos reales, saveAllEquipos()
+  // no escribe nada y las fichas nuevas se perderían al recargar.
+  if(!window._fbDB || !window._fbReady || !window._equiposFBok){ setTimeout(_repararEquiposCliente, 1500); return; }
   window._repEqCliHecho = true;
   try{
     var creados = 0, enlazadas = 0;
@@ -6308,37 +6322,125 @@ function actualizarBadgeNotifMant(){
 
 // ── DÍAS DE RENTA: vencimientos y avisos (solo Gerencia MT Rental) ───────────
 function _fechaLocalNR(x){ if(!x) return null; const m=String(x).slice(0,10).split('-'); if(m.length<3||!(+m[0])) return null; return new Date(+m[0], +m[1]-1, +m[2]); }
+function _fmtNR(d){ return d ? ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear() : ''; }
+function _escNR(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Inicio de la renta: la fecha que se puso en la solicitud (o.inicioRenta). Las
+// órdenes viejas no la tienen: para esas se usa la fecha de inicio de la orden
+// de trabajo y, si tampoco hay, la de cierre.
+function _rentaInicioDe(o){
+  if(!o) return null;
+  return _fechaLocalNR(o.inicioRenta) || _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+}
 function _rentaVenceDe(o){
   const n = parseInt(o&&o.diasRenta)||0;
-  // La renta se cuenta desde la FECHA DE INICIO de la orden (igual que el campo
-  // "Finalización de renta" de la orden de trabajo); si aún no hay fecha de
-  // inicio, se usa el cierre como respaldo.
-  const ini = o ? (_fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre)) : null;
+  const ini = _rentaInicioDe(o);
   if(!n || !ini) return null;
   const v = new Date(ini); v.setDate(v.getDate()+n); return v;
 }
 function _rentaDiasHTML(o){
   if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
   const n = parseInt(o.diasRenta)||0;
+  const iniR = _fechaLocalNR(o.inicioRenta);
   const v = _rentaVenceDe(o);
-  const venceTxt = v ? ' · finaliza el <b>'+('0'+v.getDate()).slice(-2)+'/'+('0'+(v.getMonth()+1)).slice(-2)+'/'+v.getFullYear()+'</b>' : (n?' · falta la fecha de inicio de la orden':'');
-  return '<div style="background:#fdf3e3;border:1px solid #f0d6ad;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#8a4800;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>⏱ Días de renta: <b>'+(n||'—')+'</b>'+venceTxt+'</span><button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaDiasEditar(this.dataset.rid)" style="font-size:11px;background:#1f3864;color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">✏️ Ajustar (PIN)</button></div>';
+  const iniTxt = iniR ? ' · inicia el <b>'+_fmtNR(iniR)+'</b>' : '';
+  const venceTxt = v ? ' · finaliza el <b>'+_fmtNR(v)+'</b>' : (n?' · falta la fecha de inicio':'');
+  let h = '<div style="background:#fdf3e3;border:1px solid #f0d6ad;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#8a4800;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>⏱ Días de renta: <b>'+(n||'—')+'</b>'+iniTxt+venceTxt+'</span><button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaDiasEditar(this.dataset.rid)" style="font-size:11px;background:#1f3864;color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">✏️ Ajustar (PIN)</button></div>';
+  if(o.retiroCancelado){
+    const rc = o.retiroCancelado, f = rc.ts ? new Date(rc.ts) : null;
+    h += '<div style="background:#f1f1f1;border:1px solid #d4d4d4;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#555;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<span>🚫 <b>Retiro cancelado</b>'+(f?' el '+_fmtNR(f):'')+' — '+_escNR(rc.motivo||'')+(rc.nota?': '+_escNR(rc.nota):'')+(rc.por?' <span style="opacity:.7">('+_escNR(rc.por)+')</span>':'')+'</span>'
+      + '<button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaRetiroReactivar(this.dataset.rid)" style="font-size:11px;background:#fff;color:#1f3864;border:1px solid #1f3864;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">↩ Reactivar aviso (PIN)</button></div>';
+  }
+  return h;
+}
+// Ventana propia para editar la renta / cancelar el retiro. Se abre DESPUÉS del
+// PIN, por eso queda por debajo del teclado de PIN (z-index 99998).
+function _rentaModal(html, okTxt, onOk){
+  const prev = document.getElementById('renta-modal'); if(prev) prev.remove();
+  const ov = document.createElement('div');
+  ov.id = 'renta-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99990;display:flex;align-items:center;justify-content:center;padding:16px';
+  const inp = 'width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;margin:4px 0 10px';
+  ov.innerHTML = '<div class="modal" style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;max-height:90vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25);color:#1a1a18">'
+    + html.replace(/__INP__/g, inp)
+    + '<div class="rm-err" style="color:#c0392b;font-size:12.5px;font-weight:700;min-height:16px;margin-top:4px"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
+    + '<button type="button" class="rm-x" style="padding:10px 14px;border:1px solid #ccc;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
+    + '<button type="button" class="rm-ok" style="padding:10px 14px;border:none;background:#1f3864;color:#fff;border-radius:8px;font-weight:800;cursor:pointer">'+okTxt+'</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  const cerrar = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.rm-x').onclick = cerrar;
+  ov.querySelector('.rm-ok').onclick = function(){
+    const err = onOk(ov);
+    if(err){ ov.querySelector('.rm-err').textContent = err; return; }
+    cerrar();
+  };
+  return ov;
+}
+function _rentaGuardar(o, msg){
+  saveDB();
+  if(typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(o.id);
+  toast(msg);
+  try{ renderLogistica(); }catch(e){}
+  try{ renderNotificacionesTab(); }catch(e){}
+  try{ actualizarBadgeNotifMant(); }catch(e){}
 }
 function _rentaDiasEditar(id){
   solicitarPINAccion(function(){
     const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
     if(!o) return;
-    const val = prompt('Días de renta (calendario) para '+(o.correlativo||'la orden')+':', o.diasRenta||'');
-    if(val === null) return;
-    const n = parseInt(val)||0;
-    if(n>0) o.diasRenta = n; else delete o.diasRenta;
-    saveDB();
-    if(typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(o.id);
-    toast('⏱ Días de renta actualizados ✓');
-    try{ renderLogistica(); }catch(e){}
-    try{ renderNotificacionesTab(); }catch(e){}
-    try{ actualizarBadgeNotifMant(); }catch(e){}
-  }, '⏱ Días de renta', 'Ingresa tu PIN para ajustar los días de renta (extensión de la renta)');
+    // Órdenes viejas sin inicio de renta: se propone la fecha de inicio de la orden
+    const iniVal = o.inicioRenta || (o.fechaInicio ? String(o.fechaInicio).slice(0,10) : '');
+    _rentaModal(
+      '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:2px">⏱ Renta · '+_escNR(o.correlativo||'')+'</div>'
+      + '<div style="font-size:12px;color:#777;margin-bottom:12px">La finalización se calcula desde el inicio de la renta.</div>'
+      + '<label style="font-size:12px;font-weight:700">Inicio de la renta</label><input id="rm-ini" type="date" value="'+_escNR(iniVal)+'" style="__INP__">'
+      + '<label style="font-size:12px;font-weight:700">Días de renta (calendario)</label><input id="rm-dias" type="number" min="1" inputmode="numeric" value="'+(parseInt(o.diasRenta)||'')+'" style="__INP__">'
+      + '<div style="font-size:11px;color:#888">Deja los días vacíos para quitar la renta de esta orden.</div>',
+      'Guardar',
+      function(ov){
+        const n = parseInt(ov.querySelector('#rm-dias').value)||0;
+        const ini = ov.querySelector('#rm-ini').value||'';
+        if(n>0 && !/^\d{4}-\d{2}-\d{2}$/.test(ini)) return 'Pon la fecha de inicio de la renta.';
+        if(n>0){ o.diasRenta = n; o.inicioRenta = ini; }
+        else { delete o.diasRenta; delete o.inicioRenta; }
+        _rentaGuardar(o, '⏱ Renta actualizada ✓');
+      });
+  }, '⏱ Días de renta', 'Ingresa tu PIN para ajustar el inicio y los días de renta');
+}
+// Cancelar el aviso de retiro (renta cancelada, orden de prueba, etc.). NO toca
+// el estado del equipo: solo quita el aviso y deja constancia en la orden.
+function _rentaRetiroCancelar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    const radio = function(v){ return '<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #ddd;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:14px"><input type="radio" name="rm-mot" value="'+v+'"> '+v+'</label>'; };
+    _rentaModal(
+      '<div style="font-weight:800;color:#a32d2d;font-size:16px;margin-bottom:2px">🚫 Cancelar retiro · '+_escNR(o.correlativo||'')+'</div>'
+      + '<div style="font-size:12px;color:#777;margin-bottom:12px">El aviso de retiro desaparece y queda anotado en la orden. El estado del equipo no cambia. Se puede reactivar desde la orden (con PIN).</div>'
+      + '<div style="font-size:12px;font-weight:700;margin-bottom:6px">Motivo</div>'
+      + radio('Renta cancelada') + radio('Orden de prueba') + radio('Otro')
+      + '<label style="font-size:12px;font-weight:700;display:block;margin-top:8px">Detalle (obligatorio si es «Otro»)</label><textarea id="rm-nota" rows="2" style="__INP__"></textarea>',
+      'Cancelar retiro',
+      function(ov){
+        const m = ov.querySelector('input[name=rm-mot]:checked');
+        if(!m) return 'Elige el motivo.';
+        const nota = (ov.querySelector('#rm-nota').value||'').trim();
+        if(m.value==='Otro' && !nota) return 'Escribe el motivo en el detalle.';
+        o.retiroCancelado = { ts: Date.now(), motivo: m.value, nota: nota, por: 'Gerencia MT Rental' };
+        _rentaGuardar(o, '🚫 Retiro cancelado ✓');
+      });
+  }, '🚫 Cancelar retiro', 'Ingresa tu PIN para cancelar el aviso de retiro');
+}
+function _rentaRetiroReactivar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    delete o.retiroCancelado;
+    _rentaGuardar(o, '🔔 Aviso de retiro reactivado ✓');
+  }, '↩ Reactivar aviso', 'Ingresa tu PIN para reactivar el aviso de retiro');
 }
 function _rentaVencimientos(){
   const out = [];
@@ -6347,9 +6449,11 @@ function _rentaVencimientos(){
     if(!o || !o.cerrado || o.estado==='Cancelado') return;
     // Solo ENTREGAS de equipo: en las rentas el operador está en sitio y avisa
     if(o.tipoLogistica!=='entrega') return;
+    // Retiro cancelado a mano (renta cancelada, orden de prueba…): sin aviso
+    if(o.retiroCancelado) return;
     const vence = _rentaVenceDe(o);
     if(!vence) return;
-    const ini = _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+    const ini = _rentaInicioDe(o);
     // Basta con que EXISTA una orden de retiro del equipo (aunque esté pendiente):
     // ya se mandó a retirar, el aviso deja de tener sentido.
     const retirado = (DB.logistica||[]).some(function(r){
@@ -6371,15 +6475,20 @@ function _rentaVencimientos(){
 }
 function _rentaVencimientosHTML(){
   return _rentaVencimientos().map(function(r){
-    const f = ('0'+r.vence.getDate()).slice(-2)+'/'+('0'+(r.vence.getMonth()+1)).slice(-2)+'/'+r.vence.getFullYear();
+    const f = _fmtNR(r.vence);
+    const ini = _rentaInicioDe(r.o);
     const badge = r.vencida
       ? (r.dias===0 ? '⚠️ Vence HOY' : '⚠️ VENCIDA hace '+r.dias+' día'+(r.dias===1?'':'s'))
       : ('En '+r.dias+' día'+(r.dias===1?'':'s')+' hábil'+(r.dias===1?'':'es'));
+    const bt = 'padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer';
     return '<div class="notif-item '+(r.vencida?'notif-urgent':'')+'">'
       +'<div class="notif-item-top"><span class="notif-codigo">🚚 '+r.codigo+'</span>'
       +'<span class="notif-days-badge" style="'+(r.vencida?'background:#fbe0e0;color:#a32d2d':'background:#fdead9;color:#8a4800')+';margin-left:auto">'+badge+'</span></div>'
-      +'<div class="notif-line">La renta del equipo <b>'+r.codigo+'</b> (orden <b>'+(r.o.correlativo||'—')+'</b> · '+(parseInt(r.o.diasRenta)||0)+' días) '+(r.vencida?'venció':'vence')+' el <b>'+f+'</b> — mandar a retirar.</div>'
-      +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="margin-top:8px;padding:8px 12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✏️ Ajustar días (PIN)</button>'
+      +'<div class="notif-line">La renta del equipo <b>'+r.codigo+'</b> (orden <b>'+(r.o.correlativo||'—')+'</b> · '+(parseInt(r.o.diasRenta)||0)+' días'+(ini?' desde el '+_fmtNR(ini):'')+') '+(r.vencida?'venció':'vence')+' el <b>'+f+'</b> — mandar a retirar.</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="'+bt+';background:#1f3864;color:#fff;border:none">✏️ Ajustar días (PIN)</button>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaRetiroCancelar(this.dataset.rid)" style="'+bt+';background:#fff;color:#a32d2d;border:1px solid #a32d2d">🚫 Cancelar retiro (PIN)</button>'
+      +'</div>'
       +'</div>';
   }).join('');
 }
@@ -7728,7 +7837,7 @@ function guardarPreventivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','viaticosExtra','diasRenta','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','diasRenta','inicioRenta','retiroCancelado','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; entry.completado=false; }
       window._editandoOrden = null;
     }
@@ -8065,7 +8174,7 @@ function guardarCorrectivo(finalizar=false){
       entry.correlativo = _o.correlativo;
       entry.firma = _o.firma;                       // FIRMA ORIGINAL — nunca se re-firma
       if(!entry.foto && _o.foto) entry.foto = _o.foto;
-      ['viaticos','viaticosExtra','diasRenta','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
+      ['viaticos','viaticosExtra','diasRenta','inicioRenta','retiroCancelado','vales','kmSalida','kmRetorno','salidaPlantel','retornoPlantel','inicioTrabajo','finTrabajo','ubicacion','vehiculo','ubicacionLink','contactoCliente'].forEach(function(k){ if(_o[k]!==undefined && entry[k]===undefined) entry[k]=_o[k]; });
       if(!finalizar){ entry.estado='En proceso'; }
       window._editandoOrden = null;
     }
@@ -8649,6 +8758,13 @@ function _normalizarUbLink(t){
   if(/^[\w.-]+\.[a-z]{2,}([\/?#]|$)/i.test(t)) return 'https://'+t;
   return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(t);
 }
+// Inicio de la renta (YYYY-MM-DD). Puede ser distinto a la fecha de la orden:
+// a veces la orden se genera días antes de que arranque la renta.
+function _leerInicioRentaForm(){
+  var a=document.getElementById('sol-iniciorenta'), b=document.getElementById('sol-iniciorenta2');
+  var v=(a&&a.value?a.value:'') || (b&&b.value?b.value:'');
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+}
 function _leerDiasRentaForm(){
   var a=document.getElementById('sol-diasrenta'), b=document.getElementById('sol-diasrenta2');
   var v=parseInt((a&&a.value?a.value:'') || (b&&b.value?b.value:''))||0;
@@ -8790,6 +8906,12 @@ async function enviarSolicitudWA(){
   if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras') faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  // Renta: inicio y días van juntos (los dos o ninguno)
+  if(tipo==='renta' || tipo==='entrega'){
+    const _dR = _leerDiasRentaForm(), _iR = _leerInicioRentaForm();
+    if(_dR && !_iR) faltSol.push('Inicio de la renta');
+    if(_iR && !_dR) faltSol.push('Días de renta');
+  }
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
   if(depto === 'logistica'){
     const tipo_check = document.getElementById('sol-tipo')?.value||'';
@@ -8857,7 +8979,7 @@ async function enviarSolicitudWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     ubicacionLog = ubicacionLog2;
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,inicioRenta:(_leerDiasRentaForm()?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -8986,6 +9108,12 @@ async function copiarMensajeWA(){
   if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras') faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  // Renta: inicio y días van juntos (los dos o ninguno)
+  if(tipo==='renta' || tipo==='entrega'){
+    const _dR = _leerDiasRentaForm(), _iR = _leerInicioRentaForm();
+    if(_dR && !_iR) faltSol.push('Inicio de la renta');
+    if(_iR && !_dR) faltSol.push('Días de renta');
+  }
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
   if(depto === 'logistica'){
     const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
@@ -9023,7 +9151,7 @@ async function copiarMensajeWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,inicioRenta:(_leerDiasRentaForm()?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -9086,6 +9214,7 @@ function clearSolicitudForm(){
   const _ubl1 = document.getElementById('sol-ublink'); if(_ubl1) _ubl1.value='';
   const _dr1 = document.getElementById('sol-diasrenta'); if(_dr1) _dr1.value='';
   const _dr2 = document.getElementById('sol-diasrenta2'); if(_dr2) _dr2.value='';
+  ['sol-iniciorenta','sol-iniciorenta2'].forEach(function(i){ var x=document.getElementById(i); if(x) x.value=''; });
   const _ubl2 = document.getElementById('sol-ublink2'); if(_ubl2) _ubl2.value='';
   const _ctc1 = document.getElementById('sol-contacto'); if(_ctc1) _ctc1.value='';
   const _ctc2 = document.getElementById('sol-contacto2'); if(_ctc2) _ctc2.value='';
