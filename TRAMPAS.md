@@ -12,6 +12,11 @@ Ordenadas por gravedad (lo que puede perder datos o rentar una máquina rota, pr
 
 ## T1. La app vieja de técnicos MONHACO borra y recrea los equipos de cliente cada vez que se abre
 
+**✅ Arreglado (2026-09-29):** el archivo ahora solo redirige a `MONHACO_Tecnicos.html`. Lo de
+abajo describe la versión vieja (sigue en el historial de git). Ojo: un teléfono que tenga
+guardada la copia vieja en caché podría abrirla hasta que la recargue (esa versión no tiene
+actualización automática).
+
 ### Qué pasa
 `MONTASA_Tecnicos_MONHACO.html` (versión de jul-2026) sigue en el repo y publicada. Al
 abrirla, `_migrarEquiposCliente` quita **todos** los equipos de cliente de MONHACO, los

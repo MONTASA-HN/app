@@ -143,7 +143,7 @@ rodrigo.monterroso@montasa.com) — autocorrector y la primera guía del repo.
 | `MONHACO_Tecnicos.html` | Técnicos MONHACO | MONHACO |
 | `MONHACO_Logistica.html` | Logística MONHACO: horómetros y reportes de cobro | MONHACO |
 | `MONHACO_Logistica_PRUEBA.html` | Copia de prueba; escribe en `monhaco_prueba/...` | MONHACO |
-| `MONTASA_Tecnicos_MONHACO.html` | Versión vieja (jul-2026). Aparentemente legado — confirmar con Miguel antes de tocarla o borrarla | — |
+| `MONTASA_Tecnicos_MONHACO.html` | **Solo redirige** a `MONHACO_Tecnicos.html` (desde 2026-09-29). La versión vieja (jul-2026) borraba y recreaba los equipos de cliente de MONHACO; sigue en el historial de git | — |
 | `autocorrector.js` | Corrector ortográfico compartido (ver §9) | ambas |
 | `manifest_*.json`, `icons/` | PWA (instalación en teléfono) | — |
 | `dev/` | Herramientas de desarrollo (no las usa la app) | — |
@@ -450,7 +450,6 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   `respaldo_monhaco_20260912`) y el nodo `monhaco_prueba` cuando Miguel
   confirme.
 - MONHAGRO: activar el chip cuando exista su app.
-- `MONTASA_Tecnicos_MONHACO.html`: confirmar si se usa o se puede retirar.
 - **Bugs conocidos sin arreglar**: están en `TRAMPAS.md` (con archivo, línea y
   arreglo propuesto). Preguntar a Miguel cuáles se arreglan.
 - Cliente en equipo propio en el plantel: hoy también es obligatorio (escriben p. ej.
@@ -540,3 +539,6 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Actualización automática de las apps en los teléfonos (`version.json` +
   `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».
 - 2026-09-29 — PDF sin estado y solo para órdenes completadas; fechas día/mes/año en el PDF.
+- 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
+  la app vieja `MONTASA_Tecnicos_MONHACO.html` se reemplaza por una redirección. Se mandan
+  a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).

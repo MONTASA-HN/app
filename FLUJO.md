@@ -19,7 +19,7 @@ Abreviaturas de archivo:
 | **MHT** | `MONHACO_Tecnicos.html` | `monhaco` |
 | **MHL** | `MONHACO_Logistica.html` | `monhaco` |
 | **MHL-P** | `MONHACO_Logistica_PRUEBA.html` | escribe en `monhaco_prueba` |
-| **VIEJA** | `MONTASA_Tecnicos_MONHACO.html` | `monhaco` (legado, ver `TRAMPAS.md` T1) |
+| **VIEJA** | `MONTASA_Tecnicos_MONHACO.html` | desde 2026-09-29 solo redirige a MHT; las líneas «VIEJA» citadas aquí son de la versión anterior (T1) |
 
 Los bugs y comportamientos raros que aparecen aquí están explicados en **`TRAMPAS.md`** (T#).
 
