@@ -183,6 +183,20 @@ Supervisiones**. No asumir que es el mismo.
   posición sacada de la copia local** (`DB.x.findIndex` / `indexOf` / `length-1`): usar
   `_fbRefPorId('<raíz>/<lista>/'+idx+…).set()/.update()`, que verifica el `id` en el servidor
   (desde 2026-09-29, TRAMPAS T2). Si la posición salió de un snapshot del servidor, `window._fbDB.ref` sirve.
+- **Sincronizador (desde 2026-09-29, TRAMPAS T7)**: bloque `// ══ GUARDADO POR REGISTRO (sincronizador)`,
+  **idéntico** en MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT; se arranca con `_Sync.iniciar(raíz, _fbDB)` junto a
+  `window._fbDB = firebase.database()`. Maneja logistica, preventivos, correctivos, revisiones, evaluaciones,
+  solicitudes, ordenesCerradas, equipos y vendidos. **Ya no se escriben listas enteras de esas colecciones:**
+  `saveDB()` y las demás funciones llaman `_Sync.guardar()`, que sube solo los datos que este teléfono cambió
+  de cada registro (transacción que comprueba el `id`), agrega los nuevos al final sin huecos y borra lo que
+  este teléfono tuvo y quitó (máx. 2 por lista y guardado; nunca lo que la app no cargó; deja lápida en
+  `_borradas` y nunca resucita algo con lápida; nunca agrega un equipo vendido o repetido por serie/código).
+  Si dos cambian el mismo dato, gana el último (decisión de Miguel). La «base» (huellas de lo último
+  confirmado) vive en `localStorage` (`_sync_base_<raíz>`): lo hecho sin señal se sube al volver a abrir la
+  app. La forma de los datos en Firebase NO cambió. Fotos nunca pasan por aquí. **Regla: para guardar una de
+  esas colecciones, modificar `DB.<col>` y llamar `saveDB()` o `_Sync.guardar()`; nunca
+  `ref('<raíz>/<col>').set(lista)` ni `update({<col>: …})`.** Si se toca el sincronizador:
+  `node dev/prueba_sync.js <app>.html` debe decir «Todo bien» (14 casos con teléfonos simulados).
 - **Firebase devuelve listas con huecos como objeto** `{0:…,2:…}`: normalizar
   siempre a arreglo (`_toArr`).
 - **Equipos**: flags `esVehiculo`, `esEquipoCliente`, `esGenerico`. Los
@@ -349,7 +363,7 @@ corrige aquí.
 1. `node dev/sellar_version.js` y después `node dev/check_syntax.js` (desde la raíz del
    repo) → todo ✓. Un error de sintaxis deja la app en blanco para todos. `check_syntax`
    compila cada `<script>` inline de los `.html` y `autocorrector.js`, y revisa que las
-   versiones estén selladas.
+   versiones estén selladas. Si se tocó el sincronizador, además `node dev/prueba_sync.js`.
 2. **Playwright** con Chromium (no está instalado en la PC de Miguel todavía; se
    instala fuera del repo, p. ej. en una carpeta temporal, para no meter npm en la app).
    Patrón que funciona:
@@ -546,6 +560,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».
 - 2026-09-29 — PDF sin estado y solo para órdenes completadas; fechas día/mes/año en el PDF.
 - 2026-09-29 — Riesgo «escrituras por posición» (T2) arreglado con `_fbRefPorId` en 7 apps.
+- 2026-09-29 — Riesgo «dos teléfonos se pisan» (T7) arreglado con el sincronizador `_Sync` en 8 apps:
+  ya no se suben listas enteras; se sube solo lo cambiado de cada registro (`dev/prueba_sync.js`).
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
   la app vieja `MONTASA_Tecnicos_MONHACO.html` se reemplaza por una redirección. Se mandan
   a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).

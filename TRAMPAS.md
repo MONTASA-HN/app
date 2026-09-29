@@ -153,6 +153,14 @@ Usar `o.estadoEquipoAnterior` en vez de `eq.estadoAntesDeMant`. Arreglo chico; a
 
 ## T7. Guardar sube listas completas: el último que guarda manda
 
+**✅ Arreglado (2026-09-29):** sincronizador `_Sync` (bloque «GUARDADO POR REGISTRO», idéntico en 8 apps).
+Ninguna app sube ya listas enteras de logística, preventivos, correctivos, revisiones, evaluaciones,
+solicitudes, cerradas, equipos ni vendidos: se sube solo lo que cada teléfono cambió de cada registro.
+Probado con `dev/prueba_sync.js` (14 casos: dos teléfonos, sin señal, borrados, freno, lápidas, vendidos) y
+con las 8 apps reales sobre copia de los datos del 2026-09-29. Detalle en CLAUDE.md §4. Lo de abajo
+describe cómo era. Queda: si dos cambian el MISMO dato, gana el último (decisión de Miguel); `_ts`/`_sid` y
+contadores siguen en `saveDB`.
+
 ### Qué pasa
 `saveDB()` sube colecciones enteras (preventivos, correctivos, logística, equipos…). Con
 dos teléfonos en línea casi siempre se salva, porque los listeners actualizan antes. Pero
@@ -188,6 +196,10 @@ base: tablero de flota, mundo isométrico).
 ---
 
 ## T8. Técnicos habilitan escritura aunque no hayan leído la base de verdad
+
+**Mejorado (2026-09-29):** con el sincronizador, lo que el técnico cierra sin señal ya no se pierde: se sube
+cuando vuelve la señal, o la próxima vez que abra la app (la base de lo confirmado se guarda en el
+teléfono). Sigue siendo cierto que `_fbReady` se enciende sin haber leído el servidor.
 
 ### Qué pasa
 Si el técnico abre la app con mala señal, ve las órdenes del caché; si cierra una en ese
@@ -241,6 +253,9 @@ Cambiar la clave de MHS a `monhaco_log_cache`. Arreglo chico.
 ---
 
 ## T11. `saveAllEquipos` de Supervisión y MONHACO borra campos de los equipos
+
+**✅ Arreglado (2026-09-29):** `saveAllEquipos` ahora guarda por el sincronizador (solo los datos cambiados de
+cada equipo, sin recortar campos).
 
 ### Qué pasa
 Al reescribir la flota, solo sube una lista fija de campos: se pierden

@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='27f817e4902d';
+  var APP_VERSION='789cc3c75cfe';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -130,6 +130,270 @@ function _fbRefPorId(ruta){
     }
   };
 }
+</script>
+<script>
+// ══ GUARDADO POR REGISTRO (sincronizador) ════════════════════════════════════
+// Por qué existe (TRAMPAS.md T7): antes cada teléfono subía LISTAS ENTERAS (todas las
+// órdenes, todos los equipos). Si un teléfono tenía una copia vieja —sin señal, o con la
+// app abierta desde hace rato— al guardar pisaba lo que otros habían hecho mientras tanto,
+// sin error ni aviso («yo la cerré y aparece abierta otra vez»).
+//
+// Cómo funciona: para cada registro (orden, equipo, solicitud…) se recuerda una huella de
+// cada dato tal como estaba la última vez que este teléfono y el servidor coincidieron
+// («base»). Al guardar (_Sync.guardar(), que llama saveDB):
+//   · se suben SOLO los datos que este teléfono cambió respecto de la base, en el registro
+//     correcto (buscado por su id, con transacción que comprueba el id);
+//   · un registro nuevo se agrega al final de la lista del servidor sin pisar a nadie;
+//   · un registro que este teléfono TUVO en esta sesión y ya no tiene se borra en el servidor
+//     (y se deja la lápida en _borradas). Freno: más de 2 borrados de una misma lista en un
+//     solo guardado NO se hacen (una lista que llega vacía o recortada no puede vaciar la base).
+//     Lo que esta app nunca cargó no se borra nunca.
+//   · nunca se vuelve a subir algo que tenga lápida en _borradas (no se resucitan borrados).
+// Al llegar cambios del servidor, los datos que este teléfono NO tocó se actualizan aquí;
+// los que sí tocó y aún no subió se conservan y se suben (si dos cambian el mismo dato,
+// gana el último — decisión de Miguel, 2026-09-29).
+// La base se guarda en el teléfono (localStorage), así lo pendiente sobrevive a cerrar la
+// app sin señal y se sube la próxima vez. La forma de los datos en Firebase NO cambia
+// (siguen siendo listas), así el tablero de flota y el mundo isométrico no se enteran.
+// Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
+var _Sync = (function(){
+  var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
+  var MAX_BORRADOS = 2;
+  var raiz = null, db = null;
+  var base = {}, claves = {}, listo = {}, enVuelo = {}, visto = {}, lapidas = {}, pendiente = false, corriendo = false;
+  // Lo que este teléfono está subiendo y el servidor aún no confirma. Firebase muestra
+  // enseguida los cambios propios (aunque no haya señal): ese «eco» NO cuenta como
+  // confirmado, si no, al cerrar la app sin señal el cambio se perdería.
+  var subiendo = {};
+  // Equipos: huellas de identidad (serie / código) de lo que ya existe en el servidor y de lo
+  // vendido, para no agregar un equipo repetido ni resucitar uno vendido (listas de ejemplo).
+  var identSrv = { equipos: {}, vendidos: {} };
+  function _serieValida(x){ x = String(x || '').trim(); return x.length > 3 && x !== '—' && x !== '-' ? x.toUpperCase() : ''; }
+  function _idents(e){ var r = []; if(!e) return r; var se = _serieValida(e.serie); if(se) r.push('S:' + se);
+    if(e.codigo && !e.esEquipoCliente) r.push('C:' + String(e.codigo).trim().toUpperCase()); if(e.id) r.push('I:' + e.id); return r; }
+  function _equipoRepetidoOVendido(e){
+    var id = _idents(e), v = {};
+    (_lista('vendidos') || []).forEach(function(x){ _idents(x).forEach(function(k){ v[k] = 1; }); });
+    for(var i = 0; i < id.length; i++){
+      if(v[id[i]] || identSrv.vendidos[id[i]]) return 'vendido';
+      if(id[i].charAt(0) !== 'I' && identSrv.equipos[id[i]]) return 'repetido';
+    }
+    return '';
+  }
+
+  function _h(v){                      // huella corta de un valor (cyrb53)
+    var s = v === undefined ? '~' : JSON.stringify(v), h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for(var i = 0; i < s.length; i++){ var c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  }
+  var VACIO = _h(undefined);
+  function _hb(hb, k){ return (hb && hb[k] !== undefined) ? hb[k] : VACIO; }   // «no existe» = «vacío»
+  function _campos(o){ return Object.keys(o || {}).filter(function(k){ return !OMITIR[k] && o[k] !== undefined; }); }
+  function _huellas(o){ var r = {}; _campos(o).forEach(function(k){ r[k] = _h(o[k]); }); return r; }
+  function _limpio(o){ var c = {}; _campos(o).forEach(function(k){ c[k] = o[k]; }); return JSON.parse(JSON.stringify(c)); }
+  function _lista(col){ return (typeof DB !== 'undefined' && DB && Array.isArray(DB[col])) ? DB[col] : null; }
+  function _entradas(v){               // [clave, registro] de una lista de Firebase (array u objeto con huecos)
+    var r = []; if(!v) return r;
+    Object.keys(v).forEach(function(k){ if(v[k] && typeof v[k] === 'object') r.push([k, v[k]]); });
+    return r;
+  }
+  function _borradoAposta(id){ if(lapidas[id]) return true; try{ return !!(window._borradasCache && window._borradasCache[id]); }catch(e){ return false; } }
+  function _clave(){ return '_sync_base_' + raiz; }
+  function _guardarBase(){ try{ localStorage.setItem(_clave(), JSON.stringify(base)); }catch(e){} }
+  function _avisar(m){ try{ console.warn('[Sync] ' + m); }catch(e){} }
+  function _nombre(o){ return (o && (o.correlativo || o.codigo)) || 'un registro'; }
+
+  // ── Llega la lista del servidor ─────────────────────────────────────────────
+  function _recibir(col, valor){
+    var b = base[col] || (base[col] = {}), ks = claves[col] = {};
+    var srv = {}, loc = _lista(col), porId = {};
+    _entradas(valor).forEach(function(e){ if(e[1].id){ srv[e[1].id] = e[1]; ks[e[1].id] = e[0]; } });
+    if(identSrv[col]){ var mapa = identSrv[col] = {}; Object.keys(srv).forEach(function(id){ _idents(srv[id]).forEach(function(k){ mapa[k] = id; }); }); }
+    var vv = visto[col] || (visto[col] = {});
+    (loc || []).forEach(function(o){ if(o && o.id){ porId[o.id] = o; vv[o.id] = 1; } });
+    Object.keys(srv).forEach(function(id){
+      var s = srv[id], l = porId[id], hb = b[id];
+      var sub = subiendo[col + '/' + id];
+      if(!hb){                           // nunca visto por este teléfono: manda el servidor
+        if(sub) return;                  // es el eco de un registro nuevo que estamos subiendo
+        if(l){ _campos(s).forEach(function(k){ if(_h(l[k]) !== _h(s[k])) l[k] = JSON.parse(JSON.stringify(s[k])); }); }
+        b[id] = _huellas(s);
+        return;
+      }
+      if(!l) return;                     // lo quitó este teléfono (o esta app no lo muestra)
+      var todos = {}; _campos(s).concat(Object.keys(hb)).forEach(function(k){ if(!OMITIR[k]) todos[k] = 1; });
+      Object.keys(todos).forEach(function(k){
+        var hs = _h(s[k]);
+        if(hs === _hb(hb, k)) return;    // el servidor no cambió este dato
+        if(sub && sub[k] === hs) return; // eco de lo que estamos subiendo: esperar confirmación
+        if(_h(l[k]) === _hb(hb, k)){     // aquí tampoco se tocó: tomar el del servidor
+          if(s[k] === undefined) delete l[k]; else l[k] = JSON.parse(JSON.stringify(s[k]));
+        }                                // si aquí se tocó, queda lo de aquí (gana el último)
+        if(s[k] === undefined) delete hb[k]; else hb[k] = hs;
+      });
+    });
+    // Borrados en otro teléfono: quitar de aquí y olvidar (no resucitarlos)
+    Object.keys(b).forEach(function(id){
+      if(srv[id]) return;
+      delete b[id];
+      if(loc){ for(var i = loc.length - 1; i >= 0; i--){ if(loc[i] && loc[i].id === id) loc.splice(i, 1); } }
+    });
+    var primera = !listo[col];
+    listo[col] = true;
+    _guardarBase();
+    if(primera) guardar();               // subir lo que quedó pendiente de antes
+  }
+
+  // ── Escritura de un registro que ya existe: solo los datos cambiados ────────
+  function _actualizar(col, id, cambios, quitar, intento){
+    var k = claves[col][id];
+    if(k === undefined) return _perdido(col, id);
+    var ref = db.ref(raiz + '/' + col + '/' + k), llaveS = col + '/' + id, marca = {};
+    Object.keys(cambios).forEach(function(c){ marca[c] = _h(cambios[c]); });
+    quitar.forEach(function(c){ marca[c] = VACIO; });
+    subiendo[llaveS] = marca;
+    return ref.transaction(function(cur){
+      if(cur === null) return cur;       // aún sin dato local: Firebase reintenta con el real
+      if(!cur || cur.id !== id) return;  // en esa posición hay otro registro: abortar
+      Object.keys(cambios).forEach(function(c){ cur[c] = cambios[c]; });
+      quitar.forEach(function(c){ delete cur[c]; });
+      return cur;
+    }).then(function(r){
+      delete subiendo[llaveS];
+      var v = r && r.snapshot && r.snapshot.val();
+      if(r && r.committed && v && v.id === id){
+        var hb = base[col][id] || (base[col][id] = {});
+        Object.keys(cambios).forEach(function(c){ hb[c] = _h(cambios[c]); });
+        quitar.forEach(function(c){ delete hb[c]; });
+        _guardarBase();
+        return;
+      }
+      // Se movió (alguien borró algo antes): buscarlo por id una vez
+      if((intento || 0) >= 1) return _perdido(col, id);
+      return db.ref(raiz + '/' + col).orderByChild('id').equalTo(id).once('value').then(function(q){
+        var nk = null; q.forEach(function(ch){ var x = ch.val(); if(nk === null && x && x.id === id) nk = ch.key; });
+        if(nk === null) return _perdido(col, id);
+        claves[col][id] = nk;
+        return _actualizar(col, id, cambios, quitar, 1);
+      });
+    });
+  }
+  function _perdido(col, id){          // ya no está en el servidor: no resucitarlo
+    var loc = _lista(col), o = null;
+    if(loc){ for(var i = loc.length - 1; i >= 0; i--){ if(loc[i] && loc[i].id === id){ o = loc[i]; loc.splice(i, 1); } } }
+    if(base[col]) delete base[col][id];
+    _guardarBase();
+    _avisar('No se guardó ' + col + '/' + id + ': ya no está en el servidor');
+    try{ if(typeof toast === 'function') toast('⚠️ No se guardó: ' + _nombre(o) + ' ya no está en el sistema', true); }catch(e){}
+  }
+
+  // ── Registro nuevo: al final de la lista del servidor, sin pisar a nadie ────
+  // Próxima posición libre de la lista: se reparte en orden (varios registros nuevos en un
+  // mismo guardado no chocan entre sí ni dejan huecos, que convertirían la lista en objeto).
+  var siguiente = {};
+  function _proxima(col){
+    var ks = claves[col], max = -1;
+    Object.keys(ks).forEach(function(id){ var n = parseInt(ks[id], 10); if(!isNaN(n) && n > max) max = n; });
+    var p = Math.max(max + 1, siguiente[col] || 0);
+    siguiente[col] = p + 1;
+    return p;
+  }
+  function _agregar(col, o, intento){
+    var k = String(_proxima(col)), valor = _limpio(o), llaveA = col + '/' + o.id;
+    subiendo[llaveA] = _huellas(valor);
+    return db.ref(raiz + '/' + col + '/' + k).transaction(function(cur){
+      if(cur === null) return valor;     // libre: ocuparlo
+      if(cur && cur.id === o.id) return valor;
+      return;                            // ocupado por otro registro: abortar
+    }).then(function(r){
+      delete subiendo[llaveA];
+      var v = r && r.snapshot && r.snapshot.val();
+      if(r && r.committed && v && v.id === o.id){
+        claves[col][o.id] = k; base[col][o.id] = _huellas(valor); _guardarBase();
+        if(identSrv[col]) _idents(valor).forEach(function(x){ identSrv[col][x] = o.id; });
+        return;
+      }
+      if((intento || 0) < 8) return _agregar(col, o, (intento || 0) + 1);
+      _avisar('No se pudo agregar ' + col + '/' + o.id);
+    });
+  }
+
+  // ── Borrado: la lista del servidor sin ese registro (transacción) ──────────
+  function _borrar(col, ids){
+    return db.ref(raiz + '/' + col).transaction(function(cur){
+      if(cur === null) return cur;
+      var quedan = _entradas(cur).map(function(e){ return e[1]; }).filter(function(x){ return !(x && x.id && ids.indexOf(x.id) >= 0); });
+      return quedan;
+    }).then(function(r){
+      if(r && r.committed){
+        var u = {}; ids.forEach(function(id){ delete base[col][id]; u['_borradas/' + id] = Date.now(); lapidas[id] = 1; });
+        _guardarBase();
+        return db.ref(raiz).update(u);
+      }
+    });
+  }
+
+  // ── Guardar: subir lo que cambió aquí ───────────────────────────────────────
+  function _guardarCol(col){
+    var loc = _lista(col), b = base[col];
+    if(!loc || !b || !listo[col]) return [];
+    // Mismos candados que usaba la app: nada antes de cargar los datos reales, y equipos/vendidos
+    // solo después de haber leído los equipos de Firebase (una copia vieja no resucita vendidos).
+    if(!window._fbReady) return [];
+    if((col === 'equipos' || col === 'vendidos') && window._equiposFBok === false) return [];
+    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {});
+    loc.forEach(function(o){
+      if(o && o.id) v[o.id] = 1;
+      if(!o || !o.id || enVuelo[col + '/' + o.id]) { if(o && o.id) vistos[o.id] = 1; return; }
+      vistos[o.id] = 1;
+      var hb = b[o.id], p = null;
+      if(!hb){
+        if(claves[col][o.id] !== undefined || _borradoAposta(o.id)) return;
+        if(col === 'equipos'){ var motivo = _equipoRepetidoOVendido(o); if(motivo){ _avisar('No se agrega el equipo ' + (o.codigo || o.id) + ': ' + motivo); return; } }
+        p = _agregar(col, o);
+      } else {
+        var cambios = {}, quitar = [], hay = false;
+        _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k)){ cambios[k] = JSON.parse(JSON.stringify(o[k])); hay = true; } });
+        Object.keys(hb).forEach(function(k){ if(!OMITIR[k] && o[k] === undefined){ quitar.push(k); hay = true; } });
+        if(!hay) return;
+        p = _actualizar(col, o.id, cambios, quitar, 0);
+      }
+      var llave = col + '/' + o.id; enVuelo[llave] = 1;
+      prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
+        .then(function(){ delete enVuelo[llave]; }));
+    });
+    var fuera = Object.keys(b).filter(function(id){ return !vistos[id] && v[id] && claves[col][id] !== undefined; });
+    if(fuera.length && fuera.length <= MAX_BORRADOS) prom.push(_borrar(col, fuera).catch(function(){}));
+    else if(fuera.length) _avisar(col + ': ' + fuera.length + ' registros faltan en este teléfono; NO se borran (freno)');
+    return prom;
+  }
+  function guardar(){
+    if(!db || !raiz) return Promise.resolve();
+    if(corriendo){ pendiente = true; return Promise.resolve(); }
+    corriendo = true;
+    var prom = [];
+    COLS.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
+    return Promise.all(prom).then(function(){
+      corriendo = false;
+      if(pendiente){ pendiente = false; return guardar(); }
+    });
+  }
+
+  function iniciar(r, fbdb){
+    if(raiz) return;
+    raiz = r; db = fbdb;
+    try{ base = JSON.parse(localStorage.getItem(_clave()) || '{}') || {}; }catch(e){ base = {}; }
+    db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; });
+    COLS.forEach(function(col){
+      claves[col] = claves[col] || {};
+      db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
+    });
+  }
+  return { iniciar: iniciar, guardar: guardar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+})();
 </script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -1515,6 +1779,8 @@ function abrirDescargaFotos(id){
   upd();
 }
 function saveDB(){
+  // Órdenes, equipos y demás listas se guardan registro por registro (sincronizador, T7)
+  try{ if(typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){}
   try{ _cacheLocal(); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
@@ -1528,15 +1794,7 @@ function saveDB(){
       };
       // CANDADO ANTI-CLOBBER: sólo escribir 'equipos' si YA leímos equipos reales
       // de Firebase en esta sesión. Evita que la lista base pise los estados en vivo.
-      if(window._equiposFBok) payload.equipos = DB.equipos||[];
-      if(DB.preventivos && DB.preventivos.length)         payload.preventivos     = _sinFotosPersist(DB.preventivos);
-      if(DB.correctivos && DB.correctivos.length)         payload.correctivos     = _sinFotosPersist(DB.correctivos);
       // cortinas se sincroniza por id con _syncCortina (no como arreglo completo)
-      if(DB.revisiones && DB.revisiones.length)           payload.revisiones      = DB.revisiones;
-      if(DB.evaluaciones && DB.evaluaciones.length)       payload.evaluaciones    = DB.evaluaciones;
-      if(DB.solicitudes && DB.solicitudes.length)         payload.solicitudes     = DB.solicitudes;
-      if(DB.vendidos && DB.vendidos.length)               payload.vendidos        = DB.vendidos;
-      if(DB.ordenesCerradas && DB.ordenesCerradas.length) payload.ordenesCerradas = DB.ordenesCerradas;
       window._fbDB.ref('monhaco').update(payload);
     }
   }catch(e){}
@@ -1579,33 +1837,21 @@ function _guardarLogisticaResiliente(nuevaOrdenId){
 }
 
 function _sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj){
+  // Sube la orden de logística nueva/editada por el sincronizador (solo esa orden, solo lo
+  // cambiado). Antes reescribía la lista completa leída del servidor (TRAMPAS T7).
   if(!window._fbDB || !window._fbReady){
     setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj), 5000);
     return;
   }
-  // Leer el array real de Firebase, agregar la nueva orden, escribir de vuelta
-  window._fbDB.ref('monhaco/logistica').once('value').then(snap=>{
-    const remoto = snap.val() || [];
-    const arr = Array.isArray(remoto) ? remoto.filter(o=>o) : Object.values(remoto).filter(o=>o);
-    if(nuevaOrdenId){
-      const nueva = (DB.logistica||[]).find(o=>o&&o.id===nuevaOrdenId) || _nuevaObj;
-      if(nueva){
-        // Si ya existe en Firebase, actualizarla; si no, agregarla
-        const idxRemoto = arr.findIndex(o=>o&&o.id===nuevaOrdenId);
-        const clean = Object.assign({}, nueva);
-        Object.keys(clean).forEach(k=>{ if(clean[k]===undefined) delete clean[k]; });
-        if(idxRemoto >= 0) arr[idxRemoto] = clean;
-        else arr.push(clean);
-      }
-    }
-    return window._fbDB.ref('monhaco/logistica').set(arr).then(()=>{
-      // Nunca degradar el contador remoto: solo escribir si tenemos un valor real (>0)
-      var _lcLG = parseInt(DB['lastCorrelativo_LG'],10)||0;
-      if(_lcLG>0) window._fbDB.ref('monhaco/lastCorrelativo_LG').set(_lcLG);
-      // Actualizar DB local con el array de Firebase para mantener índices sincronizados
-      DB.logistica = arr;
-    });
-  }).catch(e=>{
+  if(nuevaOrdenId){
+    if(!DB.logistica) DB.logistica = [];
+    // Si el listener reemplazó la lista antes de sincronizar, la orden viaja en _nuevaObj
+    if(!DB.logistica.some(function(o){ return o && o.id===nuevaOrdenId; }) && _nuevaObj) DB.logistica.push(_nuevaObj);
+  }
+  // Contador: nunca bajarlo
+  var _lcLG = parseInt(DB['lastCorrelativo_LG'],10)||0;
+  if(_lcLG>0) window._fbDB.ref('monhaco/lastCorrelativo_LG').transaction(function(c){ c = parseInt(c)||0; return _lcLG>c ? _lcLG : undefined; }).catch(function(){});
+  Promise.resolve(_Sync.guardar()).catch(function(e){
     console.warn('Reintentando sync logistica...', e);
     setTimeout(()=>_sincronizarLogisticaConReintento(nuevaOrdenId, _nuevaObj), 5000);
   });
@@ -2011,14 +2257,12 @@ function saveEquipo(eq){
 }
 
 function saveAllEquipos(){
+  // Los equipos se guardan por el sincronizador: solo los datos que cambiaron de cada equipo.
+  // Antes se reescribía la lista entera (y en Supervisión/MONHACO con campos recortados, T11).
   if(!window._fbDB || !window._fbReady) return;
   if(!window._equiposFBok) return; // no escribir equipos hasta haber leído los reales de Firebase
-  window._fbDB.ref('monhaco/equipos').set(
-    DB.equipos.map(e=>({id:e.id,codigo:e.codigo,serie:e.serie||'',tipo:e.tipo||'',marca:e.marca||'',
-      desc:e.desc||'',combustible:e.combustible||'',estado:e.estado||'DISPONIBLE',
-      ubicacion:e.ubicacion||'',cliente:e.cliente||'',horometro:e.horometro||'',observaciones:e.observaciones||'',
-      intervaloMantMeses:e.intervaloMantMeses||3}))
-  ).catch(err => console.error('saveAllEquipos error:', err));
+  (DB.equipos||[]).forEach(function(e){ if(e && (e.estado===undefined || e.estado===null || e.estado==='')) e.estado = 'DISPONIBLE'; });
+  try{ _Sync.guardar(); }catch(e){}
 }
 function loadDB(){
   try{
@@ -6157,33 +6401,24 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // silencio.
 window._ordenesRecientes = window._ordenesRecientes || {};
 function _guardarOrdenMantResiliente(tipo, orden, intento){
+  // Sube UNA orden (preventivo/correctivo) por el sincronizador —solo esa orden, solo lo
+  // cambiado— y confirma que llegó. Antes reescribía la lista completa (TRAMPAS T7).
   intento = intento||0;
   if(!window._fbDB || !orden || !orden.id) return;
   if(window._borradasCache && window._borradasCache[orden.id]) return; // orden eliminada: no re-subirla
   const nodo = tipo==='prev' ? 'preventivos' : 'correctivos';
-  window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
-  const ref = window._fbDB.ref('monhaco/'+nodo);
-  ref.once('value').then(function(snap){
-    let rem = snap.val()||[];
-    if(!Array.isArray(rem)) rem = Object.values(rem);
-    rem = rem.filter(Boolean);
-    const idx = rem.findIndex(function(o){ return o && o.id===orden.id; });
-    if(idx>=0) rem[idx]=orden; else rem.push(orden);
-    const n = parseInt((orden.correlativo||'').replace(/[^0-9]/g,''))||0;
-    return window._fbDB.ref('monhaco/lastCorrelativo_MH').once('value').then(function(cs){
-      const remC = parseInt(cs.val())||0;
-      const upd = {}; upd[nodo]=rem;
-      if(n>remC) upd['lastCorrelativo_MH']=n;
-      return window._fbDB.ref('monhaco').update(upd);
-    }).then(function(){
-      return ref.once('value');
-    }).then(function(v){
-      let arr=v.val()||[]; if(!Array.isArray(arr)) arr=Object.values(arr);
-      const ok = arr.some(function(o){ return o && o.id===orden.id; });
-      if(!ok) throw new Error('verificacion fallida');
-      const loc = tipo==='prev'?DB.preventivos:DB.correctivos;
-      if(loc && !loc.some(function(o){ return o&&o.id===orden.id; })) loc.push(orden);
-    });
+  if(window._ordenesRecientes) window._ordenesRecientes[orden.id] = {tipo:tipo, obj:orden, ts:Date.now()};
+  if(!DB[nodo]) DB[nodo] = [];
+  const _i = DB[nodo].findIndex(function(o){ return o && o.id===orden.id; });
+  if(_i<0) DB[nodo].push(orden); else if(DB[nodo][_i]!==orden) DB[nodo][_i] = orden;
+  const n = parseInt((orden.correlativo||'').replace(/[^0-9]/g,''))||0;
+  // Contador: nunca bajarlo
+  window._fbDB.ref('monhaco/lastCorrelativo_MH').transaction(function(c){ c = parseInt(c)||0; return n>c ? n : undefined; }).catch(function(){});
+  Promise.resolve(_Sync.guardar()).then(function(){
+    return window._fbDB.ref('monhaco/'+nodo).orderByChild('id').equalTo(orden.id).once('value');
+  }).then(function(q){
+    let ok = false; q.forEach(function(ch){ const v = ch.val(); if(v && v.id===orden.id) ok = true; });
+    if(!ok) throw new Error('verificacion fallida');
   }).catch(function(){
     if(intento<4){ setTimeout(function(){ _guardarOrdenMantResiliente(tipo, orden, intento+1); }, 1500*(intento+1)); }
     else { try{ alert('⚠️ La orden '+(orden.correlativo||'')+' NO se pudo confirmar en la base de datos.\n\nNO cierres la aplicación. Revisa tu conexión a internet y la orden se reintentará al volver a guardar cualquier cambio, o vuelve a crearla.'); }catch(e){} }
@@ -7766,7 +8001,7 @@ function _papeleraRestaurar(id){
         Object.keys(c).forEach(function(k){ if(c[k]===undefined) delete c[k]; });
         return c;
       }).filter(Boolean);
-      window._fbDB.ref(_RAIZ_APP).update({logistica: cleanList, _ts: Date.now()});
+      _Sync.guardar();
     }
     toast('↩️ Orden '+(limpia.correlativo||'')+' restaurada ✓');
     try{ _carpetaMant = 'DEL'; renderHistorial(); }catch(e){}
@@ -7858,12 +8093,7 @@ function eliminarDelHistorial(tipo, id){
               return c;
             });
           DB.logistica = cleanList;
-          return window._fbDB.ref('monhaco').update({
-            logistica: cleanList,
-            equipos: DB.equipos,
-            _ts: Date.now(),
-            _sid: typeof _SESSION_ID!=='undefined'?_SESSION_ID:'ger'
-          });
+          return _Sync.guardar();
         }).then(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
           .catch(()=>{ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });
       } else {
@@ -8584,7 +8814,7 @@ async function enviarSolicitudWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '\uD83D\uDD0D *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'')+(_ctc?'\n📞 *Contacto:* '+_ctc:'');
@@ -8595,7 +8825,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '\uD83D\uDCCB *EVALUACIÓN DE EQUIPO - MONTASA*\n\uD83D\uDD17 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n\uD83D\uDD22 *Orden:* '+corr+'\n\uD83D\uDC77 *Técnico:* '+tecNombre+'\n\uD83D\uDCDD *Detalle:* '+descRaw+'\n\uD83D\uDCC5 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'')+(_ctc?'\n📞 *Contacto:* '+_ctc:'');
@@ -8774,7 +9004,7 @@ async function copiarMensajeWA(){
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/revisiones').set(DB.revisiones);
+      if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
       toast('Revisión '+corr+' creada ✓');
       const msg = '🔍 *REVISIÓN FÍSICO-TÉCNICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'')+(_ctc?'\n📞 *Contacto:* '+_ctc:'');
@@ -8785,7 +9015,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
-      if(window._fbDB && window._fbReady) window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones);
+      if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
       toast('Evaluación '+corr+' creada ✓');
       const msg = '📋 *EVALUACIÓN DE EQUIPO - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONHACO_Tecnicos.html\n\n🔢 *Orden:* '+corr+'\n👷 *Técnico:* '+tecNombre+'\n📝 *Detalle:* '+descRaw+'\n📅 *Fecha:* '+fechaRevEval+(_ubL?'\n📍 *Ubicación:* '+_ubL:'')+(_ctc?'\n📞 *Contacto:* '+_ctc:'');
@@ -9126,7 +9356,7 @@ function eliminarSolicitud(id){
   // Escribir el nodo explícitamente: saveDB() omite 'solicitudes' cuando la
   // lista queda vacía y la solicitud borrada reaparecía al recargar.
   if(window._fbDB && window._fbReady){
-    try{ window._fbDB.ref('monhaco').update({solicitudes: DB.solicitudes, _ts: Date.now(), _sid: _SESSION_ID}); }catch(e){}
+    try{ _Sync.guardar(); }catch(e){}
   }
   saveDB(); renderSolicitudes(); toast('Solicitud eliminada');
 }
@@ -9237,7 +9467,7 @@ function cerrarExito(){
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   firebase.initializeApp(firebaseConfig);
-  window._fbDB = firebase.database();
+  window._fbDB = firebase.database(); try{ _Sync.iniciar('monhaco', window._fbDB); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._fbDB.ref('monhaco');
 
 function _iniciarConexionFirebase(esReintento){
@@ -10979,7 +11209,7 @@ function _elimRV(id){
     DB.revisiones = (DB.revisiones||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('monhaco/revisiones').set(DB.revisiones)
+      _Sync.guardar()
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -10993,7 +11223,7 @@ function _elimEV(id){
     DB.evaluaciones = (DB.evaluaciones||[]).filter(function(x){ return x.id!==id; });
     try{ _cacheLocal(); }catch(e){}
     if(window._fbDB && window._fbReady){
-      window._fbDB.ref('monhaco/evaluaciones').set(DB.evaluaciones)
+      _Sync.guardar()
         .then(function(){ renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderHistorial(); toast('Orden eliminada ✓'); });
     } else {
@@ -11043,7 +11273,7 @@ function _elimLG(id){
         var rem=snap.val();
         var arr=(Array.isArray(rem)?rem:Object.values(rem||{})).filter(function(o){return o&&o.id&&o.id!==id;});
         var clean=arr.map(function(o){ var c={}; Object.keys(o).forEach(function(k){ if(o[k]!==undefined) c[k]=o[k]; }); return c; });
-        return window._fbDB.ref('monhaco').update({logistica:clean, _ts:Date.now()});
+        return _Sync.guardar();
       })
         .then(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); })
         .catch(function(){ renderLogistica(); renderHistorial(); toast('Orden eliminada ✓'); });

@@ -179,6 +179,15 @@ Completado, Cancelado.
 
 ## 5. Cada escritura a Firebase
 
+> **Desde 2026-09-29 ninguna app escribe listas enteras** de logistica, preventivos, correctivos,
+> revisiones, evaluaciones, solicitudes, ordenesCerradas, equipos ni vendidos: `saveDB()` y las funciones
+> de abajo que decían «lista» ahora llaman `_Sync.guardar()` (sincronizador, CLAUDE.md §4), que escribe
+> registro por registro con transacción: `<raíz>/<col>/<clave>` (solo datos cambiados), alta en
+> `<raíz>/<col>/<siguiente>`, borrado como transacción de la lista + lápida en `<raíz>/_borradas/<id>`.
+> `saveDB` sigue escribiendo `notifCompletadas`, `lastCorrelativo_MH`, `_ts`, `_sid`. Los contadores
+> `lastCorrelativo_*` se suben con transacción que nunca los baja. Las tablas de abajo describen el
+> estado anterior (líneas del commit `9a4619e`).
+
 "Lista" = reemplaza la colección entera. "Índice local" = usa la posición del arreglo
 en el teléfono. "Índice servidor" = busca la posición por id en el servidor justo antes.
 
@@ -378,6 +387,11 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 ## 10. Archivos tocados por cambio (registro)
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
+
+- 2026-09-29 — Sincronizador `_Sync` en MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT (bloque nuevo después de
+  «GUARDAR POR ID»; en MTC después de «ACTUALIZACIÓN AUTOMÁTICA»). Reemplazadas: `saveDB` (sin listas),
+  `_guardarOrdenMantResiliente`, `_sincronizarLogisticaConReintento`, `saveAllEquipos`, `_writeToFirebase`
+  (MTL) y ~50 escrituras `ref('<raíz>/<col>').set(...)` / `update({<col>: ...})`. Simulador: `dev/prueba_sync.js`.
 
 - 2026-09-29 — Actualización automática: bloque nuevo al inicio de MTG, MTS, MTT, MTL, MTC,
   MHG, MHS, MHT, MHL, MHL-P (**corre ~52 líneas hacia abajo** todo lo citado en este archivo,
