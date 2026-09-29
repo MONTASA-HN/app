@@ -484,7 +484,10 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   2026-09-29): mantenimiento/evaluación/cortinas → `completado===true` o estado «Completado»;
   logística (cualquier otro tipo, incluso viejos como `entrega_retiro`) → `cerrado===true` y no
   «Cancelado». Si no, toast «Solo se puede compartir el PDF de órdenes completadas». Por eso
-  el PDF ya no muestra estado. El botón sigue visible en órdenes abiertas.
+  el PDF ya no muestra estado. **El botón «📄 Compartir PDF» solo aparece en órdenes completadas**
+  (mantenimiento/evaluación/cortinas ya lo tenían dentro de `if(est==='Completado')`; logística en
+  `_renderDetalleLGGer` y evaluaciones de Comercial en `_detalleOrdenCom` se condicionaron el 2026-09-29).
+  Atención de compras y revisión físico-técnica siguen como imagen, siempre visibles.
 - Fechas: `aFecha` entiende `AAAA-MM-DD[THH:MM]` y `DD/MM/AAAA [HH:MM]` (las órdenes viejas
   guardan así `fechaInicio`; antes salían «—» en fecha y tiempos).
 - Qué muestra: **Cliente** siempre (de `clienteOrden || clienteNombre || cliente`);
