@@ -111,6 +111,9 @@ MTG 8854 (duplicado casi idéntico: `copiarMensajeWA` 9057) · MTS 5104 · MHG 8
    - `push` a `DB.logistica`; sube con `_guardarLogisticaResiliente` (2079) →
      `_sincronizarLogisticaConReintento` (2089): lee remoto, upsert por id, `set` lista.
    - Renta/entrega → equipo (y 2.º equipo) a `EN RENTA` + link de ubicación.
+   - **Renta con grúa** (desde 2026-09-29): casilla «🚚 Incluye grúa / vehículo» → `o.vehiculoRentaId`; la
+     grúa también pasa a `EN RENTA`. En Logística (`_rentaConGrua`) se piden horómetro del equipo y km de
+     la grúa; al cerrar los dos vuelven a `DISPONIBLE` y el km va a `kilometraje` de la grúa.
    - Retiro: **en MT no cambia nada al crear**; **en MONHACO pasa a `DISPONIBLE` al
      crear** (MHG 8564, MHS 6913) — T4.
    - Apoyo a mantenimiento / atención de compras: sin cambio de estado.
@@ -146,7 +149,7 @@ MTT 3087 / 3542 · MHT 2161 / 2592.
 | Técnicos MT y MONHACO | `completarPreventivo` (MTT 3181, MHT 2247), `cerrarCorrectivo` (MTT 3645) | Si está `EN MANTENIMIENTO`: vuelve a `EN RENTA` si `estadoEquipoAnterior` era EN RENTA; **si no, `DISPONIBLE`** (MTT 3246/3688, MHT 2310/2729) — aunque antes estuviera MAL ESTADO (T3). Horómetro a la ficha por índice (MHT 2300). Además `update` por índice local de `preventivos/{idx}` / `correctivos/{idx}` (MTT 3254/3711) |
 | Logística MT | `cerrarOrdenLog` (MTL 2251) → `_cambiarEstadoEquipo` (MTL 4073) | Renta/retiro no cancelados → `DISPONIBLE`, salvo si está EN MANTENIMIENTO/MAL ESTADO. Entrega: sin cambio (queda EN RENTA). Escribe `equipos/{idx}/estado` con índice **buscado en el servidor** por id. Horómetro final solo en el teléfono (MTL 2327–2339) |
 | Logística MONHACO | — | Las apps MONHACO no cierran logística; Gerencia solo reabre (MHG 4958) |
-| Cancelar logística | `cancelarOrdenLog` (MTL 2222) | **No toca el equipo** (T5) |
+| Cancelar logística | `cancelarOrdenLog` (MTL 2222) | Desde 2026-09-29: renta/entrega → equipo, 2.º equipo y grúa a `DISPONIBLE` (salvo otra orden abierta o MANT/MAL ESTADO). Antes no tocaba el equipo (T5) |
 | Eliminar orden (Gerencia) | `_revertirEstadoEquipoAlEliminar` (MTG 2155, MHG 1513) | Vuelve a `eq.estadoAntesDeMant \|\| 'DISPONIBLE'`; `estadoAntesDeMant` **nunca se asigna** → siempre DISPONIBLE (T6) |
 
 Protección en `_cambiarEstadoEquipoAuto` de MTG (2122–2128): nunca pasa a DISPONIBLE

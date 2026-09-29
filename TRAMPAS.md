@@ -119,6 +119,10 @@ Preguntar a Miguel si en MONHACO debe comportarse como MT.
 
 ## T5. Cancelar una renta o entrega deja el equipo EN RENTA
 
+**✅ Arreglado (2026-09-29):** `cancelarOrdenLog` (Logística MT) regresa a DISPONIBLE el equipo, el 2.º equipo
+y la grúa (`vehiculoRentaId`), salvo que otra orden abierta los use o estén EN MANTENIMIENTO / MAL ESTADO.
+Lo de abajo describe cómo era.
+
 ### Qué pasa
 `cancelarOrdenLog` marca la orden Cancelado pero no toca el equipo, que quedó EN RENTA
 al crear la orden.

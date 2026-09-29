@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c61f78dfa55f';
+  var APP_VERSION='1ac027c73f0b';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -10675,6 +10675,7 @@ function _cliOrdenAlCerrar(o){
   function spec(tipo, o){
     var eq = equipoDe(o), t = TITULOS[tipo] || ['Orden de trabajo','Orden de trabajo'];
     var d = { kicker:t[0], titulo:t[1], corr:o.correlativo||'', secs:[] };
+    if(tipo==='renta' && o.vehiculoRentaId) d.titulo = 'Renta de Equipo y Grúa';
     var S = function(titulo, html){ if(html) d.secs.push([titulo, html]); };
     d.meta = [['Fecha de emisión', fF(o.fecha||o.fechaInicio)||'—'], ['Prioridad', esc(o.prioridad||'Normal')], ['Lugar del servicio', lugarMant(o)]];
     if(tipo==='preventivo'){
@@ -10710,6 +10711,8 @@ function _cliOrdenAlCerrar(o){
                           ['Marca / Modelo', esc(marcaModelo(eq))], ['Serie', mono(esc(eq.serie||''))]]
                        : [['Equipo', esc(o.clienteMarca||o.equipoTxt||'')], ['Serie', mono(esc(o.clienteSerie||''))]];
       if(eq2) filasEq.push(['Segundo equipo', mono(esc(eq2.codigo||''))]);
+      var eqG = o.vehiculoRentaId ? (BD().equipos||[]).find(function(e){ return e && e.id===o.vehiculoRentaId; }) : null;
+      if(eqG) filasEq.push(['Grúa / vehículo', mono(esc(eqG.codigo||'')) + ((eqG.subtipo||eqG.marca) ? ' · ' + esc(eqG.subtipo||eqG.marca) : '')]);
       filasEq.push(['Horómetro salida', mono(num(o.horometroSalida,' hrs'))]); filasEq.push(['Horómetro retorno', mono(num(o.horometroRetorno,' hrs'))]);
       filasEq.push(['Horómetro', mono(num(o.horometro,' hrs'))]);
       filasEq.push(['Cliente', esc(clienteDe(o, eq))]);

@@ -287,6 +287,18 @@ Supervisiones**. No asumir que es el mismo.
   `_rentaInicioDe` / `_rentaVenceDe` (Gerencia), `_rentaFinFecha` /
   `_rentaIniTexto` (Logística). «✏️ Ajustar (PIN)» edita inicio y días en una
   ventana propia (`_rentaModal`, z-index 99990, debajo del PIN).
+- **Renta de equipo + grúa** (2026-09-29, pedido de Miguel): en la solicitud de **renta** de Gerencia MT
+  (formularios `''` y `'2'`) la casilla «🚚 Incluye grúa / vehículo» (`sol-grua-chk`/`sol-grua-sel`)
+  ofrece **solo vehículos DISPONIBLES**; al enviar se valida que siga disponible y que no sea el mismo
+  equipo. La orden guarda `o.vehiculoRentaId` (el equipo sigue en `equipoId`; `equipoId2` es el 2.º
+  equipo de entregas) y la grúa pasa a EN RENTA con el equipo; el WhatsApp la menciona. Funciones
+  `_gruaLlenar/_gruaCheck/_gruaMostrar/_gruaElegida/_gruaValidar/_gruaLimpiar`. En Logística MT
+  (`_rentaConGrua(o)`): horómetro del equipo + km de salida/retorno de la grúa, motorista obligatorio;
+  al cerrar, km → `kilometraje` de la grúa y los dos a DISPONIBLE. Borrar la orden en Gerencia libera la
+  grúa. PDF «Renta de Equipo y Grúa» con fila de la grúa (bloque PDF igual en 5 apps). Supervisión MT
+  tiene la casilla pero hoy su solicitud solo ofrece «Mantenimiento» (no crea rentas).
+- **Cancelar renta/entrega** (Logística MT, desde 2026-09-29): el equipo, el 2.º equipo y la grúa vuelven a
+  DISPONIBLE salvo que otra orden abierta los use o estén EN MANTENIMIENTO/MAL ESTADO (T5).
 - **Cancelar retiro** (Gerencia MT): cada aviso de retiro trae «🚫 Cancelar
   retiro (PIN)» → motivo obligatorio (Renta cancelada / Orden de prueba / Otro
   + detalle, obligatorio si es Otro) → guarda
@@ -562,6 +574,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Riesgo «escrituras por posición» (T2) arreglado con `_fbRefPorId` en 7 apps.
 - 2026-09-29 — Riesgo «dos teléfonos se pisan» (T7) arreglado con el sincronizador `_Sync` en 8 apps:
   ya no se suben listas enteras; se sube solo lo cambiado de cada registro (`dev/prueba_sync.js`).
+- 2026-09-29 — Renta de equipo + grúa en la misma orden (`vehiculoRentaId`); cancelar renta/entrega
+  devuelve los equipos a DISPONIBLE (T5).
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
   la app vieja `MONTASA_Tecnicos_MONHACO.html` se reemplaza por una redirección. Se mandan
   a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).
