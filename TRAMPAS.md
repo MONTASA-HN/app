@@ -329,6 +329,24 @@ teléfonos no se enteran de ese cambio (no rompe nada, solo no avisa).
 
 ---
 
+## T19. Los preventivos cerrados siguen diciendo «En proceso»
+
+### Qué pasa
+Al cerrar un preventivo queda `completado = true`, pero `estado` se queda en «En proceso»
+(27 de 31 preventivos de MT al 2026-09-29; uno en «En pausa» con `completado=true`).
+### Por qué pasa
+El cierre de preventivos marca `completado` y no toca `estado` (p. ej. MHT 2250/2265/2345);
+los correctivos sí ponen `estado='Completado'`.
+### Cómo se nota desde afuera
+Cualquier pantalla o reporte que lea `estado` de un preventivo lo muestra abierto. Así el
+PDF decía «En proceso» en órdenes cerradas (por eso se quitó el estado del PDF).
+### Qué hacer
+Para saber si un preventivo está cerrado, usar `completado`, no `estado`. Arreglarlo (poner
+`estado='Completado'` al cerrar y corregir los viejos) cambia datos: preguntar a Miguel, y
+recordar que el tablero de flota y el mundo isométrico leen la base.
+
+---
+
 ## Otras cosas raras (menores)
 
 - **IDs repetidos en MTG**: `prev-cliente-fields` (730 y 1151), `corr-falla`, `corr-ublink`,

@@ -475,11 +475,18 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - **Diseño aprobado por Miguel** (no cambiarlo sin preguntar): logo MONTASA
   (`_LOGO_MONTASA_B64`, también en MONHACO), DM Sans + DM Mono, azul marino `#1f3864`,
   franja azul→verde del logo (`#0088c8`→`#68b894`); encabezado con tipo de orden y
-  «N.º MH-0167»; banda de fecha/estado/prioridad/lugar; secciones numeradas;
+  «N.º MH-0167»; banda de fecha/prioridad/lugar (**sin estado** desde 2026-09-29); secciones numeradas;
   firma **centrada al pie de la primera hoja**, solo con «RECIBIDO CONFORME»;
   anexo fotográfico 6 por hoja («Fotografía N de M»); pie «Montasa Handling Co. ·
   Documento generado por el sistema de gestión… · CORR · Página X de Y».
   Si no cabe, sigue en hojas «Continuación de la orden».
+- **Solo se genera si la orden está completada** (`completada(tipo,o)`; decisión de Miguel
+  2026-09-29): mantenimiento/evaluación/cortinas → `completado===true` o estado «Completado»;
+  logística (cualquier otro tipo, incluso viejos como `entrega_retiro`) → `cerrado===true` y no
+  «Cancelado». Si no, toast «Solo se puede compartir el PDF de órdenes completadas». Por eso
+  el PDF ya no muestra estado. El botón sigue visible en órdenes abiertas.
+- Fechas: `aFecha` entiende `AAAA-MM-DD[THH:MM]` y `DD/MM/AAAA [HH:MM]` (las órdenes viejas
+  guardan así `fechaInicio`; antes salían «—» en fecha y tiempos).
 - Qué muestra: **Cliente** siempre (de `clienteOrden || clienteNombre || cliente`);
   **Km recorridos** calculado (retorno − salida; no se imprimen km de salida/retorno);
   condiciones de renta (inicio, días, finalización) **sin** «aviso de retiro»;
@@ -525,3 +532,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   crean `FLUJO.md` y `TRAMPAS.md`.
 - 2026-09-29 — Actualización automática de las apps en los teléfonos (`version.json` +
   `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».
+- 2026-09-29 — PDF sin estado y solo para órdenes completadas; fechas día/mes/año en el PDF.
