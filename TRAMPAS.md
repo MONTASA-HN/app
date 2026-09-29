@@ -1,0 +1,336 @@
+# TRAMPAS.md — Lo que se comporta distinto a como se ve
+
+Regla: **si te costó descubrirlo, escríbelo aquí.** No arreglarlo callado ni dejarlo
+solo en el chat. Cuando se arregle una trampa, no se borra: se marca **✅ Arreglado
+(fecha, commit)** y se deja una línea de qué se hizo.
+
+Líneas según el commit `9a4619e` (2026-09-29). Abreviaturas de archivo en `FLUJO.md`.
+Ordenadas por gravedad (lo que puede perder datos o rentar una máquina rota, primero).
+**Ninguna está arreglada todavía**: cuáles se arreglan lo decide Miguel.
+
+---
+
+## T1. La app vieja de técnicos MONHACO borra y recrea los equipos de cliente cada vez que se abre
+
+### Qué pasa
+`MONTASA_Tecnicos_MONHACO.html` (versión de jul-2026) sigue en el repo y publicada. Al
+abrirla, `_migrarEquiposCliente` quita **todos** los equipos de cliente de MONHACO, los
+vuelve a crear con ids nuevos solo desde órdenes con los 4 campos completos, y reescribe
+`monhaco/equipos` entero.
+### Por qué pasa
+VIEJA 892–905 (`DB.equipos.filter(e=>!e.esEquipoCliente)` … `ref('monhaco/equipos').set(DB.equipos)`),
+llamada al arrancar (2875). Además usa `LS_KEY='monhaco_tec_v1'` (823), la misma que
+`MONHACO_Tecnicos.html`, y pisa su caché en el mismo teléfono.
+### Cómo se nota desde afuera
+Equipos de cliente que desaparecen, órdenes que quedan apuntando a un equipo que "no
+existe", equipos de cliente duplicados con otro id.
+### Qué hacer
+No está enlazada desde ninguna app, `index.html` ni manifest, pero cualquiera que tenga
+el link guardado o la PWA vieja instalada la puede abrir. Preguntar a Miguel si se
+retira del repo (o se reemplaza por una página que redirija a `MONHACO_Tecnicos.html`).
+
+---
+
+## T2. Escrituras que apuntan a un registro por su posición en la lista
+
+### Qué pasa
+Muchas escrituras usan la **posición** del registro en el arreglo del teléfono
+(`…/equipos/3/estado`, `…/preventivos/12`, `…/logistica/40/vales`). Si en el servidor
+esa posición ya es otro registro, **se escribe encima del registro equivocado**.
+### Por qué pasa
+La posición del teléfono deja de coincidir con la del servidor cuando: se borra una
+orden (se compacta la lista del servidor: MTG 8089, 8096, 11584; MTL 1930); al cargar se
+agregan `EQUIPOS_INICIALES` al final y se quitan vendidos (MTG 9757–9769, MHG 9234–9243);
+`_toArr`/`filter(Boolean)` juntan huecos; `_mergeLogistica` agrega órdenes locales al final.
+Hay llave propia en todos los casos (`id` en órdenes y equipos), pero no se usa.
+Lista completa de escrituras por índice local en `FLUJO.md` §5. Las más peligrosas:
+- MTT 1975 / MHT 1247 `equipos/{idx}/{campo}` — por aquí pasan **estado y horómetro**.
+- MTT 3254 / 3711, MHT 2318 / 2752 — `preventivos|correctivos/{idx}` al cerrar: puede
+  marcar **Completado otra orden**.
+- MTT 4634 / MHT 3638 / MHG 2539 — `equipos/{newIdx}` con `set`: puede **borrar un equipo existente**.
+- Vales y firmas de logística por índice (MTG 5824, 7940, 8280; MTL 1708, 1792, 2352, 2846).
+Si la posición ya no existe, se crea un "registro fantasma" sin id (p. ej. solo `{vales:[…]}`).
+### Cómo se nota desde afuera
+Un equipo cambia de estado "solo"; una orden aparece cerrada sin que nadie la cerrara;
+vales o firmas en la orden equivocada; registros vacíos raros en la base.
+### Qué hacer
+Arreglo recomendado: antes de escribir, leer la lista del servidor y buscar la posición
+**por id** (como ya hacen MTG 7684, MTL 4095, MHL 559), o escribir el registro completo
+por id. Aplicarlo en todas las apps a la vez.
+
+---
+
+## T3. El estado del equipo al cerrar depende de quién cierra la orden
+
+### Qué pasa
+- **Cerrada desde Técnicos**: si el equipo está EN MANTENIMIENTO sale `DISPONIBLE`
+  (o `EN RENTA` si antes estaba en renta), **aunque antes de la orden estuviera en MAL
+  ESTADO o DEMO/PRESTAMO**. No revisa si hay otra orden abierta del mismo equipo, ni si
+  el correctivo quedó "En espera de repuestos".
+- **Cerrada desde Gerencia o Supervisión**: `equipoADisponible` solo cambia `MAL ESTADO`
+  → `DISPONIBLE`. Si la orden nació de una solicitud (equipo `EN MANTENIMIENTO`), **el
+  equipo queda EN MANTENIMIENTO para siempre**. Y una máquina que ya estaba en MAL ESTADO
+  antes de abrir la orden sale DISPONIBLE al cerrarla.
+- **Abierta desde el formulario de Gerencia**: `equipoAInactivo` pasa DISPONIBLE →
+  `MAL ESTADO` (no EN MANTENIMIENTO), a diferencia de la solicitud y de Técnicos.
+### Por qué pasa
+- Técnicos: `const _destino = _anterior==='EN RENTA' ? 'EN RENTA' : 'DISPONIBLE';`
+  (MTT 3246, 3688; MHT 2310, 2729).
+- Gerencia/Supervisión: `equipoADisponible` / `equipoAInactivo` (MTG 6092–6110, igual en
+  MHG 5985–5995, MTS 3189–3195). Llamadas al cerrar: MTG 7950, 8286; MHG 7551, 7889.
+### Cómo se nota desde afuera
+Máquina rota que aparece DISPONIBLE y se renta (lo paga un cliente); o máquina reparada
+que sigue EN MANTENIMIENTO y nadie la ofrece.
+### Qué hacer
+Definir con Miguel una regla única ("al cerrar, vuelve a `estadoEquipoAnterior`, salvo
+que el técnico marque que quedó mal") y aplicarla igual en las 6 apps que cierran
+mantenimiento. Mientras tanto, revisar a mano el estado del equipo después de cerrar.
+
+---
+
+## T4. En MONHACO el retiro marca el equipo DISPONIBLE al crear la orden, no al cerrarla
+
+### Qué pasa
+Al generar una orden de retiro, el equipo pasa a DISPONIBLE aunque siga donde el cliente.
+En MT pasa a DISPONIBLE recién cuando Logística cierra el retiro.
+### Por qué pasa
+MHG 8564 / 8726 y MHS 6913 / 7088 (`else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId,'DISPONIBLE') …}`).
+Además `_cambiarEstadoEquipoAuto` de MHG (1484) no protege EN MANTENIMIENTO/MAL ESTADO
+ni ignora `__cliente__` como el de MT (MTG 2122–2128).
+### Cómo se nota desde afuera
+Una máquina en camino (o todavía en planta del cliente) aparece disponible para otra renta.
+### Qué hacer
+Preguntar a Miguel si en MONHACO debe comportarse como MT.
+
+---
+
+## T5. Cancelar una renta o entrega deja el equipo EN RENTA
+
+### Qué pasa
+`cancelarOrdenLog` marca la orden Cancelado pero no toca el equipo, que quedó EN RENTA
+al crear la orden.
+### Por qué pasa
+MTL 2222–2234: solo cambia `o.estado`, `o.cerrado`, `o.fechaCancelado` y guarda.
+### Cómo se nota desde afuera
+Equipo EN RENTA sin orden abierta; no se puede volver a rentar (la solicitud bloquea si ya
+está EN RENTA, MTG 8944–8956) hasta que alguien lo cambie a mano.
+### Qué hacer
+Al cancelar renta/entrega, volver al estado anterior del equipo (guardar
+`estadoEquipoAnterior` también en logística). Confirmar con Miguel.
+
+---
+
+## T6. Eliminar una orden siempre deja el equipo DISPONIBLE
+
+### Qué pasa
+Al eliminar una orden abierta desde Gerencia, el equipo "vuelve a su estado anterior",
+pero en la práctica **siempre** vuelve a DISPONIBLE.
+### Por qué pasa
+`_revertirEstadoEquipoAlEliminar` (MTG 2155–2179, MHG 1513–1537) usa
+`eq.estadoAntesDeMant || 'DISPONIBLE'`, y `estadoAntesDeMant` **no se asigna en ningún
+archivo**. El dato bueno existe en la orden (`o.estadoEquipoAnterior`) pero no se usa.
+Un correctivo "En espera de repuestos" no cumple la condición y deja el equipo EN
+MANTENIMIENTO.
+### Cómo se nota desde afuera
+Equipo que estaba EN RENTA o MAL ESTADO aparece DISPONIBLE tras borrar una orden.
+### Qué hacer
+Usar `o.estadoEquipoAnterior` en vez de `eq.estadoAntesDeMant`. Arreglo chico; aplicarlo en MTG y MHG.
+
+---
+
+## T7. Guardar sube listas completas: el último que guarda manda
+
+### Qué pasa
+`saveDB()` sube colecciones enteras (preventivos, correctivos, logística, equipos…). Con
+dos teléfonos en línea casi siempre se salva, porque los listeners actualizan antes. Pero
+**si uno estuvo sin señal**, Firebase guarda en cola su `update` con listas viejas y al
+reconectar las sube enteras: lo que el otro cerró o editó en ese rato **desaparece sin
+error ni aviso**. Si el que estuvo sin señal es Gerencia, pisa también `equipos`.
+### Por qué pasa
+- `saveDB` MTG 1978–2002, MHG 1387, MTT 1185, MHT 1106, MTC 412 (listas enteras con
+  `update` en la raíz).
+- MTS 1030 / MHS 986 suben las listas **aunque estén vacías** (`||[]`): una Supervisión
+  con listas vacías las vacía en el servidor.
+- MTL `_writeToFirebase` (544) mezcla por id, pero **gana lo local** en órdenes que ya
+  existen; `cerrarOrdenLog` (2362) sube la lista local sin mezclar.
+- MTG 8116 (`eliminarDelHistorial`, rama logística) sube `equipos` **sin** `_equiposFBok`.
+- Técnicos reescriben toda la flota con su copia (MTT 1225, 5216, 5232; MHT 1147).
+- Ecos: Técnicos/Logística ignoran snapshots cuyo `_sid` es el suyo (MTT 4447, MHT 3451,
+  MTL 2990). Escrituras que no tocan `_sid` (resiliente MTG 6140, `saveAllEquipos`,
+  `_elimLG`, todas las de índice) llegan con el `_sid` del técnico → el técnico **no ve
+  ese cambio** y en su próximo `saveDB` sube su copia vieja.
+- Mitigaciones que existen: `_guardarOrdenMantResiliente` (solo al **crear** órdenes),
+  `_protegerOrdenesRecientes` (órdenes de este teléfono < 15 min), borrado de logística
+  sobre la lista del servidor. **Nada protege ediciones de órdenes existentes** (cierres,
+  firmas, notas, horómetro, estado del equipo).
+### Cómo se nota desde afuera
+"Yo la cerré y aparece abierta otra vez"; firmas o notas que desaparecen; órdenes que
+vuelven al estado de hace un rato.
+### Qué hacer
+Arreglo de fondo: escribir cada orden/equipo **por id** (`<raíz>/preventivos/<id>` o
+`update` multi-ruta del registro tocado) en vez de listas. Es un cambio grande que toca
+todas las apps y la forma de los datos: planearlo con Miguel (y avisar a quien lea la
+base: tablero de flota, mundo isométrico).
+
+---
+
+## T8. Técnicos habilitan escritura aunque no hayan leído la base de verdad
+
+### Qué pasa
+Si el técnico abre la app con mala señal, ve las órdenes del caché; si cierra una en ese
+momento ve "cerrada y guardada". Al conectar, `once()` reemplaza las listas por las
+remotas sin mezclar → **el cierre se pierde**. En la otra dirección, `_fbReady` se
+enciende siempre, y desde ahí `saveDB` puede subir el caché recortado (sin fotos ni firmas).
+### Por qué pasa
+MTT 4364–4384 / MHT 3400–3422: `_fbReady=true` sin importar qué ganó; la comparación
+`remote._ts >= local._ts` siempre da remoto porque **`DB._ts` nunca se asigna** en
+ninguna app. MHT 1038–1046 recorta el caché. `saveDB` de técnicos encadena
+`setTimeout(saveDB,500)` sin límite mientras no hay conexión (varias llamadas = varias
+cadenas). MTL enciende `_fbReady` incluso si `once` falla (3003, 3006).
+### Cómo se nota desde afuera
+Técnico jura que cerró una orden y en Gerencia sigue abierta.
+### Qué hacer
+Encender `_fbReady` solo cuando llegó el snapshot real, y al llegar, mezclar por id
+conservando cierres locales (como `_mergeLogistica` en MTG).
+
+---
+
+## T9. Gerencia MONHACO no escribe nada si Firebase respondió vacío al abrir
+
+### Qué pasa
+Si el primer `once` devuelve vacío (p. ej. por un permiso o un fallo raro), la app queda
+toda la sesión sin escribir a Firebase, sin avisar.
+### Por qué pasa
+MHG 9160: solo `loadDB()`; no hay reintento (solo en `.catch`, 9287) y el listener raíz
+(9224) no enciende `_fbReady`.
+### Cómo se nota desde afuera
+Cambios hechos en Gerencia MONHACO que "no llegan" a los demás y desaparecen al recargar.
+### Qué hacer
+Encender `_fbReady` desde el listener cuando llegue un snapshot con datos, o reintentar.
+
+---
+
+## T10. Supervisión MONHACO usa la caché de logística de MT
+
+### Qué pasa
+En un mismo teléfono (o PC) que abra MT y MONHACO, la logística en caché de una empresa
+se mezcla con la de la otra.
+### Por qué pasa
+MHS usa `localStorage 'montasa_log_cache'` (1037, 1470, 9899, 9923, 9948, 10028), la
+misma clave que MTG (2081, 2566). MHG usa `monhaco_log_cache`. Todas las apps comparten
+origen (`montasa-hn.github.io`).
+### Cómo se nota desde afuera
+Órdenes LG de MT que aparecen un momento en Supervisión MONHACO (o al revés) hasta que
+llega Firebase.
+### Qué hacer
+Cambiar la clave de MHS a `monhaco_log_cache`. Arreglo chico.
+
+---
+
+## T11. `saveAllEquipos` de Supervisión y MONHACO borra campos de los equipos
+
+### Qué pasa
+Al reescribir la flota, solo sube una lista fija de campos: se pierden
+`esEquipoCliente`, `clienteNombre`, `modelo`, `ubicacionLink`, `esVehiculo`, specs, etc.
+### Por qué pasa
+MTS 1484 (campos fijos); MHG 1886 (13 campos; llamada en 2389, 2505, 5405, 7366). MTG
+2503–2524 ya sube todos los campos.
+### Cómo se nota desde afuera
+Equipos de cliente que dejan de verse como tales; pines que desaparecen del mapa de la
+flota; vehículos que muestran horómetro en vez de km.
+### Qué hacer
+Copiar el enfoque de MTG (subir el objeto completo). Arreglo chico-mediano.
+
+---
+
+## T12. Horómetros MONHACO: la toma se sella aunque no se actualicen las fichas
+
+### Qué pasa
+Al finalizar una toma, primero se sella y después se actualizan las fichas de los
+equipos. Si lo segundo falla (señal), la toma queda cerrada y las fichas con el
+horómetro viejo, sin reintento ni aviso.
+### Por qué pasa
+MHL 592–593 (sella) antes de `_horFichasActualizar` (543–559). `horFirmaBorrar` (830)
+tampoco revisa si la toma ya está cerrada. Las dos firmas (supervisor y gerente) se hacen
+en la misma app sin identificar a quien firma.
+### Cómo se nota desde afuera
+Horómetro de la ficha distinto al del reporte del mes.
+### Qué hacer
+Actualizar fichas primero y sellar al confirmar, o reintentar la actualización.
+
+---
+
+## T13. Contador de correlativos que puede bajar
+
+### Qué pasa
+`saveDB` de Gerencia/Supervisión sube `lastCorrelativo_MH: DB['lastCorrelativo_MH']||0`,
+pero ese valor **no se lee de Firebase al abrir**. Un teléfono sin caché sube 0.
+### Por qué pasa
+MTG 1986 (y MTS/MHG/MHS). `nextCorrelativo` (MTG 6193) mitiga porque calcula el máximo
+de las órdenes existentes; el guardado resiliente (6136–6139) solo sube si es mayor.
+### Cómo se nota desde afuera
+Raro: un correlativo MH que se repite si justo se borraron las órdenes con los números
+más altos.
+### Qué hacer
+Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
+
+---
+
+## Bugs de pantalla (la orden se guarda, pero la app se "traba" o no confirma)
+
+### T14. Técnicos: `renderDashboard()` no existe
+- **Qué pasa:** al cerrar o finalizar, la orden sí se guarda pero revienta antes del aviso
+  «cerrada» / ventana de éxito. El técnico no ve confirmación y puede repetir la orden.
+- **Por qué:** se llama `renderDashboard()` (solo existe `renderDashboardTec`): MTT 3155,
+  3635, 3717; MHT 2221, 2677, 2757; VIEJA 1778, 2236, 2335.
+- **Qué hacer:** `if(typeof renderDashboard==='function') renderDashboard();` o llamar
+  `renderDashboardTec`. Arreglo chico.
+
+### T15. Gerencia: finalizar un correctivo desde el formulario revienta a medio camino
+- **Qué pasa:** después de `saveDB` intenta limpiar campos que no existen → error →
+  **`registrarOrdenCerrada` no se ejecuta** (la orden no llega a `ordenesCerradas`), el
+  formulario no se limpia y no sale el aviso.
+- **Por qué:** MTG 8213 / MHG 7819 `document.getElementById(id).value=''` sobre
+  `corr-departamento`, `corr-ciudad`, `corr-cliente-*` (0 coincidencias en el HTML;
+  tampoco `corr-cliente-fields`, MTG 8217).
+- **Qué hacer:** saltar los que no existen (`const el=…; if(el) el.value=''`). Arreglo chico.
+
+### T16. Supervisión MONHACO: «✅ Cerrar correctivo (PIN)» no cierra esa orden
+- **Qué pasa:** sale "faltan campos" o, si el formulario de orden nueva tiene datos,
+  **crea un correctivo nuevo**. No pide PIN. La orden de la tarjeta nunca se cierra.
+- **Por qué:** el botón (MHS 9168) llama `finalizarOrdenCorrectivo('id')`, pero esa
+  función (MHS 5950) no recibe argumentos: valida y guarda el **formulario** `corr-*`. El
+  cierre correcto es `cerrarCorrectivo(id)` (MHS 6274).
+- **Qué hacer:** cambiar el botón a `cerrarCorrectivo` con PIN. Arreglo chico.
+
+### T17. Técnicos MONHACO no tiene pantalla de evaluaciones
+- **Qué pasa:** las evaluaciones nunca se muestran (y el campo Cliente de evaluaciones no
+  se ve ahí).
+- **Por qué:** no existe `#evaluacion-list` ni `tab-evaluacion` en MHT; `renderEvaluaciones`
+  (MHT 3981–3983) sale en silencio por `if(!el) return`.
+- **Qué hacer:** preguntar a Miguel si los técnicos MONHACO deben ver evaluaciones.
+
+---
+
+## Otras cosas raras (menores)
+
+- **IDs repetidos en MTG**: `prev-cliente-fields` (730 y 1151), `corr-falla`, `corr-ublink`,
+  `corr-diag` dos veces. `getElementById` toma el primero: un formulario lee/limpia
+  campos del otro.
+- **Equipo de cliente creado en `guardarCorrectivo` de Técnicos MT** (~MTT 3583–3600):
+  solo queda en el teléfono; la orden apunta a un `equipoId` que desaparece con la
+  siguiente actualización. (Gerencia lo repara con `_repararEquiposCliente`.)
+- **`eliminarPreventivo` de Gerencia** (MTG 8137) borra solo con `confirm`, sin PIN (a
+  diferencia de `eliminarDelHistorial`).
+- **Arreglos con `null`**: varios `find(x=>x.id===…)` sin chequear nulos (MTG 5071,
+  listener de logística MTG 9704) pueden romper con TypeError.
+- **`_mergeLogistica`** (MTG 11448) conserva la versión local cerrada sobre una reapertura
+  hecha en otro dispositivo, y resucita en el teléfono órdenes borradas en otro lado.
+- **Renta/entrega desde Gerencia** no revisa el estado actual al pasar a EN RENTA en
+  todos los caminos (MTG 8997–9025): revisar si se puede rentar algo EN MANTENIMIENTO.
+- **Horómetro final de logística MT** se guarda solo en el teléfono (MTL 2327–2339);
+  Logística no sube equipos.
+- **`_cambiarEstadoEquipo`** (MTG 11840, MHG 11149, MHS 9592) escribe en `<raíz>/estados`,
+  nodo que nadie lee. Código muerto; no revivirlo.
+- **Stubs de prueba**: `Autocorrector is not defined` y `localeCompare` en Supervisión con
+  equipos sin `codigo` no son bugs (ver CLAUDE.md §7).
