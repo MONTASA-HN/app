@@ -232,6 +232,10 @@ Supervisiones**. No asumir que es el mismo.
   porque Leaflet usa z-index 400–1000 y tapaba el botón ☰ (120) y su menú (121). En celular
   (`L.Browser.mobile`) el mapa se crea con `dragging:false`: un dedo baja la página, dos dedos
   mueven/acercan el mapa (pellizco de Leaflet). Mismo cambio en MTG y MHG.
+  **Equipos de cliente en el mapa** (2026-09-29): pin **amarillo #ffd60a con borde #8a6d00**
+  (`_MAPA_COL_CLIENTE`; el morado es de DEMO/PRÉSTAMO y el mostaza #e0a800 de EN MANTENIMIENTO),
+  rotulado con `clienteNombre || cliente` (`_mapaNombreEq`), filtro propio «🟡 Equipos de cliente»
+  (`_mapaCat` → 'CLIENTE'); ya no cuentan como «Disponibles».
 - **Mapas**: Leaflet 1.9.4 (cdnjs) + teselas de OpenStreetMap, sin API key.
 - **PIN**: `solicitarPINAccion(callback, titulo, subtitulo)`. Solo Gerencia MT,
   Gerencia MONHACO y Logística MT tienen teclado real (`.pin-key`); en las

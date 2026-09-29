@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='49c0d977c1d9';
+  var APP_VERSION='0ddf4b43ee3f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -3364,6 +3364,17 @@ function _mapaColorEstado(est){
   if(s === 'MAL ESTADO')       return '#c9211e';
   return '#6b6b6b';
 }
+// Equipos de cliente: no son de nuestra flota, así que su «estado» no aplica. Van en amarillo
+// brillante con borde oscuro (el morado es de DEMO/PRÉSTAMO y el mostaza de EN MANTENIMIENTO)
+// y se rotulan con el nombre del cliente (su «código» suele ser el modelo o la serie).
+const _MAPA_COL_CLIENTE = '#ffd60a';
+function _mapaEsCliente(eq){ return !!(eq && eq.esEquipoCliente); }
+function _mapaCat(eq){ return _mapaEsCliente(eq) ? 'CLIENTE' : String((eq && eq.estado) || '').toUpperCase(); }
+function _mapaColorEq(eq){ return _mapaEsCliente(eq) ? _MAPA_COL_CLIENTE : _mapaColorEstado(eq && eq.estado); }
+function _mapaNombreEq(eq){
+  if(_mapaEsCliente(eq)){ const n = String(eq.clienteNombre || eq.cliente || '').trim(); if(n) return n; }
+  return String((eq && eq.codigo) || '');
+}
 function _mapaDiasDe(eq){
   const ts = parseInt(eq && eq.ubicacionTs) || 0;
   if(!ts) return null;
@@ -3392,10 +3403,10 @@ function _mapaEquipos(){
   return { con: con, sin: sin };
 }
 function _mapaPasaFiltro(it){
-  const est = String(it.eq.estado||'').toUpperCase();
+  const est = _mapaCat(it.eq);
   const q = String((document.getElementById('mapa-buscar')||{}).value||'').trim().toUpperCase();
   if(q){
-    const heno = (String(it.eq.codigo||'') + ' ' + String(it.eq.cliente||'') + ' ' + String(it.eq.marca||'') + ' ' + String(it.eq.modelo||'')).toUpperCase();
+    const heno = (String(it.eq.codigo||'') + ' ' + String(it.eq.cliente||'') + ' ' + String(it.eq.clienteNombre||'') + ' ' + String(it.eq.marca||'') + ' ' + String(it.eq.modelo||'')).toUpperCase();
     if(heno.indexOf(q) < 0) return false;
   }
   if(_mapaFiltro === 'todos')  return true;
@@ -3409,7 +3420,7 @@ function _mapaPintarChips(){
   const d = _mapaEquipos();
   const cuenta = function(f){
     return d.con.filter(function(it){
-      const est = String(it.eq.estado||'').toUpperCase();
+      const est = _mapaCat(it.eq);
       if(f === 'todos') return true;
       if(f === 'viejos') return !!it.viejo;
       return est === f;
@@ -3417,7 +3428,7 @@ function _mapaPintarChips(){
   };
   const chips = [['todos','Todos'],['EN RENTA','🔵 En renta'],['DISPONIBLE','🟢 Disponibles'],
                  ['EN MANTENIMIENTO','🟠 En mantenimiento'],['MAL ESTADO','🔴 Mal estado'],
-                 ['viejos','⚠ Sin actualizar']];
+                 ['CLIENTE','🟡 Equipos de cliente'],['viejos','⚠ Sin actualizar']];
   cont.innerHTML = chips.map(function(c){
     const n = cuenta(c[0]);
     if(!n && c[0] !== 'todos') return '';
@@ -3430,13 +3441,13 @@ function _mapaPintarChips(){
 function _mapaPopupHTML(it){
   const e = it.eq;
   const esc = function(t){ return String(t==null?'':t).replace(/[<>"]/g,''); };
-  const col = _mapaColorEstado(e.estado);
+  const col = _mapaColorEq(e), deCliente = _mapaEsCliente(e);
   const coord = it.lat.toFixed(6) + ',' + it.lng.toFixed(6);
   return '<div style="font-family:DM Sans,Arial,sans-serif;min-width:190px">'
-    + '<div style="font-weight:800;font-size:15px;color:#1f3864">' + esc(e.codigo) + '</div>'
-    + (e.marca || e.modelo ? '<div style="font-size:12px;color:#666;margin-bottom:5px">' + esc(e.marca||'') + ' ' + esc(e.modelo||'') + '</div>' : '')
-    + '<div style="font-size:12px;margin:4px 0"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + col + ';margin-right:5px"></span><b>' + esc(e.estado||'—') + '</b></div>'
-    + (e.cliente ? '<div style="font-size:12px;margin-bottom:4px">📍 ' + esc(e.cliente) + '</div>' : '')
+    + '<div style="font-weight:800;font-size:15px;color:#1f3864">' + esc(_mapaNombreEq(e)) + '</div>'
+    + (e.marca || e.modelo ? '<div style="font-size:12px;color:#666;margin-bottom:5px">' + esc(e.marca||'') + ' ' + esc(e.modelo||'') + (deCliente && e.serie ? ' · Serie ' + esc(e.serie) : '') + '</div>' : '')
+    + '<div style="font-size:12px;margin:4px 0"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + col + ';margin-right:5px"></span><b>' + (deCliente ? 'Equipo de cliente' : esc(e.estado||'—')) + '</b></div>'
+    + (e.cliente && !deCliente ? '<div style="font-size:12px;margin-bottom:4px">📍 ' + esc(e.cliente) + '</div>' : '')
     + '<div style="font-size:11.5px;color:' + (it.viejo ? '#a32d2d' : '#777') + ';margin-bottom:8px">' + (it.viejo ? '⚠️ ' : '🕒 ') + _mapaTextoAntiguedad(it.dias) + '</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
     + '<a href="https://www.google.com/maps/dir/?api=1&destination=' + coord + '" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:7px 9px;background:#1f5488;color:#fff;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">🧭 Cómo llegar</a>'
@@ -3452,10 +3463,10 @@ function _mapaRefrescar(ajustar){
     _mapaCapa.clearLayers();
     const pts = [];
     vis.forEach(function(it){
-      const col = _mapaColorEstado(it.eq.estado);
-      const mk = L.circleMarker([it.lat, it.lng], { radius:9, color:'#fff', weight:2, fillColor:col, fillOpacity:1 });
+      const col = _mapaColorEq(it.eq);
+      const mk = L.circleMarker([it.lat, it.lng], { radius:9, color:(_mapaEsCliente(it.eq) ? '#8a6d00' : '#fff'), weight:2, fillColor:col, fillOpacity:1 });
       // Con pocos equipos en pantalla se deja el código siempre visible
-      mk.bindTooltip((it.viejo ? '⚠ ' : '') + String(it.eq.codigo||''),
+      mk.bindTooltip((it.viejo ? '⚠ ' : '') + _mapaNombreEq(it.eq),
         { permanent: vis.length <= 25, direction:'top', offset:[0,-9], className:'mapa-tip' });
       mk.bindPopup(_mapaPopupHTML(it));
       mk.addTo(_mapaCapa);
@@ -3487,11 +3498,12 @@ function _mapaRefrescarListas(d, vis){
     if(!d.sin.length){ sinEl.innerHTML = ''; }
     else {
       const chip = function(it){
-        const col = _mapaColorEstado(it.eq.estado);
+        const col = _mapaColorEq(it.eq), deCliente = _mapaEsCliente(it.eq);
         return '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:4px 10px;font-size:12px">'
           + '<span style="width:8px;height:8px;border-radius:50%;background:' + col + '"></span>'
-          + '<b>' + esc(it.eq.codigo) + '</b>'
-          + (it.eq.cliente ? '<span style="color:var(--text3)">· ' + esc(it.eq.cliente) + '</span>' : '')
+          + '<b>' + esc(_mapaNombreEq(it.eq)) + '</b>'
+          + (deCliente ? ((it.eq.marca || it.eq.modelo) ? '<span style="color:var(--text3)">· ' + esc(String(it.eq.marca||'') + ' ' + String(it.eq.modelo||'')) + '</span>' : '')
+                       : (it.eq.cliente ? '<span style="color:var(--text3)">· ' + esc(it.eq.cliente) + '</span>' : ''))
           + (it.link ? '<a href="' + esc(it.link) + '" target="_blank" rel="noopener" title="Tiene un link que no trae coordenadas: hay que recapturar con el botón 📍" style="color:#8a6d00;text-decoration:none">🔗</a>' : '')
           + '</span>';
       };
