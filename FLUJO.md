@@ -180,8 +180,11 @@ Completado, Cancelado.
 ## 5. Cada escritura a Firebase
 
 "Lista" = reemplaza la colección entera. "Índice local" = usa la posición del arreglo
-en el teléfono (riesgo T2). "Índice servidor" = busca la posición por id en el
-servidor justo antes (más seguro).
+en el teléfono. "Índice servidor" = busca la posición por id en el servidor justo antes.
+
+> **Desde 2026-09-29 todas las escrituras marcadas «índice local» pasan por `_fbRefPorId`**
+> (verifica el id en el servidor antes de escribir; TRAMPAS T2). Las tablas de abajo siguen
+> diciendo «índice local» para ubicar dónde están; las líneas se corrieron ~70 hacia abajo.
 
 ### `saveDB()` — qué sube cada app
 | App | Línea | Método | Qué sube |

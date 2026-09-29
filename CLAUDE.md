@@ -179,8 +179,10 @@ Supervisiones**. No asumir que es el mismo.
   `montasa/horometros/<mes>/<equipoId>`). Reescribir una lista entera con la
   copia local **borra lo que otro dispositivo agregó** (así se perdieron
   LG-0213/0223/0224/0226). Para borrar de una lista: leer la del servidor
-  (`once('value')`), quitar solo el elemento y escribir eso. Ojo: escribir por
-  **índice** tiene su propio riesgo (ver `TRAMPAS.md`).
+  (`once('value')`), quitar solo el elemento y escribir eso. **Nunca escribir por una
+  posición sacada de la copia local** (`DB.x.findIndex` / `indexOf` / `length-1`): usar
+  `_fbRefPorId('<raíz>/<lista>/'+idx+…).set()/.update()`, que verifica el `id` en el servidor
+  (desde 2026-09-29, TRAMPAS T2). Si la posición salió de un snapshot del servidor, `window._fbDB.ref` sirve.
 - **Firebase devuelve listas con huecos como objeto** `{0:…,2:…}`: normalizar
   siempre a arreglo (`_toArr`).
 - **Equipos**: flags `esVehiculo`, `esEquipoCliente`, `esGenerico`. Los
@@ -543,6 +545,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Actualización automática de las apps en los teléfonos (`version.json` +
   `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».
 - 2026-09-29 — PDF sin estado y solo para órdenes completadas; fechas día/mes/año en el PDF.
+- 2026-09-29 — Riesgo «escrituras por posición» (T2) arreglado con `_fbRefPorId` en 7 apps.
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
   la app vieja `MONTASA_Tecnicos_MONHACO.html` se reemplaza por una redirección. Se mandan
   a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).

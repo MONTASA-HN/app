@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='571f504601b7';
+  var APP_VERSION='f48e4bac1740';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -53,6 +53,83 @@
   });
   window.addEventListener('pageshow', function(e){ if(e.persisted) revisar(); });
 })();
+</script>
+<script>
+// ══ GUARDAR POR ID, NO POR POSICIÓN ══════════════════════════════════════════
+// Muchas escrituras apuntaban a un registro por su POSICIÓN en la lista del teléfono
+// (p. ej. montasa/logistica/37/vales). Si en el servidor esa posición era otra orden u
+// otro equipo —porque alguien borró o agregó algo desde otro teléfono—, el dato caía
+// encima del registro equivocado (TRAMPAS.md T2).
+// _fbRefPorId(ruta) recibe la MISMA ruta de antes y se usa igual que window._fbDB.ref(ruta)
+// con .set() o .update(). Toma el id del registro que está en esa posición en el
+// TELÉFONO, confirma en el servidor que en esa posición está el mismo id (lectura
+// pequeña) y, si no, busca dónde está de verdad. Si ya no existe, NO guarda y avisa
+// (decisión de Miguel, 2026-09-29). Un .set() del registro entero que el servidor todavía
+// no tiene (equipo de cliente recién creado) se agrega al final de la lista del servidor.
+// Solo para rutas cuya posición salió de la copia local (DB.x.findIndex / indexOf /
+// length-1); las que ya buscan la posición en el servidor siguen con window._fbDB.ref.
+function _fbRefPorId(ruta){
+  var db = window._fbDB;
+  var m = /^([^\/]+)\/([^\/]+)\/(\d+)(\/.*)?$/.exec(String(ruta));
+  if(!db) return null;
+  if(!m) return db.ref(ruta);                       // ruta con otra forma: como antes
+  var raiz = m[1], col = m[2], pos = m[3], resto = m[4] || '';
+  var lista = (typeof DB !== 'undefined' && DB && DB[col]) || [];
+  var reg = lista[+pos];
+  var id = reg && reg.id;
+  var nombre = (reg && (reg.correlativo || reg.codigo)) || 'el registro';
+  var base = raiz + '/' + col;
+  function avisar(){
+    try{ console.warn('No se guardó ' + ruta + ': ' + nombre + ' (' + id + ') no está en el servidor'); }catch(e){}
+    try{ if(typeof toast === 'function') toast('⚠️ No se guardó: ' + nombre + ' ya no está en el sistema', true); }catch(e){}
+    return Promise.resolve();
+  }
+  // → Promise con la clave del registro en el servidor, o null si no está
+  function ubicar(){
+    if(!id) return Promise.resolve(null);
+    return db.ref(base + '/' + pos + '/id').once('value').then(function(s){
+      if(s.val() === id) return pos;                // caso normal: misma posición
+      return db.ref(base).orderByChild('id').equalTo(id).once('value').then(function(q){
+        var k = null;
+        q.forEach(function(ch){ var v = ch.val(); if(k === null && v && v.id === id) k = ch.key; });
+        return k;
+      });
+    });
+  }
+  // Registro nuevo: se agrega al final de la lista del SERVIDOR (transacción: no pisa a nadie)
+  function agregar(valor){
+    return db.ref(base).transaction(function(cur){
+      if(cur === null || cur === undefined) return [valor];
+      if(Array.isArray(cur)){
+        var i = cur.findIndex(function(x){ return x && x.id === valor.id; });
+        if(i >= 0) cur[i] = valor; else cur.push(valor);
+        return cur;
+      }
+      var ks = Object.keys(cur), max = -1;
+      for(var j = 0; j < ks.length; j++){
+        if(cur[ks[j]] && cur[ks[j]].id === valor.id){ cur[ks[j]] = valor; return cur; }
+        var n = parseInt(ks[j], 10); if(!isNaN(n) && n > max) max = n;
+      }
+      cur[String(max + 1)] = valor;
+      return cur;
+    });
+  }
+  return {
+    set: function(valor){
+      return ubicar().then(function(k){
+        if(k !== null) return db.ref(base + '/' + k + resto).set(valor);
+        if(!resto && id && valor && valor.id === id) return agregar(valor);
+        return avisar();
+      });
+    },
+    update: function(cambios){
+      return ubicar().then(function(k){
+        if(k !== null) return db.ref(base + '/' + k + resto).update(cambios);
+        return avisar();
+      });
+    }
+  };
+}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1106,7 +1183,7 @@ function _syncEquipoCampoFB(equipoId, campo, valor){
   if(!window._fbDB || !window._fbReady || !equipoId) return;
   const idx = DB.equipos.findIndex(e => e.id===equipoId);
   if(idx<0) return;
-  window._fbDB.ref('montasa/equipos/'+idx+'/'+campo).set(valor).catch(err=>console.error('Error sincronizando '+campo+' del equipo:', err));
+  _fbRefPorId('montasa/equipos/'+idx+'/'+campo).set(valor).catch(err=>console.error('Error sincronizando '+campo+' del equipo:', err));
 }
 
 // Cambia el estado de un equipo localmente y lo sincroniza a Firebase (para automatizaciones)
@@ -1525,7 +1602,7 @@ function saveEquipo(eq){
   if(!eq || !window._fbDB || !window._fbReady) return;
   const idx = DB.equipos.findIndex(e => e.id === eq.id);
   if(idx === -1) return;
-  window._fbDB.ref('montasa/equipos/' + idx).update({
+  _fbRefPorId('montasa/equipos/' + idx).update({
     id:eq.id,codigo:eq.codigo,serie:eq.serie||'',tipo:eq.tipo||'',marca:eq.marca||'',
     desc:eq.desc||'',combustible:eq.combustible||'',estado:eq.estado||'DISPONIBLE',
     ubicacion:eq.ubicacion||'',cliente:eq.cliente||'',horometro:eq.horometro||'',observaciones:eq.observaciones||'',
@@ -1830,14 +1907,14 @@ function _guardarEquipoCliente(nombre, marca, modelo, serie){
   if(existe){
     existe.clienteNombre=nombre; existe.marca=marca; existe.modelo=modelo; existe.serie=serie||existe.serie;
     const idx=DB.equipos.indexOf(existe);
-    if(idx>=0&&window._fbDB&&window._fbReady&&window._equiposFBok) window._fbDB.ref('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
+    if(idx>=0&&window._fbDB&&window._fbReady&&window._equiposFBok) _fbRefPorId('montasa/equipos/'+idx).update({clienteNombre:nombre,marca,modelo,serie:serie||'',esEquipoCliente:true});
     return existe.id;
   }
   const nuevoEq={id:uid(),codigo:serie||(marca+' '+modelo),desc:marca+' '+modelo+(nombre?' — '+nombre:''),tipo:'Equipos de cliente',esEquipoCliente:true,clienteNombre:nombre,marca,modelo,serie:serie||'',cliente:nombre,estado:'DISPONIBLE',combustible:'',ubicacion:nombre,horometro:'',observaciones:'Equipo de cliente'};
   if(!DB.equipos) DB.equipos=[];
   DB.equipos.push(nuevoEq);
   const newIdx=DB.equipos.length-1;
-  if(window._fbDB&&window._fbReady&&window._equiposFBok) window._fbDB.ref('montasa/equipos/'+newIdx).set(nuevoEq);
+  if(window._fbDB&&window._fbReady&&window._equiposFBok) _fbRefPorId('montasa/equipos/'+newIdx).set(nuevoEq);
   try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_sup_v1',JSON.stringify(DB)); }catch(e){}
   return nuevoEq.id;
 }
@@ -2300,7 +2377,7 @@ function _reabrirOrdenLogGer(id){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(x=>x.id===id);
-      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+      if(idx>=0) _fbRefPorId('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
     }
     openSubgrupos.delete('ger-log-'+id);
     renderLogistica();
@@ -3051,7 +3128,7 @@ function limpiarFirma(canvasId){
       saveDB();
       if(window._fbDB && window._fbReady){
         const idx = DB.logistica.findIndex(x=>x.id===ordenId);
-        if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx+'/firma').set('');
+        if(idx>=0) _fbRefPorId('montasa/logistica/'+idx+'/firma').set('');
       }
     }
   }
@@ -4478,7 +4555,7 @@ function completarPreventivo(id){
         try{ _cacheLocal(); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.preventivos.findIndex(function(x){return x.id===p.id;});
-          if(_idx>=0) window._fbDB.ref('montasa/preventivos/'+_idx+'/vales').set(_v);
+          if(_idx>=0) _fbRefPorId('montasa/preventivos/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -4693,7 +4770,7 @@ function cerrarCorrectivo(id){
         try{ _cacheLocal(); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.correctivos.findIndex(function(x){return x.id===c.id;});
-          if(_idx>=0) window._fbDB.ref('montasa/correctivos/'+_idx+'/vales').set(_v);
+          if(_idx>=0) _fbRefPorId('montasa/correctivos/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -7198,7 +7275,7 @@ function _abrirValeGerenciaInterno(ordenId){
   if(!orden) return;
   if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
     const _iMig = DB.logistica.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) window._fbDB.ref('montasa/logistica/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+    if(_iMig>=0) _fbRefPorId('montasa/logistica/'+_iMig+'/vales').set(orden.vales).catch(function(){});
   }
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
@@ -7311,7 +7388,7 @@ function _ejecutarGuardarVale(){
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
-      window._fbDB.ref('montasa/logistica/'+idx+'/vales').set(orden.vales)
+      _fbRefPorId('montasa/logistica/'+idx+'/vales').set(orden.vales)
         .then(()=>console.log('Vale guardado en Firebase path:', orden.correlativo, idx))
         .catch(err=>console.error('Error guardando vale:', err));
     }

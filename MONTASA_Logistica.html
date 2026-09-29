@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8e34fdbaab63';
+  var APP_VERSION='e120a45d3a9f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -53,6 +53,83 @@
   });
   window.addEventListener('pageshow', function(e){ if(e.persisted) revisar(); });
 })();
+</script>
+<script>
+// ══ GUARDAR POR ID, NO POR POSICIÓN ══════════════════════════════════════════
+// Muchas escrituras apuntaban a un registro por su POSICIÓN en la lista del teléfono
+// (p. ej. montasa/logistica/37/vales). Si en el servidor esa posición era otra orden u
+// otro equipo —porque alguien borró o agregó algo desde otro teléfono—, el dato caía
+// encima del registro equivocado (TRAMPAS.md T2).
+// _fbRefPorId(ruta) recibe la MISMA ruta de antes y se usa igual que window._fbDB.ref(ruta)
+// con .set() o .update(). Toma el id del registro que está en esa posición en el
+// TELÉFONO, confirma en el servidor que en esa posición está el mismo id (lectura
+// pequeña) y, si no, busca dónde está de verdad. Si ya no existe, NO guarda y avisa
+// (decisión de Miguel, 2026-09-29). Un .set() del registro entero que el servidor todavía
+// no tiene (equipo de cliente recién creado) se agrega al final de la lista del servidor.
+// Solo para rutas cuya posición salió de la copia local (DB.x.findIndex / indexOf /
+// length-1); las que ya buscan la posición en el servidor siguen con window._fbDB.ref.
+function _fbRefPorId(ruta){
+  var db = window._fbDB;
+  var m = /^([^\/]+)\/([^\/]+)\/(\d+)(\/.*)?$/.exec(String(ruta));
+  if(!db) return null;
+  if(!m) return db.ref(ruta);                       // ruta con otra forma: como antes
+  var raiz = m[1], col = m[2], pos = m[3], resto = m[4] || '';
+  var lista = (typeof DB !== 'undefined' && DB && DB[col]) || [];
+  var reg = lista[+pos];
+  var id = reg && reg.id;
+  var nombre = (reg && (reg.correlativo || reg.codigo)) || 'el registro';
+  var base = raiz + '/' + col;
+  function avisar(){
+    try{ console.warn('No se guardó ' + ruta + ': ' + nombre + ' (' + id + ') no está en el servidor'); }catch(e){}
+    try{ if(typeof toast === 'function') toast('⚠️ No se guardó: ' + nombre + ' ya no está en el sistema', true); }catch(e){}
+    return Promise.resolve();
+  }
+  // → Promise con la clave del registro en el servidor, o null si no está
+  function ubicar(){
+    if(!id) return Promise.resolve(null);
+    return db.ref(base + '/' + pos + '/id').once('value').then(function(s){
+      if(s.val() === id) return pos;                // caso normal: misma posición
+      return db.ref(base).orderByChild('id').equalTo(id).once('value').then(function(q){
+        var k = null;
+        q.forEach(function(ch){ var v = ch.val(); if(k === null && v && v.id === id) k = ch.key; });
+        return k;
+      });
+    });
+  }
+  // Registro nuevo: se agrega al final de la lista del SERVIDOR (transacción: no pisa a nadie)
+  function agregar(valor){
+    return db.ref(base).transaction(function(cur){
+      if(cur === null || cur === undefined) return [valor];
+      if(Array.isArray(cur)){
+        var i = cur.findIndex(function(x){ return x && x.id === valor.id; });
+        if(i >= 0) cur[i] = valor; else cur.push(valor);
+        return cur;
+      }
+      var ks = Object.keys(cur), max = -1;
+      for(var j = 0; j < ks.length; j++){
+        if(cur[ks[j]] && cur[ks[j]].id === valor.id){ cur[ks[j]] = valor; return cur; }
+        var n = parseInt(ks[j], 10); if(!isNaN(n) && n > max) max = n;
+      }
+      cur[String(max + 1)] = valor;
+      return cur;
+    });
+  }
+  return {
+    set: function(valor){
+      return ubicar().then(function(k){
+        if(k !== null) return db.ref(base + '/' + k + resto).set(valor);
+        if(!resto && id && valor && valor.id === id) return agregar(valor);
+        return avisar();
+      });
+    },
+    update: function(cambios){
+      return ubicar().then(function(k){
+        if(k !== null) return db.ref(base + '/' + k + resto).update(cambios);
+        return avisar();
+      });
+    }
+  };
+}
 </script>
   <link rel="manifest" href="/app/manifest_logistica.json">
   <link rel="apple-touch-icon" href="data:image/png;base64,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">
@@ -1757,7 +1834,7 @@ function abrirValeLG(ordenId){
   const _oMig = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(_oMig && _valeMigrarPersonas(_oMig) && window._fbDB && window._fbReady){
     const _iMig = DB.logistica.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) window._fbDB.ref('montasa/logistica/'+_iMig+'/vales').set(_oMig.vales).catch(function(){});
+    if(_iMig>=0) _fbRefPorId('montasa/logistica/'+_iMig+'/vales').set(_oMig.vales).catch(function(){});
   }
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
@@ -1841,7 +1918,7 @@ function guardarValeLG(ordenId){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(o=>o.id===ordenId);
-      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx+'/vales').set(orden.vales)
+      if(idx>=0) _fbRefPorId('montasa/logistica/'+idx+'/vales').set(orden.vales)
         .catch(err=>console.error('Error guardando vale LG:', err));
     }
     toast('Vale guardado ✓');
@@ -2241,7 +2318,7 @@ function actualizarLogKmRetorno(id, valor, inputEl){
       vRenta.kilometraje = valor;
       const idxR = DB.equipos.indexOf(vRenta);
       if(idxR>=0 && window._fbDB && window._fbReady)
-        window._fbDB.ref('montasa/equipos/'+idxR+'/kilometraje').set(valor);
+        _fbRefPorId('montasa/equipos/'+idxR+'/kilometraje').set(valor);
     }
   }
   // Actualizar kilometraje en la ficha del vehículo
@@ -2251,7 +2328,7 @@ function actualizarLogKmRetorno(id, valor, inputEl){
       vehiculo.kilometraje = valor;
       const idx = DB.equipos.indexOf(vehiculo);
       if(idx>=0 && window._fbDB && window._fbReady)
-        window._fbDB.ref('montasa/equipos/'+idx+'/kilometraje').set(valor);
+        _fbRefPorId('montasa/equipos/'+idx+'/kilometraje').set(valor);
     }
   }
   saveDB();
@@ -2401,7 +2478,7 @@ function cerrarOrdenLog(id){
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.logistica.findIndex(function(x){return x.id===o.id;});
-          if(_idx>=0) window._fbDB.ref('montasa/logistica/'+_idx+'/vales').set(_v);
+          if(_idx>=0) _fbRefPorId('montasa/logistica/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -2895,7 +2972,7 @@ function limpiarFirma(canvasId){
       saveDB();
       if(window._fbDB && window._fbReady){
         const idx = DB.logistica.findIndex(x=>x.id===ordenId);
-        if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx+'/firma').set('');
+        if(idx>=0) _fbRefPorId('montasa/logistica/'+idx+'/firma').set('');
       }
     }
   }
@@ -4111,7 +4188,7 @@ function editarOrdenCerradaLog(id){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(x=>x.id===id);
-      if(idx>=0) window._fbDB.ref('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+      if(idx>=0) _fbRefPorId('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
     }
     openHistLog.delete(id);
     renderHistorialLog();

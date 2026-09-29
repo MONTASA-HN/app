@@ -38,6 +38,14 @@ retira del repo (o se reemplaza por una página que redirija a `MONHACO_Tecnicos
 
 ## T2. Escrituras que apuntan a un registro por su posición en la lista
 
+**✅ Arreglado (2026-09-29):** las 60 escrituras con posición del teléfono ahora pasan por
+`_fbRefPorId(ruta)` (bloque «GUARDAR POR ID, NO POR POSICIÓN», idéntico en MTG, MTS, MTT, MTL,
+MHG, MHS, MHT): confirma en el servidor que en esa posición está el mismo `id`; si no, lo busca;
+si ya no existe, no guarda y avisa; un equipo nuevo se agrega al final con transacción. Las 13 que
+ya buscaban la posición en el servidor siguen con `window._fbDB.ref`. **Regla nueva: nunca escribir
+`window._fbDB.ref('…/'+idx)` con una posición sacada de `DB.*`; usar `_fbRefPorId`.** Queda una
+ventana de milisegundos entre la verificación y la escritura. Lo de abajo describe cómo era.
+
 ### Qué pasa
 Muchas escrituras usan la **posición** del registro en el arreglo del teléfono
 (`…/equipos/3/estado`, `…/preventivos/12`, `…/logistica/40/vales`). Si en el servidor
