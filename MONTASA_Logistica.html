@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b4be7f8df90a';
+  var APP_VERSION='9b76c2319307';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1852,6 +1852,7 @@ function renderOrdenesLog(){
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
           ${_ubLinkHTML(o)}${_contactoHTML(o)}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
+          ${_rentaConGrua(o) ? _gruaLabelLog(o) : ''}
           ${o.motorista&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')}</div>`:''}
         </div>
@@ -1936,7 +1937,7 @@ function renderOrdenesLog(){
             ${_viatPersonal().map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        ${((o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
+        ${(_rentaConGrua(o)||(o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
@@ -2388,6 +2389,18 @@ function actualizarLog(id, campo, valor){
 }
 
 
+// Renta de EQUIPO que además lleva grúa / vehículo (o.vehiculoRentaId, 2026-09-29): se piden
+// horómetro del equipo Y km de la grúa, con motorista obligatorio; al cerrar los dos vuelven a DISPONIBLE.
+function _rentaConGrua(o){ return !!(o && o.tipoLogistica==='renta' && o.vehiculoRentaId && !_esVehiculoOrdenLog(o)); }
+function _gruaDeOrden(o){ return (o && o.vehiculoRentaId) ? ((DB.equipos||[]).find(function(e){ return e && e.id===o.vehiculoRentaId; })||null) : null; }
+function _gruaLabelLog(o){
+  var g = _gruaDeOrden(o); if(!g) return '';
+  return '<div style="font-size:12px;color:var(--text3)">🚚 Grúa / vehículo: <strong>'+String(g.codigo||'').replace(/[<>"]/g,'')+((g.subtipo||g.marca)?' – '+String(g.subtipo||g.marca).replace(/[<>"]/g,''):'')+'</strong></div>';
+}
+// ¿Otra orden abierta (distinta de exceptoId) usa este equipo como equipo, 2.º equipo o grúa?
+function _equipoEnOtraOrdenLog(eid, exceptoId){
+  return (DB.logistica||[]).some(function(x){ return x && x.id!==exceptoId && !x.cerrado && x.estado!=='Cancelado' && (x.equipoId===eid || x.equipoId2===eid || x.vehiculoRentaId===eid); });
+}
 function _esVehiculoOrdenLog(o){
   // Renta cuyo equipo es un vehículo (CM, GR, MTV, etc.): km y motorista
   if(!o || o.tipoLogistica!=='renta') return false;
@@ -2530,12 +2543,23 @@ function renderCamposTipo(o){
     html += '<input type="number" id="log-kmret-'+id+'" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
   } else if(isRenta){
+    if(_rentaConGrua(o)) html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">⏱ Horómetro del equipo — '+eq1Label+'</div>';
     html += '<div class="form-group"><label>Horómetro de salida (hrs)</label>';
     html += '<input type="number" id="log-horsal-'+id+'" value="'+(o.horometroSalida||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometroSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     html += '<div class="form-group"><label>Horómetro de retorno (hrs)</label>';
     html += '<input type="number" id="log-horret-'+id+'" value="'+(o.horometroRetorno||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLogHorometroRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    if(_rentaConGrua(o)){
+      var _g = _gruaDeOrden(o) || {};
+      html += '<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">🚚 Kilometraje de la grúa — '+String(_g.codigo||'vehículo').replace(/[<>"]/g,'')+'</div>';
+      html += '<div class="form-group"><label>Km de salida</label>';
+      html += '<input type="number" id="log-kmsal-'+id+'" value="'+(o.kmSalida||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'kmSalida\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+      html += '<div class="form-group"><label>Km de retorno</label>';
+      html += '<input type="number" id="log-kmret-'+id+'" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
+      html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
+    }
   } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras'){
     html += '<div class="form-group"><label>Horómetro (hrs)</label>';
     html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
@@ -2563,6 +2587,16 @@ function actualizarLogKmRetorno(id, valor, inputEl){
       const idxR = DB.equipos.indexOf(vRenta);
       if(idxR>=0 && window._fbDB && window._fbReady)
         _fbRefPorId('montasa/equipos/'+idxR+'/kilometraje').set(valor);
+    }
+  }
+  // Renta con grúa: el km va a la ficha de la grúa
+  if(valor && _rentaConGrua(o)){
+    const _g = _gruaDeOrden(o);
+    if(_g){
+      _g.kilometraje = valor;
+      const _ig = DB.equipos.indexOf(_g);
+      if(_ig>=0 && window._fbDB && window._fbReady)
+        _fbRefPorId('montasa/equipos/'+_ig+'/kilometraje').set(valor);
     }
   }
   // Actualizar kilometraje en la ficha del vehículo
@@ -2599,6 +2633,14 @@ function cancelarOrdenLog(id){
   o.estado = 'Cancelado';
   o.cerrado = false;
   o.fechaCancelado = new Date().toISOString().slice(0,10);
+  // Cancelar una renta o entrega regresa el equipo, el 2.º equipo y la grúa a DISPONIBLE, salvo
+  // que otra orden abierta los use o estén EN MANTENIMIENTO / MAL ESTADO (_cambiarEstadoEquipo
+  // los respeta). Antes quedaban EN RENTA (TRAMPAS T5; decisión de Miguel 2026-09-29).
+  if(o.tipoLogistica==='renta' || o.tipoLogistica==='entrega'){
+    [o.equipoId, o.equipoId2, o.vehiculoRentaId].forEach(function(eid){
+      if(eid && eid!=='__cliente__' && !_equipoEnOtraOrdenLog(eid, o.id)) _cambiarEstadoEquipo(eid, 'DISPONIBLE');
+    });
+  }
   saveDB();
   openSubgrupos.delete('cb-log-'+id);
   renderOrdenesLog();
@@ -2654,6 +2696,12 @@ function cerrarOrdenLog(id){
          parseFloat(o.horometroRetorno) < parseFloat(o.horometroSalida)){
         faltantes.push('Horómetro de retorno debe ser ≥ horómetro de salida');
       }
+      if(_rentaConGrua(o)){
+        if(!o.motorista) faltantes.push('Motorista de la grúa');
+        if(!o.kmSalida)  faltantes.push('Km de salida de la grúa');
+        if(!o.kmRetorno) faltantes.push('Km de retorno de la grúa');
+        if(o.kmSalida && o.kmRetorno && parseFloat(o.kmRetorno)<parseFloat(o.kmSalida)) faltantes.push('Km de retorno de la grúa debe ser ≥ km de salida');
+      }
     }
     if(_gpsAplicaLog(o) && !o.ubicacionLink){
       faltantes.push('📍 Ubicación GPS del punto de '+(o.tipoLogistica==='renta'?'la renta':'entrega')+' (usa el botón Capturar)');
@@ -2689,6 +2737,7 @@ function cerrarOrdenLog(id){
   if(!esCancelado && (o.tipoLogistica === 'renta' || o.tipoLogistica === 'retiro')){
     _cambiarEstadoEquipo(o.equipoId, 'DISPONIBLE');
     if(o.equipoId2) _cambiarEstadoEquipo(o.equipoId2, 'DISPONIBLE');
+    if(_rentaConGrua(o)) _cambiarEstadoEquipo(o.vehiculoRentaId, 'DISPONIBLE');
   }
   // Retiro FUERA del plantel: el equipo vuelve al taller → su ficha queda con el link del taller SPS
   if(o.tipoLogistica === 'retiro' && (o.ubicacionLog||'fuera')==='fuera' && !esCancelado){
