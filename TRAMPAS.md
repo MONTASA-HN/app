@@ -352,6 +352,22 @@ recordar que el tablero de flota y el mundo isométrico leen la base.
 
 ---
 
+## T20. Equipos EN RENTA sin orden y ubicaciones que el mapa no puede leer
+
+### Qué pasa
+La ficha deja poner EN RENTA y escribir el cliente a mano, sin orden de entrega/renta; y se aceptan
+links cortos de Google sin coordenadas. El equipo queda «en renta» sin ubicación, fecha ni días.
+### Por qué pasa
+`guardarDesdeModal` (MTG 4456) no exige orden; `_gpsCoordsDeLink` (MTG 3346) no puede leer links
+cortos. Ver FLUJO.md §8.
+### Cómo se nota desde afuera
+Equipos que se sabe que están en un sitio (p. ej. El Salvador: E-01, E-21, E-46) y el mapa no los
+muestra. Al 2026-09-29: 20 de 26 equipos MT en renta sin orden de logística.
+### Qué hacer
+Exigir orden (o PIN + motivo) para EN RENTA y avisar al pegar un link corto. Decisión de Miguel.
+
+---
+
 ## Otras cosas raras (menores)
 
 - **IDs repetidos en MTG**: `prev-cliente-fields` (730 y 1151), `corr-falla`, `corr-ublink`,

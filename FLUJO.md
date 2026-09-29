@@ -330,7 +330,49 @@ después `saveDB`. Nodo `montasa/horometros`.
 
 ---
 
-## 8. Archivos tocados por cambio (registro)
+## 8. Ubicación de los equipos en el mapa (líneas de MTG al 2026-09-29, commit 3d4b553)
+
+- El mapa de la flota (`renderMapaFlota`, MTG ~3540; igual en MHG) pone un pin **solo si
+  `eq.ubicacionLink` trae coordenadas**. `_gpsCoordsDeLink` (MTG 3346) acepta `?q=lat,lng`
+  (y `query/ll/daddr/destination/center`), `@lat,lng` o `lat,lng` suelto. **Los links cortos
+  (`share.google/…`, `maps.app.goo.gl/…`) no traen coordenadas** y el equipo cae en la lista
+  «sin ubicación» (no se pueden resolver desde el navegador: CORS).
+- Quién escribe `ubicacionLink` (+ `ubicacionTs`): `_setUbLinkEquipo` (MTG 2190) al crear
+  renta/entrega con link (9068/9072), botón 📍 de las órdenes, cierre de retiro → taller SPS
+  (`_GPS_TALLER_SPS`). Lo borra `_gpsFichaBorrar` (MTG 7772, «🗑 Quitar ubicación»).
+- **La ficha permite cambiar estado y cliente a mano** (`guardarDesdeModal`, MTG 4456; MTC 1031)
+  sin orden de logística: no queda ubicación, fecha ni días de renta. Al 2026-09-29, 20 de los 26
+  equipos MT en EN RENTA no tenían ninguna orden de renta/entrega (TRAMPAS T20).
+
+## 9. Cómo revisar la integridad de los datos
+
+La base se puede leer por REST: `GET <base>/<ruta>.json`, y
+`<base>/.json?shallow=true` lista los nodos raíz. **Solo lectura**; cualquier escritura, con
+permiso de Miguel y respaldo previo.
+
+Nodos raíz al 2026-09-29: `montasa`, `monhaco`, `fotosOrden_montasa`, `fotosOrden_monhaco`,
+`monhaco_prueba`, respaldos `respaldo_montasa_20260824`, `respaldo_monhaco_20260912`,
+`respaldo_pruebas_20260929` (lo que se mandó a la papelera hoy), y `bitacora` (**otra app**:
+caja chica; no la tocan estas apps ni se debe tocar).
+
+Método usado el 2026-09-29 (repetible):
+1. Bajar `montasa` y el respaldo más reciente; normalizar listas (Firebase devuelve objetos si
+   hay huecos).
+2. Equipos: comparar por `id`. Los que faltan deben estar en `vendidos` (por id o serie); los
+   nuevos suelen ser equipos de cliente. Buscar campos que tenían valor y hoy están vacíos,
+   códigos y series repetidos.
+3. Órdenes (prev, corr, eval, logística, cerradas, solicitudes): comparar por `id|correlativo`;
+   cruzar lo que falte contra `papelera`, `_borradas` y `respaldo_pruebas_20260929`.
+4. Coherencia del estado: EN MANTENIMIENTO sin orden abierta, EN RENTA sin orden de
+   renta/entrega, EN RENTA sin coordenadas, DISPONIBLE con orden abierta.
+
+Resultado del 2026-09-29 (contra el 24-ago): sin datos corrompidos. 18 equipos faltantes = todos
+vendidos; órdenes faltantes = las 29 de prueba; solo se vaciaron `E-46.ubicacionLink` (quitado
+desde la app; era un link corto) y `MTV-02.cliente`. Incongruencias: 4 equipos EN MANTENIMIENTO sin
+orden (E-15, E-45, MT-132, MT-67), 20 EN RENTA sin orden de logística, serie repetida ST-2/ST-3.
+Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf` (fuera del repo).
+
+## 10. Archivos tocados por cambio (registro)
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
