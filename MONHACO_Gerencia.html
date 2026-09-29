@@ -779,6 +779,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <button class="foto-preview-del" onclick="borrarFoto('prev-foto-input','prev-foto-preview')">x</button>
         </div>
       </div>
+      <div class="form-group"><label>🏢 Cliente</label><input id="prev-cliente-orden" type="text" placeholder="Nombre del cliente"></div>
       <button class="btn-finalizar btn-finalizar-prev" onclick="finalizarOrdenPreventivo()">✅ FINALIZAR ORDEN</button>
       <div class="btn-row">
         <button class="btn btn-sm" onclick="toggleForm('form-prev')">Cancelar</button>
@@ -853,6 +854,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
           <button class="foto-preview-del" onclick="borrarFoto('corr-foto-input','corr-foto-preview')">x</button>
         </div>
       </div>
+      <div class="form-group"><label>🏢 Cliente</label><input id="corr-cliente-orden" type="text" placeholder="Nombre del cliente"></div>
       <button class="btn-finalizar btn-finalizar-corr" onclick="finalizarOrdenCorrectivo()">✅ FINALIZAR ORDEN</button>
       <div class="btn-row" style="margin-top:8px">
         <button class="btn btn-sm" onclick="toggleForm('form-corr')">Cancelar</button>
@@ -1788,7 +1790,14 @@ function _construirCamposOrden(tipo, o, eq){
   return campos;
 }
 
+// Órdenes: se comparten en PDF formal (ver compartirPDFOrden). Solo Atención de
+// Compras y Revisión físico-técnica siguen compartiéndose como imagen.
 async function copiarImagenOrden(tipo, id){
+  if(tipo==='revision_fisica' || tipo==='revision_fisico_tecnica' || tipo==='revision' || tipo==='atencion_compras') return _copiarImagenOrdenIMG(tipo, id);
+  if(typeof compartirPDFOrden==='function') return compartirPDFOrden(tipo, id);
+  return _copiarImagenOrdenIMG(tipo, id);
+}
+async function _copiarImagenOrdenIMG(tipo, id){
   try{
     const arr = tipo==='preventivo' ? DB.preventivos
               : tipo==='correctivo' ? DB.correctivos
@@ -4567,6 +4576,7 @@ function editarOrden(tipo, id){
     document.getElementById('prev-fecha-fin-t').value = ft2;
     document.getElementById('prev-horometro').value = orden.horometro||'';
     document.getElementById('prev-notas').value = orden.notas||'';
+    (document.getElementById('prev-cliente-orden')||{}).value = _cliOrdenValor(orden);
     document.getElementById('prev-sugerencias').value = orden.sugerencias||'';
     preseleccionarTecnico('prev-tecnicos-grid', orden.tecnico);
     // Punto 1: recordar la orden original para conservar firma, correlativo, foto, etc.
@@ -4608,6 +4618,7 @@ function editarOrden(tipo, id){
     document.getElementById('corr-fecha-fin-d').value = fd2;
     document.getElementById('corr-fecha-fin-t').value = ft2;
     document.getElementById('corr-diag').value = orden.diagnostico||'';
+    (document.getElementById('corr-cliente-orden')||{}).value = _cliOrdenValor(orden);
     preseleccionarTecnico('corr-tecnicos-grid', orden.tecnico);
     // Punto 1: recordar la orden original para conservar firma, correlativo, foto, etc.
     window._editandoOrden = { tipo:'corr', orig: JSON.parse(JSON.stringify(orden)) };
@@ -5600,7 +5611,7 @@ function _firmaOverlayAbrir(dest){
   if(esPC){
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99997;display:flex;align-items:center;justify-content:center;padding:12px';
     ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:720px" onclick="event.stopPropagation()">'
-      + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">✍️ Firma del cliente</div>'
+      + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">✍️ Firma — Recibido conforme</div>'
       + '<canvas id="firma-ov-canvas" style="width:100%;height:auto;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
       + '<div style="display:flex;gap:8px;margin-top:10px">' + BTNS + '</div>'
       + '</div>';
@@ -5610,7 +5621,7 @@ function _firmaOverlayAbrir(dest){
     const h = rotar ? window.innerWidth : window.innerHeight;
     ov.innerHTML = '<div style="position:fixed;top:50%;left:50%;width:'+w+'px;height:'+h+'px;transform:translate(-50%,-50%)'+(rotar?' rotate(90deg)':'')+';background:#fff;display:flex;flex-direction:column;padding:10px;box-sizing:border-box">'
       + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      + '<div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✍️ Firma del cliente</div>'
+      + '<div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✍️ Firma — Recibido conforme</div>'
       + BTNS
       + '</div>'
       + '<canvas id="firma-ov-canvas" style="flex:1;min-height:0;width:100%;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
@@ -5950,7 +5961,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
   if(o.checklistPdf) h+="<button onclick=\"event.stopPropagation();verChecklistPDFGer('"+o.id+"')\" style=\"font-size:11px;background:#dce6f1;color:#1f3864;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\ud83d\udc41 Ver Checklist</button>";
   if(!o.viaticos) h+="<button onclick=\"event.stopPropagation();abrirValeGerencia('"+o.id+"')\" style=\"font-size:11px;background:#fff3cd;color:#856404;padding:4px 12px;border-radius:10px;border:1px solid #ffc107;cursor:pointer\">"+(o.vales&&o.vales.length?'Vale':'Generar Vale')+"</button>";
   h+="<button onclick=\"event.stopPropagation();_reabrirOrdenLogGer('"+o.id+"')\" style=\"font-size:11px;background:#1f3864;color:white;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\u270f\ufe0f Editar (PIN)</button>";
-  h+="<button onclick=\"event.stopPropagation();copiarImagenOrden('"+(o.tipoLogistica||"")+"','"+o.id+"')\" style=\"font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">📤 Compartir imagen</button>";
+  h+="<button onclick=\"event.stopPropagation();copiarImagenOrden('"+(o.tipoLogistica||"")+"','"+o.id+"')\" style=\"font-size:11px;background:#c8edcc;color:#1a5c1a;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">"+(o.tipoLogistica==='atencion_compras'?'📤 Compartir imagen':'📄 Compartir PDF')+"</button>";
   h+="<button onclick=\"event.stopPropagation();_elimLG('"+o.id+"')\" style=\"font-size:11px;background:#fdeaea;color:#c00;padding:4px 12px;border-radius:10px;border:none;cursor:pointer\">\ud83d\uddd1 Eliminar</button>";
   h+="</div>";
   return h;
@@ -6783,7 +6794,8 @@ function renderPreventivos(){
       ${est==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('prev','${p.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+          ${_cliCampoHTML(p,"actualizarCampoOrden('prev','"+p.id+"','clienteOrden',this.value.trim())")}
+          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ ${_firmaTituloTxt(p)}</div>
           <canvas id="firma-${p.id}" class="firma-canvas" width="600" height="160"
             ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
@@ -6886,7 +6898,8 @@ function renderCorrectivos(){
       ${c.estado==='Completado'
         ? `<button class="btn btn-sm" style="width:100%;border-color:var(--blue);color:var(--blue)" onclick="solicitarPINAccion(()=>editarOrden('corr','${c.id}'))">🔒 Editar orden (requiere PIN)</button>`
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+          ${_cliCampoHTML(c,"actualizarCampoOrden('corr','"+c.id+"','clienteOrden',this.value.trim())")}
+          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ ${_firmaTituloTxt(c)}</div>
           <canvas id="firma-${c.id}" class="firma-canvas" width="600" height="160"
             ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
@@ -7086,7 +7099,7 @@ function _buildCardCT(x, ESTADOS_COLOR){
     d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','cortinas')" style="width:100%;padding:9px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
     if(estCT==='Completado'){
       d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ct','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-      d += `<button onclick="event.stopPropagation();copiarImagenOrden('cortinas','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
+      d += `<button onclick="event.stopPropagation();copiarImagenOrden('cortinas','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📄 Compartir PDF</button>`;
     }
     d += `<button onclick="event.stopPropagation();eliminarDelHistorial('ct','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
     d += `</div>`;
@@ -7187,7 +7200,7 @@ function _buildDetalleEV(x, tecs, estEV, ESTADOS_COLOR){
   d += `<button onclick="event.stopPropagation();abrirViaticos('${x.id}','evaluacion')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
   if(estEV==='Completado'){
     d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('ev','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('evaluacion','${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📄 Compartir PDF</button>`;
   }
   d += `<button onclick="event.stopPropagation();_elimEV('${x.id}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
   d += `</div>`;
@@ -7321,7 +7334,7 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
 
   if(estRaw==='Completado'){
     d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
-    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
+    d += `<button onclick="event.stopPropagation();copiarImagenOrden('${isPrev?'preventivo':'correctivo'}','${x.id}')" style="width:100%;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📄 Compartir PDF</button>`;
     d += `<button onclick="event.stopPropagation();eliminarDelHistorial('${isPrev?'prev':'corr'}','${x.id}')" style="width:100%;padding:9px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   } else {
     d += _buildCamposEdicionPC(x, eq, tipoPC);
@@ -7372,6 +7385,8 @@ function finalizarOrdenPreventivo(){
   if(!fechaFin)    faltantes.push('Fecha y hora de finalización');
   if(!tecnico)     faltantes.push('Técnico responsable');
   if(!notas)       faltantes.push('Trabajo realizado');
+  const clienteOrden = ((document.getElementById('prev-cliente-orden')||{}).value||'').trim() || (equipoId==='__cliente__' ? ((document.getElementById('prev-cliente-nombre')||{}).value||'').trim() : '');
+  if(!clienteOrden) faltantes.push('🏢 Cliente');
   if(faltantes.length){
     alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
     return;
@@ -7399,6 +7414,8 @@ function finalizarOrdenCorrectivo(){
   if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
   if(!tecnico)     faltantes.push('Técnico asignado');
   if(!diag)        faltantes.push('Diagnóstico / Trabajos realizados');
+  const clienteOrden = ((document.getElementById('corr-cliente-orden')||{}).value||'').trim() || (equipoId==='__cliente__' ? ((document.getElementById('corr-cliente-nombre')||{}).value||'').trim() : '');
+  if(!clienteOrden) faltantes.push('🏢 Cliente');
   if(faltantes.length){
     alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
     return;
@@ -7436,6 +7453,7 @@ function guardarPreventivo(finalizar=false){
       if(nuevoId) entry.equipoId = nuevoId;
     }
   }
+  entry.clienteOrden = ((document.getElementById('prev-cliente-orden')||{}).value||'').trim() || entry.clienteNombre || '';
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
@@ -7457,6 +7475,7 @@ function guardarPreventivo(finalizar=false){
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
+  (document.getElementById('prev-cliente-orden')||{}).value='';
   ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('prev-equipo').value='';
@@ -7492,7 +7511,8 @@ function completarPreventivo(id){
   if(p.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
   // ── VALIDACIÓN: firma obligatoria ──
   const firmaData = getFirmaData(id);
-  if(!firmaData && !p.firma) faltantes.push('Firma digital del cliente');
+  if(!firmaData && !p.firma) faltantes.push('Firma (recibido conforme)');
+  if(!_cliOrdenAlCerrar(p)) faltantes.push('🏢 Cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -7774,6 +7794,7 @@ function guardarCorrectivo(finalizar=false){
       if(nuevoId) entry.equipoId = nuevoId;
     }
   }
+  entry.clienteOrden = ((document.getElementById('corr-cliente-orden')||{}).value||'').trim() || entry.clienteNombre || '';
   getFotoBase64('corr-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.estado='Completado'; entry.fechaCierre=new Date().toISOString().slice(0,10); }
@@ -7794,6 +7815,7 @@ function guardarCorrectivo(finalizar=false){
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
+  (document.getElementById('corr-cliente-orden')||{}).value='';
   ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
   ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('corr-equipo').value='';
@@ -7830,7 +7852,8 @@ function cerrarCorrectivo(id){
   if(c.estado==='Pendiente') faltantes.push('Estado (debe cambiar a En proceso)');
     // ── VALIDACIÓN: firma obligatoria ──
   const firmaDataC = getFirmaData(id);
-  if(!firmaDataC && !c.firma) faltantes.push('Firma digital del cliente');
+  if(!firmaDataC && !c.firma) faltantes.push('Firma (recibido conforme)');
+  if(!_cliOrdenAlCerrar(c)) faltantes.push('🏢 Cliente');
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -11176,5 +11199,402 @@ function _verFotoGrande(src){
 
 <script src="autocorrector.js"></script>
 <script>Autocorrector.vigilar();</script>
+<script>
+// ══ CLIENTE DE LA ORDEN Y QUIÉN FIRMA ════════════════════════════════════════
+// · «Cliente» (o.clienteOrden): se llena a mano en la orden y es OBLIGATORIO para
+//   cerrarla. Si la orden ya traía el nombre (equipo de cliente, cortinas) sale
+//   escrito y se puede corregir. Es el dato que usa el PDF de la orden.
+// · Firma «Recibido conforme»: la da el CLIENTE, salvo cuando el equipo es PROPIO
+//   y el trabajo es EN EL PLANTEL: ahí firma el supervisor de mantenimiento (en el
+//   mismo recuadro, en el celular del técnico al cerrar).
+function _cliOrdenValor(o){
+  return String((o && (o.clienteOrden || o.clienteNombre || o.cliente)) || '').trim();
+}
+function _firmaEsSupervisor(o){
+  if(!o) return false;
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+  var propio = !!eq && !eq.esEquipoCliente && o.equipoId!=='__cliente__';
+  var plantel = o.tipoLogistica ? ((o.ubicacionLog||'fuera')==='plantel') : ((o.ubicacion||'campo')==='plantel');
+  return propio && plantel;
+}
+function _firmaTituloTxt(o){
+  return _firmaEsSupervisor(o) ? 'Firma del supervisor de mantenimiento' : 'Firma del cliente';
+}
+function _cliEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+// Campo «Cliente» para la tarjeta de una orden. onchangeJS: código JS que guarda
+// el valor (usa this.value), p. ej. "actualizarCampoOrden('prev','ID','clienteOrden',this.value.trim())"
+function _cliCampoHTML(o, onchangeJS){
+  if(!o) return '';
+  return '<div class="form-group" style="margin-bottom:10px"><label>🏢 Cliente</label>'
+    + '<input id="cli-orden-'+o.id+'" type="text" value="'+_cliEsc(_cliOrdenValor(o))+'" placeholder="Nombre del cliente" '
+    + 'onclick="event.stopPropagation()" onchange="event.stopPropagation();'+_cliEsc(onchangeJS)+'">'
+    + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">Obligatorio para cerrar la orden. Sale en el PDF.</div></div>';
+}
+// Al cerrar: toma lo que esté escrito en pantalla (aunque no se haya disparado
+// el onchange) y lo deja en la orden. Devuelve el cliente final ('' si falta).
+function _cliOrdenAlCerrar(o){
+  if(!o) return '';
+  var inp = document.getElementById('cli-orden-'+o.id);
+  if(inp && inp.value.trim()) o.clienteOrden = inp.value.trim();
+  var v = _cliOrdenValor(o);
+  if(v) o.clienteOrden = v;
+  return v;
+}
+</script>
+<script>
+// ══ PDF DE ÓRDENES DE TRABAJO ═══════════════════════════════════════════════
+// Documento formal (carta) con el diseño de MONTASA: encabezado con logo, datos
+// de la orden por secciones, firma «Recibido conforme» centrada al pie de la
+// primera hoja y anexo fotográfico (6 fotos por hoja). Se arma en HTML fuera de
+// pantalla, se pagina midiendo y cada hoja se pasa al PDF con html2canvas+jsPDF.
+// No aplica a Atención de Compras ni a Revisión físico-técnica (siguen con imagen).
+(function(){
+  var W = 816, H = 1056; // carta a 96 dpi
+  // DB se declara con let en cada app: no cuelga de window
+  function BD(){ try{ return (typeof DB!=='undefined') ? DB : (window.DB||{}); }catch(e){ return window.DB||{}; } }
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function vacio(v){ return v===undefined || v===null || String(v).trim()===''; }
+  function pad(n){ return ('0'+n).slice(-2); }
+  function aFecha(x){
+    if(!x) return null;
+    if(x instanceof Date) return isNaN(x) ? null : x;
+    var s = String(x);
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3], m[4]?+m[4]:0, m[5]?+m[5]:0);
+    var d = new Date(s); return isNaN(d) ? null : d;
+  }
+  function tieneHora(x){ return /[T ]\d{2}:\d{2}/.test(String(x||'')); }
+  function fF(x){ var d=aFecha(x); return d ? pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear() : ''; }
+  function fH(x){ var d=aFecha(x); return (d && tieneHora(x)) ? pad(d.getHours())+':'+pad(d.getMinutes()) : ''; }
+  function dur(a,b){
+    var x=aFecha(a), y=aFecha(b); if(!x||!y||!tieneHora(a)||!tieneHora(b)) return '';
+    var m=Math.round((y-x)/60000); if(m<=0) return '';
+    return Math.floor(m/60)+' h '+pad(m%60)+' min';
+  }
+  function num(v, suf){ if(vacio(v)) return ''; var n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n) ? esc(v) : n.toLocaleString('en-US',{maximumFractionDigits:1})+(suf||''); }
+  function mono(v){ return vacio(v) ? '' : '<span class="op-mono">'+v+'</span>'; }
+
+  var CSS = ''
+  + '.op-page{width:'+W+'px;height:'+H+'px;position:relative;padding:40px 60px 77px;box-sizing:border-box;background:#fff;display:flex;flex-direction:column;overflow:hidden;font-family:"DM Sans",Arial,sans-serif;color:#1c2330;font-size:12.8px;line-height:1.38}'
+  + '.op-page *{box-sizing:border-box}'
+  + '.op-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:9px}'
+  + '.op-hdr img{height:46px;display:block}.op-der{text-align:right}'
+  + '.op-kick{font-size:9.9px;font-weight:700;letter-spacing:2.2px;color:#0088c8;text-transform:uppercase}'
+  + '.op-tit{font-size:22.6px;font-weight:700;color:#1f3864;letter-spacing:-0.2px;line-height:1.15;margin-top:2px}'
+  + '.op-num{display:inline-block;margin-top:7px;border:1.2px solid #1f3864;border-radius:3px;padding:3px 10px;font-family:"DM Mono",monospace;font-size:14px;font-weight:500;color:#1f3864;letter-spacing:0.5px}'
+  + '.op-num b{font-family:"DM Sans";font-weight:600;font-size:9.3px;letter-spacing:1.4px;color:#5b6472;margin-right:6px;vertical-align:1px}'
+  + '.op-hdr2{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px}.op-hdr2 img{height:34px}'
+  + '.op-regla{height:3px;background:#1f3864;position:relative;margin-bottom:14px;flex-shrink:0}'
+  + '.op-regla:after{content:"";position:absolute;left:0;top:3px;width:154px;height:3px;background:linear-gradient(90deg,#0088c8,#68b894)}'
+  + '.op-meta{width:100%;border-collapse:collapse;margin:12px 0 2px;table-layout:fixed}.op-meta td{border:1px solid #cfd6df;padding:5px 10px;vertical-align:top}'
+  + '.op-lbl{font-size:9px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#5b6472}'
+  + '.op-val{font-size:13px;font-weight:600;color:#1c2330;margin-top:1px}'
+  + '.op-pill{display:inline-block;font-size:10.6px;font-weight:700;padding:1px 8px;border-radius:10px}'
+  + '.op-sec{margin-top:8px}'
+  + '.op-sec h2{margin:0 0 6px;font-size:10.4px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#1f3864;display:flex;align-items:center;gap:8px}'
+  + '.op-sec h2 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:2px;background:#1f3864;color:#fff;font-size:10px;letter-spacing:0}'
+  + '.op-sec h2:after{content:"";flex:1;height:1px;background:#cfd6df}'
+  + '.op-page table{width:100%;border-collapse:collapse}'
+  + '.op-kv td{border:1px solid #d9dfe6;padding:4px 9px;vertical-align:top}'
+  + '.op-kv td.k{width:19%;background:#f3f5f8;font-size:9.2px;font-weight:700;letter-spacing:0.9px;text-transform:uppercase;color:#5b6472;padding-top:5.5px}'
+  + '.op-kv td.v{width:31%;font-weight:500;word-break:break-word}'
+  + '.op-mono{font-family:"DM Mono",monospace;font-size:12px}'
+  + '.op-txt{border:1px solid #d9dfe6;border-radius:2px}.op-txt+.op-txt{margin-top:5px}.op-kv+.op-txt,.op-txt+.op-kv{margin-top:6px}'
+  + '.op-txt .t{background:#f3f5f8;padding:3px 9px;border-bottom:1px solid #d9dfe6}.op-txt .c{padding:5px 9px;white-space:pre-wrap;word-break:break-word}'
+  + '.op-tt th{background:#1f3864;color:#fff;font-size:9.2px;font-weight:700;letter-spacing:0.9px;text-transform:uppercase;text-align:left;padding:4px 9px}'
+  + '.op-tt td{border:1px solid #d9dfe6;padding:3.5px 9px}.op-tt tr.tot td{background:#f3f5f8;font-weight:700;color:#1f3864}.op-tt .r{text-align:right}'
+  + '.op-firma{margin-top:auto;padding-top:18px;display:flex;justify-content:center}'
+  + '.op-firma>div{width:307px;text-align:center}'
+  + '.op-firma .z{height:56px;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid #1c2330;margin-bottom:6px}'
+  + '.op-firma .z img{max-height:54px;max-width:280px;display:block}'
+  + '.op-firma .n{font-weight:700;letter-spacing:1.6px;text-transform:uppercase;font-size:11.2px;color:#1f3864}'
+  + '.op-pie{position:absolute;left:60px;right:60px;bottom:40px;border-top:1px solid #cfd6df;padding-top:7px;display:flex;justify-content:space-between;align-items:center;font-size:9.6px;color:#5b6472}'
+  + '.op-pie .mid{text-align:center;flex:1;padding:0 12px}.op-pie b{color:#1f3864}'
+  + '.op-intro{font-size:11.5px;color:#5b6472;margin-top:4px}'
+  + '.op-fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-top:8px}'
+  + '.op-foto{border:1px solid #cfd6df;padding:5px;border-radius:2px}'
+  + '.op-foto .img{height:226px;background:#eef1f5;display:flex;align-items:center;justify-content:center;overflow:hidden}'
+  + '.op-foto .img img{max-width:100%;max-height:100%;display:block}'
+  + '.op-foto .cap{padding:5px 3px 1px;font-size:10px;color:#5b6472}.op-foto .cap b{color:#1f3864}';
+
+  function kv(rows){
+    rows = rows.filter(function(r){ return r && !vacio(r[1]); });
+    if(!rows.length) return '';
+    var h = '<table class="op-kv">';
+    for(var i=0;i<rows.length;i+=2){
+      var a=rows[i], b=rows[i+1];
+      if(!b) h += '<tr><td class="k">'+a[0]+'</td><td class="v" colspan="3">'+a[1]+'</td></tr>';
+      else h += '<tr><td class="k">'+a[0]+'</td><td class="v">'+a[1]+'</td><td class="k">'+b[0]+'</td><td class="v">'+b[1]+'</td></tr>';
+    }
+    return h + '</table>';
+  }
+  function txt(t, c){ return vacio(c) ? '' : '<div class="op-txt"><div class="t op-lbl">'+t+'</div><div class="c">'+esc(c)+'</div></div>'; }
+  function tiempos(evs, total){
+    evs = evs.filter(function(e){ return e && !vacio(e[1]); });
+    if(!evs.length) return '';
+    var h = '<table class="op-tt"><tr><th>Evento</th><th>Fecha</th><th>Hora</th><th style="text-align:right">Duración</th></tr>';
+    var prev = null;
+    evs.forEach(function(e){
+      var d = prev ? dur(prev, e[1]) : '';
+      h += '<tr><td>'+e[0]+'</td><td class="op-mono">'+fF(e[1])+'</td><td class="op-mono">'+(fH(e[1])||'—')+'</td><td class="r op-mono">'+(d ? (e[2]?e[2]+' ':'')+d : '—')+'</td></tr>';
+      prev = e[1];
+    });
+    var tot = dur(evs[0][1], evs[evs.length-1][1]);
+    if(tot) h += '<tr class="tot"><td colspan="3">'+(total||'Tiempo total de la orden')+'</td><td class="r op-mono">'+tot+'</td></tr>';
+    return h + '</table>';
+  }
+  function estadoPill(e){
+    var s = String(e||'Pendiente'), l = s.toLowerCase();
+    var c = l.indexOf('complet')>=0||l.indexOf('cerrad')>=0 ? ['#e3f1ea','#1d6b45'] : l.indexOf('cancel')>=0 ? ['#fbe0e0','#a32d2d'] : l.indexOf('proceso')>=0 ? ['#e6f0fb','#1f5488'] : ['#fdf0dc','#8a4800'];
+    return '<span class="op-pill" style="background:'+c[0]+';color:'+c[1]+'">'+esc(s)+'</span>';
+  }
+  function equipoDe(o){
+    var eq = (BD().equipos || []).find(function(e){ return e && e.id===o.equipoId; });
+    return eq || null;
+  }
+  // Cliente de la orden: el campo manual de la orden y, si no hay, el que ya traía
+  function clienteDe(o, eq){
+    return o.clienteOrden || o.clienteNombre || o.cliente || (eq && eq.esEquipoCliente ? (eq.clienteNombre||eq.cliente||'') : '') || '';
+  }
+  function datosEquipo(o, eq){
+    var cli = clienteDe(o, eq);
+    if(!eq){
+      return kv([['Equipo', esc(o.clienteMarca||o.equipoTxt||'')], ['Modelo', esc(o.clienteModelo||'')], ['Serie', mono(esc(o.clienteSerie||''))],
+                 ['Horómetro', mono(num(o.horometro,' hrs'))], ['Cliente', esc(cli)]]);
+    }
+    var cod = eq.esEquipoCliente ? '' : (eq.codigo||'');
+    return kv([['Código', mono(esc(cod))], ['Tipo', esc(eq.subtipo||eq.tipo||'')],
+               ['Marca / Modelo', esc(marcaModelo(eq))], ['Serie', mono(esc(eq.serie||''))],
+               ['Horómetro', mono(num(o.horometro||'',' hrs'))], ['Cliente', esc(cli)]]);
+  }
+  function marcaModelo(eq){
+    var ma = String(eq.marca||'').trim(), mo = String(eq.modelo||eq.desc||'').trim();
+    if(mo && ma.toUpperCase().indexOf(mo.toUpperCase())>=0) mo = '';
+    return [ma, mo].filter(Boolean).join(' ');
+  }
+  function lugarMant(o){ return (o.ubicacion||'campo')==='plantel' ? 'En plantel' : 'Fuera del plantel'; }
+  function repuestosDe(o){
+    try{
+      var r = BD().repuestos || {}; var lst = (Array.isArray(r)?r:Object.values(r)).filter(function(x){ return x && x.ordenId===o.id; });
+      var filas = '';
+      lst.forEach(function(sr){ (sr.items||[]).forEach(function(it){
+        filas += '<tr><td class="op-mono">'+esc(sr.correlativo||'')+'</td><td>'+esc(it.desc||'')+(it.parte?' <span style="color:#5b6472">· '+esc(it.parte)+'</span>':'')+'</td><td class="r op-mono">'+esc(it.cant||'')+'</td></tr>';
+      }); });
+      return filas ? '<table class="op-tt"><tr><th>Solicitud</th><th>Descripción</th><th style="text-align:right">Cantidad</th></tr>'+filas+'</table>' : '';
+    }catch(e){ return ''; }
+  }
+  function tecnicosDe(o){ return (Array.isArray(o.tecnicos) && o.tecnicos.filter(Boolean).length) ? o.tecnicos.filter(Boolean).join(', ') : (o.tecnico||''); }
+  function eventosMant(o){
+    return [['Salida del plantel', o.salidaPlantel], ['Inicio del trabajo', o.inicioTrabajo||o.fechaInicio, o.salidaPlantel?'Traslado':''],
+            ['Fin del trabajo', o.finTrabajo||o.fechaFin, 'Trabajo'], ['Retorno al plantel', o.retornoPlantel, 'Traslado']];
+  }
+
+  var TITULOS = {
+    preventivo:['Orden de trabajo · Mantenimiento','Mantenimiento Preventivo'],
+    correctivo:['Orden de trabajo · Mantenimiento','Mantenimiento Correctivo'],
+    evaluacion:['Orden de trabajo · Mantenimiento','Evaluación de Equipo'],
+    cortinas:['Orden de trabajo · Cortinas y niveladoras','Cortinas / Niveladoras'],
+    renta:['Orden de trabajo · Logística','Renta de Equipo'],
+    entrega:['Orden de trabajo · Logística','Entrega de Equipo'],
+    retiro:['Orden de trabajo · Logística','Retiro y Recepción de Equipo'],
+    apoyo_mantenimiento:['Orden de trabajo · Logística','Apoyo a Mantenimiento']
+  };
+
+  function spec(tipo, o){
+    var eq = equipoDe(o), t = TITULOS[tipo] || ['Orden de trabajo','Orden de trabajo'];
+    var d = { kicker:t[0], titulo:t[1], corr:o.correlativo||'', secs:[] };
+    var S = function(titulo, html){ if(html) d.secs.push([titulo, html]); };
+    d.meta = [['Fecha de emisión', fF(o.fecha||o.fechaInicio)||'—'], ['Estado', estadoPill(o.estado)], ['Prioridad', esc(o.prioridad||'Normal')], ['Lugar del servicio', lugarMant(o)]];
+    if(tipo==='preventivo'){
+      S('Datos del equipo', datosEquipo(o, eq));
+      S('Detalle del servicio', kv([['Servicio', esc(o.servicio||'')], ['Técnico(s)', esc(tecnicosDe(o))]]) + txt('Trabajo realizado', o.notas) + txt('Sugerencias', o.sugerencias));
+      S('Próximo mantenimiento', kv([['Próximo servicio', esc(o.proximoMant||'')]]));
+      S('Repuestos utilizados', repuestosDe(o));
+      S('Tiempos de la orden', tiempos(eventosMant(o)));
+    } else if(tipo==='correctivo'){
+      S('Datos del equipo', datosEquipo(o, eq));
+      S('Detalle del servicio', kv([['Sistema afectado', esc(o.sistema||'')], ['Técnico(s)', esc(tecnicosDe(o))]]) + txt('Falla reportada', o.falla) + txt('Diagnóstico / Trabajo realizado', o.diagnostico) + txt('Observaciones', o.notas));
+      S('Repuestos utilizados', repuestosDe(o));
+      S('Tiempos de la orden', tiempos(eventosMant(o)));
+    } else if(tipo==='evaluacion'){
+      d.meta = [['Fecha', fF(o.fecha)||'—'], ['Estado', estadoPill(o.estado)], ['Horario', esc((o.horaIni||'—')+' – '+(o.horaFin||'—'))], ['Lugar del servicio', lugarMant(o)]];
+      S('Datos del equipo evaluado', kv([['Marca', esc(o.marca||'')], ['Modelo', esc(o.modelo||'')], ['Serie', mono(esc(o.serie||''))], ['Horómetro', mono(num(o.horometro,' hrs'))],
+                                         ['Cliente', esc(clienteDe(o, eq))], ['Técnico(s)', esc(tecnicosDe(o))]]));
+      S('Resultado de la evaluación', txt('Diagnóstico', o.diagnostico) + txt('Mantenimiento sugerido', o.mantSugerido) + txt('Notas', o.notas));
+    } else if(tipo==='cortinas'){
+      S('Datos del servicio', kv([['Cliente', esc(clienteDe(o, eq))], ['Ubicación', esc(o.ubicacion&&o.ubicacion!=='plantel'&&o.ubicacion!=='campo'?o.ubicacion:'')], ['Técnico(s)', esc(tecnicosDe(o))]]));
+      S('Detalle del trabajo', txt('Trabajo a realizar', o.descripcion) + txt('Trabajo realizado', o.trabajoRealizado));
+      var ini = o.fechaInicio || (o.fecha && o.horaIni ? o.fecha+'T'+o.horaIni : ''), fin = o.fechaFin || (o.fechaFinFecha && o.horaFin ? o.fechaFinFecha+'T'+o.horaFin : '');
+      S('Tiempos de la orden', tiempos([['Inicio del trabajo', ini], ['Fin del trabajo', fin, 'Trabajo']]));
+      d.meta[3] = ['Lugar del servicio', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'];
+    } else {
+      // Logística: renta, entrega, retiro, apoyo a mantenimiento
+      var ubl = o.ubicacionLog || 'fuera';
+      d.meta[3] = ['Lugar', (tipo!=='renta' && ubl==='plantel') ? 'En plantel' : 'Fuera del plantel'];
+      var eq2 = o.equipoId2 ? (BD().equipos||[]).find(function(e){ return e && e.id===o.equipoId2; }) : null;
+      var horas = (o.horometroSalida && o.horometroRetorno) ? (parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)) : NaN;
+      var km = (o.kmSalida && o.kmRetorno) ? (parseFloat(String(o.kmRetorno).replace(/,/g,''))-parseFloat(String(o.kmSalida).replace(/,/g,''))) : NaN;
+      var filasEq = eq ? [['Código', mono(esc(eq.esEquipoCliente?'':(eq.codigo||'')))], ['Tipo', esc(eq.subtipo||eq.tipo||'')],
+                          ['Marca / Modelo', esc(marcaModelo(eq))], ['Serie', mono(esc(eq.serie||''))]]
+                       : [['Equipo', esc(o.clienteMarca||o.equipoTxt||'')], ['Serie', mono(esc(o.clienteSerie||''))]];
+      if(eq2) filasEq.push(['Segundo equipo', mono(esc(eq2.codigo||''))]);
+      filasEq.push(['Horómetro salida', mono(num(o.horometroSalida,' hrs'))]); filasEq.push(['Horómetro retorno', mono(num(o.horometroRetorno,' hrs'))]);
+      filasEq.push(['Horómetro', mono(num(o.horometro,' hrs'))]);
+      filasEq.push(['Cliente', esc(clienteDe(o, eq))]);
+      S('Datos del equipo', kv(filasEq));
+      var ops = [o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ');
+      S('Detalle de la orden', kv([['Operador(es)', esc(ops)], ['Motorista', esc(o.motorista||'')], ['Vehículo de traslado', esc(o.equipoCompra||o.vehiculo||'')],
+                                  ['Contacto del cliente', esc(o.contactoCliente||'')], ['Horas de uso', isNaN(horas)||horas<0 ? '' : mono(horas.toFixed(1)+' hrs')],
+                                  ['Km recorridos', isNaN(km)||km<0 ? '' : mono(km.toLocaleString('en-US',{maximumFractionDigits:1})+' km')]])
+                                + txt('Descripción', o.descripcion) + txt('Observaciones', o.notas||o.observaciones));
+      if((tipo==='renta'||tipo==='entrega') && parseInt(o.diasRenta)>0){
+        var iR = aFecha(o.inicioRenta) || aFecha(o.fechaInicio), finR = null;
+        if(iR){ finR = new Date(iR); finR.setDate(finR.getDate()+parseInt(o.diasRenta)); }
+        S('Condiciones de la renta', kv([['Inicio de la renta', iR?fF(iR):''], ['Días de renta', parseInt(o.diasRenta)+' días calendario'], ['Finalización', finR?fF(finR):'']]));
+      }
+      S('Tiempos de la orden', tiempos([['Inicio', o.fechaInicio], ['Fin', o.fechaFin, 'Servicio']]));
+    }
+    var fotos = (Array.isArray(o.fotos) ? o.fotos : []).filter(function(f){ return typeof f==='string' && f.indexOf('data:image')===0 || /^https?:/.test(f||''); });
+    if(!fotos.length && o.foto && typeof o.foto==='string') fotos = [o.foto];
+    d.fotos = fotos;
+    d.firma = (typeof o.firma==='string' && o.firma.indexOf('data:image')===0) ? o.firma : '';
+    return d;
+  }
+
+  function cargarLibs(){
+    function carga(src, ok){
+      return new Promise(function(res, rej){
+        if(ok()) return res();
+        var s=document.createElement('script'); s.src=src; s.onload=function(){ res(); };
+        s.onerror=function(){ rej(new Error('sin conexión para generar el PDF')); };
+        document.head.appendChild(s);
+      });
+    }
+    if(!document.getElementById('op-fuentes')){
+      var l=document.createElement('link'); l.id='op-fuentes'; l.rel='stylesheet';
+      l.href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap';
+      document.head.appendChild(l);
+    }
+    return carga('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function(){ return !!window.html2canvas; })
+      .then(function(){ return carga('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }); })
+      .then(function(){
+        var ps = ['400','500','600','700','800'].map(function(w){ return document.fonts ? document.fonts.load(w+' 12px "DM Sans"') : null; })
+          .concat([document.fonts ? document.fonts.load('400 12px "DM Mono"') : null, document.fonts ? document.fonts.load('500 12px "DM Mono"') : null]);
+        return Promise.race([Promise.all(ps), new Promise(function(r){ setTimeout(r, 4000); })]);
+      });
+  }
+  function esperarImgs(el){
+    return Promise.all(Array.prototype.map.call(el.querySelectorAll('img'), function(img){
+      if(img.complete && img.naturalWidth>0) return Promise.resolve();
+      return new Promise(function(r){ img.onload=r; img.onerror=r; setTimeout(r, 5000); });
+    }));
+  }
+
+  function construir(d){
+    var logo = (typeof _LOGO_MONTASA_B64!=='undefined') ? _LOGO_MONTASA_B64 : '';
+    var host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-10000px;top:0;width:'+W+'px;z-index:-1';
+    host.innerHTML = '<style>'+CSS+'</style>';
+    document.body.appendChild(host);
+    var paginas = [];
+    var pie = '<div class="op-pie"><div><b>Montasa Handling Co.</b></div><div class="mid">Documento generado por el sistema de gestión de Montasa Handling Co.</div><div><span class="op-mono" style="font-size:9.8px">'+esc(d.corr)+'</span> · Página <span class="pn"></span> de <span class="pt"></span></div></div>';
+    var hdr1 = '<div class="op-hdr"><img src="'+logo+'"><div class="op-der"><div class="op-kick">'+esc(d.kicker)+'</div><div class="op-tit">'+esc(d.titulo)+'</div><div class="op-num"><b>N.º</b>'+esc(d.corr)+'</div></div></div><div class="op-regla"></div>';
+    var hdr2 = function(k){ return '<div class="op-hdr2"><img src="'+logo+'"><div style="text-align:right"><div class="op-kick">'+k+'</div><div class="op-tit" style="font-size:17.3px">'+esc(d.titulo)+' · <span class="op-mono" style="font-size:16px">'+esc(d.corr)+'</span></div></div></div><div class="op-regla"></div>'; };
+    function nueva(cab){ var p=document.createElement('div'); p.className='op-page'; p.innerHTML=cab+pie; host.appendChild(p); paginas.push(p); return p; }
+    function meter(p, el){ p.insertBefore(el, p.querySelector('.op-pie')); }
+    function cabe(p){
+      var lim = p.querySelector('.op-pie').getBoundingClientRect().top - 8, max = 0;
+      Array.prototype.forEach.call(p.children, function(c){ if(!c.classList.contains('op-pie')) max = Math.max(max, c.getBoundingClientRect().bottom); });
+      return max <= lim;
+    }
+    function el(html){ var t=document.createElement('div'); t.innerHTML=html; return t.firstElementChild; }
+    var p = nueva(hdr1);
+    meter(p, el('<table class="op-meta"><tr>'+d.meta.map(function(m){ return '<td><div class="op-lbl">'+m[0]+'</div><div class="op-val">'+m[1]+'</div></td>'; }).join('')+'</tr></table>'));
+    d.secs.forEach(function(s, i){
+      var n = el('<div class="op-sec"><h2><i>'+(i+1)+'</i>'+s[0]+'</h2>'+s[1]+'</div>');
+      meter(p, n);
+      if(!cabe(p)){ n.remove(); p = nueva(hdr2('Continuación de la orden')); meter(p, n); }
+    });
+    var f = el('<div class="op-firma"><div><div class="z">'+(d.firma?'<img src="'+d.firma+'">':'')+'</div><div class="n">Recibido conforme</div></div></div>');
+    meter(p, f);
+    if(!cabe(p)){ f.remove(); p = nueva(hdr2('Continuación de la orden')); meter(p, f); }
+    if(d.fotos.length){
+      p = nueva(hdr2('Anexo fotográfico'));
+      meter(p, el('<div class="op-intro">Registro fotográfico tomado durante la ejecución de la orden. Total de fotografías: <b>'+d.fotos.length+'</b>.</div>'));
+      var g = el('<div class="op-fotos"></div>'); meter(p, g);
+      d.fotos.forEach(function(src, i){
+        var ft = el('<div class="op-foto"><div class="img"><img src="'+src+'"></div><div class="cap"><b>Fotografía '+(i+1)+'</b> de '+d.fotos.length+'</div></div>');
+        g.appendChild(ft);
+        if(!cabe(p)){ ft.remove(); p = nueva(hdr2('Anexo fotográfico (continuación)')); g = el('<div class="op-fotos"></div>'); meter(p, g); g.appendChild(ft); }
+      });
+    }
+    paginas.forEach(function(pg, i){ pg.querySelector('.pn').textContent = i+1; pg.querySelector('.pt').textContent = paginas.length; });
+    return { host:host, paginas:paginas };
+  }
+
+  async function entregar(blob, nombre){
+    var arch = nombre + '.pdf';
+    try{
+      var file = new File([blob], arch, { type:'application/pdf' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        await navigator.share({ files:[file], title:nombre });
+        if(typeof toast==='function') toast('📤 PDF compartido ✓');
+        return;
+      }
+    }catch(err){ if(err && err.name==='AbortError') return; }
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href=url; a.download=arch; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    if(typeof toast==='function') toast('📥 PDF descargado: '+arch);
+  }
+
+  function lista(tipo){
+    var db = BD();
+    if(tipo==='preventivo') return db.preventivos||[];
+    if(tipo==='correctivo') return db.correctivos||[];
+    if(tipo==='evaluacion') return db.evaluaciones||[];
+    if(tipo==='cortinas') return db.cortinas||[];
+    return db.logistica||[];
+  }
+  function conFotos(o){
+    return new Promise(function(res){
+      if(typeof _fotosPendientes==='function' && typeof _hidratarFotos==='function' && _fotosPendientes(o)){
+        var listo=false; var fin=function(){ if(!listo){ listo=true; res(); } };
+        _hidratarFotos(o, fin); setTimeout(fin, 12000);
+      } else res();
+    });
+  }
+
+  window.compartirPDFOrden = async function(tipo, id){
+    var host = null;
+    try{
+      var o = lista(tipo).find(function(x){ return x && x.id===id; });
+      if(!o){ if(typeof toast==='function') toast('Orden no encontrada', true); return; }
+      if(typeof toast==='function') toast('📄 Generando PDF…');
+      await cargarLibs();
+      await conFotos(o);
+      var d = spec(tipo, o);
+      var r = construir(d); host = r.host;
+      await esperarImgs(host);
+      var pdf = new window.jspdf.jsPDF({ unit:'pt', format:'letter', compress:true });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      for(var i=0;i<r.paginas.length;i++){
+        var c = await window.html2canvas(r.paginas[i], { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false, width:W, height:H, windowWidth:W });
+        if(i>0) pdf.addPage();
+        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pw, ph, undefined, 'FAST');
+      }
+      host.remove(); host = null;
+      await entregar(pdf.output('blob'), (d.corr || 'orden').replace(/[^\w\-]+/g,'_'));
+    }catch(err){
+      if(host) host.remove();
+      console.error('PDF de la orden:', err);
+      if(typeof toast==='function') toast('No se pudo generar el PDF: '+(err && err.message || err), true);
+    }
+  };
+  // Para pruebas
+  window._opdfSpec = spec; window._opdfConstruir = construir;
+})();
+
+</script>
 </body>
 </html>

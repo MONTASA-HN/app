@@ -1582,10 +1582,12 @@ function renderOrdenesLog(){
           </div>
           ${(o.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">📷 Cámara${(o.fotos||[]).length>0?' ('+((o.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
         </div>
+        <!-- Cliente de la orden (renta, entrega, retiro, apoyo_mantenimiento) -->
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?_cliCampoHTML(o,"actualizarLog('"+o.id+"','clienteOrden',this.value.trim())"):''}
         <!-- Firma — entrega, retiro y renta -->
         ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ Firma del cliente</div>
+          <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ ${_firmaTituloTxt(o)}</div>
           <canvas id="firma-log-${o.id}" class="firma-canvas" width="600" height="160"
             ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)"
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
@@ -2296,7 +2298,9 @@ function cerrarOrdenLog(id){
   const firma = firmaCanvas || o.firma || '';
   // Firma solo requerida en entrega, retiro y renta (no en apoyo_mantenimiento ni atencion_compras)
   const requiereFirma = o.tipoLogistica==='entrega' || o.tipoLogistica==='retiro' || o.tipoLogistica==='renta';
-  if(!esCancelado && requiereFirma && !firma) faltantes.push('Firma digital del cliente');
+  if(!esCancelado && requiereFirma && !firma) faltantes.push('Firma (recibido conforme)');
+  const _aplicaCli = o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento';
+  if(!esCancelado && _aplicaCli && _cliOrdenAlCerrar(o)==='') faltantes.push('🏢 Cliente');
   if(faltantes.length){ alert('No se puede cerrar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   if(!esCancelado){
     const errFecha = validarFechasOrden(o.fechaInicio, o.fechaFin);
@@ -2691,7 +2695,7 @@ function _firmaOverlayAbrir(dest){
   if(esPC){
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99997;display:flex;align-items:center;justify-content:center;padding:12px';
     ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:720px" onclick="event.stopPropagation()">'
-      + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">✍️ Firma del cliente</div>'
+      + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">✍️ Firma — Recibido conforme</div>'
       + '<canvas id="firma-ov-canvas" style="width:100%;height:auto;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
       + '<div style="display:flex;gap:8px;margin-top:10px">' + BTNS + '</div>'
       + '</div>';
@@ -2701,7 +2705,7 @@ function _firmaOverlayAbrir(dest){
     const h = rotar ? window.innerWidth : window.innerHeight;
     ov.innerHTML = '<div style="position:fixed;top:50%;left:50%;width:'+w+'px;height:'+h+'px;transform:translate(-50%,-50%)'+(rotar?' rotate(90deg)':'')+';background:#fff;display:flex;flex-direction:column;padding:10px;box-sizing:border-box">'
       + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      + '<div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✍️ Firma del cliente</div>'
+      + '<div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✍️ Firma — Recibido conforme</div>'
       + BTNS
       + '</div>'
       + '<canvas id="firma-ov-canvas" style="flex:1;min-height:0;width:100%;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
@@ -4149,5 +4153,47 @@ function eliminarFotoLog(id, idx){
 
 <script src="autocorrector.js"></script>
 <script>Autocorrector.vigilar();</script>
+<script>
+// ══ CLIENTE DE LA ORDEN Y QUIÉN FIRMA ════════════════════════════════════════
+// · «Cliente» (o.clienteOrden): se llena a mano en la orden y es OBLIGATORIO para
+//   cerrarla. Si la orden ya traía el nombre (equipo de cliente, cortinas) sale
+//   escrito y se puede corregir. Es el dato que usa el PDF de la orden.
+// · Firma «Recibido conforme»: la da el CLIENTE, salvo cuando el equipo es PROPIO
+//   y el trabajo es EN EL PLANTEL: ahí firma el supervisor de mantenimiento (en el
+//   mismo recuadro, en el celular del técnico al cerrar).
+function _cliOrdenValor(o){
+  return String((o && (o.clienteOrden || o.clienteNombre || o.cliente)) || '').trim();
+}
+function _firmaEsSupervisor(o){
+  if(!o) return false;
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+  var propio = !!eq && !eq.esEquipoCliente && o.equipoId!=='__cliente__';
+  var plantel = o.tipoLogistica ? ((o.ubicacionLog||'fuera')==='plantel') : ((o.ubicacion||'campo')==='plantel');
+  return propio && plantel;
+}
+function _firmaTituloTxt(o){
+  return _firmaEsSupervisor(o) ? 'Firma del supervisor de mantenimiento' : 'Firma del cliente';
+}
+function _cliEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+// Campo «Cliente» para la tarjeta de una orden. onchangeJS: código JS que guarda
+// el valor (usa this.value), p. ej. "actualizarCampoOrden('prev','ID','clienteOrden',this.value.trim())"
+function _cliCampoHTML(o, onchangeJS){
+  if(!o) return '';
+  return '<div class="form-group" style="margin-bottom:10px"><label>🏢 Cliente</label>'
+    + '<input id="cli-orden-'+o.id+'" type="text" value="'+_cliEsc(_cliOrdenValor(o))+'" placeholder="Nombre del cliente" '
+    + 'onclick="event.stopPropagation()" onchange="event.stopPropagation();'+_cliEsc(onchangeJS)+'">'
+    + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">Obligatorio para cerrar la orden. Sale en el PDF.</div></div>';
+}
+// Al cerrar: toma lo que esté escrito en pantalla (aunque no se haya disparado
+// el onchange) y lo deja en la orden. Devuelve el cliente final ('' si falta).
+function _cliOrdenAlCerrar(o){
+  if(!o) return '';
+  var inp = document.getElementById('cli-orden-'+o.id);
+  if(inp && inp.value.trim()) o.clienteOrden = inp.value.trim();
+  var v = _cliOrdenValor(o);
+  if(v) o.clienteOrden = v;
+  return v;
+}
+</script>
 </body>
 </html>
