@@ -27,6 +27,11 @@ Los bugs y comportamientos raros que aparecen aquí están explicados en **`TRAM
 
 ## 1. De dónde sale el dato al abrir la app
 
+**Antes que todo**, el bloque «ACTUALIZACIÓN AUTOMÁTICA DE LA APP» (líneas 5–56 de las 10
+apps) revisa `version.json`; si esta copia de la app es vieja y el usuario no ha tocado
+nada, recarga con `?v=<versión>`. Se repite cada vez que la app vuelve a primer plano
+(`visibilitychange`, `pageshow`). Detalle en CLAUDE.md §4.
+
 Hay tres fuentes: **listas escritas dentro del HTML** (`EQUIPOS_INICIALES`,
 `VENDIDOS_INICIALES`), **caché del teléfono** (localStorage) y **Firebase**.
 
@@ -328,6 +333,10 @@ después `saveDB`. Nodo `montasa/horometros`.
 ## 8. Archivos tocados por cambio (registro)
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
+
+- 2026-09-29 — Actualización automática: bloque nuevo al inicio de MTG, MTS, MTT, MTL, MTC,
+  MHG, MHS, MHT, MHL, MHL-P (**corre ~52 líneas hacia abajo** todo lo citado en este archivo,
+  que es de `9a4619e`). Nuevos: `version.json`, `dev/sellar_version.js`.
 
 - 2026-09-29 (`9a4619e`) — PDF de órdenes (MTG, MTS, MTC, MHG, MHS) y campo Cliente
   obligatorio al cerrar (MTT, MHT, MTL, MTG, MTS, MHG, MHS). No cambian el flujo de

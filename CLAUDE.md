@@ -52,7 +52,9 @@ Después, `git log --oneline -10` para ver qué entró y leer lo que no conozcas
 - **Flujo git (desde 2026-09-29, pedido por Rodrigo y Miguel):**
   1. `git pull` **al empezar cada sesión** y otra vez antes de tocar cualquier archivo.
   2. Cambios sobre la versión del repo, nunca sobre copias locales viejas.
-  3. `node dev/check_syntax.js` → debe salir todo en ✓ (§7).
+  3. `node dev/sellar_version.js` y luego `node dev/check_syntax.js` → todo en ✓ (§7).
+     Sin sellar, los teléfonos no se enteran de que hay versión nueva (§4, «Actualización
+     automática»); `check_syntax` lo detecta y sale en ✗.
   4. Probar (§7).
   5. `git commit` **local**, con mensaje en español que diga **qué** y **por qué**.
   6. **`git push` SOLO con permiso explícito de Miguel, cada vez.** Él quiere revisar
@@ -74,8 +76,8 @@ Después, `git log --oneline -10` para ver qué entró y leer lo que no conozcas
   `git show BASE:ARCHIVO > base; git merge-file -p copia base ARCHIVO_actual > resultado`
   (normalizar antes los finales de línea: el repo guarda LF; las descargas de
   Windows vienen en CRLF → `tr -d '\r'`).
-- Tras publicar, en los teléfonos hay que **cerrar y reabrir la PWA** para que
-  tome la versión nueva.
+- Tras publicar, **los teléfonos se actualizan solos** al abrir la app o volver a ella
+  (bloque «ACTUALIZACIÓN AUTOMÁTICA DE LA APP», §4), siempre que se haya sellado la versión.
 - Al hacer commit o pedir push, decirle en 1–2 frases qué cambió y qué debe
   probar; no recitar cada paso.
 
@@ -213,6 +215,19 @@ Supervisiones**. No asumir que es el mismo.
   `actualizarCampoOrden('prev'|'corr', id, campo, valor)` (acepta cualquier campo);
   Logística `actualizarLog(id, campo, valor)`; evaluaciones `actualizarEvaluacion`;
   cortinas (MONHACO) `actualizarCortina` + `_syncCortina`.
+- **Actualización automática** (desde 2026-09-29, pedido de Miguel: el iPhone seguía con la
+  versión vieja). Bloque `// ══ ACTUALIZACIÓN AUTOMÁTICA DE LA APP` justo después de
+  `<meta charset>` en las 10 apps vivas (no en `index.html` ni en la app vieja), **idéntico**
+  en todas salvo `APP_VERSION`. Al abrir y al volver a la app pide `version.json` sin caché;
+  si la versión de ese archivo es distinta de su `APP_VERSION`, hace
+  `location.replace(archivo?v=<versión>)` (URL nueva = el teléfono no puede usar la copia
+  vieja). **No recarga si en esa sesión se tocó un campo, la firma (canvas) o la cámara**:
+  en iPhone abrir la cámara o WhatsApp dispara "volver a la app" y recargar borraría lo que
+  se estaba llenando; espera a la próxima apertura. Candado anti-ciclo: no reintenta la misma
+  versión antes de 5 min (`localStorage _actualizar_<archivo>`). `APP_VERSION` y
+  `version.json` los escribe `node dev/sellar_version.js` (huella sha1 del contenido, sin
+  finales de línea); nunca a mano. No cubre `autocorrector.js` (se carga aparte y el
+  teléfono puede tener la copia vieja un rato).
 - **Mapas**: Leaflet 1.9.4 (cdnjs) + teselas de OpenStreetMap, sin API key.
 - **PIN**: `solicitarPINAccion(callback, titulo, subtitulo)`. Solo Gerencia MT,
   Gerencia MONHACO y Logística MT tienen teclado real (`.pin-key`); en las
@@ -321,9 +336,10 @@ corrige aquí.
 
 ## 7. Cómo probar antes de commit
 
-1. `node dev/check_syntax.js` (desde la raíz del repo) → todo ✓. Un error de
-   sintaxis deja la app en blanco para todos. El script compila cada `<script>`
-   inline de los `.html` y `autocorrector.js`.
+1. `node dev/sellar_version.js` y después `node dev/check_syntax.js` (desde la raíz del
+   repo) → todo ✓. Un error de sintaxis deja la app en blanco para todos. `check_syntax`
+   compila cada `<script>` inline de los `.html` y `autocorrector.js`, y revisa que las
+   versiones estén selladas.
 2. **Playwright** con Chromium (no está instalado en la PC de Miguel todavía; se
    instala fuera del repo, p. ej. en una carpeta temporal, para no meter npm en la app).
    Patrón que funciona:
@@ -507,3 +523,5 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   A pedido de Rodrigo: esta guía reemplaza la suya (se integraron sus reglas),
   `git pull` al empezar cada sesión, y **push solo con permiso de Miguel**. Se
   crean `FLUJO.md` y `TRAMPAS.md`.
+- 2026-09-29 — Actualización automática de las apps en los teléfonos (`version.json` +
+  `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».

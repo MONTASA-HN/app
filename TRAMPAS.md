@@ -312,6 +312,23 @@ Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
 
 ---
 
+## T18. La primera vez, los teléfonos con la versión vieja no se actualizan solos
+
+### Qué pasa
+La actualización automática vive dentro de la app. Un teléfono que sigue con una copia
+**anterior** a ese cambio no tiene el código que lo actualiza.
+### Por qué pasa
+El iPhone guarda su propia copia de la app instalada; el bloque se agregó el 2026-09-29.
+### Cómo se nota desde afuera
+Un teléfono sigue mostrando cosas viejas (p. ej. «Compartir imagen» en vez de PDF).
+### Qué hacer
+Una sola vez por teléfono: cerrar la app por completo y abrirla; si sigue igual, borrar el
+ícono y volver a agregarla desde Safari (`montasa-hn.github.io/app/`). Desde ahí se
+actualiza sola. También: si alguien sube un `.html` sin correr `dev/sellar_version.js`, los
+teléfonos no se enteran de ese cambio (no rompe nada, solo no avisa).
+
+---
+
 ## Otras cosas raras (menores)
 
 - **IDs repetidos en MTG**: `prev-cliente-fields` (730 y 1151), `corr-falla`, `corr-ublink`,
