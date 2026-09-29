@@ -2,6 +2,58 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<script>
+// ══ ACTUALIZACIÓN AUTOMÁTICA DE LA APP ════════════════════════════════════════
+// El iPhone guarda su propia copia de la app instalada y a veces sigue mostrando la
+// versión vieja aunque ya se publicó una nueva. Al abrir la app y al volver a ella,
+// se compara APP_VERSION con version.json (pedido sin caché); si hay una más nueva,
+// la app se recarga sola con ?v=<versión> para obligar al teléfono a bajarla.
+// NUNCA recarga si el usuario ya tocó un campo, la firma o la cámara en esta sesión:
+// abrir la cámara o salir a WhatsApp también cuenta como "volver a la app", y
+// recargar ahí borraría lo que estaba llenando. En ese caso la actualización espera
+// a la próxima vez que se abra la app.
+// APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
+(function(){
+  var APP_VERSION='9c305cbb0524';
+  if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
+  var archivo = location.pathname.split('/').pop();
+  if(!archivo) return;
+  var tocado = false;
+  function marcar(e){
+    var t = e.target, n = t && t.tagName;
+    if(n==='INPUT' || n==='TEXTAREA' || n==='SELECT' || n==='CANVAS') tocado = true;
+  }
+  document.addEventListener('focusin', marcar, true);
+  document.addEventListener('pointerdown', marcar, true);
+  document.addEventListener('touchstart', marcar, {capture:true, passive:true});
+  document.addEventListener('input', function(){ tocado = true; }, true);
+  var revisando = false;
+  function revisar(){
+    if(revisando || tocado) return;
+    revisando = true;
+    fetch('version.json?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(v){
+        revisando = false;
+        var nueva = v && v[archivo];
+        if(!nueva || nueva === APP_VERSION || tocado) return;
+        // Si ya se intentó esta misma versión hace poco y seguimos en la vieja (GitHub
+        // aún no la termina de publicar), no insistir: evita recargas en cadena.
+        var k = '_actualizar_' + archivo, antes = null;
+        try{ antes = JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){}
+        if(antes && antes.v === nueva && Date.now() - antes.ts < 5*60*1000) return;
+        try{ localStorage.setItem(k, JSON.stringify({v:nueva, ts:Date.now()})); }catch(e){}
+        location.replace(location.pathname + '?v=' + encodeURIComponent(nueva) + location.hash);
+      })
+      .catch(function(){ revisando = false; });
+  }
+  revisar();
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') revisar();
+  });
+  window.addEventListener('pageshow', function(e){ if(e.persisted) revisar(); });
+})();
+</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
