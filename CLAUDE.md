@@ -228,6 +228,10 @@ Supervisiones**. No asumir que es el mismo.
   `version.json` los escribe `node dev/sellar_version.js` (huella sha1 del contenido, sin
   finales de línea); nunca a mano. No cubre `autocorrector.js` (se carga aparte y el
   teléfono puede tener la copia vieja un rato).
+- **Mapa de la flota y el menú ☰** (2026-09-29): `#mapa-cont` lleva `position:relative;z-index:0;isolation:isolate`
+  porque Leaflet usa z-index 400–1000 y tapaba el botón ☰ (120) y su menú (121). En celular
+  (`L.Browser.mobile`) el mapa se crea con `dragging:false`: un dedo baja la página, dos dedos
+  mueven/acercan el mapa (pellizco de Leaflet). Mismo cambio en MTG y MHG.
 - **Mapas**: Leaflet 1.9.4 (cdnjs) + teselas de OpenStreetMap, sin API key.
 - **PIN**: `solicitarPINAccion(callback, titulo, subtitulo)`. Solo Gerencia MT,
   Gerencia MONHACO y Logística MT tienen teclado real (`.pin-key`); en las
