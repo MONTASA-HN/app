@@ -328,8 +328,9 @@ Supervisiones**. No asumir que es el mismo.
   plantel (no a revisiones/evaluaciones). **No sale en el PDF** (decisión de Miguel:
   traducir a dirección exigía una clave de Google Maps de pago y la descartó; tampoco
   quiso OpenStreetMap).
-  Al cerrar un retiro, el link del equipo pasa al taller SPS
-  (`_GPS_TALLER_SPS`).
+  Al cerrar una **renta** o un **retiro fuera del plantel** (Logística MT, `cerrarOrdenLog`), la ficha del
+  equipo (y del 2.º equipo y la grúa de la renta) deja el link del cliente y pasa al punto del taller
+  (`_GPS_TALLER_SPS`). Antes solo el retiro lo hacía y la renta dejaba el link del cliente (arreglado 2026-09-30).
 - **Renta indefinida** (desde 2026-09-30, pedido de Miguel): rentas sin fecha de fin que el cliente puede cancelar
   cuando quiera. En la solicitud de renta/entrega (MTG y MTS) la casilla `sol-renta-indef` / `sol-renta-indef2`
   desactiva los días; la orden guarda `rentaIndefinida:true`, `diasRenta:null` y el inicio si se puso. No hay
@@ -387,7 +388,8 @@ Supervisiones**. No asumir que es el mismo.
   (Jorge sin teléfono).
 - Gestores de viáticos: ver `GESTORES_VIATICOS` (incluye a Miguel Antonio
   Orellana Lopez).
-- Taller SPS: `https://maps.app.goo.gl/iXbWDRPh7HG77Ski6`.
+- Taller MONTASA en Las Palmas, SPS: `https://www.google.com/maps?q=15.4843912,-88.0203564` (punto tomado por
+  Miguel en el taller, 2026-09-30; antes era un link corto sin coordenadas que el mapa no leía).
 
 Esto cambia seguido: si no coincide con el código, **manda el código**, y se
 corrige aquí.
@@ -601,6 +603,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Cerrar renta o retiro deja el equipo con el punto del taller de Las Palmas (con coordenadas).
+  En la base se puso ese punto a E-33, MT-77, C-39, CM-35, GR-01, MTV-04 y PATRULLA (no a máquinas de clientes).
 - 2026-09-30 — Renta indefinida en la solicitud (sin días ni aviso de vencimiento). Regularizadas 17 rentas viejas
   (entregas cerradas LG-0235…0251), MT-115/MT-119 → DEMO/PRESTAMO, MT-122 → EN MANTENIMIENTO (MH-0179 en espera).
   Se regularizaron E-45, MT-132, MT-67 (correctivos MH-0176/77/78 en espera de repuestos) y E-15 → EN RENTA.

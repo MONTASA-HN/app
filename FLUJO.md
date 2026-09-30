@@ -357,8 +357,8 @@ después `saveDB`. Nodo `montasa/horometros`.
   (`share.google/…`, `maps.app.goo.gl/…`) no traen coordenadas** y el equipo cae en la lista
   «sin ubicación» (no se pueden resolver desde el navegador: CORS).
 - Quién escribe `ubicacionLink` (+ `ubicacionTs`): `_setUbLinkEquipo` (MTG 2190) al crear
-  renta/entrega con link (9068/9072), botón 📍 de las órdenes, cierre de retiro → taller SPS
-  (`_GPS_TALLER_SPS`). Lo borra `_gpsFichaBorrar` (MTG 7772, «🗑 Quitar ubicación»).
+  renta/entrega con link (9068/9072), botón 📍 de las órdenes, cierre de renta o de retiro fuera del
+  plantel → taller de Las Palmas (`_GPS_TALLER_SPS`, con coordenadas; en la renta también 2.º equipo y grúa). Lo borra `_gpsFichaBorrar` (MTG 7772, «🗑 Quitar ubicación»).
 - **Renta indefinida (desde 2026-09-30):** en la solicitud de renta/entrega se puede marcar «♾️ Renta indefinida» en
   vez de días: la orden queda con `rentaIndefinida:true`, sin fecha de fin y sin aviso de vencimiento.
 - **Desde 2026-09-30:** los campos de link solo aceptan coordenadas (vigilante `_ubLinkRevisar`), y EN RENTA a

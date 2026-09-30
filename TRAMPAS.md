@@ -410,6 +410,13 @@ Exigir orden (o PIN + motivo) para EN RENTA y avisar al pegar un link corto. Dec
 
 ---
 
+## T22. Al terminar una renta el equipo seguía con el link del cliente
+
+**✅ Arreglado (2026-09-30):** `cerrarOrdenLog` (Logística MT) solo cambiaba el link al cerrar un retiro, y
+además usaba un link corto sin coordenadas. Ahora renta y retiro fuera del plantel dejan el punto del taller de
+Las Palmas con coordenadas. Ojo: entre los «DISPONIBLE» hay **máquinas de clientes** (código = modelo o serie,
+cliente = la empresa): a esas nunca se les pone el punto del taller.
+
 ## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
 
 ### Qué pasa

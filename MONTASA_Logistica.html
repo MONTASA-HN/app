@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='26878c5a38c2';
+  var APP_VERSION='cb3fa2db8aba';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1766,7 +1766,9 @@ function _gpsCompartirLink(link){
       .catch(function(){ prompt('Copia el link de la ubicación:', link); });
   }catch(e){ prompt('Copia el link de la ubicación:', link); }
 }
-const _GPS_TALLER_SPS = 'https://maps.app.goo.gl/iXbWDRPh7HG77Ski6'; // Taller MONTASA, San Pedro Sula
+// Taller MONTASA en Las Palmas, San Pedro Sula (punto tomado por Miguel en el taller, 2026-09-30).
+// Con coordenadas para que el mapa de la flota lo pueda ubicar (el link corto de antes no las traía).
+const _GPS_TALLER_SPS = 'https://www.google.com/maps?q=15.4843912,-88.0203564';
 function _gpsCapturar(cb){
   if(!navigator.geolocation){ toast('Este dispositivo no tiene GPS disponible', true); return; }
   toast('📍 Obteniendo ubicación…');
@@ -2744,10 +2746,12 @@ function cerrarOrdenLog(id){
     if(o.equipoId2) _cambiarEstadoEquipo(o.equipoId2, 'DISPONIBLE');
     if(_rentaConGrua(o)) _cambiarEstadoEquipo(o.vehiculoRentaId, 'DISPONIBLE');
   }
-  // Retiro FUERA del plantel: el equipo vuelve al taller → su ficha queda con el link del taller SPS
-  if(o.tipoLogistica === 'retiro' && (o.ubicacionLog||'fuera')==='fuera' && !esCancelado){
+  // Renta terminada o retiro FUERA del plantel: el equipo vuelve al taller → su ficha deja el link del
+  // cliente y queda con el punto del taller (también el 2.º equipo y la grúa de la renta).
+  if(!esCancelado && (o.tipoLogistica === 'renta' || (o.tipoLogistica === 'retiro' && (o.ubicacionLog||'fuera')==='fuera'))){
     _gpsFichaLink(o.equipoId, _GPS_TALLER_SPS);
     if(o.equipoId2) _gpsFichaLink(o.equipoId2, _GPS_TALLER_SPS);
+    if(o.tipoLogistica === 'renta' && _rentaConGrua(o)) _gpsFichaLink(o.vehiculoRentaId, _GPS_TALLER_SPS);
   }
   // Update horometro in equipos
   const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
