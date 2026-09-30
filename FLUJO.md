@@ -401,6 +401,7 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Íconos de 5 manifiestos → `icons/icon-192.png`/`icon-512.png` (antes `logo.png`, que no existe).
 - 2026-09-30 — Foto del reporte (MTG, MTT, MHG, MHT): nuevo selector `<tipo>-foto-input-cam`; la foto sigue guardándose
   igual (`getFotoBase64('<tipo>-foto-input')`). No cambia datos.
 - 2026-09-30 — Manifiestos con `id`/`scope` propios por app; `prueba_camara.html` nuevo. No cambia datos.

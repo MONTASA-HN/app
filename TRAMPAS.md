@@ -465,6 +465,10 @@ facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o list
 **Instalar dos apps — ✅ arreglado (2026-09-30):** los 9 manifiestos compartían `scope:"/app/"` y no tenían `id`. Sin
 servicios de Google el teléfono no crea una app propia por manifiesto y trataba a todas como la misma. Ahora cada una
 tiene `id`/`start_url`/`scope` = su propio archivo. Quien ya tenía una instalada debe quitarla y volver a instalarla.
+**Se instalaba como «acceso directo» — ✅ arreglado (2026-09-30):** los manifiestos de Supervisión MT y de las 4 apps
+MONHACO usaban `/app/logo.png` como ícono, y ese archivo **no existe** (404). Sin ícono válido Chrome no la deja
+instalar como app y crea un acceso directo. Ahora usan `icons/icon-192.png` e `icons/icon-512.png` como Técnicos.
+Ojo: el mismo `logo.png` aparece en encabezados de algunos documentos (se oculta solo con `onerror`).
 **Fotos/cámara — ✅ arreglado (2026-09-30):** la prueba en un Huawei dio OK en las 5 formas, así que el teléfono sí
 entrega fotos. Lo que fallaba era la **foto del reporte** (preventivo/correctivo) en MTG, MTT, MHG, MHT: «Toca para
 subir foto» no estaba ligado a ningún selector, y 📷/🖼️ abrían el selector con `i.click()` desde código (`_fotoDesde`),
