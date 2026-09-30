@@ -460,6 +460,15 @@ Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
 `renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
 facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
 
+## T27. Huawei / Honor: no se pueden instalar dos apps, y fotos/cámara que no funcionan
+
+**Instalar dos apps — ✅ arreglado (2026-09-30):** los 9 manifiestos compartían `scope:"/app/"` y no tenían `id`. Sin
+servicios de Google el teléfono no crea una app propia por manifiesto y trataba a todas como la misma. Ahora cada una
+tiene `id`/`start_url`/`scope` = su propio archivo. Quien ya tenía una instalada debe quitarla y volver a instalarla.
+**Fotos/cámara — en diagnóstico:** los botones usan `<input type=file>` escondido con `display:none` dentro de un
+`<label>` (y `capture` para cámara). `prueba_camara.html` prueba 5 formas (normal, capture, display:none, semi-oculto y
+`getUserMedia`) para saber cuál sirve en esos teléfonos antes de cambiar las apps.
+
 ## T26. Km y horómetros de las órdenes que no llegaban a la ficha
 
 **✅ Arreglado (2026-09-30):** ver CLAUDE.md §5 «Lecturas de las órdenes a la ficha». Cómo era:

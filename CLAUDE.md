@@ -287,6 +287,10 @@ Supervisiones**. No asumir que es el mismo.
   vehículo del viaje (`equipoCompra`). Cambiar un campo de la orden ya no toca la ficha.
 - **Fecha del vale de alimentación = fecha FINAL de la orden** (`fechaFin`; confirmado por Miguel, 2026-09-30).
   Si no hay, usa `fechaCierre`, `fechaInicio`, `fecha`. Se arma con año/mes/día locales (ver TRAMPAS T24).
+- **Cada app es una app aparte al instalarla** (2026-09-30): cada `manifest*.json` tiene su propio `id`, `start_url` y
+  `scope` = `/app/<archivo>.html`. Antes todas compartían `scope:/app/` sin `id` y en Huawei/Honor (sin servicios de
+  Google) instalar una reemplazaba a la otra. Abrir desde una app el enlace de otra la abre en el navegador (normal).
+  `prueba_camara.html`: página de diagnóstico de cámara/fotos (no toca la base).
 - **Nombre de la plataforma: «Nexo»** (decisión de Miguel, 2026-09-30): `<title>` y `manifest*.json` name =
   «Nexo <Área> MT|MH» (p. ej. «Nexo Gerencia MT»); debajo del ícono (`apple-mobile-web-app-title` y short_name)
   «Nexo Ger. MT», «Nexo Téc. MH»… Los logos de MONTASA / MONHACO se quedan. En iPhone el nombre del ícono solo
@@ -629,6 +633,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Huawei/Honor: cada app con identidad propia (manifiestos) y página prueba_camara.html (T27).
 - 2026-09-30 — Las apps se llaman «Nexo» + área + empresa (título, manifiestos y nombre del ícono).
 - 2026-09-30 — Viáticos: botón Imprimir en solicitud y liquidación. Fichas: 15 horómetros/km corregidos en la base.
 - 2026-09-30 — Auditoría km/horómetros: las lecturas llegan a la ficha al cerrar en todas las apps, sin bajar (T26).
