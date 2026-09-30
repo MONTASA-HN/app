@@ -465,7 +465,13 @@ facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o list
 **Instalar dos apps — ✅ arreglado (2026-09-30):** los 9 manifiestos compartían `scope:"/app/"` y no tenían `id`. Sin
 servicios de Google el teléfono no crea una app propia por manifiesto y trataba a todas como la misma. Ahora cada una
 tiene `id`/`start_url`/`scope` = su propio archivo. Quien ya tenía una instalada debe quitarla y volver a instalarla.
-**Fotos/cámara — en diagnóstico:** los botones usan `<input type=file>` escondido con `display:none` dentro de un
+**Fotos/cámara — ✅ arreglado (2026-09-30):** la prueba en un Huawei dio OK en las 5 formas, así que el teléfono sí
+entrega fotos. Lo que fallaba era la **foto del reporte** (preventivo/correctivo) en MTG, MTT, MHG, MHT: «Toca para
+subir foto» no estaba ligado a ningún selector, y 📷/🖼️ abrían el selector con `i.click()` desde código (`_fotoDesde`),
+que esos teléfonos bloquean. Ahora son `<label for>` ligados a dos selectores reales: `<tipo>-foto-input` (galería) y
+`<tipo>-foto-input-cam` (con capture), que pasa su foto al primero con `_fotoPasar` (DataTransfer). **No usar
+`input.click()` para abrir la cámara o la galería.**
+Antes (diagnóstico): los botones usan `<input type=file>` escondido con `display:none` dentro de un
 `<label>` (y `capture` para cámara). `prueba_camara.html` prueba 5 formas (normal, capture, display:none, semi-oculto y
 `getUserMedia`) para saber cuál sirve en esos teléfonos antes de cambiar las apps.
 
