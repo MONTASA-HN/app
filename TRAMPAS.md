@@ -392,6 +392,10 @@ recordar que el tablero de flota y el mundo isométrico leen la base.
 `Documents\Rentas_sin_orden_para_llenar_2026-09-30.xlsx` (fuera del repo) para que Miguel las complete y se
 regularicen. Lo de abajo describe cómo era.
 
+**✅ Regularizado (2026-09-30):** con la hoja de Miguel se crearon entregas cerradas LG-0235…LG-0251 (renta
+indefinida) para las rentas que siguen; MT-115/MT-119 pasaron a DEMO/PRESTAMO y MT-122 a EN MANTENIMIENTO. Solo
+E-10 queda EN RENTA sin orden de entrega (tiene su retiro LG-0234 abierto; Miguel pidió no tocarlo).
+
 ### Qué pasa
 La ficha deja poner EN RENTA y escribir el cliente a mano, sin orden de entrega/renta; y se aceptan
 links cortos de Google sin coordenadas. El equipo queda «en renta» sin ubicación, fecha ni días.

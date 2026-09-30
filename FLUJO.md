@@ -359,6 +359,8 @@ después `saveDB`. Nodo `montasa/horometros`.
 - Quién escribe `ubicacionLink` (+ `ubicacionTs`): `_setUbLinkEquipo` (MTG 2190) al crear
   renta/entrega con link (9068/9072), botón 📍 de las órdenes, cierre de retiro → taller SPS
   (`_GPS_TALLER_SPS`). Lo borra `_gpsFichaBorrar` (MTG 7772, «🗑 Quitar ubicación»).
+- **Renta indefinida (desde 2026-09-30):** en la solicitud de renta/entrega se puede marcar «♾️ Renta indefinida» en
+  vez de días: la orden queda con `rentaIndefinida:true`, sin fecha de fin y sin aviso de vencimiento.
 - **Desde 2026-09-30:** los campos de link solo aceptan coordenadas (vigilante `_ubLinkRevisar`), y EN RENTA a
   mano en la ficha pide cliente y motivo (`_rentaManualPedir` → `eq.rentaManual`).
 - **La ficha permite cambiar estado y cliente a mano** (`guardarDesdeModal`, MTG 4456; MTC 1031)

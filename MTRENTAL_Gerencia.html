@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='115f79c289c9';
+  var APP_VERSION='359adc3d0585';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1594,6 +1594,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div id="sol-diasrenta-wrap" class="form-group" style="display:none">
         <label>⏱ Renta — inicio y días (calendario) — opcional</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;font-weight:600"><input type="checkbox" id="sol-renta-indef" onchange="_rentaIndefToggle('')" style="width:auto;margin:0"> ♾️ Renta indefinida (sin fecha de fin; el cliente puede cancelar cuando quiera)</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><div style="font-size:11px;color:#777;margin-bottom:3px">Inicio de la renta</div><input id="sol-iniciorenta" type="date"></div>
           <div><div style="font-size:11px;color:#777;margin-bottom:3px">Días de renta</div><input id="sol-diasrenta" type="number" min="1" inputmode="numeric" placeholder="Ej: 30"></div>
@@ -2016,6 +2017,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       </div>
       <div id="sol-diasrenta-wrap2" class="form-group" style="display:none">
         <label>⏱ Renta — inicio y días (calendario) — opcional</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;font-weight:600"><input type="checkbox" id="sol-renta-indef2" onchange="_rentaIndefToggle('2')" style="width:auto;margin:0"> ♾️ Renta indefinida (sin fecha de fin; el cliente puede cancelar cuando quiera)</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><div style="font-size:11px;color:#777;margin-bottom:3px">Inicio de la renta</div><input id="sol-iniciorenta2" type="date"></div>
           <div><div style="font-size:11px;color:#777;margin-bottom:3px">Días de renta</div><input id="sol-diasrenta2" type="number" min="1" inputmode="numeric" placeholder="Ej: 30"></div>
@@ -6884,6 +6886,10 @@ function _rentaVenceDe(o){
 }
 function _rentaDiasHTML(o){
   if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
+  if(o.rentaIndefinida && !(parseInt(o.diasRenta)>0)){
+    const _iRi = _fechaLocalNR(o.inicioRenta);
+    return '<div style="background:#eef4fb;border:1px solid #c9d9ef;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#1f3864">♾️ <b>Renta indefinida</b> · sin fecha de fin'+(_iRi?' · desde el <b>'+_fmtNR(_iRi)+'</b>':'')+'</div>';
+  }
   const n = parseInt(o.diasRenta)||0;
   const iniR = _fechaLocalNR(o.inicioRenta);
   const v = _rentaVenceDe(o);
@@ -9368,6 +9374,21 @@ function _gruaLimpiar(){
   ['','2'].forEach(function(suf){ var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
     if(c) c.checked = false; if(s){ s.value = ''; s.style.display = 'none'; } });
 }
+// ── RENTA INDEFINIDA (2026-09-30, pedido de Miguel) ─────────────────────────
+// Rentas sin fecha de fin (el cliente puede cancelar cuando quiera): la orden guarda
+// rentaIndefinida=true y no lleva días, así no hay aviso de vencimiento. El inicio es opcional.
+function _rentaIndefToggle(suf){
+  var c = document.getElementById('sol-renta-indef'+suf), d = document.getElementById('sol-diasrenta'+suf);
+  if(!c || !d) return;
+  if(c.checked){ d.value = ''; d.disabled = true; d.placeholder = 'Indefinida'; } else { d.disabled = false; d.placeholder = 'Ej: 30'; }
+}
+function _leerRentaIndef(){
+  return ['','2'].some(function(suf){ var w = document.getElementById('sol-diasrenta-wrap'+suf), c = document.getElementById('sol-renta-indef'+suf);
+    return !!(w && w.offsetParent!==null && c && c.checked); });
+}
+function _rentaIndefLimpiar(){
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-renta-indef'+suf); if(c){ c.checked = false; _rentaIndefToggle(suf); } });
+}
 function _leerDiasRentaForm(){
   var a=document.getElementById('sol-diasrenta'), b=document.getElementById('sol-diasrenta2');
   var v=parseInt((a&&a.value?a.value:'') || (b&&b.value?b.value:''))||0;
@@ -9514,7 +9535,7 @@ async function enviarSolicitudWA(){
   if(tipo==='renta' || tipo==='entrega'){
     const _dR = _leerDiasRentaForm(), _iR = _leerInicioRentaForm();
     if(_dR && !_iR) faltSol.push('Inicio de la renta');
-    if(_iR && !_dR) faltSol.push('Días de renta');
+    if(_iR && !_dR && !_leerRentaIndef()) faltSol.push('Días de renta (o marca «Renta indefinida»)');
   }
   // Renta con grúa: si se marcó la casilla, la grúa tiene que estar elegida y DISPONIBLE
   if(tipo==='renta'){ const _gE = _gruaValidar(equipoTxt); if(_gE) faltSol.push(_gE); }
@@ -9586,7 +9607,7 @@ async function enviarSolicitudWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     const ubicacionLog2 = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     ubicacionLog = ubicacionLog2;
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,vehiculoRentaId:_gruaR||null,inicioRenta:(_leerDiasRentaForm()?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,rentaIndefinida:((tipo==='renta'||tipo==='entrega') && _leerRentaIndef() && !_leerDiasRentaForm())||null,vehiculoRentaId:_gruaR||null,inicioRenta:((_leerDiasRentaForm()||_leerRentaIndef())?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -9721,7 +9742,7 @@ async function copiarMensajeWA(){
   if(tipo==='renta' || tipo==='entrega'){
     const _dR = _leerDiasRentaForm(), _iR = _leerInicioRentaForm();
     if(_dR && !_iR) faltSol.push('Inicio de la renta');
-    if(_iR && !_dR) faltSol.push('Días de renta');
+    if(_iR && !_dR && !_leerRentaIndef()) faltSol.push('Días de renta (o marca «Renta indefinida»)');
   }
   // Renta con grúa: si se marcó la casilla, la grúa tiene que estar elegida y DISPONIBLE
   if(tipo==='renta'){ const _gE = _gruaValidar(equipoTxt); if(_gE) faltSol.push(_gE); }
@@ -9763,7 +9784,7 @@ async function copiarMensajeWA(){
     const equipoId2Val = document.getElementById('sol-equipo2')?.value || '';
     // Leer ubicacion del formulario activo
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
-    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,vehiculoRentaId:_gruaR||null,inicioRenta:(_leerDiasRentaForm()?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
+    const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,diasRenta:_leerDiasRentaForm()||null,rentaIndefinida:((tipo==='renta'||tipo==='entrega') && _leerRentaIndef() && !_leerDiasRentaForm())||null,vehiculoRentaId:_gruaR||null,inicioRenta:((_leerDiasRentaForm()||_leerRentaIndef())?_leerInicioRentaForm():'')||null,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:(eq&&eq.esEquipoCliente)?(eq.clienteNombre||eq.cliente||''):((eq||equipoTxt==='__cliente__')?'':equipoTxt),clienteMarca:(eq&&eq.esEquipoCliente)?(eq.marca||''):'',clienteModelo:(eq&&eq.esEquipoCliente)?(eq.modelo||eq.desc||''):'',clienteSerie:(eq&&eq.esEquipoCliente)?(eq.serie||''):''};
     if(!DB.logistica) DB.logistica = [];
     DB.logistica.push(entry);
     // Estado automático del equipo según el tipo de orden de logística:
@@ -9816,6 +9837,7 @@ async function copiarMensajeWA(){
 }
 
 function clearSolicitudForm(){
+  try{ _rentaIndefLimpiar(); }catch(e){}
   try{ _gruaLimpiar(); }catch(e){}
   document.getElementById('sol-equipo').value = '';
   document.getElementById('sol-desc').value = '';
@@ -12887,6 +12909,10 @@ function _cliOrdenAlCerrar(o){
                                   ['Contacto del cliente', esc(o.contactoCliente||'')], ['Horas de uso', isNaN(horas)||horas<0 ? '' : mono(horas.toFixed(1)+' hrs')],
                                   ['Km recorridos', isNaN(km)||km<0 ? '' : mono(km.toLocaleString('en-US',{maximumFractionDigits:1})+' km')]])
                                 + txt('Descripción', o.descripcion) + txt('Observaciones', o.notas||o.observaciones));
+      if((tipo==='renta'||tipo==='entrega') && o.rentaIndefinida && !(parseInt(o.diasRenta)>0)){
+        var iRi = aFecha(o.inicioRenta);
+        S('Condiciones de la renta', kv([['Tipo de renta', 'Indefinida — sin fecha de fin'], ['Inicio de la renta', iRi?fF(iRi):'']]));
+      }
       if((tipo==='renta'||tipo==='entrega') && parseInt(o.diasRenta)>0){
         var iR = aFecha(o.inicioRenta) || aFecha(o.fechaInicio), finR = null;
         if(iR){ finR = new Date(iR); finR.setDate(finR.getDate()+parseInt(o.diasRenta)); }

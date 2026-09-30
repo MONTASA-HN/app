@@ -328,6 +328,12 @@ Supervisiones**. No asumir que es el mismo.
   quiso OpenStreetMap).
   Al cerrar un retiro, el link del equipo pasa al taller SPS
   (`_GPS_TALLER_SPS`).
+- **Renta indefinida** (desde 2026-09-30, pedido de Miguel): rentas sin fecha de fin que el cliente puede cancelar
+  cuando quiera. En la solicitud de renta/entrega (MTG y MTS) la casilla `sol-renta-indef` / `sol-renta-indef2`
+  desactiva los días; la orden guarda `rentaIndefinida:true`, `diasRenta:null` y el inicio si se puso. No hay
+  aviso de vencimiento. Se ve en la tarjeta (MTG `_rentaDiasHTML`), en Logística (`_rentaFinHTML`) y en el PDF
+  («Condiciones de la renta · Tipo de renta: Indefinida»). Las entregas regularizadas LG-0235…LG-0251 (cerradas,
+  `regularizacion:true`) son las rentas viejas que siguen, según la hoja que llenó Miguel.
 - **Ubicación solo con coordenadas y EN RENTA a mano** (desde 2026-09-30, decisiones de Miguel, riesgo 5): bloque
   `// ══ UBICACIÓN CON COORDENADAS Y «EN RENTA» A MANO` en MTG, MTS, MTT, MTC, MHG, MHS. Un vigilante revisa
   todo campo cuyo id contiene `ublink` al salir del campo: sin coordenadas (link corto share.google /
@@ -593,6 +599,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Renta indefinida en la solicitud (sin días ni aviso de vencimiento). Regularizadas 17 rentas viejas
+  (entregas cerradas LG-0235…0251), MT-115/MT-119 → DEMO/PRESTAMO, MT-122 → EN MANTENIMIENTO (MH-0179 en espera).
   Se regularizaron E-45, MT-132, MT-67 (correctivos MH-0176/77/78 en espera de repuestos) y E-15 → EN RENTA.
 - 2026-09-29 — Renta de equipo + grúa en la misma orden (`vehiculoRentaId`); cancelar renta/entrega
   devuelve los equipos a DISPONIBLE (T5).
