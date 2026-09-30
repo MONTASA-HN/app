@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexo · Prueba de cámara</title>
+<style>
+  :root{ --azul:#1f3864; --ok:#1a7f37; --mal:#c9211e; --gris:#667085; --fondo:#f0f2f5; --borde:#d0d5dd; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:Arial, sans-serif; background:var(--fondo); color:#101828; }
+  header{ background:var(--azul); color:#fff; padding:16px; }
+  header h1{ margin:0; font-size:18px; }
+  header p{ margin:4px 0 0; font-size:13px; opacity:.85; }
+  main{ padding:16px; max-width:560px; margin:0 auto; }
+  .caja{ background:#fff; border:1px solid var(--borde); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .caja h2{ margin:0 0 4px; font-size:15px; }
+  .caja p{ margin:0 0 10px; font-size:12.5px; color:var(--gris); }
+  button, .boton{ display:block; width:100%; padding:13px; border:none; border-radius:8px; background:var(--azul); color:#fff;
+    font-size:15px; font-weight:700; text-align:center; cursor:pointer; }
+  .res{ margin-top:8px; font-size:13px; font-weight:700; }
+  .res.ok{ color:var(--ok); } .res.mal{ color:var(--mal); }
+  video, img.vista{ width:100%; border-radius:8px; margin-top:8px; background:#000; display:none; }
+  #resumen{ white-space:pre-wrap; font-family:monospace; font-size:12px; background:#f8f9fb; border:1px solid var(--borde); border-radius:8px; padding:10px; }
+  .oculto-visual{ position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Prueba de cámara y fotos</h1>
+  <p>Haz las 5 pruebas en orden. Al final toca «Copiar resultado» y mándalo por WhatsApp.</p>
+</header>
+<main>
+  <div class="caja">
+    <h2>1. Galería (normal)</h2>
+    <p>Elige cualquier foto de la galería.</p>
+    <input type="file" id="p1" accept="image/*">
+    <div class="res" id="r1">Sin probar</div>
+  </div>
+  <div class="caja">
+    <h2>2. Cámara del teléfono</h2>
+    <p>Debe abrir la cámara. Toma una foto y acepta.</p>
+    <input type="file" id="p2" accept="image/*" capture="environment">
+    <div class="res" id="r2">Sin probar</div>
+  </div>
+  <div class="caja">
+    <h2>3. Botón como el de la app</h2>
+    <p>Así están hechos los botones de la app (el selector va escondido).</p>
+    <label class="boton">🖼️ Galería<input type="file" id="p3" accept="image/*" style="display:none"></label>
+    <div class="res" id="r3">Sin probar</div>
+  </div>
+  <div class="caja">
+    <h2>4. Botón con selector semi-oculto</h2>
+    <p>La misma idea, escondiendo el selector de otra forma.</p>
+    <label class="boton">📷 Cámara<input type="file" id="p4" accept="image/*" capture="environment" class="oculto-visual"></label>
+    <div class="res" id="r4">Sin probar</div>
+  </div>
+  <div class="caja">
+    <h2>5. Cámara dentro de la página</h2>
+    <p>Pide permiso para usar la cámara. Toca «Tomar foto» cuando se vea la imagen.</p>
+    <button id="b5">📸 Abrir cámara</button>
+    <video id="v5" playsinline autoplay muted></video>
+    <button id="t5" style="display:none;margin-top:8px;background:var(--ok)">Tomar foto</button>
+    <img class="vista" id="i5" alt="">
+    <div class="res" id="r5">Sin probar</div>
+  </div>
+  <div class="caja">
+    <h2>Resultado</h2>
+    <div id="resumen"></div>
+    <button id="copiar" style="margin-top:10px">📋 Copiar resultado</button>
+  </div>
+</main>
+<script>
+(function(){
+  var estado = { 1:'sin probar', 2:'sin probar', 3:'sin probar', 4:'sin probar', 5:'sin probar' };
+  function pintar(){
+    var ua = navigator.userAgent;
+    var modo = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'app instalada' : 'navegador';
+    document.getElementById('resumen').textContent =
+      'Teléfono/navegador: ' + ua + '\nAbierto como: ' + modo + '\n' +
+      [1,2,3,4,5].map(function(n){ return 'Prueba ' + n + ': ' + estado[n]; }).join('\n');
+  }
+  function marcar(n, ok, txt){
+    var r = document.getElementById('r' + n);
+    r.className = 'res ' + (ok ? 'ok' : 'mal'); r.textContent = (ok ? '✅ ' : '❌ ') + txt;
+    estado[n] = (ok ? 'OK — ' : 'FALLA — ') + txt; pintar();
+  }
+  [1,2,3,4].forEach(function(n){
+    var inp = document.getElementById('p' + n);
+    inp.addEventListener('click', function(){ if(estado[n] === 'sin probar'){ estado[n] = 'se tocó, pero no llegó ninguna foto'; pintar(); } });
+    inp.addEventListener('change', function(){
+      var f = inp.files && inp.files[0];
+      if(f) marcar(n, true, 'llegó la foto (' + Math.round(f.size/1024) + ' KB)');
+      else marcar(n, false, 'se abrió pero no llegó la foto');
+    });
+  });
+  var stream = null;
+  document.getElementById('b5').addEventListener('click', function(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ marcar(5, false, 'este navegador no permite la cámara en la página'); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(function(s){
+      stream = s; var v = document.getElementById('v5'); v.srcObject = s; v.style.display = 'block';
+      document.getElementById('t5').style.display = 'block'; estado[5] = 'cámara abierta, falta tomar la foto'; pintar();
+    }).catch(function(e){ marcar(5, false, 'no se pudo abrir la cámara (' + (e && e.name || 'error') + ')'); });
+  });
+  document.getElementById('t5').addEventListener('click', function(){
+    var v = document.getElementById('v5'), c = document.createElement('canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+    var img = document.getElementById('i5'); img.src = c.toDataURL('image/jpeg', 0.8); img.style.display = 'block';
+    v.style.display = 'none'; this.style.display = 'none';
+    if(stream) stream.getTracks().forEach(function(t){ t.stop(); });
+    marcar(5, c.width > 0, c.width > 0 ? 'foto tomada (' + c.width + 'x' + c.height + ')' : 'la imagen salió vacía');
+  });
+  document.getElementById('copiar').addEventListener('click', function(){
+    var t = document.getElementById('resumen').textContent;
+    function listo(){ alert('Copiado. Pégalo en WhatsApp.'); }
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(listo, function(){ prompt('Copia este texto:', t); });
+    else prompt('Copia este texto:', t);
+  });
+  pintar();
+})();
+</script>
+</body>
+</html>
