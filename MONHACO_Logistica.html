@@ -2214,5 +2214,78 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
 </script>
 <script src="autocorrector.js"></script>
 <script>Autocorrector.vigilar();</script>
+<script>
+// ══ ACERCA DE NEXO (2026-09-30, pedido de Miguel) ══════════════════════════
+// Botón con el logo en el encabezado (.app-header) que abre la explicación del nombre y del logo.
+(function(){
+  var LOGO = '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true"><rect width="100" height="100" rx="22" fill="#1f3864"/>'
+    + '<path d="M24 20 L54 48 H38 V76 Q38 80 34 80 H28 Q24 80 24 76 Z" fill="#038dcc"/>'
+    + '<path d="M76 80 L46 52 H62 V24 Q62 20 66 20 H72 Q76 20 76 24 Z" fill="#6cbc97"/></svg>';
+  function abrir(){
+    if(document.getElementById('nexo-acerca')) return;
+    var ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? String(APP_VERSION) : '';
+    var ov = document.createElement('div');
+    ov.id = 'nexo-acerca';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:0';
+    ov.innerHTML = '<div role="dialog" aria-label="Acerca de Nexo" style="background:#fff;color:#1d2433;width:100%;max-width:520px;max-height:88vh;overflow:auto;'
+      + 'border-radius:18px 18px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));font-family:inherit;box-sizing:border-box">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:52px;height:52px;flex:none">' + LOGO + '</div>'
+      + '<div><div style="font-size:22px;font-weight:800;color:#1f3864;line-height:1">Nexo</div>'
+      + '<div style="font-size:12.5px;color:#667085;margin-top:4px">' + (document.title || '') + '</div></div></div>'
+      + '<div style="font-size:15px;font-weight:700;color:#1f3864;margin:6px 0 6px">¿Por qué «Nexo»?</div>'
+      + '<p style="margin:0 0 10px;font-size:14px;line-height:1.5">Un <b>nexo</b> es lo que une dos o más cosas. Eso es lo que hace esta plataforma: '
+      + 'junta en un solo lugar a todos los que hacemos funcionar la operación, trabajando sobre la misma información y al mismo tiempo.</p>'
+      + '<p style="margin:0 0 6px;font-size:14px;line-height:1.5">Una orden que abre el técnico la ve gerencia al instante; una entrega que cierra logística '
+      + 'actualiza la ficha del equipo y el mapa de la flota; un vale o una liquidación quedan ligados a su orden.</p>'
+      + '<div style="font-size:14px;font-weight:700;margin:12px 0 4px">Nexo une:</div>'
+      + '<ul style="margin:0 0 10px;padding-left:20px;font-size:14px;line-height:1.55">'
+      + '<li><b>A las personas:</b> técnicos, supervisión, logística, comercial y gerencia.</li>'
+      + '<li><b>A las empresas:</b> MONTASA y MONHACO, cada una con su información, en la misma plataforma.</li>'
+      + '<li><b>Al equipo con su historia:</b> órdenes, horómetros, ubicación y estado de cada máquina.</li></ul>'
+      + '<div style="font-size:15px;font-weight:700;color:#1f3864;margin:14px 0 6px">¿Y el logo?</div>'
+      + '<p style="margin:0 0 10px;font-size:14px;line-height:1.5">Son <b>las dos flechas de la N de MONTASA</b>: la <span style="color:#038dcc;font-weight:700">celeste</span> '
+      + 'que sube y la <span style="color:#3f9a73;font-weight:700">verde</span> que baja. Juntas forman la N de Nexo: el ida y vuelta de la información entre el '
+      + 'campo y la oficina, y la señal de que Nexo nace de la misma familia que MONTASA.</p>'
+      + (ver ? '<div style="font-size:11.5px;color:#98a2b3;margin-top:12px">Versión ' + ver + '</div>' : '')
+      + '<button type="button" id="nexo-acerca-cerrar" style="margin-top:14px;width:100%;padding:13px;border:none;border-radius:10px;background:#1f3864;color:#fff;'
+      + 'font-size:15px;font-weight:700;cursor:pointer">Cerrar</button></div>';
+    ov.addEventListener('click', function(e){ if(e.target === ov || e.target.id === 'nexo-acerca-cerrar') ov.remove(); });
+    document.body.appendChild(ov);
+  }
+  window.abrirAcercaNexo = abrir;
+  function poner(){
+    if(document.getElementById('nexo-acerca-btn')) return;
+    // Apps con menú ☰ (Gerencia MT): va como una opción más del menú, para no tapar la fecha del encabezado
+    var menu = document.getElementById('ger-menu-panel');
+    if(menu){
+      var it = document.createElement('button');
+      it.type = 'button'; it.id = 'nexo-acerca-btn'; it.className = 'ger-menu-item';
+      it.innerHTML = '<span style="width:22px;height:22px;flex:none;display:inline-block">' + LOGO + '</span>Acerca de Nexo';
+      it.addEventListener('click', function(){ try{ _gerMenuToggle(false); }catch(e){} abrir(); });
+      menu.appendChild(it); return;
+    }
+    var h = document.querySelector('.app-header');
+    if(!h) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.id = 'nexo-acerca-btn'; b.title = 'Acerca de Nexo'; b.setAttribute('aria-label', 'Acerca de Nexo');
+    b.innerHTML = LOGO;
+    b.addEventListener('click', function(e){ e.stopPropagation(); abrir(); });
+    var base = 'width:30px;height:30px;padding:0;border:none;background:none;cursor:pointer;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.25);flex:none;';
+    // Encabezados con fecha a la derecha (Gerencia MONHACO): al final de la fila de empresas
+    if(h.querySelector('#header-fecha') && h.firstElementChild){ b.style.cssText = base + 'margin:0 0 8px auto'; h.firstElementChild.appendChild(b); return; }
+    // Encabezado con logo a la derecha (Logística MONHACO): junto al logo
+    var lg = h.querySelector('#hdr-logo');
+    if(lg && lg.parentNode && lg.parentNode.parentNode){
+      var caja = lg.parentNode, fila = caja.parentNode, w = document.createElement('div');
+      w.style.cssText = 'display:flex;align-items:center;gap:8px';
+      fila.insertBefore(w, caja); w.appendChild(b); w.appendChild(caja); b.style.cssText = base; return;
+    }
+    if(getComputedStyle(h).position === 'static') h.style.position = 'relative';
+    b.style.cssText = base + 'position:absolute;right:12px;bottom:10px;z-index:5';
+    h.appendChild(b);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', poner); else poner();
+})();
+</script>
 </body>
 </html>
