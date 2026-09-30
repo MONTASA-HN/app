@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8cf05e1b2a94';
+  var APP_VERSION='47a88f4f22a3';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -212,6 +212,56 @@ function _eqPreguntarComoQuedo(eq, orden, cb){
   var fin = function(r){ ov.remove(); cb(r); };
   ov.querySelector('#eq-quedo-ok').onclick = function(){ fin('operativo'); };
   ov.querySelector('#eq-quedo-mal').onclick = function(){ fin('falla'); };
+}
+</script>
+<script>
+// ══ LECTURAS DE LAS ÓRDENES (HORÓMETRO / KM) A LA FICHA ══════════════════════
+// Decisiones de Miguel, 2026-09-30 (auditoría de km y horómetros, TRAMPAS T26):
+//  · Al cerrar una orden, en cualquier app, su lectura pasa a la ficha del equipo.
+//  · Vehículos: la ficha muestra el km en «horometro» (etiqueta «Kilometraje»); se guarda ahí y también en
+//    «kilometraje», que es lo que lee el Excel de la flota. Antes Logística/Técnicos solo escribían «kilometraje».
+//  · La ficha nunca baja sola: si la lectura es MENOR que la ficha, o salta muchísimo (más del doble), se
+//    pregunta. En modo 'silencio' (cambios de campo) esas lecturas simplemente no se pasan.
+function _lecturaNum(v){ var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return (isFinite(n) && n > 0) ? n : 0; }
+function _vehiculoPorCodigo(cod){
+  var c = String(cod || '').trim().toUpperCase(); if(!c) return null;
+  return (DB.equipos || []).find(function(e){ return e && e.esVehiculo && String(e.codigo || '').trim().toUpperCase() === c; }) || null;
+}
+function _lecturaAFicha(equipoId, valor, modo, etiqueta){
+  if(!equipoId || equipoId === '__cliente__') return false;
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === equipoId; });
+  if(!eq || eq.esGenerico) return false;
+  var v = _lecturaNum(valor); if(!v) return false;
+  var esVeh = !!eq.esVehiculo, actual = _lecturaNum(eq.horometro), unidad = esVeh ? 'km' : 'horas';
+  if(actual && Math.abs(v - actual) < 0.0001 && (!esVeh || _lecturaNum(eq.kilometraje) === v)) return true;
+  var raro = '';
+  if(actual && v < actual - 0.0001) raro = 'es MENOR que la que tiene la ficha';
+  else if(actual && v > actual * 2 && (v - actual) > (esVeh ? 5000 : 500)) raro = 'es mucho MAYOR que la que tiene la ficha';
+  if(raro){
+    if(modo !== 'preguntar') return false;
+    if(!confirm('⚠️ ' + (etiqueta || '') + 'La lectura ' + v + ' ' + unidad + ' de ' + (eq.codigo || 'el equipo') + ' ' + raro + ' (' + actual + ' ' + unidad + ').\n\n'
+      + 'Aceptar = es correcta, guardarla en la ficha.\nCancelar = dejar la ficha como está (la orden conserva su número).')) return false;
+  }
+  var txt = String(v);
+  eq.horometro = txt;
+  if(esVeh) eq.kilometraje = txt;
+  if(typeof _syncEquipoCampoFB === 'function'){
+    _syncEquipoCampoFB(eq.id, 'horometro', txt);
+    if(esVeh) _syncEquipoCampoFB(eq.id, 'kilometraje', txt);
+  } else if(typeof saveDB === 'function') saveDB();
+  return true;
+}
+// Orden de mantenimiento (preventivo, correctivo, evaluación) al cerrarse: horómetro del equipo y km del
+// vehículo del viaje (campo «vehiculo», p. ej. PATRULLA). Del viaje se toma el mayor entre salida y retorno.
+function _lecturasMantAFicha(o){
+  if(!o) return;
+  var et = o.correlativo ? o.correlativo + ': ' : '';
+  _lecturaAFicha(o.equipoId, o.horometro, 'preguntar', et);
+  var veh = _vehiculoPorCodigo(o.vehiculo);
+  if(veh && veh.id !== o.equipoId){
+    var km = Math.max(_lecturaNum(o.kmSalida), _lecturaNum(o.kmRetorno));
+    if(km) _lecturaAFicha(veh.id, km, 'preguntar', et + 'km del vehículo del viaje · ');
+  }
 }
 </script>
 <script>
@@ -2689,6 +2739,7 @@ function guardarPreventivo(finalizar=false){
         entry.completado = true;
         entry.estado = 'Completado'; // antes quedaba «En proceso» (T19)
         entry.fechaCompletado = new Date().toISOString().slice(0,10);
+        _lecturasMantAFicha(entry);   // lecturas a la ficha (T26)
         registrarOrdenCerrada(entry,'Preventivo');
         saveDB();
         console.log('Preventivo guardado:', JSON.stringify(entry).slice(0,200));
@@ -2775,17 +2826,12 @@ function completarPreventivo(id){
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
-  // Sincronizar horómetro con la ficha del equipo al finalizar
-  if(p.horometro && p.equipoId){
-    const _eq = DB.equipos.find(e=>e.id===p.equipoId);
-    if(_eq) _eq.horometro = p.horometro;
-    _syncEquipoCampoFB(p.equipoId, 'horometro', p.horometro);
-  }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(p.equipoId){
     const _eqM = DB.equipos.find(e=>e.id===p.equipoId);
     if(_eqM) _eqCerrarMant(p);   // pregunta «¿Cómo quedó el equipo?» (regla única, T3)
   }
+  _lecturasMantAFicha(p);   // lecturas a la ficha (T26)
   registrarOrdenCerrada(p, 'Preventivo');
   // Write directo en Firebase para sync inmediato con Gerencia/Supervisión
   if(window._fbDB && window._fbReady){
@@ -3143,6 +3189,7 @@ function guardarCorrectivo(finalizar=false){
       try{
         entry.estado = 'Completado';
         entry.fechaCierre = new Date().toISOString().slice(0,10);
+        _lecturasMantAFicha(entry);   // lecturas a la ficha (T26)
         registrarOrdenCerrada(entry,'Correctivo');
         saveDB();
         console.log('Correctivo guardado:', JSON.stringify(entry).slice(0,200));
@@ -3191,12 +3238,6 @@ function cerrarCorrectivo(id){
   _guardarEquipoClienteEnFlota(c);
   if(c.inicioTrabajo && !c.fechaInicio) c.fechaInicio = c.inicioTrabajo;
   if(c.finTrabajo && !c.fechaFin) c.fechaFin = c.finTrabajo;
-  // Sincronizar horómetro con la ficha del equipo al finalizar
-  if(c.horometro && c.equipoId){
-    const _eq = DB.equipos.find(e=>e.id===c.equipoId);
-    if(_eq) _eq.horometro = c.horometro;
-    _syncEquipoCampoFB(c.equipoId, 'horometro', c.horometro);
-  }
   // Restaurar el estado del equipo tras salir de mantenimiento
   if(c.equipoId){
     const _eqM = DB.equipos.find(e=>e.id===c.equipoId);
@@ -3217,6 +3258,7 @@ function cerrarCorrectivo(id){
       }
     }
   })();
+  _lecturasMantAFicha(c);   // lecturas a la ficha (T26)
   registrarOrdenCerrada(c, 'Correctivo');
   // Write directo en Firebase para sync inmediato con Gerencia/Supervisión
   if(window._fbDB && window._fbReady){
@@ -4834,6 +4876,7 @@ function finalizarEvaluacion(id){
   if(fc && fc.classList.contains('firmado')) v.firma = fc.toDataURL('image/png');
   v.estado = 'Completado';
   v.completado = true;
+  _lecturasMantAFicha(v);   // lecturas a la ficha (T26)
   v.fechaCierre = new Date().toISOString().slice(0,10);
   saveDB();
   renderEvaluaciones();

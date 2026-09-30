@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a4ba6fc60723';
+  var APP_VERSION='1a6819950d6c';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -129,6 +129,56 @@ function _fbRefPorId(ruta){
       });
     }
   };
+}
+</script>
+<script>
+// ══ LECTURAS DE LAS ÓRDENES (HORÓMETRO / KM) A LA FICHA ══════════════════════
+// Decisiones de Miguel, 2026-09-30 (auditoría de km y horómetros, TRAMPAS T26):
+//  · Al cerrar una orden, en cualquier app, su lectura pasa a la ficha del equipo.
+//  · Vehículos: la ficha muestra el km en «horometro» (etiqueta «Kilometraje»); se guarda ahí y también en
+//    «kilometraje», que es lo que lee el Excel de la flota. Antes Logística/Técnicos solo escribían «kilometraje».
+//  · La ficha nunca baja sola: si la lectura es MENOR que la ficha, o salta muchísimo (más del doble), se
+//    pregunta. En modo 'silencio' (cambios de campo) esas lecturas simplemente no se pasan.
+function _lecturaNum(v){ var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return (isFinite(n) && n > 0) ? n : 0; }
+function _vehiculoPorCodigo(cod){
+  var c = String(cod || '').trim().toUpperCase(); if(!c) return null;
+  return (DB.equipos || []).find(function(e){ return e && e.esVehiculo && String(e.codigo || '').trim().toUpperCase() === c; }) || null;
+}
+function _lecturaAFicha(equipoId, valor, modo, etiqueta){
+  if(!equipoId || equipoId === '__cliente__') return false;
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === equipoId; });
+  if(!eq || eq.esGenerico) return false;
+  var v = _lecturaNum(valor); if(!v) return false;
+  var esVeh = !!eq.esVehiculo, actual = _lecturaNum(eq.horometro), unidad = esVeh ? 'km' : 'horas';
+  if(actual && Math.abs(v - actual) < 0.0001 && (!esVeh || _lecturaNum(eq.kilometraje) === v)) return true;
+  var raro = '';
+  if(actual && v < actual - 0.0001) raro = 'es MENOR que la que tiene la ficha';
+  else if(actual && v > actual * 2 && (v - actual) > (esVeh ? 5000 : 500)) raro = 'es mucho MAYOR que la que tiene la ficha';
+  if(raro){
+    if(modo !== 'preguntar') return false;
+    if(!confirm('⚠️ ' + (etiqueta || '') + 'La lectura ' + v + ' ' + unidad + ' de ' + (eq.codigo || 'el equipo') + ' ' + raro + ' (' + actual + ' ' + unidad + ').\n\n'
+      + 'Aceptar = es correcta, guardarla en la ficha.\nCancelar = dejar la ficha como está (la orden conserva su número).')) return false;
+  }
+  var txt = String(v);
+  eq.horometro = txt;
+  if(esVeh) eq.kilometraje = txt;
+  if(typeof _syncEquipoCampoFB === 'function'){
+    _syncEquipoCampoFB(eq.id, 'horometro', txt);
+    if(esVeh) _syncEquipoCampoFB(eq.id, 'kilometraje', txt);
+  } else if(typeof saveDB === 'function') saveDB();
+  return true;
+}
+// Orden de mantenimiento (preventivo, correctivo, evaluación) al cerrarse: horómetro del equipo y km del
+// vehículo del viaje (campo «vehiculo», p. ej. PATRULLA). Del viaje se toma el mayor entre salida y retorno.
+function _lecturasMantAFicha(o){
+  if(!o) return;
+  var et = o.correlativo ? o.correlativo + ': ' : '';
+  _lecturaAFicha(o.equipoId, o.horometro, 'preguntar', et);
+  var veh = _vehiculoPorCodigo(o.vehiculo);
+  if(veh && veh.id !== o.equipoId){
+    var km = Math.max(_lecturaNum(o.kmSalida), _lecturaNum(o.kmRetorno));
+    if(km) _lecturaAFicha(veh.id, km, 'preguntar', et + 'km del vehículo del viaje · ');
+  }
 }
 </script>
 <script>
@@ -2379,17 +2429,7 @@ function actualizarLog(id, campo, valor){
     saveDB();
     return;
   }
-  // P5: Auto-update horometro in equipment card
-  const _hf = ['horometroSalida','horometroRetorno','horometroSalida2','horometroRetorno2','horometro'];
-  if(_hf.includes(campo) && valor){
-    const _t = o.tipoLogistica||'';
-    if(o.equipoId){
-      if((_t==='renta'||_t==='retiro')&&campo==='horometroRetorno'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
-      if(_t==='entrega'&&campo==='horometroSalida'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
-      if(campo==='horometro'){const _e=DB.equipos.find(e=>e.id===o.equipoId);if(_e)_e.horometro=valor;}
-    }
-    if(o.equipoId2&&(campo==='horometroSalida2'||campo==='horometroRetorno2')){const _e2=DB.equipos.find(e=>e.id===o.equipoId2);if(_e2)_e2.horometro=valor;}
-  }
+  // Las lecturas pasan a la ficha al CERRAR la orden, revisando que no bajen (T26)
   saveDB();
 }
 
@@ -2587,37 +2627,7 @@ function actualizarLogKmRetorno(id, valor, inputEl){
     if(inputEl) inputEl.value = o.kmRetorno||'';
     return;
   }
-  o.kmRetorno = valor;
-  // Renta de vehículo: actualizar el kilometraje en la ficha del vehículo rentado
-  if(valor && o.tipoLogistica==='renta' && o.equipoId){
-    const vRenta = DB.equipos.find(e=>e.id===o.equipoId && e.esVehiculo);
-    if(vRenta){
-      vRenta.kilometraje = valor;
-      const idxR = DB.equipos.indexOf(vRenta);
-      if(idxR>=0 && window._fbDB && window._fbReady)
-        _fbRefPorId('montasa/equipos/'+idxR+'/kilometraje').set(valor);
-    }
-  }
-  // Renta con grúa: el km va a la ficha de la grúa
-  if(valor && _rentaConGrua(o)){
-    const _g = _gruaDeOrden(o);
-    if(_g){
-      _g.kilometraje = valor;
-      const _ig = DB.equipos.indexOf(_g);
-      if(_ig>=0 && window._fbDB && window._fbReady)
-        _fbRefPorId('montasa/equipos/'+_ig+'/kilometraje').set(valor);
-    }
-  }
-  // Actualizar kilometraje en la ficha del vehículo
-  if(valor && o.equipoCompra){
-    const vehiculo = DB.equipos.find(e=>e.codigo===o.equipoCompra && e.esVehiculo);
-    if(vehiculo){
-      vehiculo.kilometraje = valor;
-      const idx = DB.equipos.indexOf(vehiculo);
-      if(idx>=0 && window._fbDB && window._fbReady)
-        _fbRefPorId('montasa/equipos/'+idx+'/kilometraje').set(valor);
-    }
-  }
+  o.kmRetorno = valor;   // la ficha del vehículo se actualiza al cerrar la orden (T26)
   saveDB();
 }
 
@@ -2755,20 +2765,25 @@ function cerrarOrdenLog(id){
     if(o.equipoId2) _gpsFichaLink(o.equipoId2, _GPS_TALLER_SPS);
     if(o.tipoLogistica === 'renta' && _rentaConGrua(o)) _gpsFichaLink(o.vehiculoRentaId, _GPS_TALLER_SPS);
   }
-  // Update horometro in equipos
-  const horoFinal = o.tipoLogistica==='renta' ? o.horometroRetorno :
-                    o.tipoLogistica==='retiro' ? o.horometroRetorno :
-                    o.tipoLogistica==='entrega' ? o.horometroSalida : o.horometro;
-  if(horoFinal && o.equipoId){
-    const eq = DB.equipos.find(e=>e.id===o.equipoId);
-    if(eq) eq.horometro = horoFinal;
-  }
-  // Update second equipo if exists
-  if(o.equipoId2){
-    const eq2 = DB.equipos.find(e=>e.id===o.equipoId2);
-    if(eq2){
-      const horo2 = o.tipoLogistica==='retiro' ? o.horometroRetorno2 : o.horometroSalida2;
-      if(horo2) eq2.horometro = horo2;
+  // Lecturas a la ficha al cerrar (T26): horómetro del equipo y del 2.º equipo (retorno en renta/retiro,
+  // salida en entrega) y km del vehículo (renta de vehículo, grúa de la renta y vehículo del viaje).
+  if(!esCancelado){
+    const _t = o.tipoLogistica, _et = (o.correlativo||'') + ': ';
+    const _vuelta = (_t==='renta' || _t==='retiro');
+    if(o.equipoId && !_esVehiculoOrdenLog(o)){
+      const h1 = _vuelta ? (o.horometroRetorno || o.horometroSalida) : _t==='entrega' ? o.horometroSalida : o.horometro;
+      _lecturaAFicha(o.equipoId, h1, 'preguntar', _et);
+    }
+    if(o.equipoId2){
+      const h2 = _vuelta ? (o.horometroRetorno2 || o.horometroSalida2) : o.horometroSalida2;
+      _lecturaAFicha(o.equipoId2, h2, 'preguntar', _et + '2.º equipo · ');
+    }
+    const _km = Math.max(_lecturaNum(o.kmSalida), _lecturaNum(o.kmRetorno));
+    if(_km){
+      if(_t==='renta' && _esVehiculoOrdenLog(o)) _lecturaAFicha(o.equipoId, _km, 'preguntar', _et);
+      if(_rentaConGrua(o)){ const _g = _gruaDeOrden(o); if(_g) _lecturaAFicha(_g.id, _km, 'preguntar', _et + 'grúa · '); }
+      const _vc = _vehiculoPorCodigo(o.equipoCompra);
+      if(_vc && _vc.id !== o.equipoId) _lecturaAFicha(_vc.id, _km, 'preguntar', _et + 'vehículo del viaje · ');
     }
   }
 
