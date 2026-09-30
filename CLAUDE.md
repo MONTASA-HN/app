@@ -287,6 +287,9 @@ Supervisiones**. No asumir que es el mismo.
   vehículo del viaje (`equipoCompra`). Cambiar un campo de la orden ya no toca la ficha.
 - **Fecha del vale de alimentación = fecha FINAL de la orden** (`fechaFin`; confirmado por Miguel, 2026-09-30).
   Si no hay, usa `fechaCierre`, `fechaInicio`, `fecha`. Se arma con año/mes/día locales (ver TRAMPAS T24).
+- **Viáticos: botón «🖨 Imprimir»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): junto a «Descargar
+  PDF» en solicitud y liquidación. `generarPDFViaticos(tipo, true)` arma el mismo documento y lo manda a
+  `_imprimirHTML` (igual que los vales): abre la impresión sin descargar nada.
 - **Liquidación: «OTROS GASTOS»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): en la lista de
   descripciones de cada factura (`_VIAT_DESC`) está «OTROS GASTOS» para imprevistos que no estaban en la
   solicitud. Al elegirlo aparece `vlf-otro-N` para escribir el gasto; se guarda en la factura como
@@ -622,6 +625,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Viáticos: botón Imprimir en solicitud y liquidación. Fichas: 15 horómetros/km corregidos en la base.
 - 2026-09-30 — Auditoría km/horómetros: las lecturas llegan a la ficha al cerrar en todas las apps, sin bajar (T26).
 - 2026-09-30 — Solicitudes: «Tipo de orden» muestra solo los tipos del departamento (en iPhone salían todos).
 - 2026-09-30 — Errores menores: preventivos cerrados quedan «Completado» (T19), horómetros MONHACO sellan solo

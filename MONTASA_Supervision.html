@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2c45672f91fe';
+  var APP_VERSION='29937db79f74';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6934,20 +6934,26 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:8px;font-size:13px;color:#856404">
     🔒 Solo lectura — esta solicitud ya fue guardada
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px">
     <button onclick="editarViaticosConPin()" style="padding:13px;background:#856404;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       🔑 Editar (PIN)
     </button>
     <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
     </button>
+    <button onclick="generarPDFViaticos('solicitud', true)" style="padding:13px;background:#2d6a2d;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🖨 Imprimir
+    </button>
   </div>` : `
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px">
     <button onclick="guardarViaticos()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       💾 Guardar solicitud
     </button>
     <button onclick="generarPDFViaticos('solicitud')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
+    </button>
+    <button onclick="generarPDFViaticos('solicitud', true)" style="padding:13px;background:#2d6a2d;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🖨 Imprimir
     </button>
   </div>`}`;
 }
@@ -7079,20 +7085,26 @@ function renderLiquidacionForm(v, montoSol, readOnly){
     </div>
   </div>
   ${readOnly ? `
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
     <button onclick="editarLiquidacionConPin()" style="padding:13px;background:#c87000;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       🔑 Editar liquidación
     </button>
     <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
     </button>
+    <button onclick="generarPDFViaticos('liquidacion', true)" style="padding:13px;background:#2d6a2d;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🖨 Imprimir
+    </button>
   </div>` : `
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
     <button onclick="guardarLiquidacion()" style="padding:13px;background:#2d6a9f;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       💾 Guardar liquidación
     </button>
     <button onclick="generarPDFViaticos('liquidacion')" style="padding:13px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
       📄 Descargar PDF
+    </button>
+    <button onclick="generarPDFViaticos('liquidacion', true)" style="padding:13px;background:#2d6a2d;color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer">
+      🖨 Imprimir
     </button>
   </div>`}`;
 }
@@ -7489,7 +7501,7 @@ function _imprimirHTML(htmlContent){
   setTimeout(function(){ iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 500);
 }
 
-async function generarPDFViaticos(tipo){
+async function generarPDFViaticos(tipo, imprimir){
   const orden=_getViaticosOrden();
   if(!orden) return;
 
@@ -7532,6 +7544,14 @@ if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='fu
   try{
     const htmlContent = tipo==='solicitud' ? _buildSolicitudHTML(v, orden) : _buildLiquidacionHTML(v, orden);
     const _corr=(orden.correlativo||'orden').replace(/[^\w\-]+/g,'_');
+    if(imprimir){
+      // Imprimir directo (como los vales): sin el botón interno del documento; la solicitud va horizontal
+      let _h = htmlContent.replace(/<button class="no-print[^>]*>[\s\S]*?<\/button>/, '');
+      if(tipo==='solicitud') _h = _h.replace('</head>', '<style>@page{size:letter landscape;margin:10mm}</style></head>');
+      _imprimirHTML(_h);
+      toast('Abriendo impresión — elige tu impresora o «Guardar como PDF» ✓');
+      return;
+    }
     await _descargarDocPDF(htmlContent, (tipo==='solicitud'?'Solicitud_Viaticos_':'Liquidacion_Viaticos_')+_corr+'.pdf', tipo==='solicitud');
     toast('PDF descargado ✓');
   }catch(e){
