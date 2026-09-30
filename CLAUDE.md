@@ -57,11 +57,13 @@ Después, `git log --oneline -10` para ver qué entró y leer lo que no conozcas
      automática»); `check_syntax` lo detecta y sale en ✗.
   4. Probar (§7).
   5. `git commit` **local**, con mensaje en español que diga **qué** y **por qué**.
-  6. **`git push` SOLO con permiso explícito de Miguel, cada vez.** Él quiere revisar
-     antes de que algo llegue a GitHub (lo que está en `main` es lo que corre en
-     todos los teléfonos). Antes de pedir permiso, resumirle en palabras de su
-     trabajo qué cambia y qué debe probar. Un "sí" vale para ese push, no para los
-     siguientes. Justo antes de hacer push: `git pull` otra vez.
+  6. **`git push` sin preguntar** (desde 2026-09-30, pedido de Miguel): si el cambio está
+     tal cual él lo pidió, probado en copias y con sellar/check_syntax/prueba_sync en verde,
+     se sube a GitHub sin pedir permiso y **después se le confirma** que ya está subido
+     (en 1–2 frases: qué cambia y qué debe probar). Si hay dudas sobre lo que pidió, o algo
+     falló en las pruebas, NO se sube: se le pregunta. Justo antes del push: `git pull`.
+     Esto es solo para GitHub: **escribir en la base real sigue necesitando su permiso**,
+     con respaldo y ensayo antes.
   7. GitHub Pages publica solo en ~1–10 min tras el push.
 - **Actualizar CLAUDE.md / FLUJO.md / TRAMPAS.md** en el mismo commit cuando cambie
   algo que el próximo necesite saber.
@@ -78,7 +80,7 @@ Después, `git log --oneline -10` para ver qué entró y leer lo que no conozcas
   Windows vienen en CRLF → `tr -d '\r'`).
 - Tras publicar, **los teléfonos se actualizan solos** al abrir la app o volver a ella
   (bloque «ACTUALIZACIÓN AUTOMÁTICA DE LA APP», §4), siempre que se haya sellado la versión.
-- Al hacer commit o pedir push, decirle en 1–2 frases qué cambió y qué debe
+- Al hacer commit o push, decirle en 1–2 frases qué cambió y qué debe
   probar; no recitar cada paso.
 
 ### Reglas de la casa (de Rodrigo)
@@ -600,7 +602,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   obligatorio al cerrar, firma «Recibido conforme» con regla cliente/supervisor.
 - 2026-09-29 — Repo clonado en la PC de Miguel; se trabaja con Claude Code local.
   A pedido de Rodrigo: esta guía reemplaza la suya (se integraron sus reglas),
-  `git pull` al empezar cada sesión, y **push solo con permiso de Miguel**. Se
+  `git pull` al empezar cada sesión, y **push solo con permiso de Miguel** (cambiado el 2026-09-30: ver §flujo, punto 6). Se
   crean `FLUJO.md` y `TRAMPAS.md`.
 - 2026-09-29 — Actualización automática de las apps en los teléfonos (`version.json` +
   `dev/sellar_version.js`), porque el iPhone de Miguel seguía mostrando «Compartir imagen».
