@@ -469,7 +469,8 @@ facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o list
   bajaba (E-33 bajó de 1,474.8 a 123 por una orden). El 2.º equipo de una renta se quedaba con la salida.
 - `kmSalida` no se usaba. Del viaje se toma el mayor entre salida y retorno.
 **Datos (2026-09-30):** con permiso de Miguel se corrigieron 15 fichas (respaldo `equipos_antes_lecturas_…json`).
-Quedan 7 dudosas esperando su número: C-33, C-39, CM-08, E-01, E-12, E-33, MT-77.
+Las dudosas se pusieron con los números que dio Miguel: C-33 13418, C-39 70793, CM-08 6794, E-12 53.7, E-33 1474.8,
+MT-77 7296.3 (respaldo `equipos_antes_lecturas_miguel_…json`). E-01 queda en 922.8 hasta que Miguel confirme (escribió 922.08).
 Ojo: hay lecturas con errores de dedo en órdenes viejas (PATRULLA LG-0222 40,309.9 en vez de ~402,735).
 
 ## T25. En iPhone, «display:none» no oculta opciones de un menú
