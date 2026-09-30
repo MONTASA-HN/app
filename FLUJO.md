@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Lecturas a la ficha (MTG, MTS, MTT, MTL, MHG, MHS, MHT): al cerrar una orden se escribe
+  `equipos/*/horometro` (y `kilometraje` en vehículos) con `_lecturaAFicha`. Antes: vehículos solo `kilometraje`
+  (no se veía), Gerencia/Supervisión no copiaban nada, y Logística copiaba al cambiar el campo sin revisar.
 - 2026-09-30 — Solicitudes (MTG, MTS, MHG, MHS): `_solFiltrarTipos` quita del menú «Tipo de orden» los tipos del
   otro departamento (no cambia datos). En MTG existe una 2.ª copia del formulario (`-B`, mismo `id="tab-solicitudes"`)
   que no se muestra; se filtra igual.

@@ -460,6 +460,16 @@ Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
 `renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
 facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
 
+## T26. Km y horómetros de las órdenes que no llegaban a la ficha
+
+**✅ Arreglado (2026-09-30):** ver CLAUDE.md §5 «Lecturas de las órdenes a la ficha». Cómo era:
+- Vehículos: Logística y Técnicos escribían el km en `eq.kilometraje`, pero la ficha, las tarjetas y el aviso de
+  7,000 km leen `eq.horometro`. Gerencia (`_actualizarKmVehiculo`) usaba `horometro`. Dos campos distintos.
+- Horómetro: solo Técnicos (al cerrar) y Logística lo pasaban; Gerencia y Supervisión nunca. Nadie revisaba si
+  bajaba (E-33 bajó de 1,474.8 a 123 por una orden). El 2.º equipo de una renta se quedaba con la salida.
+- `kmSalida` no se usaba. Del viaje se toma el mayor entre salida y retorno.
+Ojo: hay lecturas con errores de dedo en órdenes viejas (PATRULLA LG-0222 40,309.9 en vez de ~402,735).
+
 ## T25. En iPhone, «display:none» no oculta opciones de un menú
 
 **✅ Arreglado en solicitudes (2026-09-30):** `solDeptoChange` ocultaba los tipos del otro departamento con

@@ -276,6 +276,15 @@ Supervisiones**. No asumir que es el mismo.
   monto asignado es la suma de todas. Destino internacional (Santa Ana, El
   Salvador) muestra aviso: alimentación/hospedaje a mano y gastos de frontera en
   "Otros gastos".
+- **Lecturas de las órdenes a la ficha** (desde 2026-09-30, auditoría de km/horómetros, decisiones de Miguel):
+  bloque `// ══ LECTURAS DE LAS ÓRDENES (HORÓMETRO / KM) A LA FICHA` en MTG, MTS, MTT, MTL, MHG, MHS, MHT.
+  `_lecturaAFicha(equipoId, valor, modo)` pone la lectura en `eq.horometro` (lo que muestra la ficha; en
+  vehículos con etiqueta «Kilometraje») y en vehículos también en `eq.kilometraje` (lo lee el Excel). Nunca baja
+  sola: si es menor que la ficha o más del doble, pregunta ('preguntar') o no la pasa ('silencio').
+  Se llama al CERRAR: preventivo/correctivo en las 6 apps de mantenimiento (`_lecturasMantAFicha`, también el
+  km del vehículo del viaje `o.vehiculo`) y evaluaciones en Técnicos; en Logística (`cerrarOrdenLog`) el
+  horómetro del equipo y del 2.º equipo (retorno en renta/retiro) y el km de la renta de vehículo, la grúa y el
+  vehículo del viaje (`equipoCompra`). Cambiar un campo de la orden ya no toca la ficha.
 - **Fecha del vale de alimentación = fecha FINAL de la orden** (`fechaFin`; confirmado por Miguel, 2026-09-30).
   Si no hay, usa `fechaCierre`, `fechaInicio`, `fecha`. Se arma con año/mes/día locales (ver TRAMPAS T24).
 - **Liquidación: «OTROS GASTOS»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): en la lista de
@@ -613,6 +622,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Auditoría km/horómetros: las lecturas llegan a la ficha al cerrar en todas las apps, sin bajar (T26).
 - 2026-09-30 — Solicitudes: «Tipo de orden» muestra solo los tipos del departamento (en iPhone salían todos).
 - 2026-09-30 — Errores menores: preventivos cerrados quedan «Completado» (T19), horómetros MONHACO sellan solo
   si las fichas se actualizaron (T12), caché de logística propia en MHS (T10), botón cerrar correctivo MHS (T16),
