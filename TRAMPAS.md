@@ -387,6 +387,11 @@ recordar que el tablero de flota y el mundo isométrico leen la base.
 
 ## T20. Equipos EN RENTA sin orden y ubicaciones que el mapa no puede leer
 
+**✅ Arreglado hacia adelante (2026-09-30):** links sin coordenadas ya no se aceptan (vigilante en los campos
+`…ublink…`) y EN RENTA a mano pide cliente + motivo (`eq.rentaManual`). Las 21 rentas viejas sin orden están en
+`Documents\Rentas_sin_orden_para_llenar_2026-09-30.xlsx` (fuera del repo) para que Miguel las complete y se
+regularicen. Lo de abajo describe cómo era.
+
 ### Qué pasa
 La ficha deja poner EN RENTA y escribir el cliente a mano, sin orden de entrega/renta; y se aceptan
 links cortos de Google sin coordenadas. El equipo queda «en renta» sin ubicación, fecha ni días.

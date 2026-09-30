@@ -359,6 +359,8 @@ después `saveDB`. Nodo `montasa/horometros`.
 - Quién escribe `ubicacionLink` (+ `ubicacionTs`): `_setUbLinkEquipo` (MTG 2190) al crear
   renta/entrega con link (9068/9072), botón 📍 de las órdenes, cierre de retiro → taller SPS
   (`_GPS_TALLER_SPS`). Lo borra `_gpsFichaBorrar` (MTG 7772, «🗑 Quitar ubicación»).
+- **Desde 2026-09-30:** los campos de link solo aceptan coordenadas (vigilante `_ubLinkRevisar`), y EN RENTA a
+  mano en la ficha pide cliente y motivo (`_rentaManualPedir` → `eq.rentaManual`).
 - **La ficha permite cambiar estado y cliente a mano** (`guardarDesdeModal`, MTG 4456; MTC 1031)
   sin orden de logística: no queda ubicación, fecha ni días de renta. Al 2026-09-29, 20 de los 26
   equipos MT en EN RENTA no tenían ninguna orden de renta/entrega (TRAMPAS T20).

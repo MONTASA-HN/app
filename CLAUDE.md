@@ -328,6 +328,13 @@ Supervisiones**. No asumir que es el mismo.
   quiso OpenStreetMap).
   Al cerrar un retiro, el link del equipo pasa al taller SPS
   (`_GPS_TALLER_SPS`).
+- **Ubicación solo con coordenadas y EN RENTA a mano** (desde 2026-09-30, decisiones de Miguel, riesgo 5): bloque
+  `// ══ UBICACIÓN CON COORDENADAS Y «EN RENTA» A MANO` en MTG, MTS, MTT, MTC, MHG, MHS. Un vigilante revisa
+  todo campo cuyo id contiene `ublink` al salir del campo: sin coordenadas (link corto share.google /
+  maps.app.goo.gl, dirección escrita) avisa y **borra** el valor; coordenadas sueltas se convierten en
+  `https://www.google.com/maps?q=lat,lng`. En la ficha, pasar a EN RENTA sin orden de renta/entrega abierta
+  (`_rentaManualPedir`) exige cliente y motivo (además del PIN de la ficha) y guarda `eq.rentaManual`
+  = {fecha, ts, motivo, cliente, app}.
 - **Solicitudes de repuestos (SR)**: hasta 80 filas (10 visibles al abrir, se
   agregan de 5 en 5). Varias SR por orden: la 2ª en adelante pide PIN cada vez
   y se numera ligada a la primera (`SR-0057`, `SR-0057-2`, `-3`…). Editar una SR
@@ -585,6 +592,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   ya no se suben listas enteras; se sube solo lo cambiado de cada registro (`dev/prueba_sync.js`).
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
+- 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+  Se regularizaron E-45, MT-132, MT-67 (correctivos MH-0176/77/78 en espera de repuestos) y E-15 → EN RENTA.
 - 2026-09-29 — Renta de equipo + grúa en la misma orden (`vehiculoRentaId`); cancelar renta/entrega
   devuelve los equipos a DISPONIBLE (T5).
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
