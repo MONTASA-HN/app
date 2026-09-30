@@ -108,6 +108,10 @@ mantenimiento. Mientras tanto, revisar a mano el estado del equipo después de c
 
 ## T4. En MONHACO el retiro marca el equipo DISPONIBLE al crear la orden, no al cerrarla
 
+**Decisión de Miguel (2026-09-30): se deja así.** MONHACO no usa órdenes de logística (`monhaco/logistica` vacío) y
+ninguna app de MONHACO las cierra ni cancela: si el retiro liberara el equipo solo al cerrar, quedaría EN RENTA para
+siempre. Si algún día Logística cierra retiros de MONHACO, cambiarlo entonces.
+
 ### Qué pasa
 Al generar una orden de retiro, el equipo pasa a DISPONIBLE aunque siga donde el cliente.
 En MT pasa a DISPONIBLE recién cuando Logística cierra el retiro.
@@ -362,6 +366,7 @@ Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
 - **Qué hacer:** cambiar el botón a `cerrarCorrectivo` con PIN. Arreglo chico.
 
 ### T17. Técnicos MONHACO no tiene pantalla de evaluaciones
+- **Decisión de Miguel (2026-09-30): así está bien.** Las evaluaciones de MONHACO se ven en Gerencia y Supervisión.
 - **Qué pasa:** las evaluaciones nunca se muestran (y el campo Cliente de evaluaciones no
   se ve ahí).
 - **Por qué:** no existe `#evaluacion-list` ni `tab-evaluacion` en MHT; `renderEvaluaciones`
