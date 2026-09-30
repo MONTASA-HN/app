@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='54cd56ce8e5b';
+  var APP_VERSION='da3cbecbf9ee';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6879,7 +6879,19 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
 
 // ── LISTAS ESTÁNDAR PARA VIÁTICOS (personas y descripciones de factura) ──
 const TECNICOS_VIAT = ['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Dalton Garcia','Eliberto Peña'];
-const _VIAT_DESC = ['COMBUSTIBLE','ALIMENTACION','VALE DE ALIMENTACION','DEPOSITO BANCARIO','PEAJE CORTES','PEAJE YOJOA','PEAJE SIGUATEPEQUE','PEAJE ZAMBRANO'];
+const _VIAT_DESC = ['COMBUSTIBLE','ALIMENTACION','VALE DE ALIMENTACION','DEPOSITO BANCARIO','PEAJE CORTES','PEAJE YOJOA','PEAJE SIGUATEPEQUE','PEAJE ZAMBRANO','OTROS GASTOS'];
+// «OTROS GASTOS» (2026-09-30, pedido de Miguel): gastos imprevistos que no estaban en la solicitud.
+// Al elegirlo aparece un campo para escribir cuál fue el gasto; se guarda en la factura como «detalle».
+const _VIAT_OTROS = 'OTROS GASTOS';
+function _viatEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _viatDescTexto(f){ return f ? (String(f.descripcion||'') + (f.descripcion===_VIAT_OTROS && f.detalle ? ' — ' + f.detalle : '')) : ''; }
+function _viatOtroToggle(i){
+  const s = document.getElementById('vlf-desc-'+i), t = document.getElementById('vlf-otro-'+i);
+  if(!s || !t) return;
+  const ver = s.value === _VIAT_OTROS;
+  t.style.display = ver ? 'block' : 'none';
+  if(ver && !t.value) t.focus();
+}
 function _viatPersonal(){
   const ops = (typeof OPERADORES_LOGISTICA!=='undefined') ? OPERADORES_LOGISTICA : [];
   const mots = (typeof MOTORISTAS_LOGISTICA!=='undefined') ? MOTORISTAS_LOGISTICA : [];
@@ -6934,7 +6946,7 @@ function renderPersonaRow(p, i){
 
 function renderLiquidacionForm(v, montoSol, readOnly){
   const facturas = v.facturas || [];
-  const totalFact = facturas.reduce((s,f)=>s+(f.monto||0),0);
+  const totalFact = facturas.reduce((s,f)=>s+(f&&f.monto||0),0); // f puede ser null (filas vacías)
   const diff = montoSol - totalFact;
   const hoy = new Date().toISOString().slice(0,10);
 
@@ -6953,7 +6965,7 @@ function renderLiquidacionForm(v, montoSol, readOnly){
       if(readOnly && !f.descripcion && !f.monto) return '';
       if(readOnly) return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
-        <div style="font-size:13px;margin-bottom:4px"><span style="color:var(--text3)">Descripción: </span><strong>${f.descripcion||'—'}</strong></div>
+        <div style="font-size:13px;margin-bottom:4px"><span style="color:var(--text3)">Descripción: </span><strong>${_viatEsc(_viatDescTexto(f))||'—'}</strong></div>
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;font-size:13px">
           <div><span style="color:var(--text3)">Fecha: </span><strong>${f.fecha||'—'}</strong></div>
           <div style="overflow:hidden"><span style="color:var(--text3)">N° Doc: </span><strong style="white-space:nowrap;font-size:12px">${f.ndocumento||'—'}</strong></div>
@@ -6963,7 +6975,8 @@ function renderLiquidacionForm(v, montoSol, readOnly){
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:6px">
         <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">FACTURA ${i+1}</div>
         <div class="form-group"><label>Descripción</label>
-          <select id="vlf-desc-${i}" onchange="recalcFacturas()">${_viatOpts(f.descripcion, _VIAT_DESC)}</select>
+          <select id="vlf-desc-${i}" onchange="recalcFacturas();_viatOtroToggle(${i})">${_viatOpts(f.descripcion, _VIAT_DESC)}</select>
+          <input type="text" id="vlf-otro-${i}" value="${_viatEsc(f.detalle)}" maxlength="120" placeholder="✏️ Escribe cuál fue el gasto (ej. reparación de llanta)" style="display:${f.descripcion===_VIAT_OTROS?'block':'none'};margin-top:6px">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
           <div class="form-group"><label>Fecha</label>
@@ -7276,6 +7289,7 @@ function _leerFormLiquidacion(){
     if(desc||monto){
       facturas.push({
         descripcion:desc,
+        ...(desc===_VIAT_OTROS ? { detalle:(document.getElementById('vlf-otro-'+i)?.value||'').trim() } : {}),
         fecha:document.getElementById('vlf-fecha-'+i)?.value||'',
         ndocumento:document.getElementById('vlf-ndoc-'+i)?.value||'',
         monto
@@ -7313,6 +7327,9 @@ function guardarViaticos(){
 
 function guardarLiquidacion(){
   const liqData = _leerFormLiquidacion();
+  // «OTROS GASTOS» necesita que se escriba cuál fue el gasto
+  const _sinDet = (liqData.facturas||[]).map(function(f,i){ return (f && f.descripcion===_VIAT_OTROS && !f.detalle) ? i+1 : 0; }).filter(Boolean);
+  if(_sinDet.length){ alert('En «OTROS GASTOS» escribe cuál fue el gasto.\n\nFalta en la factura ' + _sinDet.join(', ') + '.'); return; }
   const orden = _getViaticosOrden();
   if(!orden) return;
   orden.viaticos = {...(_viaticosData||{}), ...liqData};
@@ -7582,7 +7599,7 @@ function _buildLiquidacionHTML(v, orden){
 
   const factRows=Array.from({length:14},(_,i)=>{
     const f=facturas[i];
-    if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${f.descripcion}</td><td>${f.fecha||''}</td><td>${f.ndocumento||''}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
+    if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${_viatEsc(_viatDescTexto(f))}</td><td>${f.fecha||''}</td><td>${f.ndocumento||''}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
     return `<tr><td class="num">${i+1}</td><td></td><td></td><td></td><td></td></tr>`;
   }).join('');
 
