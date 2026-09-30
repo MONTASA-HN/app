@@ -401,6 +401,7 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Nombre «Nexo» en `<title>`, `apple-mobile-web-app-title` y `manifest*.json` de las 9 apps. No cambia datos.
 - 2026-09-30 — Viáticos (MTG, MTS, MTL, MHG, MHS): botón Imprimir; no escribe nada nuevo (antes de imprimir guarda
   el formulario igual que «Descargar PDF»). Base: 15 fichas con `horometro` (y `kilometraje` en vehículos) corregidos.
 - 2026-09-30 — Lecturas a la ficha (MTG, MTS, MTT, MTL, MHG, MHS, MHT): al cerrar una orden se escribe

@@ -287,6 +287,10 @@ Supervisiones**. No asumir que es el mismo.
   vehículo del viaje (`equipoCompra`). Cambiar un campo de la orden ya no toca la ficha.
 - **Fecha del vale de alimentación = fecha FINAL de la orden** (`fechaFin`; confirmado por Miguel, 2026-09-30).
   Si no hay, usa `fechaCierre`, `fechaInicio`, `fecha`. Se arma con año/mes/día locales (ver TRAMPAS T24).
+- **Nombre de la plataforma: «Nexo»** (decisión de Miguel, 2026-09-30): `<title>` y `manifest*.json` name =
+  «Nexo <Área> MT|MH» (p. ej. «Nexo Gerencia MT»); debajo del ícono (`apple-mobile-web-app-title` y short_name)
+  «Nexo Ger. MT», «Nexo Téc. MH»… Los logos de MONTASA / MONHACO se quedan. En iPhone el nombre del ícono solo
+  cambia si se quita y se vuelve a agregar la app a la pantalla de inicio. Los nombres de archivo NO cambian.
 - **Viáticos: botón «🖨 Imprimir»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): junto a «Descargar
   PDF» en solicitud y liquidación. `generarPDFViaticos(tipo, true)` arma el mismo documento y lo manda a
   `_imprimirHTML` (igual que los vales): abre la impresión sin descargar nada.
@@ -625,6 +629,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Las apps se llaman «Nexo» + área + empresa (título, manifiestos y nombre del ícono).
 - 2026-09-30 — Viáticos: botón Imprimir en solicitud y liquidación. Fichas: 15 horómetros/km corregidos en la base.
 - 2026-09-30 — Auditoría km/horómetros: las lecturas llegan a la ficha al cerrar en todas las apps, sin bajar (T26).
 - 2026-09-30 — Solicitudes: «Tipo de orden» muestra solo los tipos del departamento (en iPhone salían todos).
