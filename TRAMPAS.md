@@ -144,6 +144,12 @@ Al cancelar renta/entrega, volver al estado anterior del equipo (guardar
 
 ## T6. Eliminar una orden siempre deja el equipo DISPONIBLE
 
+**✅ Arreglado (2026-09-30):** `_revertirEstadoEquipoAlEliminar` (MTG, MHG) solo actúa si la orden borrada está
+**abierta**. Mantenimiento → vuelve a `orden.estadoEquipoAnterior` (o DISPONIBLE), también si el correctivo estaba
+«En espera de repuestos» o «En pausa». Renta/entrega → equipo, 2.º equipo y grúa de EN RENTA a DISPONIBLE. No toca
+equipos que otra orden abierta usa, ni órdenes cerradas (borrar una entrega cerrada no regresa el equipo).
+Lo de abajo describe cómo era.
+
 ### Qué pasa
 Al eliminar una orden abierta desde Gerencia, el equipo "vuelve a su estado anterior",
 pero en la práctica **siempre** vuelve a DISPONIBLE.

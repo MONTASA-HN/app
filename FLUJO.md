@@ -401,6 +401,8 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Borrar orden (MTG, MHG): `_revertirEstadoEquipoAlEliminar` usa `orden.estadoEquipoAnterior` y solo
+  con órdenes abiertas; en renta/entrega también regresa 2.º equipo y grúa.
 - 2026-09-30 — Vales de alimentación (MTG, MTS, MTL, MTT, MHG, MHS, MHT): la fecha impresa sale de `fechaFin`
   (antes `fechaCierre`). Solo cambia lo que se imprime; no se escribe nada nuevo en la base.
 - 2026-09-30 — Liquidación de viáticos (MTG, MTS, MTL, MHG, MHS): las facturas con descripción «OTROS GASTOS»
