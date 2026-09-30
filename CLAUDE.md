@@ -265,6 +265,8 @@ Supervisiones**. No asumir que es el mismo.
 - **Solo Gerencia edita o elimina órdenes de trabajo.** En Supervisión/Técnicos
   esas funciones empiezan con `toast('Solo Gerencia puede editar o eliminar…'); return;`.
   Es intencional.
+- **Supervisión MT RENTAL solo se encarga de mantenimiento** (confirmado por Miguel, 2026-09-30): su
+  departamento solo ofrece Mantenimiento y **no crea rentas ni entregas**. Es intencional; no proponerlo.
 - **Papelera**: órdenes borradas van a `<raíz>/papelera/<id>` (se conservan 2
   meses); lápidas en `<raíz>/_borradas/<id>` para que otro dispositivo no las
   resucite.
