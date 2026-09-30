@@ -197,6 +197,12 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   const cods14 = srv('equipos').map(e => e.codigo).join(',');
   ok('14. Flota de ejemplo con vendidos (MT-66 ×2) y un repetido → solo entra el equipo nuevo de verdad', cods14 === 'MT-1,MT-200', cods14);
 
+  // 15 ─ Código de un vendido reusado por un equipo distinto (otra serie) → SÍ se agrega
+  reset({ montasa: { equipos: [{ id: 'e1', codigo: 'MT-1', serie: 'SER-0001' }], vendidos: [{ id: 'v67', codigo: 'MT-67', serie: 'B16091J00110' }] } });
+  A = cliente('A', { equipos: J(srv('equipos')).concat([{ id: 'n67', codigo: 'MT-67', serie: '010409M4896' }]), vendidos: J(srv('vendidos')) });
+  await esperar(); await A.sync.guardar(); await esperar();
+  ok('15. MT-67 nuevo con otra serie que la del MT-67 vendido → se agrega', srv('equipos').some(e => e.id === 'n67'), srv('equipos').map(e => e.codigo + '/' + e.serie).join(', '));
+
   await sinDuplicados('final');
   console.log(fallas ? '\n✗ ' + fallas + ' falla(s)' : '\nTodo bien');
   process.exitCode = fallas ? 1 : 0;

@@ -316,6 +316,7 @@ Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
 ## Bugs de pantalla (la orden se guarda, pero la app se "traba" o no confirma)
 
 ### T14. Técnicos: `renderDashboard()` no existe
+- **✅ Arreglado (2026-09-30):** MTT y MHT tienen un puente `renderDashboard()` → `renderDashboardTec()`.
 - **Qué pasa:** al cerrar o finalizar, la orden sí se guarda pero revienta antes del aviso
   «cerrada» / ventana de éxito. El técnico no ve confirmación y puede repetir la orden.
 - **Por qué:** se llama `renderDashboard()` (solo existe `renderDashboardTec`): MTT 3155,
@@ -397,6 +398,23 @@ Equipos que se sabe que están en un sitio (p. ej. El Salvador: E-01, E-21, E-46
 muestra. Al 2026-09-29: 20 de 26 equipos MT en renta sin orden de logística.
 ### Qué hacer
 Exigir orden (o PIN + motivo) para EN RENTA y avisar al pegar un link corto. Decisión de Miguel.
+
+---
+
+## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
+
+### Qué pasa
+Cada empresa numera su flota desde MT-01, así que el mismo código existe en MT Rental y en MONHACO para
+máquinas distintas (p. ej. MT-67: en MT Rental serie 010409M4896, Baoli/Pegasus CPQYD-40, activo; en MONHACO
+serie B16091J00110, Baoli KBE-20, vendido). Además, al 2026-09-30 la serie B16091J00110 aparece en los
+vendidos de MONHACO como MT-67 **y** como MT-80, y en los vendidos de MT Rental como MT-80.
+### Por qué pasa
+El código no identifica a la máquina; la serie sí. Un registro de vendidos quedó con el código cambiado.
+### Cómo se nota desde afuera
+Confusiones al buscar por código entre empresas; un equipo «vendido» que parece estar activo.
+### Qué hacer
+Comparar siempre por **serie** (el sincronizador ya lo hace contra vendidos). Pendiente que Miguel diga cuál
+de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 
 ---
 

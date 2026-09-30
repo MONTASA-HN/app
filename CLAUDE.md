@@ -190,7 +190,8 @@ Supervisiones**. No asumir que es el mismo.
   `saveDB()` y las demás funciones llaman `_Sync.guardar()`, que sube solo los datos que este teléfono cambió
   de cada registro (transacción que comprueba el `id`), agrega los nuevos al final sin huecos y borra lo que
   este teléfono tuvo y quitó (máx. 2 por lista y guardado; nunca lo que la app no cargó; deja lápida en
-  `_borradas` y nunca resucita algo con lápida; nunca agrega un equipo vendido o repetido por serie/código).
+  `_borradas` y nunca resucita algo con lápida; nunca agrega un equipo vendido —comparando **solo serie e id**: los códigos MT-xx se repiten entre
+  empresas y se reusan— ni uno repetido por serie o por código de equipo propio).
   Si dos cambian el mismo dato, gana el último (decisión de Miguel). La «base» (huellas de lo último
   confirmado) vive en `localStorage` (`_sync_base_<raíz>`): lo hecho sin señal se sube al volver a abrir la
   app. La forma de los datos en Firebase NO cambió. Fotos nunca pasan por aquí. **Regla: para guardar una de
@@ -583,6 +584,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Riesgo «dos teléfonos se pisan» (T7) arreglado con el sincronizador `_Sync` en 8 apps:
   ya no se suben listas enteras; se sube solo lo cambiado de cada registro (`dev/prueba_sync.js`).
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
+- 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-29 — Renta de equipo + grúa en la misma orden (`vehiculoRentaId`); cancelar renta/entrega
   devuelve los equipos a DISPONIBLE (T5).
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
