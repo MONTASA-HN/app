@@ -460,6 +460,17 @@ Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
 `renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
 facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
 
+## T28. Fotos que traban o cierran la app en celulares de poca memoria
+
+**✅ Arreglado (2026-09-30):** cada foto (5–12 MB) se abría completa en memoria dos veces (vista previa y guardado),
+y `previsualizarFoto` rechazaba las de más de 5 MB. Ahora el bloque `FOTOS LIVIANAS` (antes de `</body>`, 9 apps)
+cambia `FileReader.prototype.readAsDataURL`: si es una imagen de más de 400 KB, primero la achica a 1280 px con
+`createImageBitmap` y lee esa versión (si falla, lee la original). Probado: 11.3 MB → 462 KB leída, 130 KB guardada.
+Se quitó el límite de 5 MB. **Ojo:** cualquier código nuevo que lea fotos con `readAsDataURL` ya recibe la versión
+achicada; si algún día se necesita la foto original, usar `URL.createObjectURL` o leer el archivo de otra forma.
+Queda un riesgo: el teléfono puede cerrar Nexo mientras la cámara está abierta; con poca memoria es más seguro tomar
+la foto con la cámara del teléfono y luego subirla con 🖼️ Galería.
+
 ## T27. Huawei / Honor: no se pueden instalar dos apps, y fotos/cámara que no funcionan
 
 **Instalar dos apps — ✅ arreglado (2026-09-30):** los 9 manifiestos compartían `scope:"/app/"` y no tenían `id`. Sin

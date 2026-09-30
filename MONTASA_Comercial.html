@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='103edc4dce98';
+  var APP_VERSION='e79a25f0c49e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1472,7 +1472,7 @@ function previsualizarFoto(inputId, previewId){
   const preview=document.getElementById(previewId);
   const file=input.files[0];
   if(!file) return;
-  if(file.size>5*1024*1024){ toast("La foto supera 5MB",true); input.value=""; return; }
+  // (sin límite de 5 MB: la foto se achica al leerla, bloque FOTOS LIVIANAS, T28)
   const reader=new FileReader();
   reader.onload=e=>{ preview.querySelector("img").src=e.target.result; preview.style.display="block"; };
   reader.readAsDataURL(file);
@@ -2775,6 +2775,40 @@ function _detalleOrdenCom(x, tipo, est){
     h.appendChild(b);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', poner); else poner();
+})();
+</script>
+<script>
+// ══ FOTOS LIVIANAS PARA CELULARES DE POCA MEMORIA (2026-09-30, T28) ══════════
+// Antes cada foto (5–12 MB, 12+ megapíxeles) se abría completa en memoria dos veces (vista previa y guardado) y en
+// celulares sencillos la app se trababa o se cerraba. Ahora, cuando la app pide leer una IMAGEN grande, primero se
+// achica a 1280 px de ancho con createImageBitmap (el teléfono la decodifica ya chica) y se lee esa versión.
+// Si algo falla, se lee la foto original como antes. Los ~20 lugares que reciben fotos siguen igual.
+(function(){
+  if(typeof FileReader === 'undefined' || !window.createImageBitmap || FileReader.prototype._nexoFotoLiviana) return;
+  var original = FileReader.prototype.readAsDataURL;
+  var ANCHO = 1280, MINIMO = 400 * 1024;
+  function aBlob(canvas){
+    return new Promise(function(res){ try{ canvas.toBlob(function(b){ res(b); }, 'image/jpeg', 0.85); }catch(e){ res(null); } });
+  }
+  function achicar(file){
+    return createImageBitmap(file, { resizeWidth: ANCHO, resizeQuality: 'medium', imageOrientation: 'from-image' }).then(function(bm){
+      var w = bm.width, h = bm.height;
+      if(w > ANCHO){ h = Math.round(h * ANCHO / w); w = ANCHO; }   // por si el navegador ignoró resizeWidth
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(bm, 0, 0, w, h);
+      try{ bm.close(); }catch(e){}
+      return aBlob(c).then(function(b){ c.width = c.height = 0; return b; });
+    });
+  }
+  FileReader.prototype.readAsDataURL = function(blob){
+    var lector = this;
+    var esFoto = blob && /^image\/(jpe?g|png|webp|heic|heif)$/i.test(blob.type || '') && blob.size > MINIMO;
+    if(!esFoto) return original.call(lector, blob);
+    achicar(blob).then(function(chica){
+      original.call(lector, (chica && chica.size && chica.size < blob.size) ? chica : blob);
+    }).catch(function(){ original.call(lector, blob); });
+  };
+  FileReader.prototype._nexoFotoLiviana = true;
 })();
 </script>
 </body>

@@ -401,6 +401,8 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Fotos livianas (9 apps): las fotos que se guardan en órdenes quedan más chicas (1280 px antes de la
+  compresión de siempre). No cambia campos ni estructura.
 - 2026-09-30 — «Acerca de Nexo» y deslizar desactivado: solo pantalla, no cambia datos.
 - 2026-09-30 — Ícono Nexo: `icons/nexo-*.png` en manifiestos, `apple-touch-icon` e `icon` de las 9 apps. No cambia datos.
 - 2026-09-30 — Íconos de 5 manifiestos → `icons/icon-192.png`/`icon-512.png` (antes `logo.png`, que no existe).

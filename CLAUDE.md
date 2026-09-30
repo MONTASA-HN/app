@@ -641,6 +641,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Fotos livianas: toda foto se achica a 1280 px al leerla (celulares de poca memoria), sin límite de 5 MB (T28).
 - 2026-09-30 — Pantalla «Acerca de Nexo» en las 9 apps y fuera el deslizar entre módulos.
 - 2026-09-30 — Respaldo diario automático de toda la base en la PC de Miguel: tarea de Windows «Nexo - respaldo
   diario» (12:00, o al encender) → `Documentsmontasa-respaldosdiariosase_AAAA-MM-DD.json.gz`, guarda 30 días,
