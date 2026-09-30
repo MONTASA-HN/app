@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e7ed3dcd5424';
+  var APP_VERSION='089309015eae';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1572,11 +1572,13 @@ function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
+      // Contador MH: solo se sube si es mayor que el del servidor, nunca lo baja (T13)
+      var _lcMH = parseInt(DB['lastCorrelativo_MH'],10)||0;
+      if(_lcMH>0 && _lcMH!==window._lcMHSubido){ window._lcMHSubido = _lcMH; window._fbDB.ref('montasa/lastCorrelativo_MH').transaction(function(c){ c = parseInt(c)||0; return _lcMH>c ? _lcMH : undefined; }).catch(function(){ window._lcMHSubido = 0; }); }
       const ts = Date.now();
       window._localWriteTs = ts;
       window._fbDB.ref('montasa').update({
         notifCompletadas: DB.notifCompletadas||{},
-        lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
       });
@@ -4589,7 +4591,7 @@ function guardarEquipo(){
   if(!codigo||!desc){ toast('Código y descripción requeridos',true); return; }
   DB.equipos.push({id:uid(),codigo,desc,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value.trim(),serie:document.getElementById('eq-serie-new').value.trim(),combustible:document.getElementById('eq-combustible').value,ubicacion:document.getElementById('eq-ubicacion-new').value.trim(),cliente:document.getElementById('eq-cliente-new').value.trim(),estado:'DISPONIBLE',horometro:'',observaciones:''});
   saveDB(); saveAllEquipos(); toggleForm('form-equipo');
-  ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>document.getElementById(id).value='');
+  ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
   renderEquipos(); toast('Equipo guardado');
 }
 function finalizarOrdenPreventivo(){
@@ -4853,7 +4855,7 @@ function guardarPreventivo(finalizar=false){
   entry.clienteOrden = ((document.getElementById('prev-cliente-orden')||{}).value||'').trim() || entry.clienteNombre || '';
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
-    if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    if(finalizar){ entry.completado=true; entry.estado='Completado'; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
     // Punto 1: al EDITAR, conservar firma original, correlativo, foto previa y datos
     // fuera del formulario. Vuelve a "En proceso" sin volver a firmarse.
     if(window._editandoOrden && window._editandoOrden.tipo==='prev'){
@@ -4873,13 +4875,14 @@ function guardarPreventivo(finalizar=false){
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
   (document.getElementById('prev-cliente-orden')||{}).value='';
-  ['prev-horometro','prev-departamento','prev-ciudad','prev-notas','prev-sugerencias','prev-proximo','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
+  ['prev-horometro','prev-departamento','prev-ciudad','prev-notas','prev-sugerencias','prev-proximo','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
   if(finalizar){
       try{
         entry.completado = true;
+        entry.estado = 'Completado'; // antes quedaba «En proceso» (T19)
         entry.fechaCompletado = new Date().toISOString().slice(0,10);
         registrarOrdenCerrada(entry,'Preventivo');
         saveDB();
@@ -4946,6 +4949,7 @@ function completarPreventivo(id){
     }
   })();
   p.completado = true;
+  p.estado = 'Completado'; // antes quedaba «En proceso» (T19)
   p.fechaCompletado = new Date().toISOString().slice(0,10);
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
@@ -5084,11 +5088,11 @@ function guardarCorrectivo(finalizar=false){
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
   (document.getElementById('corr-cliente-orden')||{}).value='';
-  ['corr-falla','corr-departamento','corr-ciudad','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('corr-equipo').value='';
-  document.getElementById('corr-sistema').value='';
-  document.getElementById('corr-cliente-fields').style.display='none';
+  ['corr-falla','corr-departamento','corr-ciudad','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  (document.getElementById('corr-equipo')||{}).value='';
+  (document.getElementById('corr-sistema')||{}).value='';
+  (document.getElementById('corr-cliente-fields')||{style:{}}).style.display='none';
   if(finalizar){
       try{
         entry.estado = 'Completado';
@@ -9807,6 +9811,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d && d.repuestos) DB.repuestos = d.repuestos;
       if(d.ordenesCerradas)DB.ordenesCerradas= d.ordenesCerradas;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
+      if(d.lastCorrelativo_MH) DB['lastCorrelativo_MH'] = Math.max(parseInt(DB['lastCorrelativo_MH'],10)||0, parseInt(d.lastCorrelativo_MH,10)||0); // T13
       if(d.solicitudes)    DB.solicitudes    = d.solicitudes;
       if(d.logistica){
         // Merge preservando vales y otros campos locales que Firebase puede no incluir
@@ -9873,6 +9878,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d && d.repuestos) DB.repuestos = d.repuestos;
       if(d.revisiones)    DB.revisiones    = d.revisiones||[];
       if(d.evaluaciones)  DB.evaluaciones  = d.evaluaciones||[];
+      if(d.lastCorrelativo_MH) DB['lastCorrelativo_MH'] = Math.max(parseInt(DB['lastCorrelativo_MH'],10)||0, parseInt(d.lastCorrelativo_MH,10)||0); // T13
       if(d.solicitudes)   DB.solicitudes   = d.solicitudes;
       if(d.equipos)       DB.equipos       = d.equipos;
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;

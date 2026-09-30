@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Preventivos: al cerrar se escribe también `estado:'Completado'` (antes solo `completado:true`).
+  `lastCorrelativo_MH` se sube por transacción (nunca baja). Horómetros MONHACO: `_cierres/_cierre` se escriben
+  después de actualizar `monhaco/equipos/*/horometro`. MHS guarda su caché en `monhaco_log_cache`.
 - 2026-09-30 — Borrar orden (MTG, MHG): `_revertirEstadoEquipoAlEliminar` usa `orden.estadoEquipoAnterior` y solo
   con órdenes abiertas; en renta/entrega también regresa 2.º equipo y grúa.
 - 2026-09-30 — Vales de alimentación (MTG, MTS, MTL, MTT, MHG, MHS, MHT): la fecha impresa sale de `fechaFin`

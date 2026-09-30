@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='eb8dc2cf23ff';
+  var APP_VERSION='d728baded4ba';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -622,6 +622,27 @@ function _horSellarGlobalSiCompleto(mes, ts){
   try{ if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_cierre').set({ ts: ts }); }catch(e){}
   return true;
 }
+// Primero actualiza las fichas y SOLO si eso termina bien sella la toma (T12, 2026-09-30). Antes se sellaba
+// primero: sin señal la toma quedaba cerrada y las fichas con el horómetro viejo, sin aviso.
+function _horFinalizarConFichas(conLectura, lecturas, sellar, alTerminar){
+  if(window._horFinalizando){ toast('Espera: ya se están actualizando las fichas', true); return; }
+  window._horFinalizando = true;
+  toast('⏳ Actualizando horómetros en las fichas…');
+  let listo = false;
+  const plazo = setTimeout(function(){
+    if(listo) return; listo = true; window._horFinalizando = false;
+    toast('⚠️ No se pudieron actualizar las fichas (¿sin señal?). La toma NO se finalizó: intenta de nuevo.', true);
+  }, 20000);
+  _horFichasActualizar(conLectura, lecturas).then(function(n){
+    if(listo) return; listo = true; clearTimeout(plazo); window._horFinalizando = false;
+    sellar();
+    alTerminar(n);
+    renderHorometros(_HC_HOR_CONT);
+  }).catch(function(){
+    if(listo) return; listo = true; clearTimeout(plazo); window._horFinalizando = false;
+    toast('⚠️ No se pudieron actualizar las fichas. La toma NO se finalizó: intenta de nuevo.', true);
+  });
+}
 function finalizarTomaCliente(cli){
   const mes = _horMesVista || horMesActual();
   const ck = _horCliKey(cli);
@@ -637,14 +658,15 @@ function finalizarTomaCliente(cli){
   if(!conLectura.length){ toast('No hay lecturas de '+cli+' para finalizar', true); return; }
   const pend = grupo.length - conLectura.length;
   if(!confirm('\u00bfFinalizar la toma de '+cli+' ('+horMesLabel(mes)+')?\n\nLos hor\u00f3metros de '+conLectura.length+' equipos se actualizar\u00e1n en la ficha de cada equipo y la hoja quedar\u00e1 en solo lectura.'+(pend?('\n\n(Ojo: quedan '+pend+' equipos de '+cli+' sin toma)'):''))) return;
-  const ts = Date.now();
-  _horSellarCliente(mes, ck, ts);
-  const completo = _horSellarGlobalSiCompleto(mes, ts);
-  _horFichasActualizar(conLectura, lecturas).then(function(n){
+  let completo = false;
+  _horFinalizarConFichas(conLectura, lecturas, function(){
+    const ts = Date.now();
+    _horSellarCliente(mes, ck, ts);
+    completo = _horSellarGlobalSiCompleto(mes, ts);
+  }, function(n){
     if(HOR_PRUEBA) toast('\u2705 (PRUEBA) '+cli+' finalizada \u2014 fichas reales NO tocadas'+(completo?' \u00b7 toma completa':''));
     else toast('\u2705 '+cli+' finalizada \u2014 '+n+' fichas actualizadas'+(completo?' \u00b7 toma completa':''));
   });
-  renderHorometros(_HC_HOR_CONT);
 }
 function finalizarTomaHorometros(){
   // Finaliza TODOS los clientes que sigan pendientes
@@ -660,14 +682,14 @@ function finalizarTomaHorometros(){
   pendientes.forEach(function(c){ (grupos[c]||[]).forEach(function(e){ if(_horTiene(lecturas[e.id])) conLectura.push(e); }); });
   if(!conLectura.length){ toast('No hay lecturas para finalizar', true); return; }
   if(!confirm('\u00bfFinalizar la toma de TODOS los clientes pendientes ('+pendientes.join(', ')+')?\n\nLos hor\u00f3metros de '+conLectura.length+' equipos se actualizar\u00e1n en la ficha de cada equipo.')) return;
-  const ts = Date.now();
-  pendientes.forEach(function(c){ _horSellarCliente(mes, _horCliKey(c), ts); });
-  _horSellarGlobalSiCompleto(mes, ts);
-  _horFichasActualizar(conLectura, lecturas).then(function(n){
+  _horFinalizarConFichas(conLectura, lecturas, function(){
+    const ts = Date.now();
+    pendientes.forEach(function(c){ _horSellarCliente(mes, _horCliKey(c), ts); });
+    _horSellarGlobalSiCompleto(mes, ts);
+  }, function(n){
     if(HOR_PRUEBA) toast('\u2705 (PRUEBA) Toma finalizada \u2014 fichas reales NO tocadas');
     else toast('\u2705 Toma finalizada \u2014 '+n+' fichas actualizadas');
   });
-  renderHorometros(_HC_HOR_CONT);
 }
 
 // ── NUEVA TOMA (mes manual) + MINIATURAS de tomas finalizadas ────────────────
@@ -877,8 +899,10 @@ function horFirmaGuardar(ck, rol){
   toast('Firma guardada \u2713');
 }
 function horFirmaBorrar(ck, rol){
-  if(!confirm('\u00bfBorrar esta firma?')) return;
   const mes = _horMesVista || horMesActual();
+  // Toma ya finalizada: sus firmas no se borran (T12)
+  if(_horCierreCli(mes, ck)){ toast('Esta toma ya fue finalizada: sus firmas no se pueden borrar', true); return; }
+  if(!confirm('\u00bfBorrar esta firma?')) return;
   try{ delete DB.horometros[mes]._firmas[ck][rol]; }catch(e){}
   try{ if(window._fbDB) window._fbDB.ref('monhaco_prueba/horometros/'+mes+'/_firmas/'+ck+'/'+rol).remove(); }catch(e){}
   renderHorometros(_HC_HOR_CONT);

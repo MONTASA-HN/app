@@ -252,6 +252,8 @@ Encender `_fbReady` desde el listener cuando llegue un snapshot con datos, o rei
 
 ## T10. Supervisión MONHACO usa la caché de logística de MT
 
+**✅ Arreglado (2026-09-30):** MHS usa ahora `monhaco_log_cache` (las 6 lecturas/escrituras). Lo de abajo describe cómo era.
+
 ### Qué pasa
 En un mismo teléfono (o PC) que abra MT y MONHACO, la logística en caché de una empresa
 se mezcla con la de la otra.
@@ -288,6 +290,10 @@ Copiar el enfoque de MTG (subir el objeto completo). Arreglo chico-mediano.
 
 ## T12. Horómetros MONHACO: la toma se sella aunque no se actualicen las fichas
 
+**✅ Arreglado (2026-09-30):** `_horFinalizarConFichas` (MHL y su copia de prueba) actualiza primero las fichas y solo si
+terminan bien sella la toma; si falla o pasan 20 s sin señal, avisa y la toma sigue abierta para reintentar.
+No deja finalizar dos veces a la vez. `horFirmaBorrar` ya no borra firmas de una toma finalizada.
+
 ### Qué pasa
 Al finalizar una toma, primero se sella y después se actualizan las fichas de los
 equipos. Si lo segundo falla (señal), la toma queda cerrada y las fichas con el
@@ -304,6 +310,9 @@ Actualizar fichas primero y sellar al confirmar, o reintentar la actualización.
 ---
 
 ## T13. Contador de correlativos que puede bajar
+
+**✅ Arreglado (2026-09-30):** `saveDB` (MTG, MTS, MHG, MHS) ya no sube `lastCorrelativo_MH` tal cual: lo sube con una
+transacción que nunca lo baja, y al abrir se queda con el mayor entre el del teléfono y el del servidor.
 
 ### Qué pasa
 `saveDB` de Gerencia/Supervisión sube `lastCorrelativo_MH: DB['lastCorrelativo_MH']||0`,
@@ -331,6 +340,9 @@ Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
   `renderDashboardTec`. Arreglo chico.
 
 ### T15. Gerencia: finalizar un correctivo desde el formulario revienta a medio camino
+- **✅ Arreglado (2026-09-30):** la limpieza del formulario salta los campos que no existen (MTG, MHG, MTS, MHS);
+  el que reventaba al final era `corr-cliente-fields`. Probado: la orden queda Completado, llega a `ordenesCerradas`
+  y sale «¿Cómo quedó el equipo?».
 - **Qué pasa:** después de `saveDB` intenta limpiar campos que no existen → error →
   **`registrarOrdenCerrada` no se ejecuta** (la orden no llega a `ordenesCerradas`), el
   formulario no se limpia y no sale el aviso.
@@ -340,6 +352,8 @@ Leer `lastCorrelativo_MH` al abrir, o no incluirlo en `saveDB`.
 - **Qué hacer:** saltar los que no existen (`const el=…; if(el) el.value=''`). Arreglo chico.
 
 ### T16. Supervisión MONHACO: «✅ Cerrar correctivo (PIN)» no cierra esa orden
+- **✅ Arreglado (2026-09-30):** el botón pide PIN y llama `cerrarCorrectivo(id)`. «Completar preventivo (PIN)» también
+  pide PIN ahora (antes no lo pedía aunque lo decía).
 - **Qué pasa:** sale "faltan campos" o, si el formulario de orden nueva tiene datos,
   **crea un correctivo nuevo**. No pide PIN. La orden de la tarjeta nunca se cierra.
 - **Por qué:** el botón (MHS 9168) llama `finalizarOrdenCorrectivo('id')`, pero esa
@@ -374,6 +388,9 @@ teléfonos no se enteran de ese cambio (no rompe nada, solo no avisa).
 ---
 
 ## T19. Los preventivos cerrados siguen diciendo «En proceso»
+
+**✅ Arreglado (2026-09-30):** al cerrar un preventivo (guardarPreventivo/completarPreventivo en MTG, MTS, MTT, MHG, MHS,
+MHT) también se pone `estado='Completado'`. Los 29 viejos se corrigen en la base aparte, con permiso de Miguel.
 
 ### Qué pasa
 Al cerrar un preventivo queda `completado = true`, pero `estado` se queda en «En proceso»
