@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='55499d4ed62f';
+  var APP_VERSION='e2cf36ab9d1a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -129,6 +129,89 @@ function _fbRefPorId(ruta){
       });
     }
   };
+}
+</script>
+<script>
+// ══ ESTADO DEL EQUIPO AL ABRIR Y CERRAR MANTENIMIENTO ═══════════════════════
+// Regla única en Gerencias, Supervisiones y Técnicos (decisión de Miguel, 2026-09-30; TRAMPAS T3).
+// Antes el estado dependía de quién cerraba: Técnicos dejaba DISPONIBLE una máquina que seguía
+// rota, y Gerencia/Supervisión dejaban EN MANTENIMIENTO para siempre una ya reparada.
+//  · Al ABRIR cualquier preventivo/correctivo el equipo pasa a EN MANTENIMIENTO y la orden guarda
+//    el estado que tenía (estadoEquipoAnterior). Antes el formulario de Gerencia lo ponía MAL ESTADO.
+//  · Al CERRAR se pregunta «¿Cómo quedó el equipo?»: ✅ operativo → vuelve a EN RENTA o
+//    DEMO/PRESTAMO si estaba así, si no DISPONIBLE; ⚠️ sigue con falla → MAL ESTADO. La respuesta
+//    queda en la orden (equipoQuedo). Si el equipo tiene OTRA orden de mantenimiento abierta, sigue
+//    EN MANTENIMIENTO. Si nadie contesta (se cierra la app), el equipo se queda EN MANTENIMIENTO.
+//  · Una orden «En espera de repuestos» no se puede cerrar.
+//  · No aplica a equipos de cliente ni a los genéricos (talleres).
+function _eqMantAplica(eq){ return !!(eq && !eq.esEquipoCliente && !eq.esGenerico); }
+// Otra orden de mantenimiento ABIERTA del mismo equipo (o null)
+function _eqMantOtraAbierta(equipoId, exceptoId){
+  var p = (DB.preventivos||[]).find(function(o){ return o && o.id!==exceptoId && o.equipoId===equipoId && !o.completado && o.estado!=='Cancelado'; });
+  if(p) return p;
+  return (DB.correctivos||[]).find(function(o){ return o && o.id!==exceptoId && o.equipoId===equipoId && o.estado!=='Completado' && o.estado!=='Cancelado'; }) || null;
+}
+function _eqPonerEstado(eq, estado){
+  eq.estado = estado;
+  try{ if(typeof _syncEquipoCampoFB==='function') _syncEquipoCampoFB(eq.id, 'estado', estado); }catch(e){}
+}
+function _eqAbrirMant(orden){
+  if(!orden || !orden.equipoId) return;
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id===orden.equipoId; });
+  if(!_eqMantAplica(eq)) return;
+  if(!orden.estadoEquipoAnterior){
+    var ant = eq.estado || 'DISPONIBLE';
+    if(ant==='EN MANTENIMIENTO'){ var otra = _eqMantOtraAbierta(eq.id, orden.id); ant = (otra && otra.estadoEquipoAnterior) || 'DISPONIBLE'; }
+    orden.estadoEquipoAnterior = ant;
+  }
+  if(eq.estado!=='EN MANTENIMIENTO') _eqPonerEstado(eq, 'EN MANTENIMIENTO');
+}
+function _eqDestinoOperativo(orden){
+  var a = orden && orden.estadoEquipoAnterior;
+  return (a==='EN RENTA' || a==='DEMO/PRESTAMO') ? a : 'DISPONIBLE';
+}
+function _eqCerrarMant(orden){
+  if(!orden || !orden.equipoId) return;
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id===orden.equipoId; });
+  if(!_eqMantAplica(eq)) return;
+  if(_eqMantOtraAbierta(eq.id, orden.id)){
+    if(eq.estado!=='EN MANTENIMIENTO') _eqPonerEstado(eq, 'EN MANTENIMIENTO');
+    try{ toast('🔧 '+eq.codigo+' sigue EN MANTENIMIENTO: tiene otra orden abierta'); }catch(e){}
+    return;
+  }
+  _eqPreguntarComoQuedo(eq, orden, function(resp){
+    orden.equipoQuedo = resp;
+    var destino = resp==='falla' ? 'MAL ESTADO' : _eqDestinoOperativo(orden);
+    _eqPonerEstado(eq, destino);
+    try{ saveDB(); }catch(e){}
+    try{ if(typeof renderEquipos==='function') renderEquipos(); }catch(e){}
+    try{ toast('Equipo '+eq.codigo+' → '+destino); }catch(e){}
+  });
+}
+// «Cerrar» bloqueado mientras la orden espera repuestos
+function _eqEsperaRepuestos(orden){
+  if(orden && orden.estado==='En espera de repuestos'){
+    alert('⚠️ La orden '+(orden.correlativo||'')+' está «En espera de repuestos».\n\nCambia su estado cuando lleguen los repuestos y se termine el trabajo; mientras tanto el equipo sigue EN MANTENIMIENTO.');
+    return true;
+  }
+  return false;
+}
+function _eqPreguntarComoQuedo(eq, orden, cb){
+  var viejo = document.getElementById('eq-quedo-ov'); if(viejo) viejo.remove();
+  var limpio = function(t){ return String(t==null?'':t).replace(/[<>"&]/g,''); };
+  var ov = document.createElement('div'); ov.id = 'eq-quedo-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99997;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:DM Sans,Arial,sans-serif">'
+    + '<div style="font-size:17px;font-weight:800;color:#1f3864;margin-bottom:4px">¿Cómo quedó el equipo?</div>'
+    + '<div style="font-size:13px;color:#555;margin-bottom:14px">'+limpio(eq.codigo)+' · orden '+limpio(orden.correlativo)+'</div>'
+    + '<button type="button" id="eq-quedo-ok" style="display:block;width:100%;padding:14px;margin-bottom:10px;border:none;border-radius:10px;background:#1d6b45;color:#fff;font-size:15px;font-weight:800;cursor:pointer">✅ Quedó operativo</button>'
+    + '<button type="button" id="eq-quedo-mal" style="display:block;width:100%;padding:14px;border:none;border-radius:10px;background:#a32d2d;color:#fff;font-size:15px;font-weight:800;cursor:pointer">⚠️ Sigue con falla</button>'
+    + '<div style="font-size:11.5px;color:#777;margin-top:10px;line-height:1.4">Operativo: pasa a <b>'+_eqDestinoOperativo(orden)+'</b>. Con falla: queda <b>MAL ESTADO</b> y no se puede rentar.</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  var fin = function(r){ ov.remove(); cb(r); };
+  ov.querySelector('#eq-quedo-ok').onclick = function(){ fin('operativo'); };
+  ov.querySelector('#eq-quedo-mal').onclick = function(){ fin('falla'); };
 }
 </script>
 <script>
@@ -7850,7 +7933,7 @@ function guardarPreventivo(finalizar=false){
       window._editandoOrden = null;
     }
     DB.preventivos.push(entry);
-    equipoAInactivo(equipoId);
+    _eqAbrirMant(entry); if(finalizar) _eqCerrarMant(entry);   // regla única (T3): antes MAL ESTADO
     saveDB(); toggleForm('form-prev');
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
@@ -7881,6 +7964,7 @@ function guardarPreventivo(finalizar=false){
 function completarPreventivo(id){
   const p = DB.preventivos.find(x=>x.id===id);
   if(!p) return;
+  if(_eqEsperaRepuestos(p)) return;
   const faltantes = [];
   if(!p.fechaInicio)   faltantes.push('Fecha y hora de inicio');
   if(!p.fechaFin)      faltantes.push('Fecha y hora de finalización');
@@ -7927,7 +8011,7 @@ function completarPreventivo(id){
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
   registrarOrdenCerrada(p, 'Preventivo');
-  equipoADisponible(p.equipoId);
+  _eqCerrarMant(p);   // pregunta «¿Cómo quedó el equipo?» (regla única, T3)
   saveDB();
   renderPreventivos(); renderDashboard();
   toast('Orden ' + (p.correlativo||'') + ' cerrada y guardada en Excel');
@@ -8185,7 +8269,7 @@ function guardarCorrectivo(finalizar=false){
       window._editandoOrden = null;
     }
     DB.correctivos.push(entry);
-    equipoAInactivo(equipoId);
+    _eqAbrirMant(entry); if(finalizar) _eqCerrarMant(entry);   // regla única (T3): antes MAL ESTADO
     saveDB(); toggleForm('form-corr');
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
@@ -8216,6 +8300,7 @@ function guardarCorrectivo(finalizar=false){
 function cerrarCorrectivo(id){
   const c = DB.correctivos.find(x=>x.id===id);
   if(!c) return;
+  if(_eqEsperaRepuestos(c)) return;
   const faltantes = [];
   if(!c.sistema)       faltantes.push('Sistema afectado');
   if(!c.fechaInicio)   faltantes.push('Fecha y hora de inicio');
@@ -8260,7 +8345,7 @@ function cerrarCorrectivo(id){
     }
   })();
   registrarOrdenCerrada(c, 'Correctivo');
-  equipoADisponible(c.equipoId);
+  _eqCerrarMant(c);   // pregunta «¿Cómo quedó el equipo?» (regla única, T3)
   saveDB();
   renderCorrectivos(); renderDashboard();
   toast('Orden ' + (c.correlativo||'') + ' cerrada y guardada en Excel');

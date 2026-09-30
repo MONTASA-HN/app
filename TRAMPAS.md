@@ -75,6 +75,11 @@ por id. Aplicarlo en todas las apps a la vez.
 
 ## T3. El estado del equipo al cerrar depende de quién cierra la orden
 
+**✅ Arreglado (2026-09-30):** regla única en las 6 apps (CLAUDE.md §5): al abrir → EN MANTENIMIENTO; al cerrar
+se pregunta «¿Cómo quedó el equipo?» (operativo / sigue con falla); «En espera de repuestos» no se cierra; con
+otra orden abierta sigue EN MANTENIMIENTO. Los 4 equipos EN MANTENIMIENTO sin orden del 2026-09-29 (E-15, E-45,
+MT-132, MT-67) no eran por este error: se habían cambiado a mano en la ficha. Lo de abajo describe cómo era.
+
 ### Qué pasa
 - **Cerrada desde Técnicos**: si el equipo está EN MANTENIMIENTO sale `DISPONIBLE`
   (o `EN RENTA` si antes estaba en renta), **aunque antes de la orden estuviera en MAL

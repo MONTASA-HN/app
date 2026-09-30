@@ -307,6 +307,14 @@ Supervisiones**. No asumir que es el mismo.
   cancelado» con «↩ Reactivar aviso (PIN)» (borra `retiroCancelado`).
   Logística muestra el retiro cancelado en el detalle. Se sincroniza solo esa
   orden con `_sincronizarLogisticaConReintento(o.id)`.
+- **Estado del equipo en mantenimiento** (regla única desde 2026-09-30, decisión de Miguel, T3): bloque
+  `// ══ ESTADO DEL EQUIPO AL ABRIR Y CERRAR MANTENIMIENTO` idéntico en MTG, MTS, MTT, MHG, MHS, MHT.
+  Al **abrir** cualquier preventivo/correctivo (`_eqAbrirMant`) el equipo pasa a EN MANTENIMIENTO y la
+  orden guarda `estadoEquipoAnterior` (el formulario de Gerencia ya no pone MAL ESTADO). Al **cerrar**
+  (`_eqCerrarMant`) se pregunta «¿Cómo quedó el equipo?»: ✅ operativo → EN RENTA / DEMO-PRESTAMO si
+  estaba así, si no DISPONIBLE; ⚠️ sigue con falla → MAL ESTADO; se guarda `o.equipoQuedo`. Con otra
+  orden de mantenimiento abierta del mismo equipo, sigue EN MANTENIMIENTO. Una orden «En espera de
+  repuestos» no se puede cerrar (`_eqEsperaRepuestos`). No aplica a equipos de cliente ni genéricos.
 - **Estados de equipo**: al cerrar una renta o retiro, el equipo vuelve a
   DISPONIBLE (salvo EN MANTENIMIENTO / MAL ESTADO). Se escribe en la ficha
   (`<raíz>/equipos/<idx>/estado`). Lista completa de estados y caminos en `FLUJO.md`.
@@ -574,6 +582,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Riesgo «escrituras por posición» (T2) arreglado con `_fbRefPorId` en 7 apps.
 - 2026-09-29 — Riesgo «dos teléfonos se pisan» (T7) arreglado con el sincronizador `_Sync` en 8 apps:
   ya no se suben listas enteras; se sube solo lo cambiado de cada registro (`dev/prueba_sync.js`).
+- 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-29 — Renta de equipo + grúa en la misma orden (`vehiculoRentaId`); cancelar renta/entrega
   devuelve los equipos a DISPONIBLE (T5).
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;

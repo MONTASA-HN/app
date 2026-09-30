@@ -143,6 +143,10 @@ MTT 3087 / 3542 · MHT 2161 / 2592.
 
 ## 3. Cerrar la orden (y a qué estado vuelve el equipo)
 
+> **Desde 2026-09-30 el mantenimiento sigue una regla única** (`_eqAbrirMant` / `_eqCerrarMant`, CLAUDE.md §5):
+> la pregunta «¿Cómo quedó el equipo?» decide DISPONIBLE / EN RENTA / MAL ESTADO en las 6 apps. Las filas de
+> mantenimiento de la tabla de abajo describen cómo era antes; logística no cambió.
+
 | Quién cierra | Función | Qué le pasa al equipo |
 |---|---|---|
 | Gerencia/Supervisión MT y MONHACO | `completarPreventivo` (MTG 7896, MHG 7502), `cerrarCorrectivo` (MTG 8236, MHG ~7870) → `equipoADisponible` (MTG 6102) | **Solo pasa `MAL ESTADO` → `DISPONIBLE`.** Si el equipo estaba `EN MANTENIMIENTO` (orden nacida de solicitud) **se queda así** (T3) |
