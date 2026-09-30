@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='42106a1fd03c';
+  var APP_VERSION='d908927bd2e5';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2681,38 +2681,44 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
 
 // ── REVERTIR ESTADO DE EQUIPO AL ELIMINAR UNA ORDEN ─────────────────────────
 function _revertirEstadoEquipoAlEliminar(orden){
+  // Riesgo 6 (2026-09-30): al borrar una orden ABIERTA el equipo vuelve al estado que tenía antes de ella.
+  //  · Mantenimiento (preventivo, correctivo —también «En espera de repuestos» o «En pausa»—, revisión,
+  //    evaluación): vuelve a orden.estadoEquipoAnterior; si no hay, a DISPONIBLE.
+  //  · Renta / entrega abierta: el equipo, el 2.º equipo y la grúa salen de EN RENTA a DISPONIBLE.
+  //  Nunca se toca un equipo que otra orden abierta sigue usando, ni una orden ya cerrada (una entrega
+  //  cerrada es una renta que sigue: borrarla no regresa el equipo).
   if(!orden) return;
-  // Renta con grúa: la grúa vuelve a DISPONIBLE si estaba EN RENTA y ninguna otra orden activa la usa
-  if(orden.vehiculoRentaId){
-    const _g = DB.equipos.find(e=>e.id===orden.vehiculoRentaId);
-    const _gid = orden.vehiculoRentaId;
-    const _otraG = (DB.logistica||[]).some(o=>o && o.id!==orden.id && !o.cerrado && o.estado!=='Cancelado' && (o.equipoId===_gid || o.equipoId2===_gid || o.vehiculoRentaId===_gid));
-    if(_g && _g.estado==='EN RENTA' && !_otraG){ _g.estado = 'DISPONIBLE'; _syncEquipoCampoFB(_gid, 'estado', 'DISPONIBLE'); }
+  const esLog = !!orden.tipoLogistica;
+  const abierta = esLog
+    ? (!orden.cerrado && orden.estado!=='Cancelado' && orden.estado!=='Completado')
+    : (!orden.completado && orden.estado!=='Completado' && orden.estado!=='Cancelado');
+  if(!abierta) return;
+  const _otraAbierta = function(eid){
+    return (DB.logistica||[]).some(o=>o && o.id!==orden.id && !o.cerrado && o.estado!=='Cancelado' && (o.equipoId===eid || o.equipoId2===eid || o.vehiculoRentaId===eid))
+      || (DB.preventivos||[]).some(p=>p && p.id!==orden.id && p.equipoId===eid && !p.completado && p.estado!=='Cancelado')
+      || (DB.correctivos||[]).some(c=>c && c.id!==orden.id && c.equipoId===eid && c.estado!=='Completado' && c.estado!=='Cancelado')
+      || (DB.revisiones||[]).some(r=>r && r.id!==orden.id && r.equipoId===eid && !r.completado && r.estado!=='Completado')
+      || (DB.evaluaciones||[]).some(v=>v && v.id!==orden.id && v.equipoId===eid && !v.completado && v.estado!=='Completado');
+  };
+  const _poner = function(eid, desde, hacia){
+    if(!eid || eid==='__cliente__') return;
+    const eq = DB.equipos.find(e=>e && e.id===eid);
+    if(!eq || eq.estado!==desde || _otraAbierta(eid)) return;
+    eq.estado = hacia;
+    delete eq.estadoAntesDeMant;
+    _syncEquipoCampoFB(eid, 'estado', hacia);
+  };
+  if(esLog){
+    if(orden.tipoLogistica==='renta' || orden.tipoLogistica==='entrega'){
+      _poner(orden.equipoId, 'EN RENTA', 'DISPONIBLE');
+      if(orden.equipoId2) _poner(orden.equipoId2, 'EN RENTA', 'DISPONIBLE');
+      if(orden.vehiculoRentaId) _poner(orden.vehiculoRentaId, 'EN RENTA', 'DISPONIBLE');
+    }
+    return;
   }
-  const equipoId = orden.equipoId;
-  if(!equipoId || equipoId==='__cliente__') return;
-  const eq = DB.equipos.find(e=>e.id===equipoId);
-  if(!eq) return;
-  const tipoLog = orden.tipoLogistica;
-  const estadoActual = eq.estado;
-  // Solo revertir si el estado actual corresponde al tipo de orden eliminada
-  const corresponde =
-    (tipoLog==='renta' && estadoActual==='EN RENTA') ||
-    (tipoLog==='entrega' && estadoActual==='EN RENTA') ||
-    ((orden.completado===false || orden.estado==='En proceso' || orden.estado==='Pendiente') && estadoActual==='EN MANTENIMIENTO');
-  if(!corresponde) return;
-  // Verificar si hay OTRA orden activa para el mismo equipo
-  const otrasActivas = [
-    ...(DB.logistica||[]).filter(o=>o.id!==orden.id && o.equipoId===equipoId && !o.cerrado && o.estado!=='Cancelado'),
-    ...(DB.preventivos||[]).filter(p=>p.id!==orden.id && p.equipoId===equipoId && !p.completado),
-    ...(DB.correctivos||[]).filter(c=>c.id!==orden.id && c.equipoId===equipoId && c.estado!=='Completado'&&c.estado!=='Cancelado'),
-  ];
-  if(otrasActivas.length > 0) return;
-  // Revertir a estado previo
-  const estadoAnterior = eq.estadoAntesDeMant || 'DISPONIBLE';
-  eq.estado = estadoAnterior;
-  delete eq.estadoAntesDeMant;
-  _syncEquipoCampoFB(equipoId, 'estado', eq.estado);
+  let ant = String(orden.estadoEquipoAnterior||'').toUpperCase().trim();
+  if(!ant || ant==='EN MANTENIMIENTO') ant = 'DISPONIBLE';
+  _poner(orden.equipoId, 'EN MANTENIMIENTO', ant);
 }
 
 
