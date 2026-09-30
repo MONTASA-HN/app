@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='aee1d4255de7';
+  var APP_VERSION='115f79c289c9';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -212,6 +212,62 @@ function _eqPreguntarComoQuedo(eq, orden, cb){
   var fin = function(r){ ov.remove(); cb(r); };
   ov.querySelector('#eq-quedo-ok').onclick = function(){ fin('operativo'); };
   ov.querySelector('#eq-quedo-mal').onclick = function(){ fin('falla'); };
+}
+</script>
+<script>
+// ══ UBICACIÓN CON COORDENADAS Y «EN RENTA» A MANO ══════════════════════════
+// Decisiones de Miguel, 2026-09-30 (riesgo 5 del informe; TRAMPAS T20):
+//  · Los links de ubicación tienen que traer COORDENADAS: el mapa de la flota no puede ubicar links
+//    cortos (share.google, maps.app.goo.gl) ni direcciones escritas. Un vigilante revisa TODOS los
+//    campos «…ublink…» al salir del campo: si no hay coordenadas avisa y borra el valor (no se guarda).
+//    Coordenadas sueltas («15.5123, -88.0257») se convierten en link de Google Maps.
+//  · Poner un equipo EN RENTA desde la ficha, sin orden de renta/entrega abierta, pide cliente y
+//    motivo (además del PIN que ya pide la ficha) y queda anotado en eq.rentaManual.
+function _ubCoords(t){
+  var s = String(t||''); try{ s = decodeURIComponent(s); }catch(e){}
+  var m = s.match(/[?&](?:q|query|ll|daddr|destination|center)=(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)/i)
+       || s.match(/@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/)
+       || s.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+  if(!m) return null;
+  var la = parseFloat(m[1]), ln = parseFloat(m[2]);
+  if(!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180 || (la === 0 && ln === 0)) return null;
+  return [la, ln];
+}
+function _ubLinkRevisar(input){
+  var v = String(input.value||'').trim();
+  if(!v) return true;
+  var c = _ubCoords(v);
+  if(c){
+    if(!/^https?:\/\//i.test(v)) input.value = 'https://www.google.com/maps?q=' + c[0] + ',' + c[1];
+    return true;
+  }
+  var corto = /share\.google|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(v);
+  alert('⚠️ ' + (corto ? 'Ese es un link corto de Google: no trae coordenadas' : 'Ese link o dirección no trae coordenadas')
+    + ', así que el mapa no puede ubicar el equipo y no se guarda.\n\nCómo hacerlo:\n'
+    + '• En la orden, usa el botón 📍 para capturar la ubicación con el GPS.\n'
+    + '• O en Google Maps mantén el dedo sobre el punto, copia las coordenadas (ej. 15.5123, -88.0257) y pégalas aquí.');
+  input.value = '';
+  return false;
+}
+document.addEventListener('change', function(ev){
+  var t = ev.target;
+  if(t && t.tagName === 'INPUT' && /ublink/i.test(t.id || '') && !/btn/i.test(t.id || '')) _ubLinkRevisar(t);
+}, true);
+// ¿Hay una orden de renta/entrega abierta con este equipo (equipo, 2.º equipo o grúa)?
+function _rentaAbiertaDe(eid){
+  return (typeof DB !== 'undefined' && DB && DB.logistica || []).some(function(o){
+    return o && !o.cerrado && o.estado !== 'Cancelado' && (o.tipoLogistica === 'renta' || o.tipoLogistica === 'entrega')
+      && (o.equipoId === eid || o.equipoId2 === eid || o.vehiculoRentaId === eid);
+  });
+}
+// Ficha: pasar a EN RENTA sin orden pide cliente y motivo. Devuelve false si no se debe guardar.
+function _rentaManualPedir(e, nuevoEstado, cliente){
+  if(!e || nuevoEstado !== 'EN RENTA' || e.estado === 'EN RENTA' || _rentaAbiertaDe(e.id)) return true;
+  if(!cliente){ alert('Para poner ' + (e.codigo || 'el equipo') + ' EN RENTA sin una orden de renta o entrega, escribe primero el cliente en la ficha.'); return false; }
+  var m = prompt('Motivo para poner ' + (e.codigo || 'el equipo') + ' EN RENTA sin orden de renta/entrega\n(p. ej.: renta anterior a la app, renta por hora):', '');
+  if(!m || !m.trim()){ try{ toast('No se guardó: falta el motivo', true); }catch(x){} return false; }
+  e.rentaManual = { fecha: new Date().toISOString().slice(0, 10), ts: Date.now(), motivo: m.trim(), cliente: cliente, app: String(document.title || '') };
+  return true;
 }
 </script>
 <script>
@@ -4886,6 +4942,8 @@ function guardarDesdeModal(){
   solicitarPINAccion(()=>{
     const e = DB.equipos.find(x => x.id === modalEquipoId);
     if(!e) return;
+    // EN RENTA sin orden de renta/entrega: pide cliente y motivo (riesgo 5)
+    if(!_rentaManualPedir(e, document.getElementById('det-estado').value, (document.getElementById('det-cliente').value||'').trim())) return;
     e.estado      = document.getElementById('det-estado').value;
     e.ubicacion   = document.getElementById('det-ubicacion').value.trim();
     const _dUbG = document.getElementById('det-ublink');
