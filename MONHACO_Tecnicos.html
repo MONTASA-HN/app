@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='5028fdbab19f';
+  var APP_VERSION='8cf05e1b2a94';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2671,7 +2671,7 @@ function guardarPreventivo(finalizar=false){
   }
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
-    if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    if(finalizar){ entry.completado=true; entry.estado='Completado'; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
     const _eqAuto = DB.equipos.find(e=>e.id===entry.equipoId);
     if(_eqAuto) entry.estadoEquipoAnterior = _eqAuto.estado || 'DISPONIBLE';
     DB.preventivos.push(entry);
@@ -2687,6 +2687,7 @@ function guardarPreventivo(finalizar=false){
   if(finalizar){
       try{
         entry.completado = true;
+        entry.estado = 'Completado'; // antes quedaba «En proceso» (T19)
         entry.fechaCompletado = new Date().toISOString().slice(0,10);
         registrarOrdenCerrada(entry,'Preventivo');
         saveDB();
@@ -2768,6 +2769,7 @@ function completarPreventivo(id){
     }
   })();
   p.completado = true;
+  p.estado = 'Completado'; // antes quedaba «En proceso» (T19)
   p.fechaCompletado = new Date().toISOString().slice(0,10);
   _guardarEquipoClienteEnFlota(p);
   // Sincronizar: si usaron los nuevos campos, reflejarlos también en los legacy para compatibilidad

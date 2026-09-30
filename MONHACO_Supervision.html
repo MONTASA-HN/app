@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f0c9ae71bf1f';
+  var APP_VERSION='dfa0597069d9';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1522,11 +1522,13 @@ function saveDB(){
   try{ _cacheLocal(); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
+      // Contador MH: solo se sube si es mayor que el del servidor, nunca lo baja (T13)
+      var _lcMH = parseInt(DB['lastCorrelativo_MH'],10)||0;
+      if(_lcMH>0 && _lcMH!==window._lcMHSubido){ window._lcMHSubido = _lcMH; window._fbDB.ref('monhaco/lastCorrelativo_MH').transaction(function(c){ c = parseInt(c)||0; return _lcMH>c ? _lcMH : undefined; }).catch(function(){ window._lcMHSubido = 0; }); }
       const ts = Date.now();
       window._localWriteTs = ts;
       window._fbDB.ref('monhaco').update({
         notifCompletadas: DB.notifCompletadas||{},
-        lastCorrelativo_MH: DB['lastCorrelativo_MH']||0,
         _ts: ts,
         _sid: _SESSION_ID
       });
@@ -1562,7 +1564,7 @@ function _esperarFirebaseListo(maxMs){
 let _logisticaSyncEnCurso = false;
 function _guardarLogisticaResiliente(nuevaOrdenId){
   try{ _cacheLocal(); }catch(e){}
-  try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+  try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
   renderLogistica(); renderDashboard();
   toast('Orden guardada ✓');
   // Capturar la orden AHORA: si el listener reemplaza DB.logistica antes de que el
@@ -1981,7 +1983,7 @@ function loadDB(){
   if(!DB.vendidos) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
   // logistica se guarda en clave separada para evitar conflictos de timestamp
   try{
-    const logCache = localStorage.getItem('montasa_log_cache');
+    const logCache = localStorage.getItem('monhaco_log_cache');
     if(logCache) DB.logistica = JSON.parse(logCache);
     else DB.logistica = [];
   }catch(e){ DB.logistica = []; }
@@ -6423,7 +6425,7 @@ function guardarEquipo(){
   if(!codigo||!desc){ toast('Código y descripción requeridos',true); return; }
   DB.equipos.push({id:uid(),codigo,desc,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value.trim(),serie:document.getElementById('eq-serie-new').value.trim(),combustible:document.getElementById('eq-combustible').value,ubicacion:document.getElementById('eq-ubicacion-new').value.trim(),cliente:document.getElementById('eq-cliente-new').value.trim(),estado:'DISPONIBLE',horometro:'',observaciones:''});
   saveDB(); saveAllEquipos(); toggleForm('form-equipo');
-  ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>document.getElementById(id).value='');
+  ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
   renderEquipos(); toast('Equipo guardado');
 }
 function finalizarOrdenPreventivo(){
@@ -6533,7 +6535,7 @@ function guardarPreventivo(finalizar=false){
   entry.clienteOrden = ((document.getElementById('prev-cliente-orden')||{}).value||'').trim() || entry.clienteNombre || '';
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
-    if(finalizar){ entry.completado=true; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    if(finalizar){ entry.completado=true; entry.estado='Completado'; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
     // Punto 1: al EDITAR, conservar firma original, correlativo, foto previa y datos
     // fuera del formulario. Vuelve a "En proceso" sin volver a firmarse.
     if(window._editandoOrden && window._editandoOrden.tipo==='prev'){
@@ -6552,13 +6554,14 @@ function guardarPreventivo(finalizar=false){
     borrarFoto('prev-foto-input','prev-foto-preview');
   clearTecnicos('prev-tecnicos-grid');
   (document.getElementById('prev-cliente-orden')||{}).value='';
-  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
+  ['prev-horometro','prev-notas','prev-sugerencias','prev-cliente-nombre','prev-cliente-marca','prev-cliente-modelo','prev-cliente-serie'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  ['prev-fecha-inicio-d','prev-fecha-inicio-t','prev-fecha-fin-d','prev-fecha-fin-t'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
   document.getElementById('prev-equipo').value='';
   document.getElementById('prev-cliente-fields').style.display='none';
   if(finalizar){
       try{
         entry.completado = true;
+        entry.estado = 'Completado'; // antes quedaba «En proceso» (T19)
         entry.fechaCompletado = new Date().toISOString().slice(0,10);
         registrarOrdenCerrada(entry,'Preventivo');
         saveDB();
@@ -6621,6 +6624,7 @@ function completarPreventivo(id){
     }
   })();
   p.completado = true;
+  p.estado = 'Completado'; // antes quedaba «En proceso» (T19)
   p.fechaCompletado = new Date().toISOString().slice(0,10);
   if(p.inicioTrabajo && !p.fechaInicio) p.fechaInicio = p.inicioTrabajo;
   if(p.finTrabajo && !p.fechaFin) p.fechaFin = p.finTrabajo;
@@ -6754,11 +6758,11 @@ function guardarCorrectivo(finalizar=false){
     borrarFoto('corr-foto-input','corr-foto-preview');
   clearTecnicos('corr-tecnicos-grid');
   (document.getElementById('corr-cliente-orden')||{}).value='';
-  ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>document.getElementById(id).value='');
-  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('corr-equipo').value='';
-  document.getElementById('corr-sistema').value='';
-  document.getElementById('corr-cliente-fields').style.display='none';
+  ['corr-falla','corr-diag','corr-cliente-nombre','corr-cliente-marca','corr-cliente-modelo','corr-cliente-serie'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  ['corr-fecha-inicio-d','corr-fecha-inicio-t','corr-fecha-fin-d','corr-fecha-fin-t'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
+  (document.getElementById('corr-equipo')||{}).value='';
+  (document.getElementById('corr-sistema')||{}).value='';
+  (document.getElementById('corr-cliente-fields')||{style:{}}).style.display='none';
   if(finalizar){
       try{
         entry.estado = 'Completado';
@@ -9689,9 +9693,9 @@ function _buildDetallePC(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTAD
   } else {
     d += _buildCamposEdicionPC(x, eq, tipoPC);
     if(isPrev){
-      d += `<button onclick="event.stopPropagation();completarPreventivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
+      d += `<button onclick="event.stopPropagation();solicitarPINAccion(function(){ completarPreventivo('${x.id}'); }, '🔒 Completar preventivo', 'Ingresa tu PIN para completar esta orden')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar preventivo (PIN)</button>`;
     } else {
-      d += `<button onclick="event.stopPropagation();finalizarOrdenCorrectivo('${x.id}')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
+      d += `<button onclick="event.stopPropagation();solicitarPINAccion(function(){ cerrarCorrectivo('${x.id}'); }, '🔒 Cerrar correctivo', 'Ingresa tu PIN para cerrar esta orden')" style="width:100%;padding:9px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">✅ Cerrar correctivo (PIN)</button>`;
     }
     d += ``;
   }
@@ -10424,7 +10428,7 @@ function _iniciarConexionFirebase(esReintento){
         if(remote.cobros)         DB.cobros         = remote.cobros;
         if(remote.logistica){
           DB.logistica = _mergeLogistica(remote.logistica);
-          try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+          try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         }
         if(remote.lastCorrelativo)DB.lastCorrelativo= remote.lastCorrelativo;
         // Recién ahora, con TODO el snapshot real cargado (con fotos y firmas), es
@@ -10448,7 +10452,7 @@ function _iniciarConexionFirebase(esReintento){
     // logística siempre desde Firebase — su _ts puede diferir del main app
     if(snap.val() && snap.val().logistica){
       DB.logistica = _mergeLogistica(snap.val().logistica);
-      try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+      try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
     renderDashboard();
    } catch(_procErr){
@@ -10473,7 +10477,7 @@ function _iniciarConexionFirebase(esReintento){
             viaticos: (function(rv,lv){ if(rv===undefined) return lv; if(lv&&lv.facturas&&lv.facturas.filter(Boolean).length&&(!rv.facturas||!rv.facturas.filter(Boolean).length)) return Object.assign({},rv,{facturas:lv.facturas}); return rv; })(remote.viaticos, local.viaticos)
           }) : remote;
         });
-        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+        try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
         const active = document.querySelector('.section.active');
         if(active){
           const tabId = active.id.replace('tab-','');
@@ -10537,6 +10541,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.cortinas || d.cortinasReg) DB.cortinas = _mergeCort(d.cortinas, d.cortinasReg);
       if(d.ordenesCerradas)DB.ordenesCerradas= _toArr(d.ordenesCerradas);
       if(d.notifCompletadas) DB.notifCompletadas = d.notifCompletadas;
+      if(d.lastCorrelativo_MH) DB['lastCorrelativo_MH'] = Math.max(parseInt(DB['lastCorrelativo_MH'],10)||0, parseInt(d.lastCorrelativo_MH,10)||0); // T13
       if(d.solicitudes)    DB.solicitudes    = _toArr(d.solicitudes);
       if(d.horometros)     DB.horometros     = d.horometros;
       if(d.horometros_externos) DB.horometrosExternos = d.horometros_externos;
@@ -10553,7 +10558,7 @@ function _iniciarConexionFirebase(esReintento){
             viaticos: (function(rv,lv){ if(rv===undefined) return lv; if(lv&&lv.facturas&&lv.facturas.filter(Boolean).length&&(!rv.facturas||!rv.facturas.filter(Boolean).length)) return Object.assign({},rv,{facturas:lv.facturas}); return rv; })(remote.viaticos, local.viaticos)
           });
         });
-        try{ localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
+        try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
       }
       if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
       if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
@@ -10604,6 +10609,7 @@ function _iniciarConexionFirebase(esReintento){
       _protegerOrdenesRecientes();
       if(d.revisiones)    DB.revisiones    = d.revisiones||[];
       if(d.evaluaciones)  DB.evaluaciones  = d.evaluaciones||[];
+      if(d.lastCorrelativo_MH) DB['lastCorrelativo_MH'] = Math.max(parseInt(DB['lastCorrelativo_MH'],10)||0, parseInt(d.lastCorrelativo_MH,10)||0); // T13
       if(d.solicitudes)   DB.solicitudes   = d.solicitudes;
       if(d.horometros)    DB.horometros    = d.horometros;
       if(d.horometros_externos) DB.horometrosExternos = d.horometros_externos;
