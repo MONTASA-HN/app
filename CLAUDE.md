@@ -636,6 +636,9 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Respaldo diario automático de toda la base en la PC de Miguel: tarea de Windows «Nexo - respaldo
+  diario» (12:00, o al encender) → `Documentsmontasa-respaldosdiariosase_AAAA-MM-DD.json.gz`, guarda 30 días,
+  registro en `diariosegistro.txt`. El script está en esa carpeta (fuera del repo). Solo lee la base.
 - 2026-09-30 — Logo Nexo (flechas de la N de MONTASA) como ícono de las 9 apps.
 - 2026-09-30 — Manifiestos de Supervisión MT y MONHACO apuntaban a logo.png (no existe): no se instalaban como app (T27).
 - 2026-09-30 — Huawei/Honor: foto del reporte con selectores ligados (sin input.click()), MTG/MTT/MHG/MHT (T27).
