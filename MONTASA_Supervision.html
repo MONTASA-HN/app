@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='da3cbecbf9ee';
+  var APP_VERSION='e7ed3dcd5424';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7903,7 +7903,9 @@ function imprimirVale(){
   const montoPorPersona = vales.reduce((s,v)=>s+((parseFloat(v.monto)||0)/(parseInt(v.personas)||numPersonas)), 0);
 
   const concepto = 'VALE DE ALIMENTACION - '+conceptoBase.toUpperCase()+' POR '+tipoDesc.toUpperCase()+' CON EQUIPO '+eqDesc.toUpperCase();
-  const d = new Date(orden.fechaCierre||orden.fechaInicio||'');
+  // Fecha del vale = fecha FINAL de la orden (2026-09-30). Se arma con año/mes/día locales: new Date('2026-09-30')
+  // se lee como UTC y en Honduras salía un día antes.
+  const d = (function(t){ const m = String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(t||''); })(orden.fechaFin||orden.fechaCierre||orden.fechaInicio||orden.fecha);
   const fecha = isNaN(d)?'—':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
   const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]');
   const logoB64 = logoEl ? logoEl.src : '';
@@ -8559,7 +8561,9 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   const montoTotal = vales.reduce((s,v)=>s+(parseFloat(v.monto)||0), 0);
   const montoPorPersona = vales.reduce((s,v)=>s+((parseFloat(v.monto)||0)/(parseInt(v.personas)||numPersonas)), 0);
   const concepto = 'VALE DE ALIMENTACION - '+conceptoBase.toUpperCase()+' POR '+String(tipoDesc||'').toUpperCase()+(eqDesc?' CON EQUIPO '+String(eqDesc).toUpperCase():'');
-  const d = new Date(orden.fechaCierre||orden.fechaInicio||orden.fecha||'');
+  // Fecha del vale = fecha FINAL de la orden (2026-09-30). Se arma con año/mes/día locales: new Date('2026-09-30')
+  // se lee como UTC y en Honduras salía un día antes.
+  const d = (function(t){ const m = String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(t||''); })(orden.fechaFin||orden.fechaCierre||orden.fechaInicio||orden.fecha);
   const fecha = isNaN(d)?'\u2014':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
   const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]') || document.querySelector('header img') || document.querySelector('img[src^="data:image"]');
   const logoB64 = logoEl ? logoEl.src : '';

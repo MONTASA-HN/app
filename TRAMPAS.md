@@ -419,6 +419,13 @@ cliente = la empresa): a esas nunca se les pone el punto del taller.
 Además, todos los equipos del taller comparten el mismo punto: el mapa los agrupa en un marcador con el número
 (si no, quedaban uno encima de otro y parecía que faltaban).
 
+## T24. Fechas «AAAA-MM-DD» que salen un día antes
+
+**✅ Arreglado en los vales (2026-09-30):** `new Date('2026-09-30')` se lee como medianoche UTC y en Honduras (UTC-6)
+es el 29/09 a las 18:00: el vale mostraba un día antes. Además usaba `fechaCierre` (día en que se cerró en la app)
+en vez de `fechaFin`. Ojo en cualquier otra fecha sin hora: armarla con `new Date(año, mes-1, día)`.
+Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
+
 ## T23. Liquidación que no abría después de guardarla
 
 **✅ Arreglado (2026-09-30):** `_leerFormLiquidacion` guarda las filas vacías como `null` y la suma del total en

@@ -401,6 +401,8 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Vales de alimentación (MTG, MTS, MTL, MTT, MHG, MHS, MHT): la fecha impresa sale de `fechaFin`
+  (antes `fechaCierre`). Solo cambia lo que se imprime; no se escribe nada nuevo en la base.
 - 2026-09-30 — Liquidación de viáticos (MTG, MTS, MTL, MHG, MHS): las facturas con descripción «OTROS GASTOS»
   llevan el campo nuevo `detalle` (texto a mano) dentro de `orden.viaticos.facturas[i]`. No se renombró nada.
 
