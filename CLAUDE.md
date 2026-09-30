@@ -298,6 +298,11 @@ Supervisiones**. No asumir que es el mismo.
   **Logo Nexo** (opción I2, elegida por Miguel): las dos flechas de la N de MONTASA (celeste #038dcc sube, verde
   #6cbc97 baja) sobre azul marino #1f3864. Archivos `icons/nexo-512|192|180|32.png`; los usan los 9 manifiestos,
   `apple-touch-icon` y el ícono de pestaña. Los logos de MONTASA/MONHACO dentro de la app y PDFs no cambian.
+- **«Acerca de Nexo»** (2026-09-30): bloque `// ══ ACERCA DE NEXO` antes de `</body>` en las 9 apps. Botón con el logo en el
+  encabezado (`.app-header`); en Gerencia MT va como opción del menú ☰, en Gerencia MONHACO al final de la fila de
+  empresas y en Logística MONHACO junto al logo. Abre la explicación del nombre y del logo (`abrirAcercaNexo()`).
+- **Deslizar para cambiar de módulo: DESACTIVADO** (pedido de Miguel, 2026-09-30) en MTG, MTS, MTT, MTL, MHG, MHS, MHT:
+  el `touchend` del gesto termina en `return;`. Se cambia de módulo solo con los botones.
 - **Viáticos: botón «🖨 Imprimir»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): junto a «Descargar
   PDF» en solicitud y liquidación. `generarPDFViaticos(tipo, true)` arma el mismo documento y lo manda a
   `_imprimirHTML` (igual que los vales): abre la impresión sin descargar nada.
@@ -636,9 +641,10 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Pantalla «Acerca de Nexo» en las 9 apps y fuera el deslizar entre módulos.
 - 2026-09-30 — Respaldo diario automático de toda la base en la PC de Miguel: tarea de Windows «Nexo - respaldo
   diario» (12:00, o al encender) → `Documentsmontasa-respaldosdiariosase_AAAA-MM-DD.json.gz`, guarda 30 días,
-  registro en `diariosegistro.txt`. El script está en esa carpeta (fuera del repo). Solo lee la base.
+  registro en `diariosegistro.txt`. El script está en esa carpeta (fuera del repo). Solo lee la base.
 - 2026-09-30 — Logo Nexo (flechas de la N de MONTASA) como ícono de las 9 apps.
 - 2026-09-30 — Manifiestos de Supervisión MT y MONHACO apuntaban a logo.png (no existe): no se instalaban como app (T27).
 - 2026-09-30 — Huawei/Honor: foto del reporte con selectores ligados (sin input.click()), MTG/MTT/MHG/MHT (T27).
