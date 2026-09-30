@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Solicitudes (MTG, MTS, MHG, MHS): `_solFiltrarTipos` quita del menú «Tipo de orden» los tipos del
+  otro departamento (no cambia datos). En MTG existe una 2.ª copia del formulario (`-B`, mismo `id="tab-solicitudes"`)
+  que no se muestra; se filtra igual.
 - 2026-09-30 — Preventivos: al cerrar se escribe también `estado:'Completado'` (antes solo `completado:true`).
   `lastCorrelativo_MH` se sube por transacción (nunca baja). Horómetros MONHACO: `_cierres/_cierre` se escriben
   después de actualizar `monhaco/equipos/*/horometro`. MHS guarda su caché en `monhaco_log_cache`.

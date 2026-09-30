@@ -613,6 +613,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Solicitudes: «Tipo de orden» muestra solo los tipos del departamento (en iPhone salían todos).
 - 2026-09-30 — Errores menores: preventivos cerrados quedan «Completado» (T19), horómetros MONHACO sellan solo
   si las fichas se actualizaron (T12), caché de logística propia en MHS (T10), botón cerrar correctivo MHS (T16),
   contador MH que no baja (T13) y finalizar correctivo desde el formulario de Gerencia (T15).

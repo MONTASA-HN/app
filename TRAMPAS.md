@@ -460,6 +460,13 @@ Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
 `renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
 facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
 
+## T25. En iPhone, «display:none» no oculta opciones de un menú
+
+**✅ Arreglado en solicitudes (2026-09-30):** `solDeptoChange` ocultaba los tipos del otro departamento con
+`option.style.display='none'`; Safari de iPhone lo ignora y en Logística salían también Correctivo, Preventivo, etc.
+Ahora `_solFiltrarTipos` los **quita** del menú (guarda la lista completa en `sel._todas`) y se aplica también al abrir.
+Ojo en cualquier otro `<select>`: para ocultar opciones hay que quitarlas, no esconderlas.
+
 ## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
 
 ### Qué pasa
