@@ -295,6 +295,9 @@ Supervisiones**. No asumir que es el mismo.
   «Nexo <Área> MT|MH» (p. ej. «Nexo Gerencia MT»); debajo del ícono (`apple-mobile-web-app-title` y short_name)
   «Nexo Ger. MT», «Nexo Téc. MH»… Los logos de MONTASA / MONHACO se quedan. En iPhone el nombre del ícono solo
   cambia si se quita y se vuelve a agregar la app a la pantalla de inicio. Los nombres de archivo NO cambian.
+  **Logo Nexo** (opción I2, elegida por Miguel): las dos flechas de la N de MONTASA (celeste #038dcc sube, verde
+  #6cbc97 baja) sobre azul marino #1f3864. Archivos `icons/nexo-512|192|180|32.png`; los usan los 9 manifiestos,
+  `apple-touch-icon` y el ícono de pestaña. Los logos de MONTASA/MONHACO dentro de la app y PDFs no cambian.
 - **Viáticos: botón «🖨 Imprimir»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): junto a «Descargar
   PDF» en solicitud y liquidación. `generarPDFViaticos(tipo, true)` arma el mismo documento y lo manda a
   `_imprimirHTML` (igual que los vales): abre la impresión sin descargar nada.
@@ -633,6 +636,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Logo Nexo (flechas de la N de MONTASA) como ícono de las 9 apps.
 - 2026-09-30 — Manifiestos de Supervisión MT y MONHACO apuntaban a logo.png (no existe): no se instalaban como app (T27).
 - 2026-09-30 — Huawei/Honor: foto del reporte con selectores ligados (sin input.click()), MTG/MTT/MHG/MHT (T27).
 - 2026-09-30 — Huawei/Honor: cada app con identidad propia (manifiestos) y página prueba_camara.html (T27).
