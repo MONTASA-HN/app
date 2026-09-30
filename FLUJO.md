@@ -351,6 +351,8 @@ después `saveDB`. Nodo `montasa/horometros`.
 
 ## 8. Ubicación de los equipos en el mapa (líneas de MTG al 2026-09-29, commit 3d4b553)
 
+- Varios equipos en el mismo punto (a ~10 m) se muestran en un solo marcador con el número de equipos;
+  el globo los lista todos (`_mapaPopupGrupoHTML`, 2026-09-30).
 - El mapa de la flota (`renderMapaFlota`, MTG ~3540; igual en MHG) pone un pin **solo si
   `eq.ubicacionLink` trae coordenadas**. `_gpsCoordsDeLink` (MTG 3346) acepta `?q=lat,lng`
   (y `query/ll/daddr/destination/center`), `@lat,lng` o `lat,lng` suelto. **Los links cortos

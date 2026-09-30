@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='fe30d83b3a99';
+  var APP_VERSION='725e39720d6c';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2589,6 +2589,26 @@ function _mapaPopupHTML(it){
     + '<a href="https://waze.com/ul?ll=' + coord + '&navigate=yes" target="_blank" rel="noopener" style="padding:7px 9px;background:#eef4fb;color:#1f3864;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">Waze</a>'
     + '</div></div>';
 }
+// Globo de un punto con varios equipos: la lista de todos y cómo llegar
+function _mapaPopupGrupoHTML(g){
+  const esc = function(t){ return String(t==null?'':t).replace(/[<>"]/g,''); };
+  const coord = g[0].lat.toFixed(6) + ',' + g[0].lng.toFixed(6);
+  return '<div style="font-family:DM Sans,Arial,sans-serif;min-width:210px">'
+    + '<div style="font-weight:800;font-size:15px;color:#1f3864;margin-bottom:6px">📍 ' + g.length + ' equipos en este punto</div>'
+    + g.map(function(it){
+        const e = it.eq, deCliente = _mapaEsCliente(e);
+        return '<div style="display:flex;align-items:center;gap:6px;font-size:12.5px;padding:4px 0;border-top:1px solid #eee">'
+          + '<span style="flex:none;width:9px;height:9px;border-radius:50%;background:' + _mapaColorEq(e) + '"></span>'
+          + '<b>' + esc(_mapaNombreEq(e)) + '</b>'
+          + '<span style="color:#666">· ' + (deCliente ? 'Equipo de cliente' : esc(e.estado||'—')) + '</span>'
+          + (it.viejo ? '<span style="color:#a32d2d" title="' + esc(_mapaTextoAntiguedad(it.dias)) + '">⚠️</span>' : '')
+          + '</div>';
+      }).join('')
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'
+    + '<a href="https://www.google.com/maps/dir/?api=1&destination=' + coord + '" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:7px 9px;background:#1f5488;color:#fff;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">🧭 Cómo llegar</a>'
+    + '<a href="https://waze.com/ul?ll=' + coord + '&navigate=yes" target="_blank" rel="noopener" style="padding:7px 9px;background:#eef4fb;color:#1f3864;border-radius:7px;font-size:11.5px;font-weight:700;text-decoration:none">Waze</a>'
+    + '</div></div>';
+}
 function _mapaRefrescar(ajustar){
   _mapaPintarChips();
   const d = _mapaEquipos();
@@ -2597,14 +2617,35 @@ function _mapaRefrescar(ajustar){
   if(_mapaObj && _mapaCapa && window.L){
     _mapaCapa.clearLayers();
     const pts = [];
+    // Equipos en el mismo punto (a menos de ~10 m, p. ej. todos en el taller) van en UN marcador con el
+    // número de equipos: si no, quedaban uno encima de otro y solo se veía el de arriba.
+    const grupos = [], porPunto = {};
     vis.forEach(function(it){
-      const col = _mapaColorEq(it.eq);
-      const mk = L.circleMarker([it.lat, it.lng], { radius:9, color:(_mapaEsCliente(it.eq) ? '#8a6d00' : '#fff'), weight:2, fillColor:col, fillOpacity:1 });
-      // Con pocos equipos en pantalla se deja el código siempre visible
-      mk.bindTooltip((it.viejo ? '⚠ ' : '') + _mapaNombreEq(it.eq),
-        { permanent: vis.length <= 25, direction:'top', offset:[0,-9], className:'mapa-tip' });
-      mk.bindPopup(_mapaPopupHTML(it));
-      mk.addTo(_mapaCapa);
+      const k = it.lat.toFixed(4) + ',' + it.lng.toFixed(4);
+      if(!porPunto[k]){ porPunto[k] = []; grupos.push(porPunto[k]); }
+      porPunto[k].push(it);
+    });
+    grupos.forEach(function(g){
+      const it = g[0];
+      if(g.length === 1){
+        const col = _mapaColorEq(it.eq);
+        const mk = L.circleMarker([it.lat, it.lng], { radius:9, color:(_mapaEsCliente(it.eq) ? '#8a6d00' : '#fff'), weight:2, fillColor:col, fillOpacity:1 });
+        // Con pocos equipos en pantalla se deja el código siempre visible
+        mk.bindTooltip((it.viejo ? '⚠ ' : '') + _mapaNombreEq(it.eq),
+          { permanent: grupos.length <= 25, direction:'top', offset:[0,-9], className:'mapa-tip' });
+        mk.bindPopup(_mapaPopupHTML(it));
+        mk.addTo(_mapaCapa);
+      } else {
+        const cols = g.map(function(x){ return _mapaColorEq(x.eq); });
+        const col = cols.every(function(c){ return c === cols[0]; }) ? cols[0] : '#1f3864';
+        const mk = L.marker([it.lat, it.lng], { icon: L.divIcon({ className:'', iconSize:[30,30], iconAnchor:[15,15],
+          html:'<div style="width:30px;height:30px;border-radius:50%;background:' + col + ';border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);color:#fff;font:800 13px/24px Arial,sans-serif;text-align:center">' + g.length + '</div>' }) });
+        const nombres = g.map(function(x){ return (x.viejo ? '⚠ ' : '') + _mapaNombreEq(x.eq); });
+        mk.bindTooltip(nombres.length <= 4 ? nombres.join(', ') : nombres.slice(0, 3).join(', ') + ' y ' + (nombres.length - 3) + ' más',
+          { permanent: grupos.length <= 25, direction:'top', offset:[0,-15], className:'mapa-tip' });
+        mk.bindPopup(_mapaPopupGrupoHTML(g), { maxHeight: 320 });
+        mk.addTo(_mapaCapa);
+      }
       pts.push([it.lat, it.lng]);
     });
     if(ajustar && pts.length){

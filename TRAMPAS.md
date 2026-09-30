@@ -416,6 +416,8 @@ Exigir orden (o PIN + motivo) para EN RENTA y avisar al pegar un link corto. Dec
 además usaba un link corto sin coordenadas. Ahora renta y retiro fuera del plantel dejan el punto del taller de
 Las Palmas con coordenadas. Ojo: entre los «DISPONIBLE» hay **máquinas de clientes** (código = modelo o serie,
 cliente = la empresa): a esas nunca se les pone el punto del taller.
+Además, todos los equipos del taller comparten el mismo punto: el mapa los agrupa en un marcador con el número
+(si no, quedaban uno encima de otro y parecía que faltaban).
 
 ## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
 
