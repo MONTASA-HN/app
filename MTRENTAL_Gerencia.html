@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='58dc4d43be66';
+  var APP_VERSION='2860dc9944f2';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -9093,6 +9093,26 @@ function initSolicitudes(){
   renderSolicitudes();
 }
 
+// Deja en «Tipo de orden» solo los tipos del departamento elegido (y elige el primero si «elegirPrimero»).
+function _solFiltrarTipos(depto, elegirPrimero){
+  [document.getElementById('sol-tipo'), document.getElementById('sol-tipo-B')].forEach(function(sel){
+    if(!sel) return;
+    if(!sel._todas) sel._todas = Array.from(sel.options).map(function(o){ return o.cloneNode(true); });
+    const antes = sel.value;
+    sel.innerHTML = '';
+    sel._todas.forEach(function(o){
+      if((o.dataset.depto || 'mantenimiento') !== depto) return;
+      const c = o.cloneNode(true); c.style.display = ''; c.selected = false; sel.appendChild(c);
+    });
+    if(!sel.options.length) return;
+    const sigue = Array.from(sel.options).some(function(o){ return o.value === antes; });
+    sel.value = (elegirPrimero || !sigue) ? sel.options[0].value : antes;
+  });
+}
+// Al abrir la app el menú ya sale filtrado (antes mostraba los 9 tipos hasta tocar «Departamento»)
+document.addEventListener('DOMContentLoaded', function(){
+  try{ _solFiltrarTipos((document.getElementById('sol-depto')||{}).value || 'mantenimiento', false); }catch(e){}
+});
 function solDeptoChange(){
   const depto = document.getElementById('sol-depto')?.value || 'mantenimiento';
   const tipo  = document.getElementById('sol-tipo');
@@ -9100,14 +9120,9 @@ function solDeptoChange(){
   const descLabel = document.getElementById('sol-desc-label');
   if(descLabel) descLabel.textContent = depto==='logistica' ? 'Trabajo a realizar' : 'Descripción de la falla';
 
-  // Mostrar/ocultar opciones del select tipo según departamento
-  Array.from(tipo.options).forEach(opt => {
-    const optDepto = opt.dataset.depto || 'mantenimiento';
-    opt.style.display = optDepto === depto ? '' : 'none';
-  });
-  // Seleccionar primera opción visible
-  const firstVisible = Array.from(tipo.options).find(o => o.style.display !== 'none');
-  if(firstVisible) tipo.value = firstVisible.value;
+  // Opciones del «Tipo de orden» según departamento. Las que no aplican se QUITAN del menú: en iPhone
+  // «display:none» en un <option> no lo oculta y salían los de mantenimiento en logística (2026-09-30).
+  _solFiltrarTipos(depto, true);
 
   // Mostrar/ocultar grids de personal
   const mntGrid  = document.getElementById('sol-tecnicos-mnt');
@@ -9894,6 +9909,7 @@ function clearSolicitudForm(){
   document.getElementById('sol-desc').value = '';
   document.getElementById('sol-prioridad').value = 'Normal';
   document.getElementById('sol-tipo').value = 'correctivo';
+  if(!document.getElementById('sol-tipo').value){ try{ solDeptoChange(); }catch(e){} } // en Logística no hay «correctivo»
   const mant = document.getElementById('sol-mant-tipo');
   if(mant) mant.value = '';
   clearTecnicos('sol-tecnicos-grid');
