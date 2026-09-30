@@ -274,6 +274,10 @@ Supervisiones**. No asumir que es el mismo.
   monto asignado es la suma de todas. Destino internacional (Santa Ana, El
   Salvador) muestra aviso: alimentación/hospedaje a mano y gastos de frontera en
   "Otros gastos".
+- **Liquidación: «OTROS GASTOS»** (desde 2026-09-30, pedido de Miguel; MTG, MTS, MTL, MHG, MHS): en la lista de
+  descripciones de cada factura (`_VIAT_DESC`) está «OTROS GASTOS» para imprevistos que no estaban en la
+  solicitud. Al elegirlo aparece `vlf-otro-N` para escribir el gasto; se guarda en la factura como
+  `detalle` (obligatorio al guardar) y se ve como «OTROS GASTOS — <detalle>» en la vista y el PDF.
 - **Vales de alimentación**: formato oficial "Comprobante de entrega de caja
   chica" (`_valeComprobanteImprimir`). El monto se recalcula por el número real
   de personas de la orden.
@@ -605,6 +609,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-09-30 — Liquidación de viáticos: «OTROS GASTOS» con texto a mano. Arreglado: la liquidación guardada
+  no se podía volver a abrir si tenía filas vacías (la suma leía f.monto de una fila null).
 - 2026-09-30 — Mapa de la flota: equipos en el mismo punto se agrupan en un marcador con el número.
 - 2026-09-30 — Cerrar renta o retiro deja el equipo con el punto del taller de Las Palmas (con coordenadas).
   En la base se puso ese punto a E-33, MT-77, C-39, CM-35, GR-01, MTV-04 y PATRULLA (no a máquinas de clientes).

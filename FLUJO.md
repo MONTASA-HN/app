@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-09-30 — Liquidación de viáticos (MTG, MTS, MTL, MHG, MHS): las facturas con descripción «OTROS GASTOS»
+  llevan el campo nuevo `detalle` (texto a mano) dentro de `orden.viaticos.facturas[i]`. No se renombró nada.
+
 - 2026-09-29 — Sincronizador `_Sync` en MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT (bloque nuevo después de
   «GUARDAR POR ID»; en MTC después de «ACTUALIZACIÓN AUTOMÁTICA»). Reemplazadas: `saveDB` (sin listas),
   `_guardarOrdenMantResiliente`, `_sincronizarLogisticaConReintento`, `saveAllEquipos`, `_writeToFirebase`

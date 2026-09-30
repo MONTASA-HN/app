@@ -419,6 +419,12 @@ cliente = la empresa): a esas nunca se les pone el punto del taller.
 Además, todos los equipos del taller comparten el mismo punto: el mapa los agrupa en un marcador con el número
 (si no, quedaban uno encima de otro y parecía que faltaban).
 
+## T23. Liquidación que no abría después de guardarla
+
+**✅ Arreglado (2026-09-30):** `_leerFormLiquidacion` guarda las filas vacías como `null` y la suma del total en
+`renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
+facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
+
 ## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
 
 ### Qué pasa
