@@ -656,6 +656,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-01 — Pie de los PDF/imágenes: «Documento generado desde el sistema interno de NEXO» (antes «… de Montasa
+  Handling Co.»), 30 lugares en las 9 apps. Los logos y el «© Derechos Reservados» de los vales no cambian.
 - 2026-10-01 — Botón «Órdenes asignadas» en la ficha del equipo (Gerencia MT/MH y Comercial).
 - 2026-10-01 — MONHACO listo para arrancar: horómetros sin cerrar antes de las fichas en MHG/MHS (T12), escritura que
   se enciende al llegar la base (T9), equipos/vendidos en cualquier formato, vendidos por serie y antes de reponer
