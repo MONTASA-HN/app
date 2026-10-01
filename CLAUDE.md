@@ -298,6 +298,12 @@ Supervisiones**. No asumir que es el mismo.
   **Logo Nexo** (opción I2, elegida por Miguel): las dos flechas de la N de MONTASA (celeste #038dcc sube, verde
   #6cbc97 baja) sobre azul marino #1f3864. Archivos `icons/nexo-512|192|180|32.png`; los usan los 9 manifiestos,
   `apple-touch-icon` y el ícono de pestaña. Los logos de MONTASA/MONHACO dentro de la app y PDFs no cambian.
+- **«📋 Órdenes asignadas» en la ficha del equipo** (2026-10-01, pedido de Miguel): bloque `// ══ ÓRDENES ASIGNADAS EN LA
+  FICHA` antes de `</body>` en MTG, MTS, MTC, MHG, MHS. Envuelve `abrirModal(id)` y pone el botón arriba de la ficha;
+  lista TODAS las órdenes del equipo (logística, preventivos, correctivos, revisiones, evaluaciones, cortinas y
+  `ordenesCerradas` que ya no estén en sus listas), también como 2.º equipo, grúa de la renta o vehículo del viaje
+  (`equipoCompra`/`vehiculo`). Solo lee. Comercial no guarda esas listas en DB: el oyente deja una copia en
+  `window._ordSoloLectura`. Supervisión MT/MH no tiene pantalla de flota, así que ahí la ficha no se abre.
 - **MONHACO — arranque (2026-10-01, decisiones de Miguel):**
   - Técnicos MONHACO: Rances Pineda, Angel Cardona, Maynor Paz, Cristian Barrera, Jose Escoto, Ramon Moreno, Marvin
     Torres. **Marvin es de MONHACO y Sergio Madrid de MT Rental** (`ROSTER_TEC` de MTT y MHT corregido).
@@ -650,6 +656,7 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-01 — Botón «Órdenes asignadas» en la ficha del equipo (Gerencia MT/MH y Comercial).
 - 2026-10-01 — MONHACO listo para arrancar: horómetros sin cerrar antes de las fichas en MHG/MHS (T12), escritura que
   se enciende al llegar la base (T9), equipos/vendidos en cualquier formato, vendidos por serie y antes de reponer
   (MT-66/MT-67), textos «MONTASA»→«MONHACO», sin `_cortDbg`, configuración de técnicos/motoristas/operador/clientes.

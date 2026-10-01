@@ -401,6 +401,7 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-01 — «Órdenes asignadas»: solo lectura. Comercial guarda además `window._ordSoloLectura` (no toca DB).
 - 2026-10-01 — MONHACO (MHG, MHS, MHT): equipos y vendidos se leen con `_toArr` (lista u objeto); vendidos se cargan
   antes de reponer `EQUIPOS_INICIALES`; MHG/MHS encienden `_fbReady` cuando llega el primer dato real del oyente.
   Ya no se escribe `monhaco/_cortDbg`.

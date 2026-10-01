@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e79a25f0c49e';
+  var APP_VERSION='943b20b4b7da';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1679,6 +1679,8 @@ function _estaVendido(e){
     if(d.revisiones)   DB.revisiones   = _toArr(d.revisiones);
     if(d.agenda) DB.agenda = d.agenda;
     if(d.evaluaciones) DB.evaluaciones = _toArr(d.evaluaciones);
+    // Copia SOLO DE LECTURA para «Órdenes asignadas» (Comercial no guarda estas listas en DB)
+    window._ordSoloLectura = { logistica: d.logistica, preventivos: d.preventivos, correctivos: d.correctivos, ordenesCerradas: d.ordenesCerradas };
     if(!DB.equipos||!DB.equipos.length) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos||!DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     window._fbReady = true;
@@ -1712,6 +1714,8 @@ function _estaVendido(e){
       if(remote.revisiones)   DB.revisiones   = _toArr(remote.revisiones);
       if(remote.agenda) DB.agenda = remote.agenda;
       if(remote.evaluaciones) DB.evaluaciones = _toArr(remote.evaluaciones);
+      // Copia SOLO DE LECTURA para «Órdenes asignadas» (Comercial no guarda estas listas en DB)
+      window._ordSoloLectura = { logistica: remote.logistica, preventivos: remote.preventivos, correctivos: remote.correctivos, ordenesCerradas: remote.ordenesCerradas };
       localStorage.setItem(LS_KEY, JSON.stringify(DB));
     }
     window._fbReady = true; // Firebase cargó — recién ahora es seguro escribir
@@ -2809,6 +2813,126 @@ function _detalleOrdenCom(x, tipo, est){
     }).catch(function(){ original.call(lector, blob); });
   };
   FileReader.prototype._nexoFotoLiviana = true;
+})();
+</script>
+<script>
+// ══ ÓRDENES ASIGNADAS EN LA FICHA DEL EQUIPO (2026-10-01, pedido de Miguel) ═══
+// Al abrir la ficha (abrirModal) aparece «📋 Órdenes asignadas (N)»: lista de TODAS las órdenes del equipo
+// (logística y mantenimiento), también donde fue 2.º equipo, grúa de la renta o vehículo del viaje.
+// Solo lee DB; no cambia datos.
+(function(){
+  if(typeof abrirModal !== 'function' || window._ordEqListo) return;
+  window._ordEqListo = true;
+  var TIPOS_LOG = { renta:'🚛 Renta', entrega:'📦 Entrega', retiro:'🔙 Retiro', apoyo_mantenimiento:'🔩 Apoyo mant.', atencion_compras:'🛒 Compras' };
+  function esc(t){ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function lista(x){ return Array.isArray(x) ? x.filter(Boolean) : (x && typeof x === 'object' ? Object.keys(x).map(function(k){ return x[k]; }).filter(function(o){ return o && typeof o === 'object'; }) : []); }
+  function dia(o){ return String(o.fechaFin || o.fechaCierre || o.fechaCompletado || o.fechaInicio || o.fecha || '').slice(0, 10); }
+  function fmt(d){ var m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[3] + '/' + m[2] + '/' + m[1]; return d || '—'; }
+  function mismaCod(a, b){ return a && b && String(a).trim().toUpperCase() === String(b).trim().toUpperCase(); }
+  function col(n){ var a = lista(DB[n]); if(!a.length && window._ordSoloLectura && window._ordSoloLectura[n]) a = lista(window._ordSoloLectura[n]); return a; }
+  function ordenesDe(e){
+    var out = [], vistos = {};
+    function add(o, tipo, grupo, papel){
+      var k = (o.id || '') + '|' + (o.correlativo || '');
+      if(vistos[k]) return; vistos[k] = 1;
+      var est;
+      if(grupo === 'log') est = o.estado === 'Cancelado' ? 'Cancelada' : (o.cerrado ? 'Cerrada' : (o.estado || 'Abierta'));
+      else est = (o.completado || o.estado === 'Completado') ? 'Completada' : (o.estado || 'Pendiente');
+      out.push({ o: o, tipo: tipo, grupo: grupo, papel: papel, est: est, dia: dia(o),
+        txt: String(o.falla || o.servicio || o.descripcion || o.notas || o.trabajo || '').replace(/\s+/g, ' ').slice(0, 90),
+        cli: o.clienteOrden || o.clienteNombre || o.cliente || '' });
+    }
+    col('logistica').forEach(function(o){
+      var t = TIPOS_LOG[o.tipoLogistica] || ('🚚 ' + (o.tipoLogistica || 'Logística'));
+      if(o.equipoId === e.id) add(o, t, 'log', '');
+      else if(o.equipoId2 === e.id) add(o, t, 'log', '2.º equipo');
+      else if(o.vehiculoRentaId === e.id) add(o, t, 'log', 'grúa de la renta');
+      else if(e.esVehiculo && mismaCod(o.equipoCompra, e.codigo)) add(o, t, 'log', 'vehículo del viaje');
+    });
+    [['preventivos','📅 Preventivo'],['correctivos','🔧 Correctivo'],['revisiones','🚌 Revisión'],['evaluaciones','📋 Evaluación'],['cortinas','🚪 Cortinas']].forEach(function(p){
+      col(p[0]).forEach(function(o){
+        if(o.equipoId === e.id) add(o, p[1], 'mant', '');
+        else if(e.esVehiculo && mismaCod(o.vehiculo, e.codigo)) add(o, p[1], 'mant', 'vehículo del viaje');
+      });
+    });
+    // Registro de órdenes cerradas: solo las que ya no estén en sus listas
+    col('ordenesCerradas').forEach(function(o){
+      if(o.equipoId !== e.id) return;
+      var k = (o.id || '') + '|' + (o.correlativo || '');
+      if(vistos[k] || out.some(function(x){ return x.o.correlativo && x.o.correlativo === o.correlativo; })) return;
+      add(o, '🗂 ' + (o.tipo || o.tipoOrden || 'Orden'), /LG-/.test(o.correlativo || '') ? 'log' : 'mant', '');
+    });
+    out.sort(function(a, b){ return a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : String(b.o.correlativo || '').localeCompare(String(a.o.correlativo || '')); });
+    return out;
+  }
+  function color(est){
+    if(/Cancel/.test(est)) return ['#f2f4f7','#667085'];
+    if(/Cerrad|Complet/.test(est)) return ['#e7f6ec','#1a7f37'];
+    if(/espera|pausa/i.test(est)) return ['#f3e8ff','#6b21a8'];
+    return ['#fff4e5','#b45309'];
+  }
+  function abrirLista(e){
+    var todas = ordenesDe(e), filtro = 'todas';
+    var ov = document.createElement('div');
+    ov.id = 'ord-eq-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center';
+    function pintar(){
+      var vis = todas.filter(function(x){ return filtro === 'todas' || x.grupo === filtro; });
+      var chip = function(k, t){ var on = filtro === k; return '<button type="button" data-f="' + k + '" style="flex:1;padding:8px 4px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;'
+        + 'border:1.5px solid #1f3864;background:' + (on ? '#1f3864' : '#fff') + ';color:' + (on ? '#fff' : '#1f3864') + '">' + t + '</button>'; };
+      var n = function(g){ return todas.filter(function(x){ return g === 'todas' || x.grupo === g; }).length; };
+      ov.innerHTML = '<div role="dialog" aria-label="Órdenes asignadas" style="background:#fff;color:#1d2433;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;'
+        + 'border-radius:18px 18px 0 0;box-sizing:border-box">'
+        + '<div style="padding:16px 16px 10px;border-bottom:1px solid #eaecf0">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><div style="font-size:17px;font-weight:800;color:#1f3864">📋 Órdenes de ' + esc(e.codigo || e.clienteNombre || 'equipo') + '</div>'
+        + '<div style="font-size:12px;color:#667085;margin-top:2px">' + esc((e.marca || '') + ' ' + (e.modelo || '')) + ' · ' + todas.length + ' en total</div></div>'
+        + '<button type="button" data-cerrar="1" aria-label="Cerrar" style="border:none;background:#f2f4f7;border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer">✕</button></div>'
+        + '<div style="display:flex;gap:6px;margin-top:10px">' + chip('todas', 'Todas (' + n('todas') + ')') + chip('mant', 'Mantenimiento (' + n('mant') + ')') + chip('log', 'Logística (' + n('log') + ')') + '</div></div>'
+        + '<div style="overflow:auto;padding:10px 12px calc(14px + env(safe-area-inset-bottom))">'
+        + (vis.length ? vis.map(function(x){
+            var c = color(x.est);
+            return '<div style="border:1px solid #eaecf0;border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+              + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+              + '<div style="font-weight:800;font-size:14px;color:#1f3864">' + esc(x.o.correlativo || '—') + ' <span style="font-weight:600;color:#344054">· ' + esc(x.tipo) + '</span></div>'
+              + '<span style="flex:none;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:' + c[0] + ';color:' + c[1] + '">' + esc(x.est) + '</span></div>'
+              + '<div style="font-size:12.5px;color:#475467;margin-top:4px">📅 ' + fmt(x.dia) + (x.cli ? ' · 🏢 ' + esc(x.cli) : '') + (x.papel ? ' · <b>' + esc(x.papel) + '</b>' : '') + '</div>'
+              + (x.txt ? '<div style="font-size:12.5px;color:#667085;margin-top:3px">' + esc(x.txt) + '</div>' : '')
+              + '</div>';
+          }).join('') : '<div style="text-align:center;color:#667085;font-size:14px;padding:30px 10px">Este equipo no tiene órdenes ' + (filtro === 'todas' ? '' : 'de este tipo ') + 'registradas.</div>')
+        + '</div></div>';
+    }
+    ov.addEventListener('click', function(ev){
+      var t = ev.target;
+      if(t === ov || (t.closest && t.closest('[data-cerrar]'))){ ov.remove(); return; }
+      var b = t.closest && t.closest('[data-f]'); if(b){ filtro = b.getAttribute('data-f'); pintar(); }
+    });
+    pintar();
+    document.body.appendChild(ov);
+  }
+  window.abrirOrdenesEquipo = function(id){ var e = (DB.equipos || []).find(function(x){ return x && x.id === id; }); if(e) abrirLista(e); };
+  function ponerBoton(id){
+    var viejo = document.getElementById('ord-eq-btn'); if(viejo) viejo.remove();
+    var e = (DB.equipos || []).find(function(x){ return x && x.id === id; }); if(!e) return;
+    // Ficha con campos fijos (Gerencia): arriba del cuerpo. Ficha armada al vuelo (Comercial): debajo del título.
+    var est = document.getElementById('det-estado'), caja = null, antes = null;
+    if(est){ caja = est.closest('#modal-body') || est.closest('#modal-content') || est.closest('#modal-box') || est.parentNode; antes = caja.firstChild; }
+    else { caja = document.getElementById('modal-box') || document.getElementById('modal-content'); if(!caja || !caja.firstElementChild) return; antes = caja.firstElementChild.nextSibling; }
+    var n = ordenesDe(e).length;
+    var b = document.createElement('button');
+    b.type = 'button'; b.id = 'ord-eq-btn';
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;margin:0 0 12px;border:1.5px solid #1f3864;'
+      + 'border-radius:10px;background:#eef4fb;color:#1f3864;font-size:15px;font-weight:800;cursor:pointer;box-sizing:border-box';
+    b.innerHTML = '📋 Órdenes asignadas <span style="background:#1f3864;color:#fff;border-radius:999px;padding:1px 9px;font-size:13px">' + n + '</span>';
+    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); abrirLista(e); });
+    caja.insertBefore(b, antes);
+    if(!est) b.style.margin = '12px 0';
+  }
+  var original = abrirModal;
+  window.abrirModal = function(id){
+    var r = original.apply(this, arguments);
+    setTimeout(function(){ try{ ponerBoton(id); }catch(err){ console.warn('Órdenes asignadas', err); } }, 0);
+    return r;
+  };
 })();
 </script>
 </body>
