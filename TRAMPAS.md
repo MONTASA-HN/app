@@ -145,11 +145,11 @@ MTG 9013/9017, MTS 5252/5256, MHG 8563: al guardar la orden de logística se lla
 se pide.
 
 ### Cómo se nota desde afuera
-- **MT-129** (AZUCARERA TRES VALLES) figura `EN RENTA` y su orden de logística tipo
-  `renta` está «En proceso» **desde el 2026-09-04**. ¿Está en el cliente o sigue en el
-  patio? La base no lo dice, y ya pasó casi un mes.
 - Nadie puede contestar «¿qué equipos salieron hoy y cuáles están por salir?».
 - Si la entrega se cae o se reprograma, el equipo queda `EN RENTA` sin haber salido.
+- La ventana suele ser corta: en las 36 entregas cerradas, entre pedir y cerrar pasaron
+  0 días de mediana y 3 como máximo. El problema no es cuántos días, es que durante esas
+  horas el dato dice «rentado» cuando el equipo todavía está en manos de Logística.
 
 ### Qué hacer
 Un estado nuevo, **`EN TRÁNSITO`**, entre `DISPONIBLE` y `EN RENTA`: *el equipo ya se le
@@ -166,16 +166,26 @@ no una persona acordándose.
 1. **¿El mismo estado para el viaje de vuelta?** Un retiro también deja la máquina en
    manos de Logística sin estar disponible todavía. En MT hoy el retiro no cambia nada al
    crear; en MONHACO se decidió dejarlo como está (T4).
-2. **`renta` y `entrega` no se comportan igual al cerrar.** Según `FLUJO.md` §3, cerrar una
-   orden tipo `renta` manda el equipo a `DISPONIBLE`, pero tipo `entrega` lo deja
-   `EN RENTA`. En la base hay 26 órdenes `renta` y 36 `entrega`. Si los dos son el mismo
-   viaje, una de las dos ramas está mal y conviene resolverlo **antes** de meter el estado
-   nuevo, porque `EN TRÁNSITO` tiene que saber a cuál de los dos vuelve.
+2. **Cómo entra en una `renta`.** *(Corregido: acá decía que `renta` y `entrega` no se
+   comportaban igual al cerrar y que una rama estaba mal. Las dos están bien:
+   `CLAUDE.md` §5 ya lo explica — «retorno en renta/retiro» — y los datos lo
+   confirman, las 25 `renta` cerradas duraron 0 a 3 días.)* Una `entrega` es la que se
+   queda: al cerrarla, el equipo está entregado, así que `EN TRÁNSITO` → `EN RENTA` calza
+   tal cual. Una `renta` es una renta corta con retorno: al cerrarla, el equipo **volvió**.
+   Ahí no hay hoy ningún momento que diga «entregado», así que `EN TRÁNSITO` necesitaría
+   un paso dentro de la orden (por ejemplo, el «Recibido conforme» del cliente) para pasar
+   a `EN RENTA`; si no, se podría dejar `EN TRÁNSITO` solo para las `entrega`.
 3. **Afuera hay quien lee este campo**: el tablero de flota y el mapa isométrico leen esta
    misma base. Un estado que no conozcan hoy les cae en «otros / interno». Avisar cuando
    entre y se ajustan el mismo día.
 
-*Propuesta de Rodrigo, 1-oct-2026, salida de una reunión de operaciones.*
+**Otra cosa que salió al medir, aparte:** el **MT-129** (AZUCARERA TRES VALLES) tiene una
+orden `renta` «En proceso» desde el 2026-09-04. Las otras 25 `renta` cerraron en 3 días o
+menos. O se convirtió en renta larga sin cambiar de tipo de orden, o ya volvió y nadie
+cerró la orden. La base no dice cuál.
+
+*Propuesta de Rodrigo, 1-oct-2026, salida de una reunión de operaciones. Corregida el
+mismo día: el ejemplo del MT-129 y la pregunta 2 partían de un supuesto equivocado.*
 
 ---
 
