@@ -298,6 +298,15 @@ Supervisiones**. No asumir que es el mismo.
   **Logo Nexo** (opción I2, elegida por Miguel): las dos flechas de la N de MONTASA (celeste #038dcc sube, verde
   #6cbc97 baja) sobre azul marino #1f3864. Archivos `icons/nexo-512|192|180|32.png`; los usan los 9 manifiestos,
   `apple-touch-icon` y el ícono de pestaña. Los logos de MONTASA/MONHACO dentro de la app y PDFs no cambian.
+- **MONHACO — arranque (2026-10-01, decisiones de Miguel):**
+  - Técnicos MONHACO: Rances Pineda, Angel Cardona, Maynor Paz, Cristian Barrera, Jose Escoto, Ramon Moreno, Marvin
+    Torres. **Marvin es de MONHACO y Sergio Madrid de MT Rental** (`ROSTER_TEC` de MTT y MHT corregido).
+  - Motoristas MONHACO = los mismos técnicos (todos manejan). Único operador: **Maynor Lemus**.
+  - **Viáticos: MONHACO no los usa por ahora.** Los botones se esconden con una línea `<style>` en la cabecera de MHG y
+    MHS (`button[onclick*="abrirViaticos"]{display:none}`); para volver a mostrarlos, borrar esa línea.
+  - Cliente correcto: **«SAN JUAN TEXTILES»** (antes «SAN JUAN» / «SAN JUAN TEXTIL»).
+  - PIN: se quedan como están. Logística MONHACO solo maneja tomas de horómetros y reportes de cobro (no cierra
+    órdenes de logística). MONHACO **no necesita** GPS, Agenda ni Revisión físico-técnica.
 - **«Acerca de Nexo»** (2026-09-30): bloque `// ══ ACERCA DE NEXO` antes de `</body>` en las 9 apps. Botón con el logo en el
   encabezado (`.app-header`); en Gerencia MT va como opción del menú ☰, en Gerencia MONHACO al final de la fila de
   empresas y en Logística MONHACO junto al logo. Abre la explicación del nombre y del logo (`abrirAcercaNexo()`).
@@ -641,6 +650,9 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-01 — MONHACO listo para arrancar: horómetros sin cerrar antes de las fichas en MHG/MHS (T12), escritura que
+  se enciende al llegar la base (T9), equipos/vendidos en cualquier formato, vendidos por serie y antes de reponer
+  (MT-66/MT-67), textos «MONTASA»→«MONHACO», sin `_cortDbg`, configuración de técnicos/motoristas/operador/clientes.
 - 2026-09-30 — Fotos livianas: toda foto se achica a 1280 px al leerla (celulares de poca memoria), sin límite de 5 MB (T28).
 - 2026-09-30 — Pantalla «Acerca de Nexo» en las 9 apps y fuera el deslizar entre módulos.
 - 2026-09-30 — Respaldo diario automático de toda la base en la PC de Miguel: tarea de Windows «Nexo - respaldo

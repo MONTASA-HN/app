@@ -241,6 +241,10 @@ conservando cierres locales (como `_mergeLogistica` en MTG).
 
 ## T9. Gerencia MONHACO no escribe nada si Firebase respondió vacío al abrir
 
+**✅ Arreglado (2026-10-01):** en MHG y MHS el oyente de la base enciende `_fbReady` (con `setTimeout 0`, al terminar de
+cargar) cuando llega el primer dato real. Probado: arranque con base vacía → sin escritura; llega la base → escritura
+encendida y 128 equipos. Lo de abajo describe cómo era.
+
 ### Qué pasa
 Si el primer `once` devuelve vacío (p. ej. por un permiso o un fallo raro), la app queda
 toda la sesión sin escribir a Firebase, sin avisar.
@@ -294,6 +298,7 @@ Copiar el enfoque de MTG (subir el objeto completo). Arreglo chico-mediano.
 
 ## T12. Horómetros MONHACO: la toma se sella aunque no se actualicen las fichas
 
+**✅ También en Gerencia y Supervisión MONHACO (2026-10-01):** se copiaron las mismas funciones de MHL.
 **✅ Arreglado (2026-09-30):** `_horFinalizarConFichas` (MHL y su copia de prueba) actualiza primero las fichas y solo si
 terminan bien sella la toma; si falla o pasan 20 s sin señal, avisa y la toma sigue abierta para reintentar.
 No deja finalizar dos veces a la vez. `horFirmaBorrar` ya no borra firmas de una toma finalizada.
@@ -511,6 +516,9 @@ Ahora `_solFiltrarTipos` los **quita** del menú (guarda la lista completa en `s
 Ojo en cualquier otro `<select>`: para ocultar opciones hay que quitarlas, no esconderlas.
 
 ## T21. Códigos MT-xx que se repiten entre empresas (y una serie con dos códigos)
+
+**✅ Parte arreglada (2026-10-01):** MHG/MHS reponían MT-66 y MT-67 (vendidos) desde `EQUIPOS_INICIALES` porque
+revisaban la lista de vendidos ANTES de cargarla de la base. Ahora cargan vendidos primero y también comparan por serie.
 
 ### Qué pasa
 Cada empresa numera su flota desde MT-01, así que el mismo código existe en MT Rental y en MONHACO para

@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-01 — MONHACO (MHG, MHS, MHT): equipos y vendidos se leen con `_toArr` (lista u objeto); vendidos se cargan
+  antes de reponer `EQUIPOS_INICIALES`; MHG/MHS encienden `_fbReady` cuando llega el primer dato real del oyente.
+  Ya no se escribe `monhaco/_cortDbg`.
 - 2026-09-30 — Fotos livianas (9 apps): las fotos que se guardan en órdenes quedan más chicas (1280 px antes de la
   compresión de siempre). No cambia campos ni estructura.
 - 2026-09-30 — «Acerca de Nexo» y deslizar desactivado: solo pantalla, no cambia datos.
