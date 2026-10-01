@@ -126,6 +126,59 @@ Preguntar a Miguel si en MONHACO debe comportarse como MT.
 
 ---
 
+## T29. `EN RENTA` se pone al pedir el equipo, no al entregarlo
+
+*(El número es el siguiente libre; va acá porque es de la misma familia que la T4
+—estado que cambia al **crear** la orden en vez de al cerrarla— y renumerar rompería
+las referencias de `FLUJO.md`.)*
+
+### Qué pasa
+Al crear una solicitud de renta o entrega, el equipo pasa a `EN RENTA` de inmediato
+(`FLUJO.md` §2, paso 4), aunque siga en el patio esperando a que Logística lo lleve.
+Entre que se pide y se entrega —horas, a veces semanas— la máquina figura rentada y
+**no hay forma de distinguir «va en camino» de «ya está con el cliente»**.
+
+### Por qué pasa
+MTG 9013/9017, MTS 5252/5256, MHG 8563: al guardar la orden de logística se llama
+`_cambiarEstadoEquipoAuto(equipoId,'EN RENTA')`. No existe ningún estado entre
+`DISPONIBLE` y `EN RENTA`, así que el único momento disponible para marcarla es cuando
+se pide.
+
+### Cómo se nota desde afuera
+- **MT-129** (AZUCARERA TRES VALLES) figura `EN RENTA` y su orden de logística tipo
+  `renta` está «En proceso» **desde el 2026-09-04**. ¿Está en el cliente o sigue en el
+  patio? La base no lo dice, y ya pasó casi un mes.
+- Nadie puede contestar «¿qué equipos salieron hoy y cuáles están por salir?».
+- Si la entrega se cae o se reprograma, el equipo queda `EN RENTA` sin haber salido.
+
+### Qué hacer
+Un estado nuevo, **`EN TRÁNSITO`**, entre `DISPONIBLE` y `EN RENTA`: *el equipo ya se le
+encargó a Logística y está en manos de ellos para llevarlo donde el cliente.*
+
+- Al **crear** la solicitud de renta/entrega → `EN TRÁNSITO` (hoy: `EN RENTA`)
+- Al **cerrar** la orden de logística (entregado) → `EN RENTA`
+
+Va en la misma línea de lo ya arreglado en T3 y T5: que el estado lo mueva **el evento**,
+no una persona acordándose.
+
+**Tres cosas que hay que decidir antes de meterlo:**
+
+1. **¿El mismo estado para el viaje de vuelta?** Un retiro también deja la máquina en
+   manos de Logística sin estar disponible todavía. En MT hoy el retiro no cambia nada al
+   crear; en MONHACO se decidió dejarlo como está (T4).
+2. **`renta` y `entrega` no se comportan igual al cerrar.** Según `FLUJO.md` §3, cerrar una
+   orden tipo `renta` manda el equipo a `DISPONIBLE`, pero tipo `entrega` lo deja
+   `EN RENTA`. En la base hay 26 órdenes `renta` y 36 `entrega`. Si los dos son el mismo
+   viaje, una de las dos ramas está mal y conviene resolverlo **antes** de meter el estado
+   nuevo, porque `EN TRÁNSITO` tiene que saber a cuál de los dos vuelve.
+3. **Afuera hay quien lee este campo**: el tablero de flota y el mapa isométrico leen esta
+   misma base. Un estado que no conozcan hoy les cae en «otros / interno». Avisar cuando
+   entre y se ajustan el mismo día.
+
+*Propuesta de Rodrigo, 1-oct-2026, salida de una reunión de operaciones.*
+
+---
+
 ## T5. Cancelar una renta o entrega deja el equipo EN RENTA
 
 **✅ Arreglado (2026-09-29):** `cancelarOrdenLog` (Logística MT) regresa a DISPONIBLE el equipo, el 2.º equipo
