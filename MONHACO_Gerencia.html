@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c9f7a8423eaf';
+  var APP_VERSION='78e1cf10f526';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -329,6 +329,42 @@ function _fotoPasar(desde, destinoId){
   catch(e){ toast('Este teléfono no pudo pasar la foto de la cámara: usa 🖼️ Galería', true); return; }
   desde.value = '';
   dest.dispatchEvent(new Event('change', { bubbles: true }));
+}
+</script>
+<script>
+// ══ DATOS DEL EQUIPO DE CLIENTE OBLIGATORIOS AL CERRAR (2026-10-02, pedido de Miguel) ══
+// Solo en órdenes de EQUIPO DE CLIENTE: nombre del cliente, marca, modelo y número de serie. Si el equipo de cliente
+// ya está en la flota, se usan los datos de su ficha (no hay que volver a escribirlos).
+function _nxEsOrdenCliente(o){
+  if(!o) return false;
+  if(o.equipoId === '__cliente__') return true;
+  if((DB.equipos || []).some(function(e){ return e && e.id === o.equipoId && e.esEquipoCliente; })) return true;
+  return !!(o.clienteNombre || o.clienteMarca || o.clienteModelo || o.clienteSerie);
+}
+function _nxFaltanCampos(d){
+  var f = [], t = function(v){ return String(v == null ? '' : v).trim(); };
+  if(!t(d.nombre)) f.push('Equipo de cliente: nombre del cliente');
+  if(!t(d.marca))  f.push('Equipo de cliente: marca');
+  if(!t(d.modelo)) f.push('Equipo de cliente: modelo');
+  if(!t(d.serie))  f.push('Equipo de cliente: número de serie');
+  return f;
+}
+// Cierre desde la tarjeta de la orden
+function _faltanEquipoCliente(o){
+  if(!_nxEsOrdenCliente(o)) return [];
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === o.equipoId && e.esEquipoCliente; }) || {};
+  return _nxFaltanCampos({ nombre: o.clienteNombre || eq.clienteNombre || eq.cliente, marca: o.clienteMarca || eq.marca,
+    modelo: o.clienteModelo || eq.modelo, serie: o.clienteSerie || eq.serie });
+}
+// Finalizar desde el formulario (prefijo 'prev' o 'corr'): lee los campos del formulario si existen
+function _faltanEquipoClienteForm(pref){
+  var sel = document.getElementById(pref + '-equipo'), eid = sel ? sel.value : '';
+  var val = function(id){ var el = document.getElementById(pref + '-cliente-' + id); return el ? el.value : ''; };
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === eid && e.esEquipoCliente; });
+  if(eid !== '__cliente__' && !eq) return [];
+  eq = eq || {};
+  return _nxFaltanCampos({ nombre: val('nombre') || eq.clienteNombre || eq.cliente, marca: val('marca') || eq.marca,
+    modelo: val('modelo') || eq.modelo, serie: val('serie') || eq.serie });
 }
 </script>
 <script>
@@ -8044,6 +8080,7 @@ function finalizarOrdenPreventivo(){
   if(!notas)       faltantes.push('Trabajo realizado');
   const clienteOrden = ((document.getElementById('prev-cliente-orden')||{}).value||'').trim() || (equipoId==='__cliente__' ? ((document.getElementById('prev-cliente-nombre')||{}).value||'').trim() : '');
   if(!clienteOrden) faltantes.push('🏢 Cliente');
+  faltantes.push.apply(faltantes, _faltanEquipoClienteForm('prev'));   // datos del equipo de cliente
   if(faltantes.length){
     alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
     return;
@@ -8073,6 +8110,7 @@ function finalizarOrdenCorrectivo(){
   if(!diag)        faltantes.push('Diagnóstico / Trabajos realizados');
   const clienteOrden = ((document.getElementById('corr-cliente-orden')||{}).value||'').trim() || (equipoId==='__cliente__' ? ((document.getElementById('corr-cliente-nombre')||{}).value||'').trim() : '');
   if(!clienteOrden) faltantes.push('🏢 Cliente');
+  faltantes.push.apply(faltantes, _faltanEquipoClienteForm('corr'));   // datos del equipo de cliente
   if(faltantes.length){
     alert('No se puede finalizar la orden.\nFaltan los siguientes campos:\n\n• '+faltantes.join('\n• '));
     return;
@@ -8173,6 +8211,7 @@ function completarPreventivo(id){
   const firmaData = getFirmaData(id);
   if(!firmaData && !p.firma) faltantes.push('Firma (recibido conforme)');
   if(!_cliOrdenAlCerrar(p)) faltantes.push('🏢 Cliente');
+  faltantes.push.apply(faltantes, _faltanEquipoCliente(p));   // datos del equipo de cliente
   if(faltantes.length){
     alert('No se puede cerrar la orden.\nFaltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
@@ -8513,6 +8552,7 @@ function cerrarCorrectivo(id){
   const firmaDataC = getFirmaData(id);
   if(!firmaDataC && !c.firma) faltantes.push('Firma (recibido conforme)');
   if(!_cliOrdenAlCerrar(c)) faltantes.push('🏢 Cliente');
+  faltantes.push.apply(faltantes, _faltanEquipoCliente(c));   // datos del equipo de cliente
   if(faltantes.length){
     alert('No se puede cerrar la orden. Faltan los siguientes campos:\n\n• ' + faltantes.join('\n• '));
     return;
