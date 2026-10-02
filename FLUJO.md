@@ -401,6 +401,8 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-02 — Cierre (MTG, MTS, MTT, MHG, MHS, MHT): en órdenes de equipo de cliente se exigen `clienteNombre`,
+  `clienteMarca`, `clienteModelo` y `clienteSerie` (o los de la ficha del equipo de cliente). No cambia campos.
 - 2026-10-02 — Comercial: oyentes por lista (`montasa/equipos|vendidos|revisiones|evaluaciones|agenda`) en vez de
   `montasa` completo; `_Sync` solo vigila revisiones, evaluaciones, equipos y vendidos en Comercial. No cambia datos.
 - 2026-10-01 — «Órdenes asignadas»: solo lectura. Comercial guarda además `window._ordSoloLectura` (no toca DB).
