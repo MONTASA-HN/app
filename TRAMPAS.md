@@ -528,6 +528,17 @@ Las que traen hora (`2026-09-17T17:00`) sí se leen como hora local.
 `renderLiquidacionForm` hacía `f.monto` sin revisar: al volver a abrir la liquidación (o con una fila vacía entre
 facturas) se rompía. Ahora suma `f&&f.monto`. Ojo si se agrega otra suma o lista de facturas: pueden venir `null`.
 
+## T29. Comercial con las carpetas de órdenes en cero en algunos celulares
+
+**✅ Arreglado (2026-10-02):** Comercial escuchaba TODA la base `montasa` (6.7 MB, 5.4 MB de logística) y la volvía a
+procesar en cada cambio de cualquier orden, solo para mostrar revisiones y evaluaciones (0.2 MB). Además el
+sincronizador vigilaba las 9 listas, y `localStorage.setItem` sin protección: con la memoria compartida llena
+(≈5 MB para TODAS las apps Nexo del teléfono) la carga caía al `.catch` y se quedaba con la copia vieja (vacía).
+Ahora: Comercial lee/escucha solo equipos, vendidos, revisiones, evaluaciones y agenda (`_leerPartesCom`,
+`_escucharPartesCom`); el sincronizador acepta `_Sync.iniciar(raiz, db, soloCols)` y Comercial vigila solo 4 listas;
+las órdenes para «Órdenes asignadas» se bajan al abrir una ficha (`_ordCargarSoloLectura`); `setItem` protegido.
+Probado con memoria llena: carpetas con 23 revisiones y 18 evaluaciones.
+
 ## T28. Fotos que traban o cierran la app en celulares de poca memoria
 
 **✅ Arreglado (2026-09-30):** cada foto (5–12 MB) se abría completa en memoria dos veces (vista previa y guardado),

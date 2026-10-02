@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a778badafc23';
+  var APP_VERSION='75893329a426';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -358,6 +358,7 @@ function _fotoPasar(desde, destinoId){
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
 var _Sync = (function(){
   var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
   var raiz = null, db = null;
@@ -576,19 +577,20 @@ var _Sync = (function(){
     if(corriendo){ pendiente = true; return Promise.resolve(); }
     corriendo = true;
     var prom = [];
-    COLS.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
+    activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
     return Promise.all(prom).then(function(){
       corriendo = false;
       if(pendiente){ pendiente = false; return guardar(); }
     });
   }
 
-  function iniciar(r, fbdb){
+  function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
+    if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || '{}') || {}; }catch(e){ base = {}; }
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; });
-    COLS.forEach(function(col){
+    activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
@@ -13448,8 +13450,15 @@ function _cliOrdenAlCerrar(o){
     b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;margin:0 0 12px;border:1.5px solid #1f3864;'
       + 'border-radius:10px;background:#eef4fb;color:#1f3864;font-size:15px;font-weight:800;cursor:pointer;box-sizing:border-box';
     b.innerHTML = '📋 Órdenes asignadas <span style="background:#1f3864;color:#fff;border-radius:999px;padding:1px 9px;font-size:13px">' + n + '</span>';
-    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); abrirLista(e); });
+    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation();
+      if(window._ordCargarSoloLectura && !window._ordSoloLectura){ window._ordCargarSoloLectura().then(function(){ abrirLista(e); }).catch(function(){ try{ toast('No se pudieron cargar las órdenes (¿sin señal?)', true); }catch(x){} }); return; }
+      abrirLista(e); });
     caja.insertBefore(b, antes);
+    // Apps que bajan las órdenes bajo demanda (Comercial): mostrar «…» mientras llegan
+    if(window._ordCargarSoloLectura && !window._ordSoloLectura){
+      var sp = b.querySelector('span'); if(sp) sp.textContent = '…';
+      window._ordCargarSoloLectura().then(function(){ if(b.isConnected && sp) sp.textContent = ordenesDe(e).length; }).catch(function(){ if(sp) sp.textContent = '?'; });
+    }
     if(!est) b.style.margin = '12px 0';
   }
   var original = abrirModal;

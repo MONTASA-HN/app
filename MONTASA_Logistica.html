@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='582880b12c8a';
+  var APP_VERSION='af18656f03f9';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -208,6 +208,7 @@ function _lecturasMantAFicha(o){
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
 var _Sync = (function(){
   var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
   var raiz = null, db = null;
@@ -426,19 +427,20 @@ var _Sync = (function(){
     if(corriendo){ pendiente = true; return Promise.resolve(); }
     corriendo = true;
     var prom = [];
-    COLS.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
+    activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
     return Promise.all(prom).then(function(){
       corriendo = false;
       if(pendiente){ pendiente = false; return guardar(); }
     });
   }
 
-  function iniciar(r, fbdb){
+  function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
+    if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || '{}') || {}; }catch(e){ base = {}; }
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; });
-    COLS.forEach(function(col){
+    activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
