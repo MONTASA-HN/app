@@ -660,6 +660,9 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-02 — PDF de órdenes (mantenimiento y logística): codificación del sistema de gestión «Código: GM-FO-04 ·
+  Versión: 3 · Fecha: 2-9-18» junto al logo (esquina superior izquierda, todas las páginas; `.op-cod`). El pie de ese
+  PDF ahora dice «Documento generado desde NEXO». MTG, MTS, MTC, MHG, MHS.
 - 2026-10-02 — Cierre de órdenes de equipo de cliente: nombre, marca, modelo y serie obligatorios.
 - 2026-10-02 — Comercial liviano: baja solo lo que muestra (0.3 MB en vez de 6.7 MB) y sobrevive a la memoria llena (T29).
   El sincronizador acepta `_Sync.iniciar(raiz, db, soloCols)` (mismo bloque en las 8 apps).
