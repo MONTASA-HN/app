@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c31a65a8c984';
+  var APP_VERSION='ae837da55500';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -137,6 +137,7 @@ function _rentaManualPedir(e, nuevoEstado, cliente){
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
 var _Sync = (function(){
   var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
   var raiz = null, db = null;
@@ -355,19 +356,20 @@ var _Sync = (function(){
     if(corriendo){ pendiente = true; return Promise.resolve(); }
     corriendo = true;
     var prom = [];
-    COLS.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
+    activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
     return Promise.all(prom).then(function(){
       corriendo = false;
       if(pendiente){ pendiente = false; return guardar(); }
     });
   }
 
-  function iniciar(r, fbdb){
+  function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
+    if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || '{}') || {}; }catch(e){ base = {}; }
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; });
-    COLS.forEach(function(col){
+    activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
@@ -1650,8 +1652,26 @@ function _estaVendido(e){
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
-  window._fbDB = firebase.database(); try{ _Sync.iniciar('montasa', window._fbDB); }catch(e){ console.warn('Sync', e); }
+  // Comercial solo vigila las listas que usa (antes: las 9, incluida logística de 5+ MB)
+  window._fbDB = firebase.database(); try{ _Sync.iniciar('montasa', window._fbDB, ['revisiones','evaluaciones','equipos','vendidos']); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._fbDB.ref('montasa');
+  // Solo lo que Comercial muestra (≈0.3 MB). Antes bajaba y re-procesaba TODA la base (6.7 MB) en cada cambio de
+  // cualquier orden: en celulares sencillos no terminaba y las carpetas quedaban en cero (2026-10-02).
+  const _COM_PARTES = ['equipos','vendidos','revisiones','evaluaciones','agenda'];
+  function _leerPartesCom(){
+    return Promise.all(_COM_PARTES.map(function(p){ return FB_REF.child(p).once('value').then(function(s){ return [p, s.val()]; }); }))
+      .then(function(par){ var o = {}; par.forEach(function(x){ if(x[1] != null) o[x[0]] = x[1]; }); return Object.keys(o).length ? o : null; });
+  }
+  var _comActual = {}, _comPend = null;
+  function _escucharPartesCom(handler){
+    _COM_PARTES.forEach(function(p){
+      FB_REF.child(p).on('value', function(s){
+        var v = s.val(); if(v == null) delete _comActual[p]; else _comActual[p] = v;
+        clearTimeout(_comPend);
+        _comPend = setTimeout(function(){ handler({ val: function(){ return Object.keys(_comActual).length ? _comActual : null; } }); }, 60);
+      });
+    });
+  }
 
   loadDB(); renderFlota(); renderEquipos(); // render inmediato
 
@@ -1679,8 +1699,6 @@ function _estaVendido(e){
     if(d.revisiones)   DB.revisiones   = _toArr(d.revisiones);
     if(d.agenda) DB.agenda = d.agenda;
     if(d.evaluaciones) DB.evaluaciones = _toArr(d.evaluaciones);
-    // Copia SOLO DE LECTURA para «Órdenes asignadas» (Comercial no guarda estas listas en DB)
-    window._ordSoloLectura = { logistica: d.logistica, preventivos: d.preventivos, correctivos: d.correctivos, ordenesCerradas: d.ordenesCerradas };
     if(!DB.equipos||!DB.equipos.length) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos||!DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     window._fbReady = true;
@@ -1689,10 +1707,18 @@ function _estaVendido(e){
     var _tor=document.getElementById('tab-ordenes'); if(_tor && _tor.style.display!=='none' && typeof renderOrdenesCom==='function') renderOrdenesCom();
   }
   var _comListenerOn = false;
-  function _attachLiveCom(){ if(_comListenerOn) return; _comListenerOn = true; FB_REF.on('value', _liveHandlerCom); }
+  function _attachLiveCom(){ if(_comListenerOn) return; _comListenerOn = true; _escucharPartesCom(_liveHandlerCom); }
+  // «Órdenes asignadas»: las órdenes de logística y mantenimiento se bajan solo cuando se abre una ficha (una vez)
+  var _ordProm = null;
+  window._ordCargarSoloLectura = function(){
+    if(_ordProm) return _ordProm;
+    _ordProm = Promise.all(['logistica','preventivos','correctivos','ordenesCerradas'].map(function(c){ return FB_REF.child(c).once('value').then(function(s){ return [c, s.val()]; }); }))
+      .then(function(par){ var o = {}; par.forEach(function(x){ o[x[0]] = x[1]; }); window._ordSoloLectura = o; return o; })
+      .catch(function(e){ _ordProm = null; throw e; });
+    return _ordProm;
+  };
 
-  FB_REF.once('value').then(snap=>{
-    const remote = snap.val();
+  _leerPartesCom().then(remote=>{
     if(remote){
       // Cargar vendidos ANTES de equipos (para que isSold funcione) — igual que Gerencia
       if(remote.vendidos && remote.vendidos.length) DB.vendidos = _dedupeVendidos(remote.vendidos);
@@ -1714,9 +1740,8 @@ function _estaVendido(e){
       if(remote.revisiones)   DB.revisiones   = _toArr(remote.revisiones);
       if(remote.agenda) DB.agenda = remote.agenda;
       if(remote.evaluaciones) DB.evaluaciones = _toArr(remote.evaluaciones);
-      // Copia SOLO DE LECTURA para «Órdenes asignadas» (Comercial no guarda estas listas en DB)
-      window._ordSoloLectura = { logistica: remote.logistica, preventivos: remote.preventivos, correctivos: remote.correctivos, ordenesCerradas: remote.ordenesCerradas };
-      localStorage.setItem(LS_KEY, JSON.stringify(DB));
+      // Memoria del teléfono llena (la comparten todas las apps Nexo): NO perder lo descargado
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){ console.warn('Caché local no guardado (memoria llena). La app sigue con los datos descargados.'); }
     }
     window._fbReady = true; // Firebase cargó — recién ahora es seguro escribir
     renderFlota(); renderEquipos();
@@ -2923,8 +2948,15 @@ function _detalleOrdenCom(x, tipo, est){
     b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;margin:0 0 12px;border:1.5px solid #1f3864;'
       + 'border-radius:10px;background:#eef4fb;color:#1f3864;font-size:15px;font-weight:800;cursor:pointer;box-sizing:border-box';
     b.innerHTML = '📋 Órdenes asignadas <span style="background:#1f3864;color:#fff;border-radius:999px;padding:1px 9px;font-size:13px">' + n + '</span>';
-    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); abrirLista(e); });
+    b.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation();
+      if(window._ordCargarSoloLectura && !window._ordSoloLectura){ window._ordCargarSoloLectura().then(function(){ abrirLista(e); }).catch(function(){ try{ toast('No se pudieron cargar las órdenes (¿sin señal?)', true); }catch(x){} }); return; }
+      abrirLista(e); });
     caja.insertBefore(b, antes);
+    // Apps que bajan las órdenes bajo demanda (Comercial): mostrar «…» mientras llegan
+    if(window._ordCargarSoloLectura && !window._ordSoloLectura){
+      var sp = b.querySelector('span'); if(sp) sp.textContent = '…';
+      window._ordCargarSoloLectura().then(function(){ if(b.isConnected && sp) sp.textContent = ordenesDe(e).length; }).catch(function(){ if(sp) sp.textContent = '?'; });
+    }
     if(!est) b.style.margin = '12px 0';
   }
   var original = abrirModal;
