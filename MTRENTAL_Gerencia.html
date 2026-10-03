@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a3083d1986c1';
+  var APP_VERSION='a2764bed4cb7';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13718,7 +13718,7 @@ function _cliOrdenAlCerrar(o){
     return Math.round((p - h) / 86400000);
   }
   function pintarEmpleados(c){
-    c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="emp-buscar" placeholder="🔍 Buscar empleado, identidad o teléfono" value="' + esc(filtroEmp) + '">'
+    c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="emp-buscar" placeholder="🔍 Buscar por nombre, cargo, identidad o teléfono" value="' + esc(filtroEmp) + '">'
       + '<button class="bt bp" data-a="emp-nuevo" style="flex:none">➕ Agregar empleado</button></div><div id="emp-lista"></div>';
     pintarListaEmp();
   }
@@ -13726,7 +13726,7 @@ function _cliOrdenAlCerrar(o){
     var el = document.getElementById('emp-lista'); if(!el) return;
     var todos = lista(datos.empleados), act = todos.filter(function(e){ return e.activo !== false; });
     var q = filtroEmp.trim().toUpperCase(), qd = soloDigitos(filtroEmp);
-    var vis = act.filter(function(e){ return !q || String(e.nombreCompleto || '').toUpperCase().indexOf(q) >= 0 || (qd && (soloDigitos(e.identidad).indexOf(qd) >= 0 || soloDigitos(e.telefono).indexOf(qd) >= 0)); })
+    var vis = act.filter(function(e){ return !q || (String(e.nombreCompleto || '') + ' ' + String(e.cargo || '')).toUpperCase().indexOf(q) >= 0 || (qd && (soloDigitos(e.identidad).indexOf(qd) >= 0 || soloDigitos(e.telefono).indexOf(qd) >= 0)); })
       .sort(function(a, b){ return String(a.nombreCompleto || '').localeCompare(String(b.nombreCompleto || '')); });
     var prox = act.map(function(e){ return { e: e, d: diasParaCumple(e.fechaNacimiento) }; }).filter(function(x){ return x.d !== null && x.d <= 30; }).sort(function(a, b){ return a.d - b.d; });
     var html = '';
@@ -13738,6 +13738,7 @@ function _cliOrdenAlCerrar(o){
     html += vis.map(function(e){
       var ce = e.contactoEmergencia || {}, ed = aFecha(e.fechaNacimiento) ? aniosEntre(aFecha(e.fechaNacimiento), new Date()) : null, dc = diasParaCumple(e.fechaNacimiento);
       return '<div class="card"><div class="nm">' + esc(e.nombreCompleto) + (dc === 0 ? ' 🎂' : '') + '</div>'
+        + '<div class="sub" style="font-weight:700;color:#475467">💼 ' + esc(e.cargo || 'Sin cargo registrado') + '</div>'
         + '<div class="sub">🪪 Identidad: <b>' + esc(e.identidad || '—') + '</b></div>'
         + '<div class="sub">📞 Teléfono: ' + (e.telefono ? '<a href="tel:' + esc(soloDigitos(e.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(e.telefono) + '</a>' : '—') + '</div>'
         + '<div class="sub">🎂 Nacimiento: ' + fmt(e.fechaNacimiento) + (ed !== null ? ' · ' + ed + ' años' : '') + '</div>'
@@ -13756,17 +13757,19 @@ function _cliOrdenAlCerrar(o){
     var n = !e; e = e || {}; var ce = e.contactoEmergencia || {};
     var w = ventana(n ? '➕ Agregar empleado' : '✏️ Editar empleado',
       '<label>1. Nombre completo</label><input id="e-nom" value="' + esc(e.nombreCompleto) + '" autocomplete="off">'
-      + '<label>2. Número de identidad</label><input id="e-id" inputmode="numeric" placeholder="0000-0000-00000" value="' + esc(e.identidad) + '" autocomplete="off">'
-      + '<label>3. Número de teléfono</label><input id="e-tel" type="tel" placeholder="0000-0000" value="' + esc(e.telefono) + '" autocomplete="off">'
-      + '<label>4. Fecha de nacimiento</label><input id="e-fn" type="date" value="' + esc(e.fechaNacimiento) + '">'
-      + '<label>5. Contacto de emergencia</label><input id="e-cn" placeholder="Nombre" value="' + esc(ce.nombre) + '" autocomplete="off">'
+      + '<label>2. Cargo o puesto</label><input id="e-cargo" placeholder="Ej: Técnico mecánico, Operador de montacarga" value="' + esc(e.cargo) + '" autocomplete="off">'
+      + '<label>3. Número de identidad</label><input id="e-id" inputmode="numeric" placeholder="0000-0000-00000" value="' + esc(e.identidad) + '" autocomplete="off">'
+      + '<label>4. Número de teléfono</label><input id="e-tel" type="tel" placeholder="0000-0000" value="' + esc(e.telefono) + '" autocomplete="off">'
+      + '<label>5. Fecha de nacimiento</label><input id="e-fn" type="date" value="' + esc(e.fechaNacimiento) + '">'
+      + '<label>6. Contacto de emergencia</label><input id="e-cn" placeholder="Nombre" value="' + esc(ce.nombre) + '" autocomplete="off">'
       + '<div class="g2" style="margin-top:6px"><div><input id="e-cp" placeholder="Parentesco (opcional)" value="' + esc(ce.parentesco) + '" autocomplete="off"></div><div><input id="e-ct" type="tel" placeholder="Teléfono del contacto" value="' + esc(ce.telefono) + '" autocomplete="off"></div></div>'
-      + '<label>6. Dirección de vivienda</label><textarea id="e-dir" rows="2">' + esc(e.direccion) + '</textarea>',
+      + '<label>7. Dirección de vivienda</label><textarea id="e-dir" rows="2">' + esc(e.direccion) + '</textarea>',
       function(w){
-        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), fechaNacimiento: val(w, 'e-fn'),
+        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), cargo: val(w, 'e-cargo'), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), fechaNacimiento: val(w, 'e-fn'),
           contactoEmergencia: { nombre: val(w, 'e-cn'), parentesco: val(w, 'e-cp'), telefono: fmtTel(val(w, 'e-ct')) }, direccion: val(w, 'e-dir') };
         var falta = [];
         if(!d.nombreCompleto) falta.push('nombre completo');
+        if(!d.cargo) falta.push('cargo o puesto');
         if(soloDigitos(d.identidad).length !== 13) falta.push('número de identidad (13 dígitos)');
         if(soloDigitos(d.telefono).length < 8) falta.push('número de teléfono');
         var fn = aFecha(d.fechaNacimiento); if(!fn || fn > new Date()) falta.push('fecha de nacimiento');
