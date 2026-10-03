@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='675f87f2e82d';
+  var APP_VERSION='a3083d1986c1';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13520,7 +13520,7 @@ function _cliOrdenAlCerrar(o){
   if(window._vacListo) return; window._vacListo = true;
   var R = (typeof _RAIZ_APP !== 'undefined' && _RAIZ_APP) ? _RAIZ_APP : 'montasa';
   var EMPRESA = R === 'monhaco' ? 'MONHACO' : 'MONTASA';
-  var datos = { colaboradores: {}, acciones: {} }, escuchando = false, vista = 'col', filtroTxt = '';
+  var datos = { colaboradores: {}, acciones: {}, empleados: {} }, escuchando = false, vista = 'col', filtroTxt = '';
   var MOTIVOS = ['VACACIONES','PERMISO POR 3 HRS','CITA MÉDICA','TRÁMITE BANCARIO','COMPENSATORIO','POR DUELO','MATRIMONIO','TRÁMITES LEGALES','DÍA LIBRE','ESTUDIOS','NACIMIENTO DE HIJO','CONSULTA FAMILIAR'];
   var NUM = ['CERO','UN','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE','VEINTIÚN','VEINTIDÓS','VEINTITRÉS','VEINTICUATRO','VEINTICINCO','VEINTISÉIS','VEINTISIETE','VEINTIOCHO','VEINTINUEVE','TREINTA'];
   function palabras(n){ n = Math.round(Math.abs(n)); return (n <= 30 ? NUM[n] : String(n)); }
@@ -13573,7 +13573,7 @@ function _cliOrdenAlCerrar(o){
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   function escuchar(){
     if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; if(document.getElementById('vac-ov')) pintar(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
   var CSS = '#vac-ov{position:fixed;inset:0;z-index:9500;background:#f0f2f5;display:flex;flex-direction:column;font-family:inherit;color:#1d2433}'
@@ -13596,11 +13596,11 @@ function _cliOrdenAlCerrar(o){
     escuchar();
     if(document.getElementById('vac-ov')) return;
     var ov = document.createElement('div'); ov.id = 'vac-ov';
-    ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones y acciones de personal · ' + EMPRESA + '</small></div>'
+    ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
-      + '<div class="vt"><button data-v="col">👥 Colaboradores</button><button data-v="acc">📄 Acciones de personal</button></div><div class="vc" id="vac-c"></div>';
+      + '<div class="vt"><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="emp">🪪 Empleados</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
-    ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } });
+    ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
     window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
     document.body.appendChild(ov); ajustarHueco(); pintar();
   }
@@ -13625,7 +13625,8 @@ function _cliOrdenAlCerrar(o){
       c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="vac-buscar" placeholder="🔍 Buscar colaborador" value="' + esc(filtroTxt) + '">'
         + '<button class="bt bp" data-a="nuevo" style="flex:none">➕ Nuevo</button></div><div id="vac-lista"></div>';
       pintarLista();
-    } else pintarAcciones(c);
+    } else if(vista === 'emp') pintarEmpleados(c);
+    else pintarAcciones(c);
   }
   function pintarLista(){
     var el = document.getElementById('vac-lista'); if(!el) return;
@@ -13700,8 +13701,104 @@ function _cliOrdenAlCerrar(o){
     if(a === 'anular') return anular(datos.acciones[id]);
     if(a === 'baja') return darBaja(datos.colaboradores[id]);
     if(a === 'reactivar') return reactivar(datos.colaboradores[id]);
+    if(a === 'emp-nuevo') return formEmpleado(null);
+    if(a === 'emp-editar') return formEmpleado(datos.empleados[id]);
+    if(a === 'emp-baja') return bajaEmpleado(datos.empleados[id]);
+    if(a === 'emp-reactivar') return reactivarEmpleado(datos.empleados[id]);
   }
   // ── Ventanas (formularios) ───────────────────────────────────────────────
+  // ── Empleados: ficha personal (nombre, identidad, teléfono, nacimiento, contacto de emergencia, dirección) ──
+  var filtroEmp = '';
+  function soloDigitos(t){ return String(t == null ? '' : t).replace(/\D/g, ''); }
+  function fmtIdentidad(t){ var d = soloDigitos(t).slice(0, 13); return d.length > 8 ? d.slice(0, 4) + '-' + d.slice(4, 8) + '-' + d.slice(8) : d.length > 4 ? d.slice(0, 4) + '-' + d.slice(4) : d; }
+  function fmtTel(t){ var d = soloDigitos(t); return d.length === 8 ? d.slice(0, 4) + '-' + d.slice(4) : String(t == null ? '' : t).trim(); }
+  function diasParaCumple(fn){
+    var d = aFecha(fn); if(!d) return null; var h = new Date(); h.setHours(0, 0, 0, 0);
+    var p = new Date(h.getFullYear(), d.getMonth(), d.getDate()); if(p < h) p = new Date(h.getFullYear() + 1, d.getMonth(), d.getDate());
+    return Math.round((p - h) / 86400000);
+  }
+  function pintarEmpleados(c){
+    c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="emp-buscar" placeholder="🔍 Buscar empleado, identidad o teléfono" value="' + esc(filtroEmp) + '">'
+      + '<button class="bt bp" data-a="emp-nuevo" style="flex:none">➕ Agregar empleado</button></div><div id="emp-lista"></div>';
+    pintarListaEmp();
+  }
+  function pintarListaEmp(){
+    var el = document.getElementById('emp-lista'); if(!el) return;
+    var todos = lista(datos.empleados), act = todos.filter(function(e){ return e.activo !== false; });
+    var q = filtroEmp.trim().toUpperCase(), qd = soloDigitos(filtroEmp);
+    var vis = act.filter(function(e){ return !q || String(e.nombreCompleto || '').toUpperCase().indexOf(q) >= 0 || (qd && (soloDigitos(e.identidad).indexOf(qd) >= 0 || soloDigitos(e.telefono).indexOf(qd) >= 0)); })
+      .sort(function(a, b){ return String(a.nombreCompleto || '').localeCompare(String(b.nombreCompleto || '')); });
+    var prox = act.map(function(e){ return { e: e, d: diasParaCumple(e.fechaNacimiento) }; }).filter(function(x){ return x.d !== null && x.d <= 30; }).sort(function(a, b){ return a.d - b.d; });
+    var html = '';
+    if(prox.length && !q) html += '<div class="card" style="background:#fff8e6;border-color:#f5d48a"><div class="nm" style="color:#b45309">🎂 Cumpleaños de los próximos 30 días</div>'
+      + prox.map(function(x){ var n = aFecha(x.e.fechaNacimiento), cumple = new Date(Date.now() + x.d * 86400000).getFullYear() - n.getFullYear();
+          return '<div class="sub" style="color:#1d2433;margin-top:6px"><b>' + esc(x.e.nombreCompleto) + '</b> — ' + (x.d === 0 ? '<b style="color:#c9211e">¡hoy!</b>' : x.d === 1 ? 'mañana' : 'en ' + x.d + ' días')
+            + ' (' + String(n.getDate()).padStart(2, '0') + '/' + String(n.getMonth() + 1).padStart(2, '0') + ') · cumple ' + cumple + ' años</div>'; }).join('') + '</div>';
+    if(!vis.length) html += '<div class="card" style="text-align:center;color:#667085">' + (q ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay empleados registrados en ' + EMPRESA + '. Usa «➕ Agregar empleado».') + '</div>';
+    html += vis.map(function(e){
+      var ce = e.contactoEmergencia || {}, ed = aFecha(e.fechaNacimiento) ? aniosEntre(aFecha(e.fechaNacimiento), new Date()) : null, dc = diasParaCumple(e.fechaNacimiento);
+      return '<div class="card"><div class="nm">' + esc(e.nombreCompleto) + (dc === 0 ? ' 🎂' : '') + '</div>'
+        + '<div class="sub">🪪 Identidad: <b>' + esc(e.identidad || '—') + '</b></div>'
+        + '<div class="sub">📞 Teléfono: ' + (e.telefono ? '<a href="tel:' + esc(soloDigitos(e.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(e.telefono) + '</a>' : '—') + '</div>'
+        + '<div class="sub">🎂 Nacimiento: ' + fmt(e.fechaNacimiento) + (ed !== null ? ' · ' + ed + ' años' : '') + '</div>'
+        + '<div class="sub">🆘 Emergencia: ' + esc(ce.nombre || '—') + (ce.parentesco ? ' (' + esc(ce.parentesco) + ')' : '') + (ce.telefono ? ' · <a href="tel:' + esc(soloDigitos(ce.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(ce.telefono) + '</a>' : '') + '</div>'
+        + '<div class="sub">🏠 ' + esc(e.direccion || '—') + '</div>'
+        + '<div class="acc"><button data-a="emp-editar" data-id="' + esc(e.id) + '">✏️ Editar</button><button data-a="emp-baja" data-id="' + esc(e.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+    }).join('');
+    var b = todos.filter(function(e){ return e.activo === false; });
+    if(b.length) html += '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Empleados dados de baja (' + b.length + ')</summary>'
+      + b.map(function(e){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #e4e7ec;padding:8px 0;margin-top:8px"><div><div style="font-weight:700">' + esc(e.nombreCompleto) + '</div>'
+        + '<div class="sub">' + (e.fechaBaja ? 'baja ' + fmt(e.fechaBaja) : '') + (e.motivoBaja ? ' · ' + esc(e.motivoBaja) : '') + '</div></div>'
+        + '<button class="bt" data-a="emp-reactivar" data-id="' + esc(e.id) + '" style="flex:none">↩️ Reincorporar</button></div>'; }).join('') + '</details>';
+    el.innerHTML = html;
+  }
+  function formEmpleado(e){
+    var n = !e; e = e || {}; var ce = e.contactoEmergencia || {};
+    var w = ventana(n ? '➕ Agregar empleado' : '✏️ Editar empleado',
+      '<label>1. Nombre completo</label><input id="e-nom" value="' + esc(e.nombreCompleto) + '" autocomplete="off">'
+      + '<label>2. Número de identidad</label><input id="e-id" inputmode="numeric" placeholder="0000-0000-00000" value="' + esc(e.identidad) + '" autocomplete="off">'
+      + '<label>3. Número de teléfono</label><input id="e-tel" type="tel" placeholder="0000-0000" value="' + esc(e.telefono) + '" autocomplete="off">'
+      + '<label>4. Fecha de nacimiento</label><input id="e-fn" type="date" value="' + esc(e.fechaNacimiento) + '">'
+      + '<label>5. Contacto de emergencia</label><input id="e-cn" placeholder="Nombre" value="' + esc(ce.nombre) + '" autocomplete="off">'
+      + '<div class="g2" style="margin-top:6px"><div><input id="e-cp" placeholder="Parentesco (opcional)" value="' + esc(ce.parentesco) + '" autocomplete="off"></div><div><input id="e-ct" type="tel" placeholder="Teléfono del contacto" value="' + esc(ce.telefono) + '" autocomplete="off"></div></div>'
+      + '<label>6. Dirección de vivienda</label><textarea id="e-dir" rows="2">' + esc(e.direccion) + '</textarea>',
+      function(w){
+        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), fechaNacimiento: val(w, 'e-fn'),
+          contactoEmergencia: { nombre: val(w, 'e-cn'), parentesco: val(w, 'e-cp'), telefono: fmtTel(val(w, 'e-ct')) }, direccion: val(w, 'e-dir') };
+        var falta = [];
+        if(!d.nombreCompleto) falta.push('nombre completo');
+        if(soloDigitos(d.identidad).length !== 13) falta.push('número de identidad (13 dígitos)');
+        if(soloDigitos(d.telefono).length < 8) falta.push('número de teléfono');
+        var fn = aFecha(d.fechaNacimiento); if(!fn || fn > new Date()) falta.push('fecha de nacimiento');
+        if(!d.contactoEmergencia.nombre || soloDigitos(d.contactoEmergencia.telefono).length < 8) falta.push('contacto de emergencia (nombre y teléfono)');
+        if(!d.direccion) falta.push('dirección de vivienda');
+        if(falta.length){ alert('Falta o está incompleto:\n• ' + falta.join('\n• ')); return; }
+        var otro = lista(datos.empleados).find(function(x){ return x.id !== e.id && soloDigitos(x.identidad) === soloDigitos(d.identidad); });
+        if(otro && !confirm('Ya hay un empleado con esa identidad: ' + otro.nombreCompleto + (otro.activo === false ? ' (dado de baja)' : '') + '.\n¿Guardar de todas formas?')) return;
+        pin(function(){
+          var id = e.id || ('emp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+          var reg = Object.assign({}, e, d, { id: id, activo: e.activo === false ? false : true, creado: e.creado || Date.now(), actualizado: Date.now() });
+          escribir('empleados/' + id, reg).then(function(){ aviso('Empleado guardado ✓'); w.remove(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+        }, n ? '🔒 Agregar empleado' : '🔒 Guardar empleado');
+      });
+    var idEl = w.querySelector('#e-id'); idEl.addEventListener('input', function(){ var p = this.value.length; this.value = fmtIdentidad(this.value); if(p >= this.value.length) this.setSelectionRange(this.value.length, this.value.length); });
+  }
+  function bajaEmpleado(e){
+    if(!e) return;
+    var m = prompt('Dar de baja a ' + e.nombreCompleto + ' (ya no forma parte de ' + EMPRESA + ').\n\nMotivo (renuncia, despido, fin de contrato…):', '');
+    if(m === null) return; m = m.trim(); if(!m){ alert('Escribe el motivo de la baja.'); return; }
+    pin(function(){
+      var reg = Object.assign({}, e, { activo: false, fechaBaja: hoyISO(), motivoBaja: m, actualizado: Date.now() });
+      escribir('empleados/' + e.id, reg).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+    }, '🔒 Dar de baja a ' + e.nombreCompleto);
+  }
+  function reactivarEmpleado(e){
+    if(!e || !confirm('¿Reincorporar a ' + e.nombreCompleto + ' en ' + EMPRESA + '?')) return;
+    pin(function(){
+      var reg = Object.assign({}, e, { activo: true, actualizado: Date.now() }); delete reg.fechaBaja; delete reg.motivoBaja;
+      escribir('empleados/' + e.id, reg).then(function(){ aviso(e.nombreCompleto + ' reincorporado ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+    }, '🔒 Reincorporar a ' + e.nombreCompleto);
+  }
   function ventana(titulo, cuerpo, alGuardar){
     var w = document.createElement('div');
     w.style.cssText = 'position:fixed;inset:0;z-index:9600;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center';
