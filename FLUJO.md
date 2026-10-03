@@ -402,7 +402,7 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
 - 2026-10-03 — Empleados (MTG, MHG): `<raíz>/rrhh/empleados/{id}` con nombreCompleto, identidad, telefono,
-  fechaNacimiento, contactoEmergencia{nombre,parentesco,telefono}, direccion, activo, fechaBaja/motivoBaja. Mismo camino
+  fechaNacimiento, cargo, contactoEmergencia{nombre,parentesco,telefono}, direccion, activo, fechaBaja/motivoBaja. Mismo camino
   que Vacaciones (set directo, sin `_Sync`); ninguna otra app lo lee.
 - 2026-10-03 — Vacaciones (MTG, MHG): datos nuevos en `<raíz>/rrhh/colaboradores/{id}` y `<raíz>/rrhh/acciones/{id}`
   (correlativo AP-0001…). Se escriben registro por registro con `window._fbDB.ref(...).set` y se leen con `.on('value')`
