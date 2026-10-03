@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-03 — Traslado (MTG, MHG): `_fbDB.ref().update({...})` de varias rutas a la vez (atómico): escribe en
+  `<destino>/rrhh/{empleados,colaboradores,acciones}/{id}` con `trasladadoDe` y pone null en el origen. Puede crear
+  `monhagro/rrhh` (sin app todavía). La numeración AP no cuenta las acciones con `trasladadoDe` de otra empresa.
 - 2026-10-03 — Empleados (MTG, MHG): `<raíz>/rrhh/empleados/{id}` con nombreCompleto, identidad, telefono,
   fechaNacimiento, cargo, contactoEmergencia{nombre,parentesco,telefono}, direccion, activo, fechaBaja/motivoBaja. Mismo camino
   que Vacaciones (set directo, sin `_Sync`); ninguna otra app lo lee.
