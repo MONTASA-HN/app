@@ -660,6 +660,9 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-03 — Empleados manda sobre el nombre: al guardar un empleado, su registro de Vacaciones (misma empresa) toma
+  ese nombre y queda enlazado (`empleadoId`). En la base: José Escoto, Miguel A. Orellana, Elkin Pérez y Kevin Deras
+  enlazados; Elkin y Kevin pasaron de MT RENTAL a MONHACO con sus vacaciones (respaldo en montasa-respaldos).
 - 2026-10-03 — Personal: «🔁 Trasladar» a MT RENTAL / MONHACO / MONHAGRO con PIN. Mueve ficha de empleado, registro de
   vacaciones y sus AP (se reconocen por nombre completo) y los borra de la empresa de origen en un solo paso.
 - 2026-10-03 — «Personal» en Gerencia MT/MONHACO con 3 pestañas: Vacaciones · AP · Empleados. Empleados = ficha personal
