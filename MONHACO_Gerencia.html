@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='91c15901b0d6';
+  var APP_VERSION='d55308ab47b6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12886,7 +12886,7 @@ function _cliOrdenAlCerrar(o){
         pin(function(){
           var id = e.id || ('emp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
           var reg = Object.assign({}, e, d, { id: id, activo: e.activo === false ? false : true, creado: e.creado || Date.now(), actualizado: Date.now() });
-          escribir('empleados/' + id, reg).then(function(){ aviso('Empleado guardado ✓'); w.remove(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+          escribir('empleados/' + id, reg).then(function(){ return enlazarVacaciones(reg, e.nombreCompleto); }).then(function(){ aviso('Empleado guardado ✓'); w.remove(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
         }, n ? '🔒 Agregar empleado' : '🔒 Guardar empleado');
       });
     var idEl = w.querySelector('#e-id'); idEl.addEventListener('input', function(){ var p = this.value.length; this.value = fmtIdentidad(this.value); if(p >= this.value.length) this.setSelectionRange(this.value.length, this.value.length); });
@@ -12913,10 +12913,21 @@ function _cliOrdenAlCerrar(o){
   function normNombre(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
   // Todo lo que pertenece a la persona en esta empresa: ficha de empleado, registro de vacaciones y sus AP
   function paqueteDe(emp, col){
-    if(emp && !col) col = lista(datos.colaboradores).find(function(c){ return normNombre(c.nombres + ' ' + c.apellidos) === normNombre(emp.nombreCompleto); }) || null;
-    if(col && !emp) emp = lista(datos.empleados).find(function(e){ return normNombre(e.nombreCompleto) === normNombre(col.nombres + ' ' + col.apellidos); }) || null;
+    if(emp && !col) col = lista(datos.colaboradores).find(function(c){ return c.empleadoId === emp.id; }) || lista(datos.colaboradores).find(function(c){ return normNombre(c.nombres + ' ' + c.apellidos) === normNombre(emp.nombreCompleto); }) || null;
+    if(col && !emp) emp = (col.empleadoId && datos.empleados[col.empleadoId]) || lista(datos.empleados).find(function(e){ return normNombre(e.nombreCompleto) === normNombre(col.nombres + ' ' + col.apellidos); }) || null;
     var acc = col ? lista(datos.acciones).filter(function(a){ return a.colaboradorId === col.id; }) : [];
     return { emp: emp, col: col, acc: acc, nombre: emp ? emp.nombreCompleto : (col.nombres + ' ' + col.apellidos) };
+  }
+  // El nombre de Vacaciones sigue al de la ficha de Empleados (enlace por empleadoId; la primera vez, por nombre sin tildes)
+  function enlazarVacaciones(emp, nombreAnterior){
+    var cols = lista(datos.colaboradores);
+    var c = cols.find(function(x){ return x.empleadoId === emp.id; }) || cols.find(function(x){ return !x.empleadoId && [emp.nombreCompleto, nombreAnterior].some(function(n){ return n && normNombre(x.nombres + ' ' + x.apellidos) === normNombre(n); }); });
+    if(!c) return Promise.resolve();
+    var pal = String(emp.nombreCompleto || '').replace(/\s+/g, ' ').trim().split(' '); if(pal.length < 2) return Promise.resolve();
+    var nN = Math.max(1, Math.min(pal.length - 1, String(c.nombres || '').trim().split(/\s+/).length));
+    var nom = pal.slice(0, nN).join(' '), ape = pal.slice(nN).join(' ');
+    if(c.nombres === nom && c.apellidos === ape && c.empleadoId === emp.id) return Promise.resolve();
+    return escribir('colaboradores/' + c.id, Object.assign({}, c, { nombres: nom, apellidos: ape, empleadoId: emp.id, actualizado: Date.now() }));
   }
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
