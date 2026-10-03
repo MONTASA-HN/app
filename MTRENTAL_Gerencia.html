@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='937da78581e7';
+  var APP_VERSION='d7356a2bfb69';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13507,6 +13507,359 @@ function _cliOrdenAlCerrar(o){
     setTimeout(function(){ try{ ponerBoton(id); }catch(err){ console.warn('Órdenes asignadas', err); } }, 0);
     return r;
   };
+})();
+</script>
+<script>
+// ══ VACACIONES Y ACCIONES DE PERSONAL (2026-10-02, pedido de Miguel) ═══════════
+// Sección de Gerencia (MT y MONHACO, cada una con su personal). Datos en <raíz>/rrhh/colaboradores y
+// <raíz>/rrhh/acciones, escritos registro por registro (no pasan por el sincronizador _Sync).
+// SIN datos sensibles por ahora (identidad, teléfono, contacto de emergencia): llegan cuando la base tenga candado.
+// Días por año de servicio (Código de Trabajo de Honduras): 1.er año 10 · 2.º 12 · 3.º 15 · 4.º en adelante 20,
+// más días extra a mano. Un saldo negativo son días ADELANTADOS (se descuentan del período siguiente).
+(function(){
+  if(window._vacListo) return; window._vacListo = true;
+  var R = (typeof _RAIZ_APP !== 'undefined' && _RAIZ_APP) ? _RAIZ_APP : 'montasa';
+  var EMPRESA = R === 'monhaco' ? 'MONHACO' : 'MONTASA';
+  var datos = { colaboradores: {}, acciones: {} }, escuchando = false, vista = 'col', filtroTxt = '';
+  var MOTIVOS = ['VACACIONES','PERMISO POR 3 HRS','CITA MÉDICA','TRÁMITE BANCARIO','COMPENSATORIO','POR DUELO','MATRIMONIO','TRÁMITES LEGALES','DÍA LIBRE','ESTUDIOS','NACIMIENTO DE HIJO','CONSULTA FAMILIAR'];
+  var NUM = ['CERO','UN','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE','VEINTIÚN','VEINTIDÓS','VEINTITRÉS','VEINTICUATRO','VEINTICINCO','VEINTISÉIS','VEINTISIETE','VEINTIOCHO','VEINTINUEVE','TREINTA'];
+  function palabras(n){ n = Math.round(Math.abs(n)); return (n <= 30 ? NUM[n] : String(n)); }
+  function esc(t){ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function num(v){ var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function lista(x){ return Object.keys(x || {}).map(function(k){ return x[k]; }).filter(function(o){ return o && typeof o === 'object'; }); }
+  function aFecha(s){ var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+  function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function fmt(s){ var d = aFecha(s); return d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear() : '—'; }
+  function hoyISO(){ return iso(new Date()); }
+  function tabla(anios){ return anios < 1 ? 0 : anios === 1 ? 10 : anios === 2 ? 12 : anios === 3 ? 15 : 20; }
+  function aniosEntre(desde, hasta){ var a = hasta.getFullYear() - desde.getFullYear(); if(hasta.getMonth() < desde.getMonth() || (hasta.getMonth() === desde.getMonth() && hasta.getDate() < desde.getDate())) a--; return a; }
+  function aniversario(fi, anio){ var d = new Date(anio, fi.getMonth(), fi.getDate()); if(d.getMonth() !== fi.getMonth()) d = new Date(anio, fi.getMonth() + 1, 0); return d; }
+  // Último aniversario cumplido (inicio del período actual); si no ha cumplido 1 año, la fecha de ingreso
+  function ultimoAniversario(fiS, hoy){
+    var fi = aFecha(fiS); if(!fi) return null; hoy = hoy || new Date();
+    var d = aniversario(fi, hoy.getFullYear()); if(d > hoy) d = aniversario(fi, hoy.getFullYear() - 1);
+    return d < fi ? fi : d;
+  }
+  function antiguedad(fiS){
+    var fi = aFecha(fiS); if(!fi) return '—'; var h = new Date();
+    var a = aniosEntre(fi, h), m = h.getMonth() - fi.getMonth() + (h.getDate() < fi.getDate() ? -1 : 0); if(m < 0) m += 12;
+    return a + ' año' + (a === 1 ? '' : 's') + ', ' + m + ' mes' + (m === 1 ? '' : 'es');
+  }
+  function gozadosDe(c){
+    return num(c.gozadosIniciales) + lista(datos.acciones).filter(function(a){
+      return a.colaboradorId === c.id && !a.anulada && a.descuentaVacaciones && a.periodo === c.corte;
+    }).reduce(function(s, a){ return s + num(a.dias); }, 0);
+  }
+  function saldoDe(c){ return num(c.diasCorresponden) + num(c.diasExtra) + num(c.pendientesAnteriores) - gozadosDe(c); }
+  function totalDe(c){ return num(c.diasCorresponden) + num(c.diasExtra) + num(c.pendientesAnteriores); }
+  // Vacaciones proporcionales: los días del período en curso se ganan poco a poco hasta cumplir el año del período
+  // (días del período × días laborados desde el inicio del período / 365), redondeado hacia abajo para no dar más de lo
+  // ganado. Los pendientes de años anteriores ya están ganados completos. En el primer año la base es la tabla de 1 año.
+  function proporcionalDe(c, fechaS){
+    var fi = aFecha(c.fechaIngreso), f = aFecha(fechaS || hoyISO()), ini = aFecha(c.corte) || fi; if(!fi || !f || !ini) return null;
+    var primerAnio = aniosEntre(fi, f) < 1;
+    var total = (primerAnio || !num(c.diasCorresponden) && iso(ini) === iso(fi) ? tabla(1) : num(c.diasCorresponden)) + num(c.diasExtra);
+    var laborados = Math.min(365, Math.max(0, Math.round((f - ini) / 86400000) + 1));
+    var ganados = Math.floor(total * laborados / 365), gozados = gozadosDe(c);   // días enteros, hacia abajo
+    return { fecha: iso(f), desde: iso(ini), primerAnio: primerAnio, total: total, laborados: laborados, ganados: ganados, gozados: gozados,
+      anteriores: num(c.pendientesAnteriores), disponibles: Math.round((ganados + num(c.pendientesAnteriores) - gozados) * 100) / 100 };
+  }
+  function n2(v){ v = Math.round(num(v) * 100) / 100; return String(v); }
+  function nuevoPeriodo(c){ var u = ultimoAniversario(c.fechaIngreso); return !!(u && c.corte && iso(u) > c.corte); }
+  // Días hábiles entre dos fechas (lunes a sábado), incluidas
+  function diasHabiles(d1, d2){ var a = aFecha(d1), b = aFecha(d2); if(!a || !b || b < a) return 0; var n = 0; for(var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) if(d.getDay() !== 0) n++; return n; }
+  function escribir(ruta, valor){ if(!window._fbDB) return Promise.reject(new Error('sin conexión')); return window._fbDB.ref(R + '/rrhh/' + ruta).set(valor); }
+  function pin(cb, titulo){ if(typeof solicitarPINAccion === 'function') solicitarPINAccion(cb, titulo || '🔒 Vacaciones', 'Ingresa tu PIN de Gerencia'); else cb(); }
+  function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
+  function escuchar(){
+    if(escuchando || !window._fbDB) return; escuchando = true;
+    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; if(document.getElementById('vac-ov')) pintar(); });
+  }
+  // ── Pantalla ─────────────────────────────────────────────────────────────
+  var CSS = '#vac-ov{position:fixed;inset:0;z-index:9500;background:#f0f2f5;display:flex;flex-direction:column;font-family:inherit;color:#1d2433}'
+    + '#vac-ov .vh{background:#1f3864;color:#fff;padding:12px 14px 10px;display:flex;align-items:center;gap:10px}'
+    + '#vac-ov .vh b{font-size:16px}#vac-ov .vh small{display:block;font-size:11.5px;opacity:.8;margin-top:2px}'
+    + '#vac-ov .vx{margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;width:34px;height:34px;font-size:17px;cursor:pointer}'
+    + '#vac-ov .vt{display:flex;gap:6px;padding:10px 12px 0}#vac-ov .vt button{flex:1;padding:9px;border-radius:9px;border:1.5px solid #1f3864;background:#fff;color:#1f3864;font-weight:700;font-size:13.5px;cursor:pointer}'
+    + '#vac-ov .vt button.on{background:#1f3864;color:#fff}#vac-ov .vc{flex:1;overflow:auto;padding:10px 12px calc(20px + env(safe-area-inset-bottom))}'
+    + '#vac-ov .card{background:#fff;border:1px solid #e4e7ec;border-radius:12px;padding:12px;margin-bottom:10px}'
+    + '#vac-ov .nm{font-weight:800;font-size:15px;color:#1f3864}#vac-ov .sub{font-size:12px;color:#667085;margin-top:2px}'
+    + '@media(max-width:520px){#vac-ov .nums{gap:4px!important}#vac-ov .nums div{padding:5px 2px!important}#vac-ov .nums b{font-size:15px!important}#vac-ov .nums span{font-size:9px!important;line-height:1.15;display:block}}#vac-ov .nums{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:10px}#vac-ov .nums div{background:#f8f9fb;border-radius:8px;padding:6px;text-align:center}'
+    + '#vac-ov .nums b{display:block;font-size:17px}#vac-ov .nums span{font-size:10.5px;color:#667085}'
+    + '#vac-ov .acc{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}#vac-ov .acc button,#vac-ov .bt{padding:8px 10px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-size:12.5px;font-weight:700;color:#1f3864;cursor:pointer}'
+    + '#vac-ov .bp{background:#1f3864;color:#fff;border-color:#1f3864}#vac-ov .bv{background:#2d6a2d;color:#fff;border-color:#2d6a2d}'
+    + '#vac-ov .ok{color:#1a7f37}#vac-ov .mal{color:#c9211e}#vac-ov .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#fff4e5;color:#b45309;margin-top:6px}'
+    + '#vac-ov input,#vac-ov select,#vac-ov textarea{width:100%;box-sizing:border-box;padding:9px;border:1px solid #c9d1dc;border-radius:8px;font-size:14px;font-family:inherit;background:#fff}'
+    + '#vac-ov .prop{margin-top:8px;background:#eef4ff;border:1px solid #c7d7f5;color:#1f3864;border-radius:8px;padding:7px 9px;font-size:12.5px;line-height:1.4}'
+    + '#vac-ov label{display:block;font-size:12px;font-weight:700;color:#475467;margin:8px 0 3px}#vac-ov .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}';
+  function abrir(){
+    escuchar();
+    if(document.getElementById('vac-ov')) return;
+    var ov = document.createElement('div'); ov.id = 'vac-ov';
+    ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">🏖️</span><div><b>Vacaciones y acciones de personal</b><small>' + EMPRESA + '</small></div>'
+      + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
+      + '<div class="vt"><button data-v="col">👥 Colaboradores</button><button data-v="acc">📄 Acciones de personal</button></div><div class="vc" id="vac-c"></div>';
+    ov.addEventListener('click', clic);
+    ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } });
+    window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
+    document.body.appendChild(ov); ajustarHueco(); pintar();
+  }
+  // Deja libre el encabezado principal y la barra de abajo (si está visible)
+  function ajustarHueco(){
+    var ov = document.getElementById('vac-ov'); if(!ov) return;
+    var h = document.querySelector('.app-header'), n = document.querySelector('.bottom-nav');
+    var arriba = h ? Math.max(0, h.getBoundingClientRect().bottom) : 0;
+    var abajo = (n && getComputedStyle(n).display !== 'none') ? n.getBoundingClientRect().height : 0;
+    ov.style.top = arriba + 'px'; ov.style.bottom = abajo + 'px';
+  }
+  function cerrar(){ var ov = document.getElementById('vac-ov'); if(ov) ov.remove(); document.documentElement.style.overflow = ''; }
+  window.addEventListener('resize', ajustarHueco);
+  // Tocar otra pestaña de la barra de abajo cierra Vacaciones
+  document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('.bottom-nav .nav-btn'); if(b && b.id !== 'vac-entrada' && b.id !== 'vac-entrada-nav') cerrar(); }, true);
+  window.abrirVacaciones = abrir;
+  function pintar(){
+    var ov = document.getElementById('vac-ov'); if(!ov) return;
+    ov.querySelectorAll('.vt button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v') === vista); });
+    var c = document.getElementById('vac-c');
+    if(vista === 'col'){
+      c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="vac-buscar" placeholder="🔍 Buscar colaborador" value="' + esc(filtroTxt) + '">'
+        + '<button class="bt bp" data-a="nuevo" style="flex:none">➕ Nuevo</button></div><div id="vac-lista"></div>';
+      pintarLista();
+    } else pintarAcciones(c);
+  }
+  function pintarLista(){
+    var el = document.getElementById('vac-lista'); if(!el) return;
+    var q = filtroTxt.trim().toUpperCase();
+    var cols = lista(datos.colaboradores).filter(function(c){ return c.activo !== false && (!q || (c.nombres + ' ' + c.apellidos + ' ' + c.posicion).toUpperCase().indexOf(q) >= 0); })
+      .sort(function(a, b){ return (a.nombres + a.apellidos).localeCompare(b.nombres + b.apellidos); });
+    if(!cols.length){ el.innerHTML = '<div class="card" style="text-align:center;color:#667085">' + (q ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay colaboradores registrados en ' + EMPRESA + '.') + '</div>' + listaBajas(); return; }
+    el.innerHTML = cols.map(function(c){
+      var s = saldoDe(c), g = gozadosDe(c);
+      return '<div class="card"><div class="nm">' + esc(c.nombres + ' ' + c.apellidos) + '</div>'
+        + '<div class="sub">' + esc(c.posicion || '') + ' · ' + esc(c.departamento || '') + '</div>'
+        + '<div class="sub">Ingreso ' + fmt(c.fechaIngreso) + ' · ' + antiguedad(c.fechaIngreso) + ' · período desde ' + fmt(c.corte) + '</div>'
+        + (nuevoPeriodo(c) ? '<div class="tag">🔔 Ya cumplió su aniversario: abre su nuevo período</div>' : '')
+        + '<div class="nums"><div><b>' + (num(c.diasCorresponden) + num(c.diasExtra)) + '</b><span>Corresponden</span></div><div><b>' + num(c.pendientesAnteriores) + '</b><span>Años anteriores</span></div>'
+        + (function(p){ return '<div><b>' + (p ? p.ganados : '—') + '</b><span>Proporcional hoy</span></div>'; })(proporcionalDe(c))
+        + '<div><b>' + g + '</b><span>Gozados</span></div><div><b class="' + (s < 0 ? 'mal' : 'ok') + '">' + Math.abs(s) + '</b><span>' + (s < 0 ? 'Adelantados' : 'Pendientes') + '</span></div></div>'
+        + (c.observaciones ? '<div class="sub" style="margin-top:8px">📝 ' + esc(c.observaciones) + '</div>' : '')
+        + '<div class="acc"><button class="bp" data-a="accion" data-id="' + esc(c.id) + '">➕ Acción de personal</button><button data-a="historial" data-id="' + esc(c.id) + '">🗂 Historial</button>'
+        + '<button data-a="editar" data-id="' + esc(c.id) + '">✏️ Editar</button>' + (nuevoPeriodo(c) ? '<button data-a="periodo" data-id="' + esc(c.id) + '">🔄 Abrir nuevo período</button>' : '')
+        + '<button data-a="baja" data-id="' + esc(c.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+    }).join('') + listaBajas();
+  }
+  // Personas dadas de baja (ya no trabajan en la empresa): se guardan con su historial y se pueden reincorporar
+  function listaBajas(){
+    var b = lista(datos.colaboradores).filter(function(c){ return c.activo === false; }).sort(function(x, y){ return String(y.fechaBaja || '').localeCompare(String(x.fechaBaja || '')); });
+    if(!b.length) return '';
+    return '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Dados de baja (' + b.length + ')</summary>'
+      + b.map(function(c){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #e4e7ec;padding:8px 0;margin-top:8px"><div><div style="font-weight:700">' + esc(c.nombres + ' ' + c.apellidos) + '</div>'
+        + '<div class="sub">' + esc(c.posicion || '') + (c.fechaBaja ? ' · baja ' + fmt(c.fechaBaja) : '') + (c.motivoBaja ? ' · ' + esc(c.motivoBaja) : '') + '</div></div>'
+        + '<button class="bt" data-a="reactivar" data-id="' + esc(c.id) + '" style="flex:none">↩️ Reincorporar</button></div>'; }).join('') + '</details>';
+  }
+  function darBaja(c){
+    if(!c) return;
+    var m = prompt('Dar de baja a ' + c.nombres + ' ' + c.apellidos + ' (ya no forma parte de ' + EMPRESA + ').\n\nMotivo (renuncia, despido, fin de contrato…):', '');
+    if(m === null) return; m = m.trim(); if(!m){ alert('Escribe el motivo de la baja.'); return; }
+    pin(function(){
+      var reg = Object.assign({}, c, { activo: false, fechaBaja: hoyISO(), motivoBaja: m, actualizado: Date.now() });
+      escribir('colaboradores/' + c.id, reg).then(function(){ aviso(c.nombres + ' dado de baja ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+    }, '🔒 Dar de baja a ' + c.nombres);
+  }
+  function reactivar(c){
+    if(!c || !confirm('¿Reincorporar a ' + c.nombres + ' ' + c.apellidos + ' en ' + EMPRESA + '?')) return;
+    pin(function(){
+      var reg = Object.assign({}, c, { activo: true, actualizado: Date.now() }); delete reg.fechaBaja; delete reg.motivoBaja;
+      escribir('colaboradores/' + c.id, reg).then(function(){ aviso(c.nombres + ' reincorporado ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+    }, '🔒 Reincorporar a ' + c.nombres);
+  }
+  function pintarAcciones(c, soloId){
+    var acc = lista(datos.acciones).filter(function(a){ return !soloId || a.colaboradorId === soloId; }).sort(function(a, b){ return String(b.correlativo).localeCompare(String(a.correlativo)); });
+    var col = soloId ? datos.colaboradores[soloId] : null;
+    c.innerHTML = (col ? '<div class="card"><div class="nm">🗂 Historial de ' + esc(col.nombres + ' ' + col.apellidos) + '</div><div class="acc"><button data-v="col">← Volver</button></div></div>' : '')
+      + (acc.length ? acc.map(function(a){
+        return '<div class="card" style="' + (a.anulada ? 'opacity:.55' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px"><div class="nm">' + esc(a.correlativo) + ' · ' + esc(a.motivo) + '</div>'
+          + '<span class="tag" style="margin:0;' + (a.anulada ? 'background:#f2f4f7;color:#667085' : 'background:#e7f6ec;color:#1a7f37') + '">' + (a.anulada ? 'Anulada' : 'Vigente') + '</span></div>'
+          + '<div class="sub">' + esc(a.nombre) + ' · ' + fmt(a.desde) + (a.hasta && a.hasta !== a.desde ? ' al ' + fmt(a.hasta) : '') + ' · ' + num(a.dias) + ' día' + (num(a.dias) === 1 ? '' : 's') + (a.descuentaVacaciones ? ' a cuenta de vacaciones' : '') + ' · ' + (a.goce === 'sin' ? 'sin goce' : 'con goce') + '</div>'
+          + (a.texto ? '<div class="sub" style="margin-top:4px">' + esc(a.texto) + '</div>' : '')
+          + '<div class="acc"><button data-a="pdf" data-id="' + esc(a.id) + '">📄 PDF</button><button data-a="imprimir" data-id="' + esc(a.id) + '">🖨 Imprimir</button>'
+          + (a.anulada ? '' : '<button data-a="anular" data-id="' + esc(a.id) + '" style="color:#c9211e">Anular</button>') + '</div></div>';
+      }).join('') : '<div class="card" style="text-align:center;color:#667085">No hay acciones de personal.</div>');
+  }
+  function clic(e){
+    var t = e.target.closest('[data-a],[data-v]'); if(!t) return;
+    var v = t.getAttribute('data-v'); if(v){ vista = v; pintar(); return; }
+    var a = t.getAttribute('data-a'), id = t.getAttribute('data-id');
+    if(a === 'cerrar'){ cerrar(); return; }
+    if(a === 'nuevo') return formColaborador(null);
+    if(a === 'editar') return formColaborador(datos.colaboradores[id]);
+    if(a === 'accion') return formAccion(datos.colaboradores[id]);
+    if(a === 'historial'){ vista = 'hist'; pintarAcciones(document.getElementById('vac-c'), id); return; }
+    if(a === 'periodo') return abrirPeriodo(datos.colaboradores[id]);
+    if(a === 'pdf' || a === 'imprimir') return documento(datos.acciones[id], a === 'imprimir');
+    if(a === 'anular') return anular(datos.acciones[id]);
+    if(a === 'baja') return darBaja(datos.colaboradores[id]);
+    if(a === 'reactivar') return reactivar(datos.colaboradores[id]);
+  }
+  // ── Ventanas (formularios) ───────────────────────────────────────────────
+  function ventana(titulo, cuerpo, alGuardar){
+    var w = document.createElement('div');
+    w.style.cssText = 'position:fixed;inset:0;z-index:9600;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center';
+    w.innerHTML = '<div style="background:#fff;width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box">'
+      + '<div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:16px;color:#1f3864">' + titulo + '</b><button data-x="1" style="margin-left:auto;border:none;background:#f2f4f7;border-radius:50%;width:32px;height:32px;cursor:pointer">✕</button></div>'
+      + cuerpo + '<div style="display:flex;gap:8px;margin-top:14px"><button data-x="1" class="bt" style="flex:1">Cancelar</button><button data-g="1" class="bt bp" style="flex:2">Guardar</button></div></div>';
+    w.addEventListener('click', function(e){ if(e.target === w || e.target.closest('[data-x]')) w.remove(); else if(e.target.closest('[data-g]')) alGuardar(w); });
+    document.getElementById('vac-ov').appendChild(w); return w;
+  }
+  function val(w, id){ var el = w.querySelector('#' + id); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; }
+  function formColaborador(c){
+    var n = !c; c = c || { nombres:'', apellidos:'', posicion:'', departamento:'Mantenimiento', fechaIngreso:'', diasExtra:0, pendientesAnteriores:0, gozadosIniciales:0, observaciones:'' };
+    var w = ventana(n ? '➕ Nuevo colaborador' : '✏️ Editar colaborador',
+      '<div class="g2"><div><label>Nombres</label><input id="f-nom" value="' + esc(c.nombres) + '"></div><div><label>Apellidos</label><input id="f-ape" value="' + esc(c.apellidos) + '"></div></div>'
+      + '<div class="g2"><div><label>Puesto</label><input id="f-pos" value="' + esc(c.posicion) + '"></div><div><label>Departamento</label><input id="f-dep" value="' + esc(c.departamento) + '"></div></div>'
+      + '<label>Fecha de ingreso</label><input id="f-ing" type="date" value="' + esc(c.fechaIngreso) + '">'
+      + '<div class="g2"><div><label>Días extra este período</label><input id="f-ext" type="number" value="' + num(c.diasExtra) + '"></div><div><label>Pendientes años anteriores</label><input id="f-ant" type="number" value="' + num(c.pendientesAnteriores) + '"></div></div>'
+      + '<label>Días ya gozados este período (antes de usar Nexo)</label><input id="f-goz" type="number" value="' + num(c.gozadosIniciales) + '">'
+      + '<label>Observaciones</label><input id="f-obs" value="' + esc(c.observaciones) + '">'
+      ,
+      function(w){
+        var nom = val(w, 'f-nom'), ape = val(w, 'f-ape'), ing = val(w, 'f-ing');
+        if(!nom || !ape || !ing){ alert('Faltan nombres, apellidos o fecha de ingreso.'); return; }
+        pin(function(){
+          var id = c.id || ('col_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+          var corte = c.corte || iso(ultimoAniversario(ing));
+          var reg = Object.assign({}, c, { id: id, nombres: nom, apellidos: ape, posicion: val(w, 'f-pos'), departamento: val(w, 'f-dep'), fechaIngreso: ing, corte: corte,
+            diasCorresponden: c.corte ? num(c.diasCorresponden) : tabla(aniosEntre(aFecha(ing), aFecha(corte))),
+            diasExtra: num(val(w, 'f-ext')), pendientesAnteriores: num(val(w, 'f-ant')), gozadosIniciales: num(val(w, 'f-goz')), observaciones: val(w, 'f-obs'),
+            activo: c.activo === false ? false : true, actualizado: Date.now() });
+          escribir('colaboradores/' + id, reg).then(function(){ aviso('Colaborador guardado ✓'); w.remove(); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+        }, '🔒 Guardar colaborador');
+      });
+  }
+  function abrirPeriodo(c){
+    var u = iso(ultimoAniversario(c.fechaIngreso)), s = saldoDe(c), anios = aniosEntre(aFecha(c.fechaIngreso), aFecha(u)), nuevos = tabla(anios);
+    if(!confirm('Abrir el nuevo período de ' + c.nombres + ' ' + c.apellidos + ' desde el ' + fmt(u) + '.\n\n'
+      + '• Le corresponden ' + nuevos + ' días (' + anios + ' años de servicio).\n'
+      + '• ' + (s < 0 ? 'Se descuentan ' + Math.abs(s) + ' días adelantados.' : 'Pasan ' + s + ' días pendientes del período anterior.') + '\n\n¿Continuar?')) return;
+    pin(function(){
+      var reg = Object.assign({}, c, { corte: u, diasCorresponden: nuevos, diasExtra: 0, pendientesAnteriores: s, gozadosIniciales: 0, actualizado: Date.now() });
+      escribir('colaboradores/' + c.id, reg).then(function(){ aviso('Nuevo período abierto ✓'); });
+    }, '🔒 Abrir nuevo período');
+  }
+  function siguienteCorrelativo(){ var mx = 0; lista(datos.acciones).forEach(function(a){ var n = parseInt(String(a.correlativo || '').replace(/\D/g, ''), 10); if(n > mx) mx = n; }); return 'AP-' + String(mx + 1).padStart(4, '0'); }
+  function textoAuto(c, motivo, dias, desc, desde, hasta){
+    var pp = desc ? proporcionalDe(c) : null;
+    if(pp && pp.primerAnio){ var q2 = Math.round((pp.disponibles - dias) * 100) / 100; return 'Se otorgan ' + palabras(dias) + ' (' + dias + ') día' + (dias === 1 ? '' : 's') + ' a cuenta de vacaciones proporcionales (aún no cumple su primer año), quedando '
+      + (q2 < 0 ? n2(Math.abs(q2)) + ' día' + (Math.abs(q2) === 1 ? '' : 's') + ' adelantado' + (Math.abs(q2) === 1 ? '' : 's') : n2(q2) + ' día' + (q2 === 1 ? '' : 's') + ' proporcional' + (q2 === 1 ? '' : 'es') + ' disponible' + (q2 === 1 ? '' : 's')) + '.'; }
+    if(desc){ var queda = saldoDe(c) - dias; return 'Se otorgan ' + palabras(dias) + ' (' + dias + ') día' + (dias === 1 ? '' : 's') + ' a cuenta de vacaciones, quedando un saldo de '
+      + (queda < 0 ? palabras(queda) + ' (' + Math.abs(queda) + ') día' + (Math.abs(queda) === 1 ? '' : 's') + ' adelantado' + (Math.abs(queda) === 1 ? '' : 's') : palabras(queda) + ' (' + queda + ') día' + (queda === 1 ? '' : 's') + ' pendiente' + (queda === 1 ? '' : 's')) + '.'; }
+    return 'Se otorga permiso por ' + motivo.toLowerCase() + (desde ? ' del ' + fmt(desde) + (hasta && hasta !== desde ? ' al ' + fmt(hasta) : '') : '') + '.';
+  }
+  function formAccion(c){
+    var h = hoyISO();
+    var w = ventana('➕ Acción de personal',
+      '<div class="sub" style="margin-bottom:4px"><b>' + esc(c.nombres + ' ' + c.apellidos) + '</b> · saldo actual: ' + (saldoDe(c) < 0 ? Math.abs(saldoDe(c)) + ' adelantados' : saldoDe(c) + ' pendientes') + '</div>'
+      + '<label>Motivo</label><select id="a-mot">' + MOTIVOS.map(function(m){ return '<option>' + m + '</option>'; }).join('') + '</select>'
+      + '<div class="g2"><div><label>Desde</label><input id="a-des" type="date" value="' + h + '"></div><div><label>Hasta</label><input id="a-has" type="date" value="' + h + '"></div></div>'
+      + '<div class="g2"><div><label>Días</label><input id="a-dias" type="number" step="0.5" value="1"></div><div><label>Goce de salario</label><select id="a-goce"><option value="con">Con goce</option><option value="sin">Sin goce</option></select></div></div>'
+      + '<label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:10px"><input id="a-desc" type="checkbox" checked style="width:auto"> Descontar de vacaciones</label>'
+      + '<label>Horario (si aplica)</label><input id="a-hor" placeholder="Ej: 8:00 a 11:00">'
+      + '<label>Fecha de solicitud</label><input id="a-sol" type="date" value="' + h + '">'
+      + '<label>Motivo / detalle (se imprime en el documento)</label><textarea id="a-txt" rows="3"></textarea>',
+      function(w){
+        var d = { motivo: val(w, 'a-mot'), desde: val(w, 'a-des'), hasta: val(w, 'a-has') || val(w, 'a-des'), dias: num(val(w, 'a-dias')), goce: val(w, 'a-goce'),
+          descuenta: !!val(w, 'a-desc'), horario: val(w, 'a-hor'), sol: val(w, 'a-sol'), texto: val(w, 'a-txt') };
+        if(!d.desde){ alert('Falta la fecha de inicio.'); return; }
+        if(aFecha(d.hasta) < aFecha(d.desde)){ alert('La fecha final es anterior a la de inicio.'); return; }
+        if(d.descuenta && !(d.dias > 0)){ alert('Indica cuántos días se descuentan.'); return; }
+        var pr = d.descuenta ? proporcionalDe(c) : null;
+        if(pr && d.dias > pr.disponibles && !confirm('⚠️ ' + c.nombres + ' todavía no ha ganado esos días.\nA hoy tiene ' + n2(Math.max(0, pr.disponibles)) + ' días ganados disponibles (proporcional de su período) y se le están dando ' + d.dias + '.\n\n¿Dar los días de todas formas (quedan como adelantados)?')) return;
+        pin(function(){
+          var id = 'ap_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          var reg = { id: id, correlativo: siguienteCorrelativo(), colaboradorId: c.id, nombre: c.nombres + ' ' + c.apellidos, nombres: c.nombres, apellidos: c.apellidos,
+            departamento: c.departamento || '', fechaSolicitud: d.sol || hoyISO(), desde: d.desde, hasta: d.hasta, motivo: d.motivo, goce: d.goce, horario: d.horario,
+            dias: d.dias, descuentaVacaciones: d.descuenta, periodo: c.corte, proporcional: pr || null, fechaIngreso: c.fechaIngreso || '', texto: d.texto || textoAuto(c, d.motivo, d.dias, d.descuenta, d.desde, d.hasta), creado: Date.now() };
+          escribir('acciones/' + id, reg).then(function(){ w.remove(); aviso('Acción ' + reg.correlativo + ' guardada ✓'); datos.acciones[id] = reg; })   // queda guardada en la app; el PDF se saca desde «Acciones de personal» si se necesita
+            .catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+        }, '🔒 Guardar acción de personal');
+      });
+    function auto(){
+      var m = val(w, 'a-mot'), des = val(w, 'a-des'), has = val(w, 'a-has');
+      var esVac = m === 'VACACIONES', es3h = m === 'PERMISO POR 3 HRS';
+      w.querySelector('#a-desc').checked = esVac;
+      w.querySelector('#a-dias').value = es3h ? 0 : diasHabiles(des, has || des);
+      var txt = w.querySelector('#a-txt'); if(!txt._editado) txt.value = textoAuto(c, m, num(w.querySelector('#a-dias').value), esVac, des, has);
+    }
+    ['a-mot','a-des','a-has'].forEach(function(i){ w.querySelector('#' + i).addEventListener('change', auto); });
+    w.querySelector('#a-dias').addEventListener('input', function(){ var txt = w.querySelector('#a-txt'); if(!txt._editado) txt.value = textoAuto(c, val(w, 'a-mot'), num(this.value), !!val(w, 'a-desc'), val(w, 'a-des'), val(w, 'a-has')); });
+    w.querySelector('#a-txt').addEventListener('input', function(){ this._editado = true; });
+    auto();
+  }
+  function anular(a){
+    var m = prompt('Motivo para anular la acción ' + a.correlativo + ':', ''); if(!m || !m.trim()) return;
+    pin(function(){ escribir('acciones/' + a.id + '/anulada', { ts: Date.now(), motivo: m.trim() }).then(function(){ aviso('Acción anulada: los días vuelven al saldo ✓'); }); }, '🔒 Anular acción');
+  }
+  // ── Documento «Acción de personal» (original y copia, como el formato de Excel) ─────
+  function documento(a, imprimir){
+    var logo = (typeof _LOGO_MONTASA_B64 !== 'undefined') ? _LOGO_MONTASA_B64 : '';
+    var x = function(m){ return a.motivo === m ? '☒' : '☐'; };
+    var celda = function(m){ return '<td>' + x(m) + ' ' + m + '</td>'; };
+    var bloque = function(titulo){
+      return '<div class="ap"><div class="hd"><img src="' + logo + '"><div class="tt">' + titulo + '<div class="nro">N.º ' + esc(a.correlativo) + (a.anulada ? ' · ANULADA' : '') + '</div></div>'
+        + '<div class="cod">Código: RRHH-FO-013<br>Versión: 06<br>Fecha: 01/02/2026</div></div>'
+        + '<table class="kv"><tr><td class="k">Fecha de solicitud:</td><td>' + fmt(a.fechaSolicitud) + '</td><td class="k">Fecha que inicia desde:</td><td>' + fmt(a.desde) + '</td></tr>'
+        + '<tr><td class="k">Departamento:</td><td>' + esc(a.departamento) + '</td><td class="k">Fecha que finaliza:</td><td>' + fmt(a.hasta) + '</td></tr></table>'
+        + '<table class="nm"><tr><td><b>' + esc(a.nombres || '') + '</b><div class="lb">NOMBRES</div></td><td><b>' + esc(a.apellidos || '') + '</b><div class="lb">APELLIDOS</div></td></tr></table>'
+        + '<div class="lb2">MOTIVO: (adjuntar anexo si aplica)</div><div class="mot">' + esc(a.texto || '') + '</div>'
+        + '<div class="lb2">El siguiente cuadro será utilizado únicamente por Recursos Humanos</div><div class="lb3">MOTIVOS DE PERMISOS</div>'
+        + '<table class="mt"><tr>' + celda('PERMISO POR 3 HRS') + celda('POR DUELO') + celda('DÍA LIBRE') + '<td>' + (a.goce !== 'sin' ? '☒' : '☐') + ' CON GOCE DE SALARIO</td></tr>'
+        + '<tr>' + celda('CITA MÉDICA') + celda('MATRIMONIO') + celda('ESTUDIOS') + '<td>' + (a.goce === 'sin' ? '☒' : '☐') + ' SIN GOCE DE SALARIO</td></tr>'
+        + '<tr>' + celda('TRÁMITE BANCARIO') + celda('VACACIONES') + celda('NACIMIENTO DE HIJO') + '<td></td></tr>'
+        + '<tr>' + celda('COMPENSATORIO') + celda('TRÁMITES LEGALES') + celda('CONSULTA FAMILIAR') + '<td>HORARIO: ' + esc(a.horario || '') + '</td></tr></table>'
+        + '<table class="fi"><tr><td><div class="ln"></div>Jefe Inmediato</td><td><div class="ln"></div>Recursos Humanos</td></tr><tr><td colspan="2"><div class="ln" style="width:45%;margin:0 auto 4px"></div>Colaborador</td></tr></table>'
+        + '<div class="pie">Documento generado desde NEXO — ' + new Date().toLocaleDateString('es-HN') + '</div></div>';
+    };
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Acción de personal ' + esc(a.correlativo) + '</title><style>'
+      + '@page{size:letter;margin:10mm}body{font-family:Arial,sans-serif;color:#111;margin:0}'
+      + '.hoja{height:1128px;display:flex;flex-direction:column}@media print{.hoja{height:257mm}}'
+      + '.ap{flex:1;display:flex;flex-direction:column;box-sizing:border-box;border:1px solid #333;padding:12px 16px;page-break-inside:avoid}.hd{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1f3864;padding-bottom:6px}'
+      + '.hd img{height:38px}.tt{flex:1;font-size:16px;font-weight:bold;color:#1f3864;text-align:center}.cod{font-size:10px;line-height:1.35;color:#111;border-left:1px solid #bbb;padding-left:8px;margin-left:8px;white-space:nowrap}.nro{font-size:11px;font-weight:normal;color:#444;margin-top:2px}'
+      + 'table{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px}.kv td{padding:3px 4px}.kv .k{font-weight:bold;width:23%}'
+      + '.nm td{text-align:center;padding:4px;font-size:12px;width:50%}.lb{font-size:9px;color:#555;border-top:1px solid #333;margin-top:2px;padding-top:1px}'
+      + '.lb2{font-size:10.5px;font-weight:bold;margin-top:8px}.lb3{font-size:10.5px;font-weight:bold;text-align:center;margin-top:4px}'
+      + '.mot{border:1px solid #999;min-height:32px;padding:6px;font-size:12px;margin-top:3px}.pp td{border:1px solid #1f3864;padding:3px 4px;font-size:9.5px;text-align:center;color:#444;width:16.6%}.pp b{display:block;font-size:12px;color:#111;margin-top:1px}.mt td{border:1px solid #bbb;padding:3px 5px;font-size:10px}'
+      + '.fi{flex:1;margin-top:10px}.fi td{text-align:center;vertical-align:bottom;font-size:10.5px;padding-top:28px;width:50%}.ln{border-top:1px solid #333;width:80%;margin:0 auto 4px}'
+      + '.pie{text-align:center;font-size:8.5px;color:#888;margin-top:8px}'
+      + '.corte{height:30px;flex:0 0 30px;position:relative}.corte:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1.5px dashed #777}'
+      + '.corte span{position:absolute;left:14px;top:50%;transform:translateY(-52%);background:#fff;padding:0 5px;font-size:15px;line-height:1;color:#555;font-family:"Segoe UI Symbol","DejaVu Sans",sans-serif}.no-print{display:none}'
+      + '</style></head><body><div class="hoja">' + bloque('ACCIÓN DE PERSONAL') + '<div class="corte"><span>✂</span></div>' + bloque('ACCIÓN DE PERSONAL (copia)') + '</div></body></html>';
+    if(imprimir && typeof _imprimirHTML === 'function'){ _imprimirHTML(html); return; }
+    if(typeof _descargarDocPDF === 'function'){ aviso('📄 Generando PDF…'); _descargarDocPDF(html, 'Accion_de_personal_' + a.correlativo + '.pdf', false).catch(function(e){ aviso('No se pudo generar el PDF: ' + e.message, true); }); }
+    else if(typeof _imprimirHTML === 'function') _imprimirHTML(html);
+  }
+  // ── Botón de entrada: menú ☰ (Gerencia MT) o barra inferior (Gerencia MONHACO) ─────
+  function ponerEntrada(){
+    if(document.getElementById('vac-entrada')) return;
+    var menu = document.getElementById('ger-menu-panel');
+    if(menu){
+      var it = document.createElement('button'); it.type = 'button'; it.id = 'vac-entrada'; it.className = 'ger-menu-item';
+      it.innerHTML = '<span style="width:22px;text-align:center;font-size:18px">🏖️</span>Vacaciones';
+      it.addEventListener('click', function(){ try{ _gerMenuToggle(false); }catch(e){} abrir(); });
+      var acerca = document.getElementById('nexo-acerca-btn');
+      if(acerca && acerca.parentNode === menu) menu.insertBefore(it, acerca); else menu.appendChild(it);
+      // sin return: en computadora Gerencia MT muestra la barra de abajo y esconde el menú ☰, así que va en los dos
+    }
+    var nav = document.querySelector('.bottom-nav');
+    if(nav && !document.getElementById('vac-entrada-nav')){
+      var b = document.createElement('button'); b.type = 'button'; b.id = menu ? 'vac-entrada-nav' : 'vac-entrada'; b.className = 'nav-btn';
+      b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 9a7 7 0 0 1 14 0z"/><path d="M8 21h8"/></svg>Vacaciones';
+      b.addEventListener('click', abrir);
+      nav.appendChild(b);
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(ponerEntrada, 50); }); else setTimeout(ponerEntrada, 50);
+  // Para pruebas
+  window._vacPrueba = { tabla: tabla, ultimoAniversario: ultimoAniversario, saldoDe: saldoDe, gozadosDe: gozadosDe, diasHabiles: diasHabiles, textoAuto: textoAuto, documento: documento, proporcionalDe: proporcionalDe, datos: function(){ return datos; } };
 })();
 </script>
 </body>

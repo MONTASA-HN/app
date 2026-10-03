@@ -631,3 +631,7 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   nodo que nadie lee. Código muerto; no revivirlo.
 - **Stubs de prueba**: `Autocorrector is not defined` y `localeCompare` en Supervisión con
   equipos sin `codigo` no son bugs (ver CLAUDE.md §7).
+- **Vacaciones (`<raíz>/rrhh`)**: no pasa por `_Sync`. Nunca hacer `ref(<raíz>).set(...)` (borraría rrhh);
+  los `ref(<raíz>).update({...})` de las apps no lo tocan. No guardar ahí identidad, teléfonos ni contactos de
+  emergencia hasta que exista el candado de la base (etapa 3). La copia de prueba mete datos con
+  `window.__arbolInicial`: si se reconstruye, no dejar un segundo `<script>` que pise `rrhh`.
