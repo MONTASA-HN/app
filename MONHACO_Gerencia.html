@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a3481fed9bbe';
+  var APP_VERSION='91c15901b0d6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12749,7 +12749,7 @@ function _cliOrdenAlCerrar(o){
         + (c.observaciones ? '<div class="sub" style="margin-top:8px">📝 ' + esc(c.observaciones) + '</div>' : '')
         + '<div class="acc"><button class="bp" data-a="accion" data-id="' + esc(c.id) + '">➕ Acción de personal</button><button data-a="historial" data-id="' + esc(c.id) + '">🗂 Historial</button>'
         + '<button data-a="editar" data-id="' + esc(c.id) + '">✏️ Editar</button>' + (nuevoPeriodo(c) ? '<button data-a="periodo" data-id="' + esc(c.id) + '">🔄 Abrir nuevo período</button>' : '')
-        + '<button data-a="baja" data-id="' + esc(c.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+        + '<button data-a="trasladar" data-id="' + esc(c.id) + '">🔁 Trasladar</button><button data-a="baja" data-id="' + esc(c.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
     }).join('') + listaBajas();
   }
   // Personas dadas de baja (ya no trabajan en la empresa): se guardan con su historial y se pueden reincorporar
@@ -12782,7 +12782,7 @@ function _cliOrdenAlCerrar(o){
     var col = soloId ? datos.colaboradores[soloId] : null;
     c.innerHTML = (col ? '<div class="card"><div class="nm">🗂 Historial de ' + esc(col.nombres + ' ' + col.apellidos) + '</div><div class="acc"><button data-v="col">← Volver</button></div></div>' : '')
       + (acc.length ? acc.map(function(a){
-        return '<div class="card" style="' + (a.anulada ? 'opacity:.55' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px"><div class="nm">' + esc(a.correlativo) + ' · ' + esc(a.motivo) + '</div>'
+        return '<div class="card" style="' + (a.anulada ? 'opacity:.55' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px"><div class="nm">' + esc(a.correlativo) + ' · ' + esc(a.motivo) + (a.trasladadoDe && a.trasladadoDe !== R ? ' <span class="tag" style="margin:0;background:#eef4ff;color:#1f3864">hecha en ' + nombreEmpresa(a.trasladadoDe) + '</span>' : '') + '</div>'
           + '<span class="tag" style="margin:0;' + (a.anulada ? 'background:#f2f4f7;color:#667085' : 'background:#e7f6ec;color:#1a7f37') + '">' + (a.anulada ? 'Anulada' : 'Vigente') + '</span></div>'
           + '<div class="sub">' + esc(a.nombre) + ' · ' + fmt(a.desde) + (a.hasta && a.hasta !== a.desde ? ' al ' + fmt(a.hasta) : '') + ' · ' + num(a.dias) + ' día' + (num(a.dias) === 1 ? '' : 's') + (a.descuentaVacaciones ? ' a cuenta de vacaciones' : '') + ' · ' + (a.goce === 'sin' ? 'sin goce' : 'con goce') + '</div>'
           + (a.texto ? '<div class="sub" style="margin-top:4px">' + esc(a.texto) + '</div>' : '')
@@ -12805,6 +12805,8 @@ function _cliOrdenAlCerrar(o){
     if(a === 'baja') return darBaja(datos.colaboradores[id]);
     if(a === 'reactivar') return reactivar(datos.colaboradores[id]);
     if(a === 'emp-nuevo') return formEmpleado(null);
+    if(a === 'emp-trasladar') return trasladar(datos.empleados[id], null);
+    if(a === 'trasladar') return trasladar(null, datos.colaboradores[id]);
     if(a === 'emp-editar') return formEmpleado(datos.empleados[id]);
     if(a === 'emp-baja') return bajaEmpleado(datos.empleados[id]);
     if(a === 'emp-reactivar') return reactivarEmpleado(datos.empleados[id]);
@@ -12847,7 +12849,7 @@ function _cliOrdenAlCerrar(o){
         + '<div class="sub">🎂 Nacimiento: ' + fmt(e.fechaNacimiento) + (ed !== null ? ' · ' + ed + ' años' : '') + '</div>'
         + '<div class="sub">🆘 Emergencia: ' + esc(ce.nombre || '—') + (ce.parentesco ? ' (' + esc(ce.parentesco) + ')' : '') + (ce.telefono ? ' · <a href="tel:' + esc(soloDigitos(ce.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(ce.telefono) + '</a>' : '') + '</div>'
         + '<div class="sub">🏠 ' + esc(e.direccion || '—') + '</div>'
-        + '<div class="acc"><button data-a="emp-editar" data-id="' + esc(e.id) + '">✏️ Editar</button><button data-a="emp-baja" data-id="' + esc(e.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+        + '<div class="acc"><button data-a="emp-editar" data-id="' + esc(e.id) + '">✏️ Editar</button><button data-a="emp-trasladar" data-id="' + esc(e.id) + '">🔁 Trasladar</button><button data-a="emp-baja" data-id="' + esc(e.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
     }).join('');
     var b = todos.filter(function(e){ return e.activo === false; });
     if(b.length) html += '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Empleados dados de baja (' + b.length + ')</summary>'
@@ -12905,6 +12907,45 @@ function _cliOrdenAlCerrar(o){
       escribir('empleados/' + e.id, reg).then(function(){ aviso(e.nombreCompleto + ' reincorporado ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Reincorporar a ' + e.nombreCompleto);
   }
+  // ── Traslado de personal entre empresas (todo junto y en un solo paso) ─────────────────────────────
+  var EMPRESAS = [{ raiz: 'montasa', nombre: 'MT RENTAL' }, { raiz: 'monhaco', nombre: 'MONHACO' }, { raiz: 'monhagro', nombre: 'MONHAGRO' }];
+  function nombreEmpresa(r){ var e = EMPRESAS.find(function(x){ return x.raiz === r; }); return e ? e.nombre : String(r || '').toUpperCase(); }
+  function normNombre(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+  // Todo lo que pertenece a la persona en esta empresa: ficha de empleado, registro de vacaciones y sus AP
+  function paqueteDe(emp, col){
+    if(emp && !col) col = lista(datos.colaboradores).find(function(c){ return normNombre(c.nombres + ' ' + c.apellidos) === normNombre(emp.nombreCompleto); }) || null;
+    if(col && !emp) emp = lista(datos.empleados).find(function(e){ return normNombre(e.nombreCompleto) === normNombre(col.nombres + ' ' + col.apellidos); }) || null;
+    var acc = col ? lista(datos.acciones).filter(function(a){ return a.colaboradorId === col.id; }) : [];
+    return { emp: emp, col: col, acc: acc, nombre: emp ? emp.nombreCompleto : (col.nombres + ' ' + col.apellidos) };
+  }
+  function trasladar(emp, col){
+    var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
+    var otras = EMPRESAS.filter(function(x){ return x.raiz !== R; });
+    var w = ventana('🔁 Trasladar a otra empresa',
+      '<div class="sub" style="color:#1d2433;font-size:13.5px"><b>' + esc(p.nombre) + '</b> pasa de <b>' + nombreEmpresa(R) + '</b> a la empresa que elijas. Se mueve todo junto:</div>'
+      + '<div class="sub" style="margin-top:6px;line-height:1.6">' + (p.emp ? '✅ Ficha de empleado (identidad, teléfono, cumpleaños, contactos)' : '➖ No tiene ficha en Empleados') + '<br>'
+      + (p.col ? '✅ Vacaciones (saldo y período)' : '➖ No está en Vacaciones') + '<br>'
+      + (p.acc.length ? '✅ ' + p.acc.length + ' acción' + (p.acc.length === 1 ? '' : 'es') + ' de personal (historial)' : '➖ Sin acciones de personal') + '</div>'
+      + '<label>Trasladar a</label><div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + otras.map(function(x){ return '<button class="bt bp" data-dest="' + x.raiz + '" style="flex:1;min-width:120px;padding:12px">' + x.nombre + '</button>'; }).join('') + '</div>'
+      + (otras.some(function(x){ return x.raiz === 'monhagro'; }) ? '<div class="sub" style="margin-top:8px">MONHAGRO todavía está en configuración: la información queda guardada y se verá cuando su app esté lista.</div>' : ''),
+      function(){ alert('Toca el botón de la empresa a la que lo quieres trasladar.'); });
+    w.querySelector('[data-g]').style.display = 'none';
+    w.addEventListener('click', function(ev){
+      var b = ev.target.closest('[data-dest]'); if(!b) return;
+      var dest = b.getAttribute('data-dest');
+      pin(function(){
+        var cambios = {}, ahora = Date.now(), base = R + '/rrhh/', otro = dest + '/rrhh/';
+        if(p.emp){ cambios[otro + 'empleados/' + p.emp.id] = Object.assign({}, p.emp, { trasladadoDe: R, fechaTraslado: hoyISO(), actualizado: ahora }); cambios[base + 'empleados/' + p.emp.id] = null; }
+        if(p.col){ cambios[otro + 'colaboradores/' + p.col.id] = Object.assign({}, p.col, { trasladadoDe: R, fechaTraslado: hoyISO(), actualizado: ahora }); cambios[base + 'colaboradores/' + p.col.id] = null; }
+        p.acc.forEach(function(a){ cambios[otro + 'acciones/' + a.id] = Object.assign({}, a, { trasladadoDe: a.trasladadoDe || R }); cambios[base + 'acciones/' + a.id] = null; });
+        if(!window._fbDB){ aviso('Sin conexión: no se trasladó', true); return; }
+        window._fbDB.ref().update(cambios).then(function(){
+          w.remove(); aviso(p.nombre + ' trasladado a ' + nombreEmpresa(dest) + ' ✓');
+        }).catch(function(er){ aviso('No se trasladó (no cambió nada): ' + er.message, true); });
+      }, '🔒 Trasladar a ' + nombreEmpresa(dest));
+    });
+  }
   function ventana(titulo, cuerpo, alGuardar){
     var w = document.createElement('div');
     w.style.cssText = 'position:fixed;inset:0;z-index:9600;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center';
@@ -12949,7 +12990,7 @@ function _cliOrdenAlCerrar(o){
       escribir('colaboradores/' + c.id, reg).then(function(){ aviso('Nuevo período abierto ✓'); });
     }, '🔒 Abrir nuevo período');
   }
-  function siguienteCorrelativo(){ var mx = 0; lista(datos.acciones).forEach(function(a){ var n = parseInt(String(a.correlativo || '').replace(/\D/g, ''), 10); if(n > mx) mx = n; }); return 'AP-' + String(mx + 1).padStart(4, '0'); }
+  function siguienteCorrelativo(){ var mx = 0; lista(datos.acciones).forEach(function(a){ if(a.trasladadoDe && a.trasladadoDe !== R) return; var n = parseInt(String(a.correlativo || '').replace(/\D/g, ''), 10); if(n > mx) mx = n; }); return 'AP-' + String(mx + 1).padStart(4, '0'); }
   function textoAuto(c, motivo, dias, desc, desde, hasta){
     var pp = desc ? proporcionalDe(c) : null;
     if(pp && pp.primerAnio){ var q2 = Math.round((pp.disponibles - dias) * 100) / 100; return 'Se otorgan ' + palabras(dias) + ' (' + dias + ') día' + (dias === 1 ? '' : 's') + ' a cuenta de vacaciones proporcionales (aún no cumple su primer año), quedando '
