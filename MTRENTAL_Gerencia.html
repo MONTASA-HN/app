@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d39420f2db81';
+  var APP_VERSION='ee58b7ea4aa2';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7306,8 +7306,10 @@ async function _rentaProgramarRetiro(id){
   var eq2 = o.equipoId2 ? (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId2; }) : null;
   var equipoTxt = codigo + (eq2 ? ' + ' + eq2.codigo : '');
   var desc = 'Retiro por fin de renta — orden ' + (o.correlativo || '—') + (vence ? ' (' + (vence <= hoy ? 'venció' : 'vence') + ' el ' + _fmtNR(vence) + ')' : '');
-  var link = o.ubicacionLink || (eq && eq.ubicacionLink) || '';   // si la entrega no guardó la ubicación, la de la ficha del equipo
-  if(!confirm('🚚 Programar retiro de ' + equipoTxt + '\n\n• Orden nueva de RETIRO (número LG nuevo)\n• Fecha: ' + _fmtNR(dia) + '\n• Operador de grúa: ' + op.n + (link ? '\n• Ubicación: ' + (o.ubicacionLink ? 'la de la entrega' : 'la de la ficha del equipo') : '\n• Sin ubicación guardada') + '\n\n¿Crear la orden y avisar al operador por WhatsApp?')) return;
+  // El retiro no pide capturar ubicación: va la que ya tiene el equipo (si no, la de la entrega). Al cerrar el retiro,
+  // Logística le pone al equipo el punto del taller MT RENTAL.
+  var link = (eq && eq.ubicacionLink) || o.ubicacionLink || '';
+  if(!confirm('🚚 Programar retiro de ' + equipoTxt + '\n\n• Orden nueva de RETIRO (número LG nuevo)\n• Fecha: ' + _fmtNR(dia) + '\n• Operador de grúa: ' + op.n + (link ? '\n• Ubicación: la que tiene guardada el equipo' : '') + '\n\n¿Crear la orden y avisar al operador por WhatsApp?')) return;
   var correlativo = nextCorrelativo('LG'), ordenId = uid();
   var entry = { id: ordenId, correlativo: correlativo, equipoId: o.equipoId || '', equipoId2: o.equipoId2 || null, tipoLogistica: 'retiro',
     diasRenta: null, rentaIndefinida: null, vehiculoRentaId: null, inicioRenta: null, ubicacionLink: link, contactoCliente: o.contactoCliente || '',
