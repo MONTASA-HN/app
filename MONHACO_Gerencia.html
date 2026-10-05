@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0671413b4daf';
+  var APP_VERSION='5cd1822b1c57';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12805,7 +12805,7 @@ function _cliOrdenAlCerrar(o){
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   function escuchar(){
     if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos.plantilla = v.plantilla || null; publicarPlantilla(); if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos.plantilla = v.plantilla || null; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
   var CSS = '#vac-ov{position:fixed;inset:0;z-index:9500;background:#f0f2f5;display:flex;flex-direction:column;font-family:inherit;color:#1d2433}'
@@ -12871,13 +12871,12 @@ function _cliOrdenAlCerrar(o){
       return '<div class="card"><div class="nm">' + esc(c.nombres + ' ' + c.apellidos) + '</div>'
         + '<div class="sub">' + esc(c.posicion || '') + ' · ' + esc(c.departamento || '') + '</div>'
         + '<div class="sub">Ingreso ' + fmt(c.fechaIngreso) + ' · ' + antiguedad(c.fechaIngreso) + ' · período desde ' + fmt(c.corte) + '</div>'
-        + (nuevoPeriodo(c) ? '<div class="tag">🔔 Ya cumplió su aniversario: abre su nuevo período</div>' : '')
-        + '<div class="nums"><div><b>' + (num(c.diasCorresponden) + num(c.diasExtra)) + '</b><span>Corresponden</span></div><div><b>' + num(c.pendientesAnteriores) + '</b><span>Años anteriores</span></div>'
+        + '<div class="nums"><div><b>' + (num(c.diasCorresponden) + num(c.diasExtra)) + '</b><span>Corresponden</span></div><div><b' +(num(c.pendientesAnteriores) < 0 ? ' class="mal"' : '') + '>' + Math.abs(num(c.pendientesAnteriores)) + '</b><span>' + (num(c.pendientesAnteriores) < 0 ? 'Adelantados año anterior' : 'Años anteriores') + '</span></div>'
         + (function(p){ return '<div><b>' + (p ? p.ganados : '—') + '</b><span>Proporcional hoy</span></div>'; })(proporcionalDe(c))
         + '<div><b>' + g + '</b><span>Gozados</span></div><div><b class="' + (s < 0 ? 'mal' : 'ok') + '">' + Math.abs(s) + '</b><span>' + (s < 0 ? 'Adelantados' : 'Pendientes') + '</span></div></div>'
         + (c.observaciones ? '<div class="sub" style="margin-top:8px">📝 ' + esc(c.observaciones) + '</div>' : '')
         + '<div class="acc"><button class="bp" data-a="accion" data-id="' + esc(c.id) + '">➕ Acción de personal</button><button data-a="historial" data-id="' + esc(c.id) + '">🗂 Historial</button>'
-        + '<button data-a="editar" data-id="' + esc(c.id) + '">✏️ Editar</button>' + (nuevoPeriodo(c) ? '<button data-a="periodo" data-id="' + esc(c.id) + '">🔄 Abrir nuevo período</button>' : '')
+        + '<button data-a="editar" data-id="' + esc(c.id) + '">✏️ Editar</button>' 
         + '<button data-a="trasladar" data-id="' + esc(c.id) + '">🔁 Trasladar</button><button data-a="baja" data-id="' + esc(c.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
     }).join('') + listaBajas();
   }
@@ -12910,6 +12909,8 @@ function _cliOrdenAlCerrar(o){
     var acc = lista(datos.acciones).filter(function(a){ return !soloId || a.colaboradorId === soloId; }).sort(function(a, b){ return String(b.correlativo).localeCompare(String(a.correlativo)); });
     var col = soloId ? datos.colaboradores[soloId] : null;
     c.innerHTML = (col ? '<div class="card"><div class="nm">🗂 Historial de ' + esc(col.nombres + ' ' + col.apellidos) + '</div><div class="acc"><button data-v="col">← Volver</button></div></div>' : '')
+      + (col && col.periodos ? '<div class="card"><div class="nm" style="font-size:13.5px">📅 Períodos cerrados</div>' + Object.keys(col.periodos).sort().reverse().map(function(k){ var p = col.periodos[k];
+          return '<div class="sub" style="margin-top:5px">' + fmt(p.desde) + ' al ' + fmt(p.hasta) + ': ' + (num(p.corresponden) + num(p.extra)) + ' del año' + (num(p.anteriores) ? (num(p.anteriores) < 0 ? ' − ' + Math.abs(num(p.anteriores)) + ' adelantados' : ' + ' + num(p.anteriores) + ' anteriores') : '') + ' − ' + num(p.gozados) + ' gozados = <b>' + (num(p.pasan) < 0 ? Math.abs(num(p.pasan)) + ' adelantados' : num(p.pasan) + ' pasaron a años anteriores') + '</b></div>'; }).join('') + '</div>' : '')
       + (acc.length ? acc.map(function(a){
         return '<div class="card" style="' + (a.anulada ? 'opacity:.55' : '') + '"><div style="display:flex;justify-content:space-between;gap:8px"><div class="nm">' + esc(a.correlativo) + ' · ' + esc(a.motivo) + (a.trasladadoDe && a.trasladadoDe !== R ? ' <span class="tag" style="margin:0;background:#eef4ff;color:#1f3864">hecha en ' + nombreEmpresa(a.trasladadoDe) + '</span>' : '') + '</div>'
           + '<span class="tag" style="margin:0;' + (a.anulada ? 'background:#f2f4f7;color:#667085' : 'background:#e7f6ec;color:#1a7f37') + '">' + (a.anulada ? 'Anulada' : 'Vigente') + '</span></div>'
@@ -13103,6 +13104,49 @@ function _cliOrdenAlCerrar(o){
     datos.plantilla = nueva;
     window._fbDB.ref(R + '/rrhh/plantilla').set(nueva).catch(function(e){ console.warn('plantilla', e); });
   }
+  // ── Cambio de período automático (2026-10-05, pedido de Miguel) ─────────────────────────────────────────
+  // Al cumplir el aniversario: lo no gozado (o lo adelantado, en negativo) pasa a «Años anteriores» sin límite, se cargan
+  // los días del nuevo año según la tabla, los días extra vuelven a 0 y el período cerrado queda en su historial
+  // (colaboradores/{id}/periodos/{desde}). Lo hace la primera Gerencia que se abra ese día (o una que ya esté abierta).
+  function gozadosEn(c, periodo, conIniciales){
+    return (conIniciales ? num(c.gozadosIniciales) : 0) + lista(datos.acciones).filter(function(a){
+      return a.colaboradorId === c.id && !a.anulada && a.descuentaVacaciones && a.periodo === periodo; }).reduce(function(s, a){ return s + num(a.dias); }, 0);
+  }
+  function periodosVencidos(c){
+    var fi = aFecha(c.fechaIngreso); if(!fi || !aFecha(c.corte) || c.activo === false) return null;
+    var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    var r = Object.assign({}, c), cerrados = [], vueltas = 0;
+    while(vueltas++ < 80){
+      var co = aFecha(r.corte), sig = aniversario(fi, co.getFullYear() + 1);
+      if(sig <= co) sig = aniversario(fi, co.getFullYear() + 2);
+      if(sig > hoy) break;
+      var goz = gozadosEn(r, r.corte, true), saldo = num(r.diasCorresponden) + num(r.diasExtra) + num(r.pendientesAnteriores) - goz;
+      cerrados.push({ desde: r.corte, hasta: iso(sig), corresponden: num(r.diasCorresponden), extra: num(r.diasExtra), anteriores: num(r.pendientesAnteriores), gozados: goz, pasan: saldo, cerrado: hoyISO() });
+      r.corte = iso(sig); r.diasCorresponden = tabla(aniosEntre(fi, sig)); r.diasExtra = 0; r.pendientesAnteriores = saldo; r.gozadosIniciales = 0;
+    }
+    if(!cerrados.length) return null;
+    r.periodos = Object.assign({}, c.periodos || {}); cerrados.forEach(function(p){ r.periodos[p.desde] = p; }); r.actualizado = Date.now();
+    return { reg: r, cerrados: cerrados };
+  }
+  var cerrandoPeriodo = {};
+  function cerrarPeriodosVencidos(){
+    if(!window._fbDB) return;
+    lista(datos.colaboradores).forEach(function(c){
+      if(cerrandoPeriodo[c.id]) return;
+      var v = periodosVencidos(c); if(!v) return;
+      cerrandoPeriodo[c.id] = true;
+      var ref = window._fbDB.ref(R + '/rrhh/colaboradores/' + c.id), corteViejo = c.corte;
+      // se vuelve a leer justo antes: si otro equipo ya lo cerró (o la persona fue trasladada), no se hace nada
+      ref.once('value').then(function(s){
+        var act = s.val(); if(!act || act.corte !== corteViejo) return false;
+        return ref.set(v.reg).then(function(){ return true; });
+      }).then(function(ok){
+        if(ok){ var u = v.cerrados[v.cerrados.length - 1];
+          aviso('📅 ' + c.nombres + ': nuevo período desde ' + fmt(v.reg.corte) + ' · ' + (u.pasan < 0 ? Math.abs(u.pasan) + ' adelantados se descuentan' : u.pasan + ' días pasan a años anteriores')); }
+      }).catch(function(e){ console.warn('período', e); }).then(function(){ cerrandoPeriodo[c.id] = false; });
+    });
+  }
+  setInterval(function(){ try{ cerrarPeriodosVencidos(); }catch(e){} }, 60 * 60 * 1000);   // por si la app queda abierta de un día a otro
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
     var otras = EMPRESAS.filter(function(x){ return x.raiz !== R; });

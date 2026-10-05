@@ -660,6 +660,10 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-05 — Vacaciones: cambio de período AUTOMÁTICO al cumplir el aniversario (ya no hay botón). Lo no gozado
+  (o lo adelantado, en negativo) pasa a «Años anteriores» sin límite; días del año nuevo según la tabla; días extra a 0;
+  el período cerrado queda en `colaboradores/{id}/periodos/{desde}` y se ve en el Historial. Lo hace la Gerencia que esté
+  abierta (relee antes de escribir para no duplicar). Primer cambio real: Sergio Madrid el 18/12/2026.
 - 2026-10-05 — Personal: pestañas Empleados · Vacaciones · AP (abre en Empleados). El enlace Empleados→Vacaciones
   reconoce nombres escritos distinto (palabras contenidas o primer nombre + primer apellido = nombre en órdenes). En la
   base se pusieron los nombres de Empleados a 6 registros de Vacaciones (respaldo en montasa-respaldos).

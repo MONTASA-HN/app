@@ -401,6 +401,9 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-05 — Gerencia (MTG, MHG) reescribe `rrhh/colaboradores/{id}` al pasar el aniversario: corte, diasCorresponden,
+  diasExtra=0, pendientesAnteriores=saldo, gozadosIniciales=0 y agrega `periodos/{desde}` = {desde,hasta,corresponden,
+  extra,anteriores,gozados,pasan,cerrado}. Antes de escribir relee el registro y no hace nada si el corte ya cambió.
 - 2026-10-05 — `<raíz>/rrhh/plantilla/{empId}` = {n, c, roles[tec|jefe|op|mot|aviso], tel}: la escribe SOLO Gerencia
   (set del nodo completo al cambiar Personal; el traslado mueve la entrada). La leen las 8 apps (`.on(value)`, copia en
   localStorage `nx_plantilla_<raíz>`) y rellenan por dentro OPERADORES_LOGISTICA, MOTORISTAS_LOGISTICA, AGENDA_TECNICOS,
