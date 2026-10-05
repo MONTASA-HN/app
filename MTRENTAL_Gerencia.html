@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a617a91fd82e';
+  var APP_VERSION='d39420f2db81';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1039,6 +1039,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     var l = nombresDe(tipo); if(!l) l = (original || []).slice();
     return sumarActuales(l, actuales);
   };
+  window._nxPersonas = function(){ return (personas() || []).map(function(p){ return { n: p.n, c: p.c || '', roles: (p.roles || []).slice(), tel: p.tel || '' }; }); };
   // Botones de técnicos dentro de una orden (los marca la app después, como siempre)
   window._nxTecBtns = function(tipo, id, actuales, original){
     return window._nxLista('tec', original, actuales).map(function(n){
@@ -7280,6 +7281,56 @@ function _rentaRetiroReactivar(id){
     _rentaGuardar(o, '🔔 Aviso de retiro reactivado ✓');
   }, '↩ Reactivar aviso', 'Ingresa tu PIN para reactivar el aviso de retiro');
 }
+// ── Programar retiro desde el aviso de renta por vencer (2026-10-05, pedido de Miguel) ──────────────────────
+function _operadoresGrua(){
+  var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
+  return ps.filter(function(p){ return /GRUA/.test(String(p.c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()); });
+}
+async function _rentaProgramarRetiro(id){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden de retiro sin conexión.'); return; }
+  var o = (DB.logistica||[]).find(function(x){ return x && x.id === id; }); if(!o) return toast('Orden no encontrada', true);
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId; });
+  var codigo = eq ? eq.codigo : (o.clienteNombre || 'equipo');
+  var abierta = (DB.logistica||[]).find(function(x){ return x && x.equipoId === o.equipoId && x.tipoLogistica === 'retiro' && !x.cerrado && x.estado !== 'Cancelado'; });
+  if(abierta){ alert('⚠️ El equipo ' + codigo + ' ya tiene una orden de RETIRO abierta (' + abierta.correlativo + ').'); return; }
+  // Operador de grúa: el que tenga «grúa» en su cargo en Personal
+  var gr = _operadoresGrua(), op = gr[0];
+  if(!gr.length){ alert('No hay ningún operador de grúa en Personal (el cargo debe decir «Grúa»). Créalo en Personal › Empleados o usa Solicitudes.'); return; }
+  if(gr.length > 1){
+    var el = prompt('Hay ' + gr.length + ' operadores de grúa. Escribe el número de quien hará el retiro:\n' + gr.map(function(p, i){ return (i + 1) + '. ' + p.n; }).join('\n'), '1');
+    if(el === null) return; op = gr[(parseInt(el, 10) || 0) - 1]; if(!op){ toast('Número no válido', true); return; }
+  }
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var vence = _rentaVenceDe(o), dia = (vence && vence > hoy) ? vence : hoy;
+  var fecha = dia.getFullYear() + '-' + String(dia.getMonth() + 1).padStart(2, '0') + '-' + String(dia.getDate()).padStart(2, '0');
+  var eq2 = o.equipoId2 ? (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId2; }) : null;
+  var equipoTxt = codigo + (eq2 ? ' + ' + eq2.codigo : '');
+  var desc = 'Retiro por fin de renta — orden ' + (o.correlativo || '—') + (vence ? ' (' + (vence <= hoy ? 'venció' : 'vence') + ' el ' + _fmtNR(vence) + ')' : '');
+  var link = o.ubicacionLink || (eq && eq.ubicacionLink) || '';   // si la entrega no guardó la ubicación, la de la ficha del equipo
+  if(!confirm('🚚 Programar retiro de ' + equipoTxt + '\n\n• Orden nueva de RETIRO (número LG nuevo)\n• Fecha: ' + _fmtNR(dia) + '\n• Operador de grúa: ' + op.n + (link ? '\n• Ubicación: ' + (o.ubicacionLink ? 'la de la entrega' : 'la de la ficha del equipo') : '\n• Sin ubicación guardada') + '\n\n¿Crear la orden y avisar al operador por WhatsApp?')) return;
+  var correlativo = nextCorrelativo('LG'), ordenId = uid();
+  var entry = { id: ordenId, correlativo: correlativo, equipoId: o.equipoId || '', equipoId2: o.equipoId2 || null, tipoLogistica: 'retiro',
+    diasRenta: null, rentaIndefinida: null, vehiculoRentaId: null, inicioRenta: null, ubicacionLink: link, contactoCliente: o.contactoCliente || '',
+    ubicacionLog: 'fuera', descripcion: desc, operador: '', prioridad: 'Normal', fecha: new Date().toISOString().slice(0, 10), fechaInicio: '', fechaFin: '',
+    tecnico: '', horometro: '', foto: '', firma: '', estado: 'Pendiente', cerrado: false, clienteNombre: o.clienteNombre || '', clienteMarca: '', clienteModelo: '', clienteSerie: '',
+    retiroDeOrden: o.id };
+  if(!DB.logistica) DB.logistica = [];
+  DB.logistica.push(entry);
+  saveDB(); _guardarLogisticaResiliente(ordenId);
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({ id: ordenId, correlativo: correlativo, equipoTxt: equipoTxt, equipoId: o.equipoId || '', desc: desc, fecha: fecha, tecnicoNombre: op.n, prioridad: 'Normal', tipo: 'retiro', estado: 'Enviada' });
+  saveDB();
+  try{ _agendarDesdeOrden(correlativo, [op.n], fecha, 'Retiro/Recepción de Equipo ' + equipoTxt + ' — ' + desc.slice(0, 60), 0); }catch(e){}
+  toast('Orden de retiro ' + correlativo + ' creada ✓');
+  try{ renderNotificacionesTab(); }catch(e){} try{ renderDashboard(); }catch(e){}
+  var tel = String(op.tel || '').replace(/[^0-9]/g, ''); if(tel.length === 8) tel = '504' + tel;
+  var msg = '🚛 *ASIGNACION LOGISTICA - MONTASA*\n🔗 https://montasa-hn.github.io/app/MONTASA_Logistica.html\n\n'
+    + '🔢 *Orden:* ' + correlativo + '\n👷 *Personal:* ' + op.n + '\n📋 *Equipo:* ' + equipoTxt + '\n🚛 *Tipo:* Retiro/Recepción de Equipo\n'
+    + '📝 *Detalle:* ' + desc + '\n⚡ *Prioridad:* Normal\n📅 *Fecha:* ' + fecha
+    + (link ? '\n📍 *Ubicación:* ' + link : '') + (o.contactoCliente ? '\n📞 *Contacto:* ' + o.contactoCliente : '');
+  if(tel) window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+  else toast(op.n + ' no tiene teléfono en Personal: avísale tú', true);
+}
 function _rentaVencimientos(){
   const out = [];
   const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -7324,6 +7375,7 @@ function _rentaVencimientosHTML(){
       +'<span class="notif-days-badge" style="'+(r.vencida?'background:#fbe0e0;color:#a32d2d':'background:#fdead9;color:#8a4800')+';margin-left:auto">'+badge+'</span></div>'
       +'<div class="notif-line">La renta del equipo <b>'+r.codigo+'</b> (orden <b>'+(r.o.correlativo||'—')+'</b> · '+(parseInt(r.o.diasRenta)||0)+' días'+(ini?' desde el '+_fmtNR(ini):'')+') '+(r.vencida?'venció':'vence')+' el <b>'+f+'</b> — mandar a retirar.</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaProgramarRetiro(this.dataset.rid)" style="'+bt+';background:#2d6a2d;color:#fff;border:none">🚚 Programar retiro</button>'
       +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="'+bt+';background:#1f3864;color:#fff;border:none">✏️ Ajustar días (PIN)</button>'
       +'<button data-rid="'+r.o.id+'" onclick="_rentaRetiroCancelar(this.dataset.rid)" style="'+bt+';background:#fff;color:#a32d2d;border:1px solid #a32d2d">🚫 Cancelar retiro (PIN)</button>'
       +'</div>'
