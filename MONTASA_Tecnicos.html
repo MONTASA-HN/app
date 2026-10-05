@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3d4e405020e1';
+  var APP_VERSION='d575d102fb8d';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1299,6 +1299,156 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </style>
 </head>
 <body>
+<script>
+// ══ PERSONAL DESDE NEXO (2026-10-05, pedido de Miguel) ══════════════════════════════════════════════════════
+// Los técnicos, operadores y motoristas que se pueden elegir salen del módulo Personal de Gerencia de ESTA empresa.
+// Gerencia publica en <raíz>/rrhh/plantilla/{id} solo lo necesario: n (nombre en órdenes), c (cargo), roles
+// (tec, jefe, op, mot, aviso) y tel. Si todavía no hay plantilla (primera vez sin conexión) se usan las listas de
+// siempre. Los nombres que ya están puestos en una orden siguen visibles en esa orden aunque la persona ya no esté.
+(function(){
+  var RAIZ = 'montasa', CLAVE = 'nx_plantilla_' + RAIZ;
+  var plantilla = null, originales = {}, estaticos = null;
+  try{ var g = localStorage.getItem(CLAVE); if(g) plantilla = JSON.parse(g); }catch(e){}
+  function escH(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function escJ(t){ return String(t == null ? '' : t).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function personas(){ return plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null; }
+  function es(p, r){ return (p.roles || []).indexOf(r) >= 0; }
+  var FILTROS = {
+    tec: function(p){ return es(p, 'tec') || es(p, 'jefe'); },                       // órdenes de mantenimiento
+    op: function(p){ return es(p, 'op') || es(p, 'mot'); },                          // operadores de logística
+    mot: RAIZ === 'monhaco' ? function(p){ return es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); }   // en MONHACO manejan los técnicos
+                            : function(p){ return es(p, 'mot'); },
+    revision: function(p){ return es(p, 'op') || es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); },
+    aviso: function(p){ return es(p, 'aviso'); }
+  };
+  function nombresDe(tipo){
+    var a = personas(); if(!a) return null;
+    return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
+      .filter(function(n, i, l){ return l.indexOf(n) === i; }).sort(function(x, y){ return x.localeCompare(y, 'es'); });
+  }
+  function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return ''; }
+  function sumarActuales(l, actuales){
+    var ya = Array.isArray(actuales) ? actuales : String(actuales || '').split(',');
+    ya.forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); });
+    return l;
+  }
+  // Lista para elegir: la de Personal (o la de siempre si no hay) + los nombres que ya tiene la orden
+  window._nxLista = function(tipo, original, actuales){
+    var l = nombresDe(tipo); if(!l) l = (original || []).slice();
+    return sumarActuales(l, actuales);
+  };
+  // Botones de técnicos dentro de una orden (los marca la app después, como siempre)
+  window._nxTecBtns = function(tipo, id, actuales, original){
+    return window._nxLista('tec', original, actuales).map(function(n){
+      return '<div class="tec-btn" data-n="' + escH(n) + '" onclick="event.stopPropagation();toggleTecnicoOrden(\'' + tipo + '\',\'' + escJ(id) + '\',\'' + escH(escJ(n)) + '\',this)">' + escH(n) + '</div>';
+    }).join('\n        ');
+  };
+  // Al editar una orden: si tiene un técnico que ya no está en la lista, se agrega su casilla para no perderlo
+  window._nxAsegurarEnGrid = function(gridId, tecnico){
+    var grid = document.getElementById(gridId); if(!grid) return;
+    var ins = grid.querySelectorAll('input[type=checkbox]'); if(!ins.length || ins[0].getAttribute('data-nombre') !== null) return;
+    var h = ins[0].getAttribute('onchange') || 'toggleTecnico(this)', hay = [].map.call(ins, function(i){ return i.value; });
+    String(tecnico || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean).forEach(function(n){
+      if(hay.indexOf(n) >= 0) return;
+      var lb = document.createElement('label'); lb.className = 'tecnico-check';
+      lb.innerHTML = '<input type="checkbox" value="' + escH(n) + '" onchange="' + escH(h) + '"> ' + escH(n); grid.appendChild(lb);
+    });
+  };
+  function global(nombre){ try{ return eval(nombre); }catch(e){ return undefined; } }
+  function rellenar(nombre, tipo){
+    var arr = global(nombre); if(!Array.isArray(arr)) return;
+    if(!originales[nombre]) originales[nombre] = arr.slice();
+    var l = window._nxLista(tipo, originales[nombre]); arr.length = 0; Array.prototype.push.apply(arr, l);
+  }
+  function rellenarRoster(){
+    var arr = global('ROSTER_TEC'); if(!Array.isArray(arr)) return;
+    if(!originales.ROSTER_TEC) originales.ROSTER_TEC = arr.map(function(t){ return { n: t.n, e: t.e }; });
+    var emp = RAIZ === 'monhaco' ? 'MONHACO' : 'MT Rental';
+    var l = plantilla ? (nombresDe('tec') || []).map(function(n){ return { n: n, e: emp }; }) : originales.ROSTER_TEC.map(function(t){ return { n: t.n, e: t.e }; });
+    arr.length = 0; Array.prototype.push.apply(arr, l);
+    if(typeof window._poblarGridsTec === 'function') try{ window._poblarGridsTec(); }catch(e){}
+    else if(typeof _poblarGridsTec === 'function') try{ _poblarGridsTec(); }catch(e){}
+  }
+  // Grupos de casillas y listas desplegables escritas en la página: se recuerdan una vez y se rehacen con Personal
+  function nombresViejos(){
+    var t = [], l = [];
+    ['TECNICOS_VIAT', 'AGENDA_TECNICOS'].forEach(function(k){ (originales[k] || global(k) || []).forEach(function(n){ t.push(n); }); });
+    (originales.ROSTER_TEC || global('ROSTER_TEC') || []).forEach(function(x){ t.push(x.n); });
+    ['OPERADORES_LOGISTICA', 'MOTORISTAS_LOGISTICA'].forEach(function(k){ (originales[k] || global(k) || []).forEach(function(n){ l.push(n); }); });
+    return { tec: t, log: l };
+  }
+  function recordarEstaticos(){
+    if(estaticos) return; estaticos = { grupos: [], selects: [] };
+    var v = nombresViejos(), saltar = ['prev-tecnicos-grid', 'corr-tecnicos-grid', 'cort-tecnicos-grid'];
+    var poblado = typeof global('_poblarGridsTec') === 'function';
+    var padres = [];
+    [].forEach.call(document.querySelectorAll('label.tecnico-check'), function(lb){ var p = lb.parentElement; if(p && padres.indexOf(p) < 0) padres.push(p); });
+    padres.forEach(function(p){
+      if(poblado && saltar.indexOf(p.id) >= 0) return;
+      var ins = p.querySelectorAll(':scope > label.tecnico-check > input[type=checkbox]'); if(!ins.length) return;
+      var conTel = ins[0].getAttribute('data-nombre') !== null;
+      var noms = [].map.call(ins, function(i){ return conTel ? i.getAttribute('data-nombre') : i.value; });
+      var tipo = /logistica/i.test(p.id || '') ? 'log' : /tecnico/i.test(p.id || '') ? 'tec'
+        : noms.some(function(n){ return v.log.indexOf(n) >= 0 && v.tec.indexOf(n) < 0; }) ? 'log' : 'tec';
+      // ¿el grupo avisa también a gerencia? (tenía a alguien que no es del rol del grupo)
+      var avisos = conTel && noms.some(function(n){ return tipo === 'tec' ? v.tec.indexOf(n) < 0 : (v.log.indexOf(n) < 0 && v.tec.indexOf(n) < 0); });
+      estaticos.grupos.push({ el: p, conTel: conTel, tipo: tipo, avisos: avisos, h: ins[0].getAttribute('onchange') || 'toggleTecnico(this)', orig: noms });
+    });
+    [].forEach.call(document.querySelectorAll('select'), function(s){
+      var ops = [].slice.call(s.options, 1).map(function(o){ return o.value || o.textContent; });
+      var conocidos = ops.filter(function(n){ return v.tec.indexOf(n) >= 0 || v.log.indexOf(n) >= 0; }).length;
+      // listas de personal: todas sus opciones son personal conocido, o el campo es de técnicos (rev-tec1, eval-tec2…)
+      if(ops.length < 2 || !(conocidos === ops.length || (/tec\d*$/i.test(s.id || '') && conocidos >= ops.length / 2))) return;
+      var tipo = ops.some(function(n){ return v.tec.indexOf(n) < 0; }) ? 'revision' : 'tec';   // si trae a alguien que no es técnico, es de técnicos + operadores
+      estaticos.selects.push({ el: s, tipo: tipo, orig: ops });
+    });
+  }
+  function rehacerEstaticos(){
+    if(!estaticos) return;
+    estaticos.grupos.forEach(function(g){
+      var marcados = [].filter.call(g.el.querySelectorAll('input[type=checkbox]'), function(i){ return i.checked; }).map(function(i){ return g.conTel ? i.getAttribute('data-nombre') : i.value; });
+      var lista;
+      if(!plantilla) lista = g.orig.slice();
+      else {
+        var base = g.tipo === 'log' ? (RAIZ === 'monhaco' ? window._nxLista('op').concat(window._nxLista('mot')) : window._nxLista('op')) : window._nxLista('tec');
+        var av = window._nxLista('aviso');
+        var conAviso = g.conTel && (g.avisos || g.orig.some(function(n){ return av.indexOf(n) >= 0; }));
+        lista = (conAviso ? av : []).concat(base).filter(function(n, i, l){ return l.indexOf(n) === i; });
+      }
+      sumarActuales(lista, marcados);
+      g.el.innerHTML = lista.map(function(n){
+        var on = marcados.indexOf(n) >= 0;
+        if(g.conTel){ var t = String(telDe(n)).replace(/\D/g, ''); if(t.length === 8) t = '+504' + t; else if(t) t = '+' + t;
+          return '<label class="tecnico-check' + (on ? ' selected' : '') + '"><input type="checkbox" value="' + escH(t) + '" data-nombre="' + escH(n) + '" onchange="' + escH(g.h) + '"' + (on ? ' checked' : '') + '> ' + escH(n) + '</label>'; }
+        return '<label class="tecnico-check' + (on ? ' selected' : '') + '"><input type="checkbox" value="' + escH(n) + '" onchange="' + escH(g.h) + '"' + (on ? ' checked' : '') + '> ' + escH(n) + '</label>';
+      }).join('');
+    });
+    estaticos.selects.forEach(function(x){
+      var sel = x.el.value, primero = x.el.options[0] ? x.el.options[0].outerHTML : '';
+      var lista = plantilla ? window._nxLista(x.tipo) : x.orig.slice(); sumarActuales(lista, sel ? [sel] : []);
+      x.el.innerHTML = primero + lista.map(function(n){ return '<option' + (n === sel ? ' selected' : '') + '>' + escH(n) + '</option>'; }).join('');
+    });
+  }
+  function aplicar(){
+    rellenar('TECNICOS_VIAT', 'tec'); rellenar('AGENDA_TECNICOS', 'tec');
+    rellenar('OPERADORES_LOGISTICA', 'op'); rellenar('MOTORISTAS_LOGISTICA', 'mot');
+    rellenarRoster();
+    recordarEstaticos(); rehacerEstaticos();
+  }
+  window._nxPersonalAplicar = aplicar;
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1000); return; }
+    db.ref(RAIZ + '/rrhh/plantilla').on('value', function(s){
+      var v = s.val() || null;
+      plantilla = v && Object.keys(v).length ? v : null;
+      try{ if(plantilla) localStorage.setItem(CLAVE, JSON.stringify(plantilla)); else localStorage.removeItem(CLAVE); }catch(e){}
+      aplicar();
+    });
+  }
+  function iniciar(){ try{ aplicar(); }catch(e){ console.warn('Personal Nexo', e); } escuchar(); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 0); }); else setTimeout(iniciar, 0);
+})();
+</script>
 <script>
 // ── Limpieza automática de Service Workers y cachés viejos (anti versión-fantasma) ──
 (function(){
@@ -5456,12 +5606,12 @@ function renderRevisiones(){
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
-          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+          ${_nxLista('revision', ['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], r.tecnicos).map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
         <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',1,this.value)">
           <option value="">— Ninguno —</option>
-          ${['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'].map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+          ${_nxLista('revision', ['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], r.tecnicos).map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)">${r.notas||''}</textarea></div>`;
       // Fotos de la orden
@@ -5684,12 +5834,12 @@ function renderEvaluaciones(){
       card += `<div class="form-group"><label>Técnico 1</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
           <option value="">— Seleccionar —</option>
-          ${['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
+          ${_nxLista('tec', ['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], v.tecnicos).map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
         <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',1,this.value)">
           <option value="">— Ninguno —</option>
-          ${['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'].map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
+          ${_nxLista('tec', ['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], v.tecnicos).map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       // Fotos de la orden (máx 10, no aparecen en imagen al cliente)
       card += `<div class="form-group">

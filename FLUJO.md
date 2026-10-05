@@ -401,6 +401,11 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-05 — `<raíz>/rrhh/plantilla/{empId}` = {n, c, roles[tec|jefe|op|mot|aviso], tel}: la escribe SOLO Gerencia
+  (set del nodo completo al cambiar Personal; el traslado mueve la entrada). La leen las 8 apps (`.on(value)`, copia en
+  localStorage `nx_plantilla_<raíz>`) y rellenan por dentro OPERADORES_LOGISTICA, MOTORISTAS_LOGISTICA, AGENDA_TECNICOS,
+  TECNICOS_VIAT y ROSTER_TEC, rehacen casillas/listas escritas en la página y usan `_nxLista`/`_nxTecBtns`.
+  `rrhh/empleados/{id}.nombreOrdenes` = nombre que se guarda en las órdenes (no cambiarlo: rompe historial y productividad).
 - 2026-10-03 — `rrhh/colaboradores/{id}.empleadoId` enlaza Vacaciones con `rrhh/empleados/{id}` (misma empresa).
 - 2026-10-03 — Traslado (MTG, MHG): `_fbDB.ref().update({...})` de varias rutas a la vez (atómico): escribe en
   `<destino>/rrhh/{empleados,colaboradores,acciones}/{id}` con `trasladadoDe` y pone null en el origen. Puede crear

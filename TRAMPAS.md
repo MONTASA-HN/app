@@ -631,6 +631,9 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   nodo que nadie lee. Código muerto; no revivirlo.
 - **Stubs de prueba**: `Autocorrector is not defined` y `localeCompare` en Supervisión con
   equipos sin `codigo` no son bugs (ver CLAUDE.md §7).
+- **Listas de personal**: ya no se escriben a mano; salen de `rrhh/plantilla`. Las listas en el código son solo
+  respaldo sin conexión. Si alguien "desaparece" de las órdenes, revisar su cargo y que esté activo en Personal.
+  Cambiar el «Nombre en órdenes» de alguien separa su historial (las órdenes guardan el nombre, no el id).
 - **Vacaciones (`<raíz>/rrhh`)**: no pasa por `_Sync`. Nunca hacer `ref(<raíz>).set(...)` (borraría rrhh);
   los `ref(<raíz>).update({...})` de las apps no lo tocan. La copia de prueba mete datos con
   `window.__arbolInicial`: si se reconstruye, no dejar un segundo `<script>` que pise `rrhh`.

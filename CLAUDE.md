@@ -660,6 +660,12 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-05 — Personal manda en las órdenes: técnicos, operadores y motoristas que se eligen salen de Personal de
+  CADA empresa (bloque «PERSONAL DESDE NEXO» al inicio del <body> de MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT). Gerencia
+  publica `<raíz>/rrhh/plantilla` al abrir y con cada cambio/traslado. Rol según el cargo: Técnico/Mecánico/Soldador →
+  mantenimiento; Jefe de taller → mantenimiento; Operador → logística; Motorista → motorista (en MONHACO manejan los
+  técnicos); Gerente/Supervisor → grupos de aviso con teléfono. Cada empleado tiene «Nombre en órdenes» (el de su historial).
+  Sin plantilla se usan las listas de siempre; los nombres ya puestos en una orden siguen visibles en esa orden.
 - 2026-10-03 — Fuera de todas las listas (ya no trabajan): Dalton Garcia, Cristian Barrera, Rances Pineda, Angel Cardona
   (ROSTER_TEC, TECNICOS_LIST, TECNICOS_VIAT, MOTORISTAS_LOGISTICA, AGENDA_TECNICOS, casillas, botones y opciones de las 8
   apps). Las órdenes de la base no se tocaron: MH-0001 (completada) conserva a Rances y Angel.
