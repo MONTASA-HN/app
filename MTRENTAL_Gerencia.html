@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4afebf4716ca';
+  var APP_VERSION='5271b1bf0f99';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13653,7 +13653,7 @@ function _cliOrdenAlCerrar(o){
   if(window._vacListo) return; window._vacListo = true;
   var R = (typeof _RAIZ_APP !== 'undefined' && _RAIZ_APP) ? _RAIZ_APP : 'montasa';
   var EMPRESA = R === 'monhaco' ? 'MONHACO' : 'MONTASA';
-  var datos = { colaboradores: {}, acciones: {}, empleados: {} }, escuchando = false, vista = 'col', filtroTxt = '';
+  var datos = { colaboradores: {}, acciones: {}, empleados: {} }, escuchando = false, vista = 'emp', filtroTxt = '';
   var MOTIVOS = ['VACACIONES','PERMISO POR 3 HRS','CITA MÉDICA','TRÁMITE BANCARIO','COMPENSATORIO','POR DUELO','MATRIMONIO','TRÁMITES LEGALES','DÍA LIBRE','ESTUDIOS','NACIMIENTO DE HIJO','CONSULTA FAMILIAR'];
   var NUM = ['CERO','UN','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE','VEINTIÚN','VEINTIDÓS','VEINTITRÉS','VEINTICUATRO','VEINTICINCO','VEINTISÉIS','VEINTISIETE','VEINTIOCHO','VEINTINUEVE','TREINTA'];
   function palabras(n){ n = Math.round(Math.abs(n)); return (n <= 30 ? NUM[n] : String(n)); }
@@ -13731,7 +13731,7 @@ function _cliOrdenAlCerrar(o){
     var ov = document.createElement('div'); ov.id = 'vac-ov';
     ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
-      + '<div class="vt"><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="emp">🪪 Empleados</button></div><div class="vc" id="vac-c"></div>';
+      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
     ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
     window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
@@ -13961,7 +13961,15 @@ function _cliOrdenAlCerrar(o){
   // El nombre de Vacaciones sigue al de la ficha de Empleados (enlace por empleadoId; la primera vez, por nombre sin tildes)
   function enlazarVacaciones(emp, nombreAnterior){
     var cols = lista(datos.colaboradores);
-    var c = cols.find(function(x){ return x.empleadoId === emp.id; }) || cols.find(function(x){ return !x.empleadoId && [emp.nombreCompleto, nombreAnterior].some(function(n){ return n && normNombre(x.nombres + ' ' + x.apellidos) === normNombre(n); }); });
+    var libres = cols.filter(function(x){ return !x.empleadoId; });
+    var pal = function(t){ return normNombre(t).split(' ').filter(Boolean); };
+    var dentro = function(a, b){ return b.every(function(w){ return a.indexOf(w) >= 0; }); };
+    var unico = function(f){ var l = libres.filter(f); return l.length === 1 ? l[0] : null; };
+    // 1) ya enlazado  2) mismo nombre  3) un nombre contiene al otro  4) primer nombre + primer apellido = nombre en órdenes
+    var c = cols.find(function(x){ return x.empleadoId === emp.id; })
+      || unico(function(x){ return [emp.nombreCompleto, nombreAnterior].some(function(n){ return n && normNombre(x.nombres + ' ' + x.apellidos) === normNombre(n); }); })
+      || unico(function(x){ var a = pal(emp.nombreCompleto), b = pal(x.nombres + ' ' + x.apellidos); return b.length >= 2 && (dentro(a, b) || dentro(b, a)); })
+      || unico(function(x){ return emp.nombreOrdenes && normNombre(pal(x.nombres)[0] + ' ' + pal(x.apellidos)[0]) === normNombre(emp.nombreOrdenes); });
     if(!c) return Promise.resolve();
     var pal = String(emp.nombreCompleto || '').replace(/\s+/g, ' ').trim().split(' '); if(pal.length < 2) return Promise.resolve();
     var nN = Math.max(1, Math.min(pal.length - 1, String(c.nombres || '').trim().split(/\s+/).length));
