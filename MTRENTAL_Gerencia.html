@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1552aa099d43';
+  var APP_VERSION='a617a91fd82e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13778,7 +13778,7 @@ function _cliOrdenAlCerrar(o){
         + (c.observaciones ? '<div class="sub" style="margin-top:8px">📝 ' + esc(c.observaciones) + '</div>' : '')
         + '<div class="acc"><button class="bp" data-a="accion" data-id="' + esc(c.id) + '">➕ Acción de personal</button><button data-a="historial" data-id="' + esc(c.id) + '">🗂 Historial</button>'
         + '<button data-a="editar" data-id="' + esc(c.id) + '">✏️ Editar</button>' 
-        + '<button data-a="trasladar" data-id="' + esc(c.id) + '">🔁 Trasladar</button><button data-a="baja" data-id="' + esc(c.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+        + '</div></div>';
     }).join('') + listaBajas();
   }
   // Personas dadas de baja (ya no trabajan en la empresa): se guardan con su historial y se pueden reincorporar
@@ -13788,7 +13788,7 @@ function _cliOrdenAlCerrar(o){
     return '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Dados de baja (' + b.length + ')</summary>'
       + b.map(function(c){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #e4e7ec;padding:8px 0;margin-top:8px"><div><div style="font-weight:700">' + esc(c.nombres + ' ' + c.apellidos) + '</div>'
         + '<div class="sub">' + esc(c.posicion || '') + (c.fechaBaja ? ' · baja ' + fmt(c.fechaBaja) : '') + (c.motivoBaja ? ' · ' + esc(c.motivoBaja) : '') + '</div></div>'
-        + '<button class="bt" data-a="reactivar" data-id="' + esc(c.id) + '" style="flex:none">↩️ Reincorporar</button></div>'; }).join('') + '</details>';
+        + '</div>'; }).join('') + '<div class="sub" style="margin-top:8px">Las bajas y reincorporaciones se hacen desde la pestaña Empleados.</div></details>';
   }
   function darBaja(c){
     if(!c) return;
@@ -13836,6 +13836,7 @@ function _cliOrdenAlCerrar(o){
     if(a === 'baja') return darBaja(datos.colaboradores[id]);
     if(a === 'reactivar') return reactivar(datos.colaboradores[id]);
     if(a === 'emp-nuevo') return formEmpleado(null);
+    if(a === 'emp-compartir') return compartirEmpleado(datos.empleados[id]);
     if(a === 'emp-trasladar') return trasladar(datos.empleados[id], null);
     if(a === 'trasladar') return trasladar(null, datos.colaboradores[id]);
     if(a === 'emp-editar') return formEmpleado(datos.empleados[id]);
@@ -13882,7 +13883,7 @@ function _cliOrdenAlCerrar(o){
         + '<div class="sub">🎂 Nacimiento: ' + fmt(e.fechaNacimiento) + (ed !== null ? ' · ' + ed + ' años' : '') + '</div>'
         + '<div class="sub">🆘 Emergencia: ' + esc(ce.nombre || '—') + (ce.parentesco ? ' (' + esc(ce.parentesco) + ')' : '') + (ce.telefono ? ' · <a href="tel:' + esc(soloDigitos(ce.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(ce.telefono) + '</a>' : '') + '</div>'
         + '<div class="sub">🏠 ' + esc(e.direccion || '—') + '</div>'
-        + '<div class="acc"><button data-a="emp-editar" data-id="' + esc(e.id) + '">✏️ Editar</button><button data-a="emp-trasladar" data-id="' + esc(e.id) + '">🔁 Trasladar</button><button data-a="emp-baja" data-id="' + esc(e.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
+        + '<div class="acc"><button data-a="emp-editar" data-id="' + esc(e.id) + '">✏️ Editar</button><button data-a="emp-compartir" data-id="' + esc(e.id) + '">📤 Compartir</button><button data-a="emp-trasladar" data-id="' + esc(e.id) + '">🔁 Trasladar</button><button data-a="emp-baja" data-id="' + esc(e.id) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Dar de baja</button></div></div>';
     }).join('');
     var b = todos.filter(function(e){ return e.activo === false; });
     if(b.length) html += '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Empleados dados de baja (' + b.length + ')</summary>'
@@ -13938,14 +13939,18 @@ function _cliOrdenAlCerrar(o){
     if(m === null) return; m = m.trim(); if(!m){ alert('Escribe el motivo de la baja.'); return; }
     pin(function(){
       var reg = Object.assign({}, e, { activo: false, fechaBaja: hoyISO(), motivoBaja: m, actualizado: Date.now() });
-      escribir('empleados/' + e.id, reg).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      var cambios = {}, col = paqueteDe(e, null).col; cambios[R + '/rrhh/empleados/' + e.id] = reg;
+      if(col && col.activo !== false) cambios[R + '/rrhh/colaboradores/' + col.id] = Object.assign({}, col, { activo: false, fechaBaja: reg.fechaBaja, motivoBaja: m, actualizado: Date.now() });
+      window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓' + (col ? ' (también en Vacaciones)' : '')); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Dar de baja a ' + e.nombreCompleto);
   }
   function reactivarEmpleado(e){
     if(!e || !confirm('¿Reincorporar a ' + e.nombreCompleto + ' en ' + EMPRESA + '?')) return;
     pin(function(){
       var reg = Object.assign({}, e, { activo: true, actualizado: Date.now() }); delete reg.fechaBaja; delete reg.motivoBaja;
-      escribir('empleados/' + e.id, reg).then(function(){ aviso(e.nombreCompleto + ' reincorporado ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      var cambios = {}, col = paqueteDe(e, null).col; cambios[R + '/rrhh/empleados/' + e.id] = reg;
+      if(col && col.activo === false){ var c2 = Object.assign({}, col, { activo: true, actualizado: Date.now() }); delete c2.fechaBaja; delete c2.motivoBaja; cambios[R + '/rrhh/colaboradores/' + col.id] = c2; }
+      window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' reincorporado ✓' + (col ? ' (también en Vacaciones)' : '')); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Reincorporar a ' + e.nombreCompleto);
   }
   // ── Traslado de personal entre empresas (todo junto y en un solo paso) ─────────────────────────────
@@ -14048,6 +14053,41 @@ function _cliOrdenAlCerrar(o){
     });
   }
   setInterval(function(){ try{ cerrarPeriodosVencidos(); }catch(e){} }, 60 * 60 * 1000);   // por si la app queda abierta de un día a otro
+  // ── Compartir la tarjeta de un empleado (nombre completo, identidad y teléfono) ──────────────────────────
+  function tarjetaEmpleado(e){
+    var W = 1000, H = 560, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var g = cv.getContext('2d'), F = 'Arial, Helvetica, sans-serif';
+    var redondo = function(x, y, w, h, r){ g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+    g.fillStyle = '#eef1f6'; g.fillRect(0, 0, W, H);
+    g.save(); redondo(30, 30, W - 60, H - 60, 28); g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(15,23,42,.18)'; g.shadowBlur = 24; g.fill(); g.restore();
+    g.save(); redondo(30, 30, W - 60, H - 60, 28); g.clip(); g.fillStyle = '#1f3864'; g.fillRect(30, 30, W - 60, 120); g.restore();
+    g.fillStyle = '#ffffff'; g.font = 'bold 40px ' + F; g.fillText(nombreEmpresa(R), 70, 103);
+    g.font = '24px ' + F; g.textAlign = 'right'; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillText('Ficha de empleado', W - 70, 100); g.textAlign = 'left';
+    var y = 220, ajustar = function(t, max, tam){ var s = tam; g.font = 'bold ' + s + 'px ' + F; while(g.measureText(t).width > max && s > 22){ s -= 2; g.font = 'bold ' + s + 'px ' + F; } };
+    g.fillStyle = '#1d2433'; ajustar(e.nombreCompleto || '', W - 140, 46); g.fillText(e.nombreCompleto || '', 70, y);
+    [['Número de identidad', e.identidad || '—'], ['Número de teléfono', e.telefono || '—']].forEach(function(f, i){
+      var yy = 300 + i * 105;
+      g.fillStyle = '#667085'; g.font = '24px ' + F; g.fillText(f[0], 70, yy);
+      g.fillStyle = '#1f3864'; g.font = 'bold 40px ' + F; g.fillText(f[1], 70, yy + 48);
+    });
+    g.fillStyle = '#98a2b3'; g.font = '18px ' + F; g.textAlign = 'right'; g.fillText('Generado desde NEXO', W - 70, H - 55); g.textAlign = 'left';
+    return cv;
+  }
+  function compartirEmpleado(e){
+    if(!e) return;
+    var texto = e.nombreCompleto + '\nIdentidad: ' + (e.identidad || '—') + '\nTeléfono: ' + (e.telefono || '—');
+    var nombreArch = 'Empleado_' + String(e.nombreCompleto || 'ficha').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_') + '.png';
+    tarjetaEmpleado(e).toBlob(function(blob){
+      var arch = null; try{ arch = new File([blob], nombreArch, { type: 'image/png' }); }catch(er){}
+      if(arch && navigator.canShare && navigator.canShare({ files: [arch] })){
+        navigator.share({ files: [arch], title: e.nombreCompleto, text: texto }).catch(function(){}); return;
+      }
+      // sin compartir imágenes (computadora): se descarga la tarjeta y el texto queda copiado
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArch; document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      try{ navigator.clipboard.writeText(texto).then(function(){ aviso('Tarjeta descargada y datos copiados ✓'); }, function(){ aviso('Tarjeta descargada ✓'); }); }catch(er){ aviso('Tarjeta descargada ✓'); }
+    }, 'image/png');
+  }
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
     var otras = EMPRESAS.filter(function(x){ return x.raiz !== R; });

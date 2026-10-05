@@ -660,6 +660,9 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-05 — Personal: Vacaciones ya no tiene Trasladar / Dar de baja / Reincorporar (todo desde Empleados; la baja y la
+  reincorporación del empleado arrastran su registro de Vacaciones en un solo update). Empleados: «📤 Compartir» genera
+  una tarjeta PNG (nombre completo, identidad, teléfono) y usa compartir del teléfono; en computadora la descarga.
 - 2026-10-05 — Vacaciones: cambio de período AUTOMÁTICO al cumplir el aniversario (ya no hay botón). Lo no gozado
   (o lo adelantado, en negativo) pasa a «Años anteriores» sin límite; días del año nuevo según la tabla; días extra a 0;
   el período cerrado queda en `colaboradores/{id}/periodos/{desde}` y se ve en el Historial. Lo hace la Gerencia que esté
