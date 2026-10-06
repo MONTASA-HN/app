@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='dc5d08481ffa';
+  var APP_VERSION='a6dfd337c9b8';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1797,15 +1797,33 @@ function _hidratarFotos(o, cb){
     if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
   }).catch(function(){ delete window._fotosHidratando[o.id]; });
 }
-function _persistirFotosOrden(o){
+function _persistirFotosOrden(o, opc){
+  // (2026-10-06) Guardado SEGURO: se suma a lo que ya está en la base, así una foto que no estaba cargada en memoria
+  // nunca se borra por agregar otra. Solo se quita la que se eliminó a propósito (opc.quitar).
   if(!o || !o.id || !window._fbDB) return;
-  const fotos = (o.fotos||[]).filter(Boolean);
-  window._fbDB.ref('fotosOrden_monhaco/'+o.id).set({fotos:fotos}).then(function(){
-    o.nFotos = fotos.length;
-    window._fotosOrdenCache[o.id] = fotos;
-    try{ saveDB(); }catch(e){}
-    try{ if((DB.cortinas||[]).some(function(x){return x&&x.id===o.id;})) _syncCortina(o); }catch(e){}
-  });
+  var id = o.id, quitar = opc && opc.quitar, local = (o.fotos||[]).filter(Boolean);
+  if(!quitar) window._fotosOrdenCache[id] = local.slice();
+  window._fbDB.ref('fotosOrden_monhaco/'+id).transaction(function(cur){
+    var srv = (cur && Array.isArray(cur.fotos)) ? cur.fotos.filter(Boolean) : (Array.isArray(cur) ? cur.filter(Boolean) : []);
+    var fin = srv.slice(); local.forEach(function(f){ if(fin.indexOf(f) < 0) fin.push(f); });
+    if(quitar) fin = fin.filter(function(f){ return f !== quitar; });
+    return { fotos: fin };
+  }).then(function(r){
+    var v = r && r.snapshot && r.snapshot.val();
+    var fin = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : local;
+    window._fotosOrdenCache[id] = fin;
+    _fotosAplicarVigente(id, fin);
+  }).catch(function(e){ try{ toast('⚠️ Las fotos no se pudieron guardar. Revisa tu conexión e inténtalo de nuevo.', true); }catch(_){} console.warn('fotos', e); });
+}
+// Pone las fotos y el contador en la orden que está AHORA en memoria (la lista pudo reemplazarse mientras subían)
+function _fotosAplicarVigente(id, fotos){
+  var listas = ['logistica','revisiones','evaluaciones','cortinas','preventivos','correctivos'], o = null;
+  for(var i = 0; i < listas.length && !o; i++){ var a = DB[listas[i]]; if(Array.isArray(a)) o = a.find(function(x){ return x && x.id === id; }) || null; }
+  if(!o) return;
+  o.fotos = fotos.slice(); o.nFotos = fotos.length;
+  try{ if((DB.cortinas||[]).some(function(x){ return x && x.id === id; })) _syncCortina(o); }catch(e){}
+  try{ saveDB(); }catch(e){}
+  try{ _refrescarVistasFotos(); }catch(e){}
 }
 function _sinFotosPersist(arr){
   return (arr||[]).map(function(o){
@@ -5181,8 +5199,8 @@ function eliminarFotoOrden(tipo, id, idx){
   const arr = _arrFotosTipo(tipo);
   const orden = (arr||[]).find(x=>x.id===id);
   if(!orden || !orden.fotos) return;
-  orden.fotos.splice(idx, 1);
-  _persistirFotosOrden(orden);
+  const quitada = orden.fotos.splice(idx, 1)[0];
+  _persistirFotosOrden(orden, { quitar: quitada });
   saveDB();
   _renderFotosTipo(tipo);
 }
