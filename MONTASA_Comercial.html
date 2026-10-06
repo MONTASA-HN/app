@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e9dd93558520';
+  var APP_VERSION='72c35c94fb8a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -384,6 +384,7 @@ var _Sync = (function(){
 <link rel="icon" sizes="32x32" type="image/png" href="/app/icons/nexo-32.png">>>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -602,6 +603,73 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
+<script>
+// ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
+// El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
+// teléfono). La primera vez pide nombre y apellido y deja accesos/<uid> como «pendiente» para que Gerencia lo apruebe.
+// En este paso NO se bloquea nada: si no hay sesión, no hay señal o el teléfono no está aprobado, la app sigue igual.
+(function(){
+  var APP = 'MONTASA_Comercial.html', EMPRESA = 'montasa';
+  window._nxAcceso = window._nxAcceso || { uid: null, registro: null };
+  function dispositivo(){
+    var u = navigator.userAgent || '';
+    var so = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
+      : /Android/.test(u) ? (((u.match(/Android[^;)]*;\s*([^;)]+?)(?:\s+Build|\))/) || [])[1]) || 'Android')
+      : /Windows/.test(u) ? 'Windows' : /Mac OS X/.test(u) ? 'Mac' : 'Otro';
+    var nav = /EdgA?\//.test(u) ? 'Edge' : /SamsungBrowser/.test(u) ? 'Samsung' : /HuaweiBrowser/.test(u) ? 'Huawei'
+      : /CriOS|Chrome\//.test(u) ? 'Chrome' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'Navegador';
+    return (String(so).trim() + ' · ' + nav).slice(0, 60);
+  }
+  var EST = 'width:100%;box-sizing:border-box;padding:12px;border:1px solid #c9d1dc;border-radius:10px;font-size:16px;font-family:inherit;margin-top:8px';
+  function pedirNombre(uid){
+    if(document.getElementById('nx-acc-ov')) return;
+    var ov = document.createElement('div'); ov.id = 'nx-acc-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;color:#1d2433">'
+      + '<div style="font-size:30px;text-align:center">📱</div>'
+      + '<div style="font-weight:800;font-size:17px;color:#1f3864;text-align:center;margin:6px 0 4px">Registra este teléfono</div>'
+      + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.45;margin-bottom:6px">Escribe tu nombre y apellido para que Gerencia sepa quién usa este teléfono. Se pide una sola vez.</div>'
+      + '<input id="nx-acc-nom" placeholder="Nombre" autocomplete="given-name" style="' + EST + '">'
+      + '<input id="nx-acc-ape" placeholder="Apellido" autocomplete="family-name" style="' + EST + '">'
+      + '<button id="nx-acc-ok" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:10px;background:#1f3864;color:#fff;font-size:16px;font-weight:700;cursor:pointer">Guardar</button></div>';
+    document.body.appendChild(ov);
+    var btn = ov.querySelector('#nx-acc-ok');
+    btn.onclick = function(){
+      var n = ov.querySelector('#nx-acc-nom').value.replace(/\s+/g, ' ').trim(), a = ov.querySelector('#nx-acc-ape').value.replace(/\s+/g, ' ').trim();
+      if(!n || !a){ alert('Escribe tu nombre y tu apellido.'); return; }
+      var ahora = Date.now(), reg = { nombre: n, apellido: a, app: APP, empresa: EMPRESA, dispositivo: dispositivo(), creado: ahora, ultimaVez: ahora, estado: 'pendiente' };
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      window._fbDB.ref('accesos/' + uid).set(reg).then(function(){
+        ov.remove(); window._nxAcceso.registro = reg;
+        try{ toast('✓ Gracias, ' + n + '. Teléfono registrado'); }catch(e){}
+        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+      }).catch(function(){ btn.disabled = false; btn.textContent = 'Guardar'; alert('No se pudo guardar. Revisa tu conexión e intenta de nuevo.'); });
+    };
+  }
+  function revisar(uid){
+    window._fbDB.ref('accesos/' + uid).once('value').then(function(s){
+      var r = s.val();
+      if(r){
+        window._nxAcceso.registro = r;
+        window._fbDB.ref('accesos/' + uid + '/ultimaVez').set(Date.now()).catch(function(){});   // una vez por sesión
+        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+      } else pedirNombre(uid);
+    }).catch(function(){});
+  }
+  function iniciar(){
+    if(!window._fbDB || !window.firebase){ setTimeout(iniciar, 1000); return; }
+    if(typeof firebase.auth !== 'function') return;          // sin el módulo de sesión: la app sigue igual
+    var a, hecho = false;
+    try{ a = firebase.auth(); }catch(e){ return; }
+    a.onAuthStateChanged(function(u){
+      if(u){ window._nxAcceso.uid = u.uid; if(!hecho){ hecho = true; revisar(u.uid); } }
+      else a.signInAnonymously().catch(function(e){ console.warn('Acceso Nexo:', e && e.code); });   // p. ej. «Anónimo» aún sin activar
+    });
+  }
+  // No se espera la sesión para leer datos: el arranque con mala señal no se hace más lento por esto
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 1500); }); else setTimeout(iniciar, 1500);
+})();
+</script>
 <script>
 // ══ PERSONAL DESDE NEXO (2026-10-05, pedido de Miguel) ══════════════════════════════════════════════════════
 // Los técnicos, operadores y motoristas que se pueden elegir salen del módulo Personal de Gerencia de ESTA empresa.

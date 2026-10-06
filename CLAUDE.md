@@ -668,6 +668,8 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-06 — ACCESO.md paso 1: registro anónimo del teléfono en las 9 apps (accesos/<uid>, no bloquea nada) y
+  pestaña «📱 Accesos» en Personal de Gerencia (aprobar/rechazar/quitar, cobertura). Detalle en ACCESO.md §3.
 - 2026-10-06 — Técnicos en logística: en apoyo a mantenimiento (operador 1-5) y atención de compras (quién va) se pueden
   elegir técnicos (MTL _listaApoyoLog; en Solicitudes el grupo «Personal logística» muestra técnicos solo para esos dos tipos:
   clase nx-solo-apoyo + _nxAjustarApoyo). Productividad (MTG, MTS, MHG, MHS): un técnico (TECNICOS_LIST) SIEMPRE suma a

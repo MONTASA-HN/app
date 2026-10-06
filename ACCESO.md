@@ -42,6 +42,14 @@ Miguel lo aprueba una vez.
 
 ## 3. Paso 1 — Registro (no bloquea nada)
 
+**✅ Hecho en el código (2026-10-06).** Las 9 apps (MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT, MHL) cargan
+`firebase-auth-compat` 9.23.0 y el bloque «ACCESO NEXO · PASO 1» al inicio del `<body>`. Gerencia MT y MONHACO:
+pestaña Personal › «📱 Accesos» (cobertura, pendientes, aprobados, rechazados; aprobar elige empleado de la plantilla de las
+dos empresas y rol), aviso en Notificaciones (`#acc-aviso`), número en el botón Personal, botón «Primer paso» para que el
+primer equipo de Gerencia se apruebe a sí mismo con PIN (reemplaza el paso a mano en la consola) y, al dar de baja en
+Personal, ofrece quitar sus teléfonos. Campo extra: `empleadoEmpresa`. **Falta:** activar *Anónimo* en la consola
+(Authentication → Sign-in method). Mientras no esté activo, las apps siguen igual y no piden registro.
+
 Este paso **no cambia las reglas**. Todo sigue funcionando igual que hoy; solo se
 empieza a saber quién es quién.
 
@@ -253,6 +261,8 @@ Cada uno necesita algo para seguir funcionando **el día del paso 2**. Medido el
 ---
 
 ## Historial
+
+- 2026-10-06 — Paso 1 construido (registro + aprobación en Gerencia). Probado en copias con sesión simulada.
 
 - 2026-10-06 — Creación. Diseño de Rodrigo y Miguel: sin login, aprobación por
   teléfono desde Gerencia (sin correo ni servidor), bloqueo solo cuando haya
