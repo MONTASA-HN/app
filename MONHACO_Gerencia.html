@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='20a6b9f2dbb0';
+  var APP_VERSION='dee3f47ac54e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -653,6 +653,7 @@ function _imprimirHTML(htmlContent){
 }
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <meta name="theme-color" content="#1f3864">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -991,6 +992,73 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <style>/* Viáticos: MONHACO no los usa por ahora (Miguel, 2026-10-01). Para volver a mostrarlos, borrar esta línea. */button[onclick*="abrirViaticos"]{display:none!important}</style>
 </head>
 <body>
+<script>
+// ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
+// El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
+// teléfono). La primera vez pide nombre y apellido y deja accesos/<uid> como «pendiente» para que Gerencia lo apruebe.
+// En este paso NO se bloquea nada: si no hay sesión, no hay señal o el teléfono no está aprobado, la app sigue igual.
+(function(){
+  var APP = 'MONHACO_Gerencia.html', EMPRESA = 'monhaco';
+  window._nxAcceso = window._nxAcceso || { uid: null, registro: null };
+  function dispositivo(){
+    var u = navigator.userAgent || '';
+    var so = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
+      : /Android/.test(u) ? (((u.match(/Android[^;)]*;\s*([^;)]+?)(?:\s+Build|\))/) || [])[1]) || 'Android')
+      : /Windows/.test(u) ? 'Windows' : /Mac OS X/.test(u) ? 'Mac' : 'Otro';
+    var nav = /EdgA?\//.test(u) ? 'Edge' : /SamsungBrowser/.test(u) ? 'Samsung' : /HuaweiBrowser/.test(u) ? 'Huawei'
+      : /CriOS|Chrome\//.test(u) ? 'Chrome' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /Safari\//.test(u) ? 'Safari' : 'Navegador';
+    return (String(so).trim() + ' · ' + nav).slice(0, 60);
+  }
+  var EST = 'width:100%;box-sizing:border-box;padding:12px;border:1px solid #c9d1dc;border-radius:10px;font-size:16px;font-family:inherit;margin-top:8px';
+  function pedirNombre(uid){
+    if(document.getElementById('nx-acc-ov')) return;
+    var ov = document.createElement('div'); ov.id = 'nx-acc-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;color:#1d2433">'
+      + '<div style="font-size:30px;text-align:center">📱</div>'
+      + '<div style="font-weight:800;font-size:17px;color:#1f3864;text-align:center;margin:6px 0 4px">Registra este teléfono</div>'
+      + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.45;margin-bottom:6px">Escribe tu nombre y apellido para que Gerencia sepa quién usa este teléfono. Se pide una sola vez.</div>'
+      + '<input id="nx-acc-nom" placeholder="Nombre" autocomplete="given-name" style="' + EST + '">'
+      + '<input id="nx-acc-ape" placeholder="Apellido" autocomplete="family-name" style="' + EST + '">'
+      + '<button id="nx-acc-ok" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:10px;background:#1f3864;color:#fff;font-size:16px;font-weight:700;cursor:pointer">Guardar</button></div>';
+    document.body.appendChild(ov);
+    var btn = ov.querySelector('#nx-acc-ok');
+    btn.onclick = function(){
+      var n = ov.querySelector('#nx-acc-nom').value.replace(/\s+/g, ' ').trim(), a = ov.querySelector('#nx-acc-ape').value.replace(/\s+/g, ' ').trim();
+      if(!n || !a){ alert('Escribe tu nombre y tu apellido.'); return; }
+      var ahora = Date.now(), reg = { nombre: n, apellido: a, app: APP, empresa: EMPRESA, dispositivo: dispositivo(), creado: ahora, ultimaVez: ahora, estado: 'pendiente' };
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      window._fbDB.ref('accesos/' + uid).set(reg).then(function(){
+        ov.remove(); window._nxAcceso.registro = reg;
+        try{ toast('✓ Gracias, ' + n + '. Teléfono registrado'); }catch(e){}
+        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+      }).catch(function(){ btn.disabled = false; btn.textContent = 'Guardar'; alert('No se pudo guardar. Revisa tu conexión e intenta de nuevo.'); });
+    };
+  }
+  function revisar(uid){
+    window._fbDB.ref('accesos/' + uid).once('value').then(function(s){
+      var r = s.val();
+      if(r){
+        window._nxAcceso.registro = r;
+        window._fbDB.ref('accesos/' + uid + '/ultimaVez').set(Date.now()).catch(function(){});   // una vez por sesión
+        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+      } else pedirNombre(uid);
+    }).catch(function(){});
+  }
+  function iniciar(){
+    if(!window._fbDB || !window.firebase){ setTimeout(iniciar, 1000); return; }
+    if(typeof firebase.auth !== 'function') return;          // sin el módulo de sesión: la app sigue igual
+    var a, hecho = false;
+    try{ a = firebase.auth(); }catch(e){ return; }
+    a.onAuthStateChanged(function(u){
+      if(u){ window._nxAcceso.uid = u.uid; if(!hecho){ hecho = true; revisar(u.uid); } }
+      else a.signInAnonymously().catch(function(e){ console.warn('Acceso Nexo:', e && e.code); });   // p. ej. «Anónimo» aún sin activar
+    });
+  }
+  // No se espera la sesión para leer datos: el arranque con mala señal no se hace más lento por esto
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 1500); }); else setTimeout(iniciar, 1500);
+})();
+</script>
 <script>
 // ══ PERSONAL DESDE NEXO (2026-10-05, pedido de Miguel) ══════════════════════════════════════════════════════
 // Los técnicos, operadores y motoristas que se pueden elegir salen del módulo Personal de Gerencia de ESTA empresa.
@@ -1894,6 +1962,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
   <div id="tab-notificaciones" class="section">
     <div style="font-size:22px;font-weight:600;margin-bottom:4px">🔔 Notificaciones</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Próximos mantenimientos de la flota</div>
+    <div id="acc-aviso"></div>
     <div id="notif-mant-list"></div>
   </div>
 
@@ -12837,7 +12906,7 @@ function _cliOrdenAlCerrar(o){
     var ov = document.createElement('div'); ov.id = 'vac-ov';
     ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
-      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button></div><div class="vc" id="vac-c"></div>';
+      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
     ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
     window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
@@ -12865,6 +12934,7 @@ function _cliOrdenAlCerrar(o){
         + '<button class="bt bp" data-a="nuevo" style="flex:none">➕ Nuevo</button></div><div id="vac-lista"></div>';
       pintarLista();
     } else if(vista === 'emp') pintarEmpleados(c);
+    else if(vista === 'tel') pintarAccesos(c);
     else pintarAcciones(c);
   }
   function pintarLista(){
@@ -12942,6 +13012,10 @@ function _cliOrdenAlCerrar(o){
     if(a === 'baja') return darBaja(datos.colaboradores[id]);
     if(a === 'reactivar') return reactivar(datos.colaboradores[id]);
     if(a === 'emp-nuevo') return formEmpleado(null);
+    if(a === 'acc-aprobar') return aprobarAcceso(id);
+    if(a === 'acc-rechazar') return cambiarEstadoAcceso(id, 'rechazado', 'Rechazar el acceso');
+    if(a === 'acc-quitar') return cambiarEstadoAcceso(id, 'rechazado', 'Quitar el acceso');
+    if(a === 'acc-yo') return aprobarEsteEquipo();
     if(a === 'emp-compartir') return compartirEmpleado(datos.empleados[id]);
     if(a === 'emp-trasladar') return trasladar(datos.empleados[id], null);
     if(a === 'trasladar') return trasladar(null, datos.colaboradores[id]);
@@ -13047,7 +13121,7 @@ function _cliOrdenAlCerrar(o){
       var reg = Object.assign({}, e, { activo: false, fechaBaja: hoyISO(), motivoBaja: m, actualizado: Date.now() });
       var cambios = {}, col = paqueteDe(e, null).col; cambios[R + '/rrhh/empleados/' + e.id] = reg;
       if(col && col.activo !== false) cambios[R + '/rrhh/colaboradores/' + col.id] = Object.assign({}, col, { activo: false, fechaBaja: reg.fechaBaja, motivoBaja: m, actualizado: Date.now() });
-      window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓' + (col ? ' (también en Vacaciones)' : '')); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓' + (col ? ' (también en Vacaciones)' : '')); setTimeout(function(){ quitarTelefonosDe(e.id, e.nombreCompleto); }, 400); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Dar de baja a ' + e.nombreCompleto);
   }
   function reactivarEmpleado(e){
@@ -13193,6 +13267,120 @@ function _cliOrdenAlCerrar(o){
       setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
       try{ navigator.clipboard.writeText(texto).then(function(){ aviso('Tarjeta descargada y datos copiados ✓'); }, function(){ aviso('Tarjeta descargada ✓'); }); }catch(er){ aviso('Tarjeta descargada ✓'); }
     }, 'image/png');
+  }
+  // ── Accesos (ACCESO.md, paso 1): aprobar los teléfonos que se registran en las apps ──────────────────────────
+  var accesos = {}, plantillas = { montasa: {}, monhaco: {} }, escuchandoAcc = false;
+  var EMP_NOMBRE = { montasa: 'MT RENTAL', monhaco: 'MONHACO' };
+  function listaAccesos(){ return Object.keys(accesos || {}).map(function(k){ var a = accesos[k]; return a && typeof a === 'object' ? Object.assign({ uid: k }, a) : null; }).filter(Boolean); }
+  function pendientesAcc(){ return listaAccesos().filter(function(a){ return a.estado === 'pendiente'; }); }
+  function personalCampo(){
+    var out = [];
+    ['montasa', 'monhaco'].forEach(function(r){ var p = plantillas[r] || {}; Object.keys(p).forEach(function(id){ var x = p[id];
+      if(x && (x.roles || []).some(function(k){ return k === 'tec' || k === 'jefe' || k === 'op' || k === 'mot'; })) out.push({ id: id, empresa: r, n: x.n, c: x.c }); }); });
+    return out;
+  }
+  function todosPersonal(){
+    var out = [];
+    ['montasa', 'monhaco'].forEach(function(r){ var p = plantillas[r] || {}; Object.keys(p).forEach(function(id){ var x = p[id]; if(x && x.n) out.push({ id: id, empresa: r, n: x.n, c: x.c || '' }); }); });
+    return out.sort(function(a, b){ return String(a.n).localeCompare(String(b.n), 'es'); });
+  }
+  function nombreEmpleado(id){ var t = todosPersonal().find(function(x){ return x.id === id; }); return t ? t.n + ' (' + EMP_NOMBRE[t.empresa] + ')' : ''; }
+  function fechaHora(ms){ if(!ms) return '—'; var d = new Date(ms); return fmt(iso(d)) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function escucharAccesos(){
+    if(escuchandoAcc || !window._fbDB) return; escuchandoAcc = true;
+    window._fbDB.ref('accesos').on('value', function(s){ accesos = s.val() || {}; avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); });
+    ['montasa', 'monhaco'].forEach(function(r){ window._fbDB.ref(r + '/rrhh/plantilla').on('value', function(s){ plantillas[r] = s.val() || {}; if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); }); });
+  }
+  // Aviso en Notificaciones y número en el botón de Personal
+  function avisoAccesos(){
+    var n = pendientesAcc().length;
+    var el = document.getElementById('acc-aviso');
+    if(el) el.innerHTML = n ? '<div class="notif-item" style="border-left:4px solid #1f3864;cursor:pointer" onclick="window._abrirAccesos && window._abrirAccesos()">'
+      + '<div class="notif-item-top"><span class="notif-codigo">📱 Acceso a Nexo</span><span class="notif-days-badge" style="background:#e8eefc;color:#1f3864;margin-left:auto">' + n + ' pendiente' + (n === 1 ? '' : 's') + '</span></div>'
+      + '<div class="notif-line"><b>' + n + ' persona' + (n === 1 ? '' : 's') + ' esperando acceso.</b> Toca para revisar y aprobar.</div></div>' : '';
+    ['vac-entrada', 'vac-entrada-nav'].forEach(function(id){ var b = document.getElementById(id); if(!b) return;
+      var m = b.querySelector('.nx-acc-num'); if(!m){ m = document.createElement('span'); m.className = 'nx-acc-num'; m.style.cssText = 'display:none;background:#c9211e;color:#fff;border-radius:999px;font-size:10px;font-weight:800;padding:1px 6px;margin-left:4px'; b.appendChild(m); }
+      m.textContent = n; m.style.display = n ? 'inline-block' : 'none'; });
+  }
+  window._abrirAccesos = function(){ vista = 'tel'; abrir(); pintar(); };
+  function pintarAccesos(c){
+    var todos = listaAccesos(), yo = (window._nxAcceso || {}).uid;
+    var pend = todos.filter(function(a){ return a.estado === 'pendiente'; }).sort(function(a, b){ return (b.creado || 0) - (a.creado || 0); });
+    var apro = todos.filter(function(a){ return a.estado === 'aprobado'; }).sort(function(a, b){ return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+    var rech = todos.filter(function(a){ return a.estado === 'rechazado'; });
+    var conTel = {}; apro.forEach(function(a){ if(a.empleadoId) conTel[a.empleadoId] = 1; });
+    var campo = personalCampo(), cubiertos = campo.filter(function(p){ return conTel[p.id]; }), faltan = campo.filter(function(p){ return !conTel[p.id]; });
+    var pct = campo.length ? Math.round(cubiertos.length * 100 / campo.length) : 0;
+    var h = '<div class="card"><div class="nm">📊 Cobertura</div>'
+      + '<div class="sub" style="color:#1d2433;font-size:14px;margin-top:4px"><b>' + cubiertos.length + ' de ' + campo.length + '</b> técnicos y operadores activos ya tienen teléfono aprobado.</div>'
+      + '<div style="height:10px;background:#eef1f6;border-radius:999px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (pct === 100 ? '#1a7f37' : '#1f3864') + '"></div></div>'
+      + (faltan.length ? '<div class="sub" style="margin-top:6px">Faltan: ' + faltan.map(function(p){ return esc(p.n) + ' <span style="color:#98a2b3">(' + EMP_NOMBRE[p.empresa] + ')</span>'; }).join(', ') + '</div>'
+        : (campo.length ? '<div class="sub ok" style="margin-top:6px;font-weight:700">✓ Todos tienen teléfono aprobado.</div>' : ''))
+      + '</div>';
+    // Arranque: el primer aprobador (Gerencia) se aprueba a sí mismo con PIN, solo mientras no haya ninguno
+    var hayGer = apro.some(function(a){ return a.rol === 'gerencia'; });
+    if(!hayGer && yo) h += '<div class="card" style="background:#fff8e6;border-color:#f5d48a"><div class="nm" style="color:#b45309">🔑 Primer paso</div>'
+      + '<div class="sub" style="color:#1d2433;margin-top:4px">Todavía no hay ningún teléfono de Gerencia aprobado. Aprueba <b>este</b> equipo como Gerencia (con tu PIN) para poder aprobar a los demás.</div>'
+      + '<div class="acc"><button class="bp" data-a="acc-yo">✅ Este equipo es de Gerencia</button></div></div>';
+    h += '<div class="nm" style="margin:14px 2px 6px">⏳ Esperando acceso (' + pend.length + ')</div>';
+    h += pend.length ? pend.map(function(a){ return tarjetaAcceso(a, yo, 'pend'); }).join('') : '<div class="card" style="color:#667085;text-align:center">Nadie esperando.</div>';
+    h += '<div class="nm" style="margin:14px 2px 6px">✅ Con acceso (' + apro.length + ')</div>';
+    h += apro.length ? apro.map(function(a){ return tarjetaAcceso(a, yo, 'apro'); }).join('') : '<div class="card" style="color:#667085;text-align:center">Todavía ningún teléfono aprobado.</div>';
+    if(rech.length) h += '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Rechazados o sin acceso (' + rech.length + ')</summary>' + rech.map(function(a){ return tarjetaAcceso(a, yo, 'rech'); }).join('') + '</details>';
+    c.innerHTML = h;
+  }
+  function tarjetaAcceso(a, yo, tipo){
+    var emp = a.empleadoId ? nombreEmpleado(a.empleadoId) : '';
+    return '<div class="card"' + (tipo === 'rech' ? ' style="margin-top:8px"' : '') + '><div class="nm">' + esc((a.nombre || '') + ' ' + (a.apellido || '')) + (a.uid === yo ? ' <span class="tag" style="margin:0 0 0 6px;background:#e8eefc;color:#1f3864">este equipo</span>' : '') + (a.rol === 'gerencia' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px">Gerencia</span>' : '') + '</div>'
+      + (emp ? '<div class="sub">🪪 Empleado: <b>' + esc(emp) + '</b></div>' : '')
+      + '<div class="sub">📱 ' + esc(a.dispositivo || '—') + ' · ' + esc(String(a.app || '').replace('.html', '').replace(/_/g, ' ')) + '</div>'
+      + '<div class="sub">Pidió: ' + fechaHora(a.creado) + ' · Última vez: ' + fechaHora(a.ultimaVez) + '</div>'
+      + '<div class="acc">' + (tipo === 'pend' ? '<button class="bp" data-a="acc-aprobar" data-id="' + esc(a.uid) + '">✅ Aprobar</button><button data-a="acc-rechazar" data-id="' + esc(a.uid) + '" style="color:#c9211e;border-color:#f1b5b3">✖ Rechazar</button>'
+        : tipo === 'apro' ? '<button data-a="acc-aprobar" data-id="' + esc(a.uid) + '">✏️ Cambiar empleado / rol</button><button data-a="acc-quitar" data-id="' + esc(a.uid) + '" style="color:#c9211e;border-color:#f1b5b3">🚫 Quitar acceso</button>'
+        : '<button data-a="acc-aprobar" data-id="' + esc(a.uid) + '">✅ Aprobar</button>') + '</div></div>';
+  }
+  function aprobarAcceso(uid){
+    var a = accesos[uid]; if(!a) return;
+    var gente = todosPersonal(), nom = normNombre((a.nombre || '') + ' ' + (a.apellido || ''));
+    var sug = a.empleadoId || ((gente.find(function(p){ var ws = nom.split(' ').filter(Boolean), pn = normNombre(p.n); return ws.length >= 2 && ws.every(function(w){ return pn.indexOf(w) >= 0; }); }) || {}).id) || '';
+    var w = ventana('✅ Aprobar acceso de ' + esc((a.nombre || '') + ' ' + (a.apellido || '')),
+      '<div class="sub" style="margin-bottom:4px">📱 ' + esc(a.dispositivo || '') + ' · ' + esc(String(a.app || '').replace('.html', '')) + '</div>'
+      + '<label>¿Quién es en Personal? <span style="font-weight:400;color:#667085">(cuenta el nombre de la ficha, no el que escribió)</span></label>'
+      + '<select id="acc-emp"><option value="">— Elegir empleado —</option>' + gente.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === sug ? ' selected' : '') + '>' + esc(p.n) + ' — ' + esc(p.c) + ' (' + EMP_NOMBRE[p.empresa] + ')</option>'; }).join('') + '</select>'
+      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (a.rol !== 'gerencia' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="gerencia"' + (a.rol === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
+      function(w){
+        var emp = val(w, 'acc-emp'), rol = val(w, 'acc-rol');
+        if(!emp){ alert('Elige a qué empleado de Personal corresponde este teléfono.'); return; }
+        var p = gente.find(function(x){ return x.id === emp; });
+        pin(function(){
+          var cambios = { estado: 'aprobado', rol: rol, empleadoId: emp, empleadoEmpresa: p ? p.empresa : '', aprobadoPor: (window._nxAcceso || {}).uid || '', aprobadoEn: Date.now() };
+          window._fbDB.ref('accesos/' + uid).update(cambios).then(function(){ w.remove(); aviso('Acceso aprobado ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+        }, '🔒 Aprobar acceso');
+      });
+  }
+  function cambiarEstadoAcceso(uid, estado, titulo){
+    var a = accesos[uid]; if(!a) return;
+    if(!confirm(titulo + ': ' + (a.nombre || '') + ' ' + (a.apellido || '') + ' (' + (a.dispositivo || '') + ')?')) return;
+    pin(function(){
+      window._fbDB.ref('accesos/' + uid).update({ estado: estado, cambiadoPor: (window._nxAcceso || {}).uid || '', cambiadoEn: Date.now() })
+        .then(function(){ aviso(estado === 'rechazado' ? 'Listo: sin acceso ✓' : 'Listo ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+    }, '🔒 ' + titulo);
+  }
+  function aprobarEsteEquipo(){
+    var yo = (window._nxAcceso || {}).uid; if(!yo){ alert('Este equipo todavía no tiene sesión. Revisa la conexión.'); return; }
+    var a = accesos[yo];
+    if(!a){ alert('Primero registra este equipo con tu nombre y apellido (sale al abrir la app).'); return; }
+    pin(function(){
+      window._fbDB.ref('accesos/' + yo).update({ estado: 'aprobado', rol: 'gerencia', aprobadoPor: yo, aprobadoEn: Date.now() })
+        .then(function(){ aviso('Este equipo quedó como Gerencia ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
+    }, '🔒 Aprobar este equipo como Gerencia');
+  }
+  // Al dar de baja a alguien en Personal: ofrecer quitarle el acceso a sus teléfonos
+  function quitarTelefonosDe(empId, nombre){
+    var suyos = listaAccesos().filter(function(a){ return a.estado === 'aprobado' && a.empleadoId === empId; });
+    if(!suyos.length || !confirm(nombre + ' tiene ' + suyos.length + ' teléfono' + (suyos.length === 1 ? '' : 's') + ' con acceso a Nexo. ¿Quitárselo' + (suyos.length === 1 ? '' : 's') + ' también?')) return;
+    var cambios = {}; suyos.forEach(function(a){ cambios['accesos/' + a.uid + '/estado'] = 'rechazado'; cambios['accesos/' + a.uid + '/cambiadoEn'] = Date.now(); });
+    window._fbDB.ref().update(cambios).then(function(){ aviso('Acceso quitado ✓'); }).catch(function(){});
   }
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
@@ -13381,7 +13569,8 @@ function _cliOrdenAlCerrar(o){
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(ponerEntrada, 50); }); else setTimeout(ponerEntrada, 50);
   // Gerencia escucha Personal desde que abre, para mantener al día la lista de quién se elige en las órdenes
-  (function esperar(){ if(window._fbDB) escuchar(); else setTimeout(esperar, 1500); })();
+  (function esperar(){ if(window._fbDB){ escuchar(); escucharAccesos(); } else setTimeout(esperar, 1500); })();
+  document.addEventListener('nx-acceso', function(){ avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); });
   // Para pruebas
   window._vacPrueba = { tabla: tabla, ultimoAniversario: ultimoAniversario, saldoDe: saldoDe, gozadosDe: gozadosDe, diasHabiles: diasHabiles, textoAuto: textoAuto, documento: documento, proporcionalDe: proporcionalDe, datos: function(){ return datos; } };
 })();
