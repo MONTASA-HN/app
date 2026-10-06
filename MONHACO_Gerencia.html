@@ -12820,8 +12820,9 @@ function _cliOrdenAlCerrar(o){
 </script>
 <script>
 // ══ VACACIONES Y ACCIONES DE PERSONAL (2026-10-02, pedido de Miguel) ═══════════
-// Sección de Gerencia (MT y MONHACO, cada una con su personal). Datos en <raíz>/rrhh/colaboradores y
-// <raíz>/rrhh/acciones, escritos registro por registro (no pasan por el sincronizador _Sync).
+// Sección de Gerencia (MT y MONHACO, cada una con su personal). Datos en rrhh/<raíz>/{empleados,colaboradores,acciones}
+// (fuera de las empresas desde el 2026-10-06, para que solo Gerencia los lea) y la plantilla en <raíz>/rrhh/plantilla.
+// Se escriben registro por registro (no pasan por el sincronizador _Sync).
 // SIN datos sensibles por ahora (identidad, teléfono, contacto de emergencia): llegan cuando la base tenga candado.
 // Días por año de servicio (Código de Trabajo de Honduras): 1.er año 10 · 2.º 12 · 3.º 15 · 4.º en adelante 20,
 // más días extra a mano. Un saldo negativo son días ADELANTADOS (se descuentan del período siguiente).
@@ -12877,12 +12878,13 @@ function _cliOrdenAlCerrar(o){
   function nuevoPeriodo(c){ var u = ultimoAniversario(c.fechaIngreso); return !!(u && c.corte && iso(u) > c.corte); }
   // Días hábiles entre dos fechas (lunes a sábado), incluidas
   function diasHabiles(d1, d2){ var a = aFecha(d1), b = aFecha(d2); if(!a || !b || b < a) return 0; var n = 0; for(var d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) if(d.getDay() !== 0) n++; return n; }
-  function escribir(ruta, valor){ if(!window._fbDB) return Promise.reject(new Error('sin conexión')); return window._fbDB.ref(R + '/rrhh/' + ruta).set(valor); }
+  function escribir(ruta, valor){ if(!window._fbDB) return Promise.reject(new Error('sin conexión')); return window._fbDB.ref('rrhh/' + R + '/' + ruta).set(valor); }
   function pin(cb, titulo){ if(typeof solicitarPINAccion === 'function') solicitarPINAccion(cb, titulo || '🔒 Personal', 'Ingresa tu PIN de Gerencia'); else cb(); }
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   function escuchar(){
     if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref(R + '/rrhh').on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos.plantilla = v.plantilla || null; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref(R + '/rrhh/plantilla').on('value', function(s){ datos.plantilla = s.val() || null; datos._plantCargada = true; publicarPlantilla(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
   var CSS = '#vac-ov{position:fixed;inset:0;z-index:9500;background:#f0f2f5;display:flex;flex-direction:column;font-family:inherit;color:#1d2433}'
@@ -13120,8 +13122,8 @@ function _cliOrdenAlCerrar(o){
     if(m === null) return; m = m.trim(); if(!m){ alert('Escribe el motivo de la baja.'); return; }
     pin(function(){
       var reg = Object.assign({}, e, { activo: false, fechaBaja: hoyISO(), motivoBaja: m, actualizado: Date.now() });
-      var cambios = {}, col = paqueteDe(e, null).col; cambios[R + '/rrhh/empleados/' + e.id] = reg;
-      if(col && col.activo !== false) cambios[R + '/rrhh/colaboradores/' + col.id] = Object.assign({}, col, { activo: false, fechaBaja: reg.fechaBaja, motivoBaja: m, actualizado: Date.now() });
+      var cambios = {}, col = paqueteDe(e, null).col; cambios['rrhh/' + R + '/empleados/' + e.id] = reg;
+      if(col && col.activo !== false) cambios['rrhh/' + R + '/colaboradores/' + col.id] = Object.assign({}, col, { activo: false, fechaBaja: reg.fechaBaja, motivoBaja: m, actualizado: Date.now() });
       window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' dado de baja ✓' + (col ? ' (también en Vacaciones)' : '')); setTimeout(function(){ quitarTelefonosDe(e.id, e.nombreCompleto); }, 400); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Dar de baja a ' + e.nombreCompleto);
   }
@@ -13129,8 +13131,8 @@ function _cliOrdenAlCerrar(o){
     if(!e || !confirm('¿Reincorporar a ' + e.nombreCompleto + ' en ' + EMPRESA + '?')) return;
     pin(function(){
       var reg = Object.assign({}, e, { activo: true, actualizado: Date.now() }); delete reg.fechaBaja; delete reg.motivoBaja;
-      var cambios = {}, col = paqueteDe(e, null).col; cambios[R + '/rrhh/empleados/' + e.id] = reg;
-      if(col && col.activo === false){ var c2 = Object.assign({}, col, { activo: true, actualizado: Date.now() }); delete c2.fechaBaja; delete c2.motivoBaja; cambios[R + '/rrhh/colaboradores/' + col.id] = c2; }
+      var cambios = {}, col = paqueteDe(e, null).col; cambios['rrhh/' + R + '/empleados/' + e.id] = reg;
+      if(col && col.activo === false){ var c2 = Object.assign({}, col, { activo: true, actualizado: Date.now() }); delete c2.fechaBaja; delete c2.motivoBaja; cambios['rrhh/' + R + '/colaboradores/' + col.id] = c2; }
       window._fbDB.ref().update(cambios).then(function(){ aviso(e.nombreCompleto + ' reincorporado ✓' + (col ? ' (también en Vacaciones)' : '')); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🔒 Reincorporar a ' + e.nombreCompleto);
   }
@@ -13184,9 +13186,9 @@ function _cliOrdenAlCerrar(o){
   function entradaPlantilla(e){ return { n: e.nombreOrdenes || nombreOrdenesAuto(e.nombreCompleto), c: e.cargo || '', roles: rolesDeCargo(e.cargo), tel: e.telefono || '' }; }
   function canon(o){ return JSON.stringify(o, function(k, v){ return v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce(function(a, x){ a[x] = v[x]; return a; }, {}) : v; }); }
   function publicarPlantilla(){
-    if(!window._fbDB) return;
+    if(!window._fbDB || !datos._cargado || !datos._plantCargada) return;   // esperar a tener Personal y la plantilla
     var nueva = {}; lista(datos.empleados).filter(function(e){ return e.activo !== false && e.id; }).forEach(function(e){ nueva[e.id] = entradaPlantilla(e); });
-    if(!Object.keys(nueva).length) nueva = null;
+    if(!Object.keys(nueva).length){ if(datos.plantilla) return; nueva = null; }   // nunca vaciar la lista de las órdenes por sí sola
     if(canon(nueva) === canon(datos.plantilla || null)) return;
     datos.plantilla = nueva;
     window._fbDB.ref(R + '/rrhh/plantilla').set(nueva).catch(function(e){ console.warn('plantilla', e); });
@@ -13222,7 +13224,7 @@ function _cliOrdenAlCerrar(o){
       if(cerrandoPeriodo[c.id]) return;
       var v = periodosVencidos(c); if(!v) return;
       cerrandoPeriodo[c.id] = true;
-      var ref = window._fbDB.ref(R + '/rrhh/colaboradores/' + c.id), corteViejo = c.corte;
+      var ref = window._fbDB.ref('rrhh/' + R + '/colaboradores/' + c.id), corteViejo = c.corte;
       // se vuelve a leer justo antes: si otro equipo ya lo cerró (o la persona fue trasladada), no se hace nada
       ref.once('value').then(function(s){
         var act = s.val(); if(!act || act.corte !== corteViejo) return false;
@@ -13400,10 +13402,10 @@ function _cliOrdenAlCerrar(o){
       var b = ev.target.closest('[data-dest]'); if(!b) return;
       var dest = b.getAttribute('data-dest');
       pin(function(){
-        var cambios = {}, ahora = Date.now(), base = R + '/rrhh/', otro = dest + '/rrhh/';
+        var cambios = {}, ahora = Date.now(), base = 'rrhh/' + R + '/', otro = 'rrhh/' + dest + '/';
         if(p.emp){ cambios[otro + 'empleados/' + p.emp.id] = Object.assign({}, p.emp, { trasladadoDe: R, fechaTraslado: hoyISO(), actualizado: ahora }); cambios[base + 'empleados/' + p.emp.id] = null;
           // en las órdenes: deja de salir aquí y sale en la empresa nueva al momento
-          cambios[base + 'plantilla/' + p.emp.id] = null; if(p.emp.activo !== false) cambios[otro + 'plantilla/' + p.emp.id] = entradaPlantilla(p.emp); }
+          cambios[R + '/rrhh/plantilla/' + p.emp.id] = null; if(p.emp.activo !== false) cambios[dest + '/rrhh/plantilla/' + p.emp.id] = entradaPlantilla(p.emp); }
         if(p.col){ cambios[otro + 'colaboradores/' + p.col.id] = Object.assign({}, p.col, { trasladadoDe: R, fechaTraslado: hoyISO(), actualizado: ahora }); cambios[base + 'colaboradores/' + p.col.id] = null; }
         p.acc.forEach(function(a){ cambios[otro + 'acciones/' + a.id] = Object.assign({}, a, { trasladadoDe: a.trasladadoDe || R }); cambios[base + 'acciones/' + a.id] = null; });
         if(!window._fbDB){ aviso('Sin conexión: no se trasladó', true); return; }
