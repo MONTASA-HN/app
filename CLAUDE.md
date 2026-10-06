@@ -9,6 +9,9 @@ Documentos hermanos, en la raíz (también se mantienen vivos, en el mismo commi
 - **`FLUJO.md`** — cómo funciona la app por dentro: de dónde sale el dato, qué pasa
   al crear y cerrar una orden, estados de equipo, cada escritura a Firebase.
 - **`TRAMPAS.md`** — cosas que se comportan distinto a como se ven, y bugs conocidos.
+- **`ACCESO.md`** — el candado de la base sin login: registro de teléfonos, aprobación
+  desde Gerencia, bloqueo y App Check. Es un plan, todavía no está hecho; ahí se marca
+  cada paso al construirlo.
 
 La app la usan mecánicos, motoristas y supervisores que no programan, desde el
 teléfono, muchas veces con las manos sucias y sin buena señal. Eso manda sobre todo
@@ -554,6 +557,11 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 
 ## 10. Pendientes y decisiones abiertas
 
+- **Candado de la base** (acordado por Rodrigo y Miguel, 2026-10-06): plan completo en
+  `ACCESO.md`. Primero registro de teléfonos sin bloquear; el bloqueo solo cuando haya
+  suficientes registrados; después App Check. **El día del bloqueo tienen que estar
+  listos los de afuera** (mundo, tablero, Jarvis, RADAR): la tabla está en
+  `ACCESO.md` §6.
 - Link corto de Google en fichas: ¿campo de coordenadas manual, traducir el
   link vía servicio externo, o solo recapturar? Miguel no decidió aún.
 - Órdenes de logística huérfanas sin restaurar: LG-0224 (entrega Cargill),
