@@ -660,6 +660,10 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-06 — FOTOS (auditoría por reporte de campo «al guardar la firma se borran las fotos»), MTL, MTT, MHT:
+  _persistirFotosOrden ahora SUMA a lo guardado (transacción en fotosOrden_*) y solo quita la foto eliminada a propósito
+  ({quitar}); el resultado va a la orden VIGENTE (_fotosAplicarVigente). MTL conserva fotos al recibir datos
+  (_mergeLogViaticos) y las vuelve a buscar en órdenes abiertas. Reproducido con la versión vieja: 2 fotos → agregar 1 → quedaba 1.
 - 2026-10-06 — Órdenes (MTG, MTS, MTT, MTL, MHG, MHS, MHT): al pasar a «En proceso» YA NO se llena sola la fecha/hora de
   inicio (además salía con la hora UTC, 6 h adelantada). La llena quien hace el trabajo.
 - 2026-10-06 — Vale de alimentación (todas las copias de _valeComprobanteImprimir/imprimirVale): caja a hoja carta completa

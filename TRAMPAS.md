@@ -637,3 +637,7 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **Vacaciones (`<raíz>/rrhh`)**: no pasa por `_Sync`. Nunca hacer `ref(<raíz>).set(...)` (borraría rrhh);
   los `ref(<raíz>).update({...})` de las apps no lo tocan. La copia de prueba mete datos con
   `window.__arbolInicial`: si se reconstruye, no dejar un segundo `<script>` que pise `rrhh`.
+- **Fotos de órdenes**: viven en `fotosOrden_<raíz>/{id}`, NUNCA en la orden (el sincronizador las omite). Cualquier
+  oyente que reemplace las órdenes en memoria las deja sin `fotos`: hay que volver a buscarlas (`_fotosPendientes` +
+  `_hidratarFotos`) y JAMÁS guardar `o.fotos` tal cual (borraría las que no estaban cargadas). Usar `_persistirFotosOrden`,
+  que suma a lo guardado; para eliminar, pasar `{quitar: foto}`.
