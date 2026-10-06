@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='dcb7aab8ff4b';
+  var APP_VERSION='015bb65cbd32';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1161,10 +1161,12 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
         lista = (conAviso ? av : []).concat(base).filter(function(n, i, l){ return l.indexOf(n) === i; });
       }
       sumarActuales(lista, marcados);
-      g.el.innerHTML = lista.map(function(n){
+      // técnicos extra en el grupo de logística: solo se muestran para apoyo a mantenimiento y atención de compras
+      var extras = (g.tipo === 'log' && g.conTel) ? (plantilla ? window._nxLista('tec') : nombresViejos().tec).filter(function(n, i, l){ return l.indexOf(n) === i && lista.indexOf(n) < 0; }) : [];
+      g.el.innerHTML = lista.concat(extras).map(function(n){
         var on = marcados.indexOf(n) >= 0;
         if(g.conTel){ var t = String(telDe(n)).replace(/\D/g, ''); if(t.length === 8) t = '+504' + t; else if(t) t = '+' + t;
-          return '<label class="tecnico-check' + (on ? ' selected' : '') + '"><input type="checkbox" value="' + escH(t) + '" data-nombre="' + escH(n) + '" onchange="' + escH(g.h) + '"' + (on ? ' checked' : '') + '> ' + escH(n) + '</label>'; }
+          return '<label class="tecnico-check' + (on ? ' selected' : '') + (extras.indexOf(n) >= 0 ? ' nx-solo-apoyo' : '') + '"><input type="checkbox" value="' + escH(t) + '" data-nombre="' + escH(n) + '" onchange="' + escH(g.h) + '"' + (on ? ' checked' : '') + '> ' + escH(n) + '</label>'; }
         return '<label class="tecnico-check' + (on ? ' selected' : '') + '"><input type="checkbox" value="' + escH(n) + '" onchange="' + escH(g.h) + '"' + (on ? ' checked' : '') + '> ' + escH(n) + '</label>';
       }).join('');
     });
@@ -1174,11 +1176,23 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
       x.el.innerHTML = primero + lista.map(function(n){ return '<option' + (n === sel ? ' selected' : '') + '>' + escH(n) + '</option>'; }).join('');
     });
   }
+  // Muestra u oculta los técnicos extra según el tipo de solicitud (y los desmarca al ocultarlos)
+  function ajustarApoyo(){
+    var b = document.getElementById('sol-tipo-B'), a = document.getElementById('sol-tipo');
+    var tipo = (b && b.offsetParent !== null && b.value) ? b.value : (a ? a.value : '');
+    var ver = tipo === 'apoyo_mantenimiento' || tipo === 'atencion_compras';
+    [].forEach.call(document.querySelectorAll('label.nx-solo-apoyo'), function(lb){
+      lb.style.display = ver ? '' : 'none';
+      if(!ver){ var i = lb.querySelector('input'); if(i && i.checked){ i.checked = false; lb.classList.remove('selected'); } }
+    });
+  }
+  window._nxAjustarApoyo = ajustarApoyo;
+  document.addEventListener('change', function(e){ var id = e.target && e.target.id; if(id === 'sol-tipo' || id === 'sol-tipo-B' || id === 'sol-depto') setTimeout(ajustarApoyo, 0); }, true);
   function aplicar(){
     rellenar('TECNICOS_VIAT', 'tec'); rellenar('AGENDA_TECNICOS', 'tec');
     rellenar('OPERADORES_LOGISTICA', 'op'); rellenar('MOTORISTAS_LOGISTICA', 'mot');
     rellenarRoster();
-    recordarEstaticos(); rehacerEstaticos();
+    recordarEstaticos(); rehacerEstaticos(); ajustarApoyo();
   }
   window._nxPersonalAplicar = aplicar;
   function escuchar(){
@@ -5204,7 +5218,7 @@ function renderPersonal(){
     const t = calcTiemposOrden(o);
     const mins = t.minsTotal || 0;
     tecs.forEach(t => {
-      if(PERSONAL_LOG.includes(t)){
+      if(PERSONAL_LOG.includes(t) && !TECNICOS_LIST.includes(t)){   // un técnico siempre suma a su productividad de técnico
         if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
         statsLog[t].ordenes++;
         statsLog[t].minutos += mins;
@@ -5229,10 +5243,12 @@ function renderPersonal(){
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
     const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
-    asignados.forEach(p => {
-      if(!statsLog[p]) statsLog[p] = {ordenes:0, minutos:0};
-      statsLog[p].ordenes++;
-      statsLog[p].minutos += mins;
+    asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
+      // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
+      const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
+      if(!st[p]) st[p] = {ordenes:0, minutos:0};
+      st[p].ordenes++;
+      st[p].minutos += mins;
     });
   });
 
@@ -5253,7 +5269,7 @@ function renderPersonal(){
     const ini = new Date(iniStr), fin = new Date(finStr);
     const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
     tecs.forEach(nombre => {
-      if(PERSONAL_LOG.includes(nombre)){
+      if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
         if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
         statsLog[nombre].ordenes++;
         statsLog[nombre].minutos += mins;
