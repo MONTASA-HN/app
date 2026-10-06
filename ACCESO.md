@@ -222,6 +222,7 @@ Cada uno necesita algo para seguir funcionando **el día del paso 2**. Medido el
 | **Bitácora SGI** | navegador, `…/dash/bitacora` | `bitacora/*` | `bitacora/*` | Igual que el mundo | Rodrigo |
 | **Servidor de sesión del mundo** | servidor (`mundo/servidor/sesion.js`) | `bitacora/auth-config` | nada | Credencial de servidor. Con el paso 2 `auth-config` queda cerrado para todos los demás, que es lo correcto | Rodrigo |
 | **Jarvis** | servidor | todo, solo lectura | `bitacora/mundo-presencia`, `mundo-actividad` | Credencial de servidor de **solo lectura** (abajo). Las dos escrituras de presencia son decorativas: se apagan o se les da identidad aprobada | Rodrigo, con la credencial que cree Miguel |
+| **Respaldo diario** | PC de Miguel (tarea de Windows, 12:00) | toda la base, solo lectura | nada | Credencial de servidor de solo lectura. Hoy lee sin credencial: **el día del paso 2 dejaría de respaldar** | Miguel / Claude |
 | **RADAR** | servidor de Fabrizio | órdenes de Nexo: las copia todos los días a las **11:20 UTC** a su tabla `mantenimientos` (correlativos MH-…; la última, MH-0182, el 2026-10-03) | nada en esta base | Credencial de servidor de solo lectura. **Si no la tiene el día del paso 2, deja de recibir órdenes sin avisar** | Fabrizio, con la credencial que cree Miguel |
 
 ### La credencial de servidor (Jarvis, RADAR, sesión del mundo)
@@ -252,7 +253,9 @@ Cada uno necesita algo para seguir funcionando **el día del paso 2**. Medido el
 
 ## 8. Decisiones abiertas
 
-- **`rrhh` fuera de `montasa`/`monhaco`** para cerrarlo también en la base (sección 4).
+- ~~**`rrhh` fuera de `montasa`/`monhaco`**~~ **✅ Hecho (2026-10-06):** empleados, colaboradores (vacaciones) y acciones (AP)
+  están en `rrhh/montasa` y `rrhh/monhaco` (raíz). En el paso 2: `"rrhh": { ".read": "GERENCIA", ".write": "GERENCIA" }`.
+  La **plantilla** (nombre en órdenes, cargo, roles, teléfono) se queda en `<raíz>/rrhh/plantilla` porque la leen las 8 apps.
 - **Quiénes son `gerencia`**: hoy, Miguel. ¿Alguien más aprueba?
 - **Criterio de "suficientes"** para el paso 2: propuesto arriba, a confirmar.
 - **Respaldos y `monhaco_prueba`**: `CLAUDE.md` §10 ya los tiene para borrar; si se
@@ -262,6 +265,7 @@ Cada uno necesita algo para seguir funcionando **el día del paso 2**. Medido el
 
 ## Historial
 
+- 2026-10-06 — Personal movido a `rrhh/<raíz>` (decisión de Miguel). Agregado el respaldo diario a la tabla de lectores externos.
 - 2026-10-06 — Paso 1 construido (registro + aprobación en Gerencia). Probado en copias con sesión simulada.
 
 - 2026-10-06 — Creación. Diseño de Rodrigo y Miguel: sin login, aprobación por
