@@ -401,6 +401,8 @@ Informe para Miguel: `DocumentsRevision_integridad_datos_MONTASA_2026-09-29.pdf`
 
 Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 
+- 2026-10-06 — MUDANZA: `rrhh/<raíz>/{empleados,colaboradores,acciones}` (antes `<raíz>/rrhh/…`). `<raíz>/rrhh/plantilla` NO se movió.
+  Las rutas `rrhh/colaboradores/…` de las notas de abajo ahora viven en `rrhh/<raíz>/colaboradores/…`.
 - 2026-10-05 — Gerencia (MTG, MHG) reescribe `rrhh/colaboradores/{id}` al pasar el aniversario: corte, diasCorresponden,
   diasExtra=0, pendientesAnteriores=saldo, gozadosIniciales=0 y agrega `periodos/{desde}` = {desde,hasta,corresponden,
   extra,anteriores,gozados,pasan,cerrado}. Antes de escribir relee el registro y no hace nada si el corte ya cambió.
