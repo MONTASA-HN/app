@@ -660,6 +660,10 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-30 — Regla única del estado del equipo al abrir/cerrar mantenimiento (T3) en 6 apps.
 - 2026-09-30 — Técnicos ya no se traban al cerrar (T14). Sincronizador: vendidos solo por serie/id.
 - 2026-09-30 — Riesgo 5: ubicación solo con coordenadas; EN RENTA a mano con cliente y motivo (T20).
+- 2026-10-06 — Órdenes (MTG, MTS, MTT, MTL, MHG, MHS, MHT): al pasar a «En proceso» YA NO se llena sola la fecha/hora de
+  inicio (además salía con la hora UTC, 6 h adelantada). La llena quien hace el trabajo.
+- 2026-10-06 — Vale de alimentación (todas las copias de _valeComprobanteImprimir/imprimirVale): caja a hoja carta completa
+  (255 mm de alto, siempre igual), letras más grandes, firmas al pie; 7+ firmas en 4 columnas. Cabe hasta 6 personas.
 - 2026-10-05 — Gerencia MT, aviso de renta por vencer: botón «🚚 Programar retiro» (_rentaProgramarRetiro). Crea una orden
   de logística NUEVA (LG nuevo, tipo retiro) con el/los equipo(s) de la entrega, ubicación (de la entrega o de la ficha del
   equipo), contacto, fecha = vencimiento (u hoy si venció) y el operador de grúa de Personal (cargo con «grúa»; si hay
