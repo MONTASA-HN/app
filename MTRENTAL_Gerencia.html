@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1309662a1608';
+  var APP_VERSION='97a623b95cca';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -14317,11 +14317,16 @@ function _cliOrdenAlCerrar(o){
     var a = accesos[uid]; if(!a) return;
     var gente = todosPersonal(), nom = normNombre((a.nombre || '') + ' ' + (a.apellido || ''));
     var sug = a.empleadoId || ((gente.find(function(p){ var ws = nom.split(' ').filter(Boolean), pn = normNombre(p.n); return ws.length >= 2 && ws.every(function(w){ return pn.indexOf(w) >= 0; }); }) || {}).id) || '';
+    // ¿Esta persona ya tiene otro dispositivo de Gerencia? (por el empleado enlazado o por el mismo nombre registrado)
+    var gerOtro = function(empId){ return listaAccesos().some(function(x){ return x.uid !== uid && x.estado === 'aprobado' && x.rol === 'gerencia'
+      && ((empId && x.empleadoId === empId) || normNombre((x.nombre || '') + ' ' + (x.apellido || '')) === nom); }); };
+    var rolDef = (a.estado === 'aprobado' && a.rol) ? a.rol : (gerOtro(sug) ? 'gerencia' : 'campo');
+    var AVISO_GER = 'ℹ️ Esta persona ya tiene otro dispositivo con permiso de Gerencia.';
     var w = ventana('✅ Aprobar acceso de ' + esc((a.nombre || '') + ' ' + (a.apellido || '')),
       '<div class="sub" style="margin-bottom:4px">📱 ' + esc(a.dispositivo || '') + ' · ' + esc(String(a.app || '').replace('.html', '')) + '</div>'
       + '<label>¿Quién es en Personal? <span style="font-weight:400;color:#667085">(cuenta el nombre de la ficha, no el que escribió)</span></label>'
       + '<select id="acc-emp"><option value="">— Elegir empleado —</option>' + gente.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === sug ? ' selected' : '') + '>' + esc(p.n) + ' — ' + esc(p.c) + ' (' + EMP_NOMBRE[p.empresa] + ')</option>'; }).join('') + '</select>'
-      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (a.rol !== 'gerencia' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="gerencia"' + (a.rol === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
+      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef !== 'gerencia' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
       function(w){
         var emp = val(w, 'acc-emp'), rol = val(w, 'acc-rol');
         if(!emp){ alert('Elige a qué empleado de Personal corresponde este teléfono.'); return; }
@@ -14331,6 +14336,11 @@ function _cliOrdenAlCerrar(o){
           window._fbDB.ref('accesos/' + uid).update(cambios).then(function(){ w.remove(); aviso('Acceso aprobado ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
         }, '🔒 Aprobar acceso');
       });
+    var hint = document.createElement('div'); hint.className = 'sub'; hint.style.cssText = 'margin-top:6px;color:#1f3864';
+    hint.textContent = (rolDef === 'gerencia' && a.rol !== 'gerencia') ? AVISO_GER : '';
+    w.querySelector('#acc-rol').insertAdjacentElement('afterend', hint);
+    // al cambiar de empleado, volver a sugerir el permiso
+    w.querySelector('#acc-emp').addEventListener('change', function(){ if(gerOtro(this.value)){ w.querySelector('#acc-rol').value = 'gerencia'; hint.textContent = AVISO_GER; } else hint.textContent = ''; });
   }
   function cambiarEstadoAcceso(uid, estado, titulo){
     var a = accesos[uid]; if(!a) return;
