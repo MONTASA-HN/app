@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d2331b43d18c';
+  var APP_VERSION='459e6739a70b';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12883,7 +12883,7 @@ function _cliOrdenAlCerrar(o){
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   function escuchar(){
     if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); completarCuentas(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
     window._fbDB.ref(R + '/rrhh/plantilla').on('value', function(s){ datos.plantilla = s.val() || null; datos._plantCargada = true; publicarPlantilla(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
@@ -13063,6 +13063,7 @@ function _cliOrdenAlCerrar(o){
             return '<div class="sub">📋 En órdenes: <b>' + esc(pl.n) + '</b> · ' + (r.length ? r.join(', ') : '<span style="color:#b45309">no se elige en órdenes</span>') + '</div>'; })(entradaPlantilla(e))
         + '<div class="sub">🪪 Identidad: <b>' + esc(e.identidad || '—') + '</b></div>'
         + '<div class="sub">📞 Teléfono: ' + (e.telefono ? '<a href="tel:' + esc(soloDigitos(e.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(e.telefono) + '</a>' : '—') + '</div>'
+        + '<div class="sub">🏦 Cuenta bancaria: ' + (e.cuentaBancaria ? '<b>' + esc(cuentaOculta(e.cuentaBancaria)) + '</b>' : '<span style="color:#b45309">falta</span>') + '</div>'
         + '<div class="sub">🎂 Nacimiento: ' + fmt(e.fechaNacimiento) + (ed !== null ? ' · ' + ed + ' años' : '') + '</div>'
         + '<div class="sub">🆘 Emergencia: ' + esc(ce.nombre || '—') + (ce.parentesco ? ' (' + esc(ce.parentesco) + ')' : '') + (ce.telefono ? ' · <a href="tel:' + esc(soloDigitos(ce.telefono)) + '" style="color:#1f3864;font-weight:700">' + esc(ce.telefono) + '</a>' : '') + '</div>'
         + '<div class="sub">🏠 ' + esc(e.direccion || '—') + '</div>'
@@ -13083,12 +13084,13 @@ function _cliOrdenAlCerrar(o){
       + '<label>2. Cargo o puesto</label><input id="e-cargo" placeholder="Ej: Técnico mecánico, Operador de montacarga" value="' + esc(e.cargo) + '" autocomplete="off">'
       + '<label>3. Número de identidad</label><input id="e-id" inputmode="numeric" placeholder="0000-0000-00000" value="' + esc(e.identidad) + '" autocomplete="off">'
       + '<label>4. Número de teléfono</label><input id="e-tel" type="tel" placeholder="0000-0000" value="' + esc(e.telefono) + '" autocomplete="off">'
+      + '<label>Cuenta bancaria <span style="font-weight:400;color:#667085">(opcional)</span></label><input id="e-cta" inputmode="numeric" placeholder="Número de cuenta" value="' + esc(e.cuentaBancaria || '') + '" autocomplete="off">'
       + '<label>5. Fecha de nacimiento</label><input id="e-fn" type="date" value="' + esc(e.fechaNacimiento) + '">'
       + '<label>6. Contacto de emergencia</label><input id="e-cn" placeholder="Nombre" value="' + esc(ce.nombre) + '" autocomplete="off">'
       + '<div class="g2" style="margin-top:6px"><div><input id="e-cp" placeholder="Parentesco (opcional)" value="' + esc(ce.parentesco) + '" autocomplete="off"></div><div><input id="e-ct" type="tel" placeholder="Teléfono del contacto" value="' + esc(ce.telefono) + '" autocomplete="off"></div></div>'
       + '<label>7. Dirección de vivienda (opcional)</label><textarea id="e-dir" rows="2">' + esc(e.direccion) + '</textarea>',
       function(w){
-        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), cargo: val(w, 'e-cargo'), nombreOrdenes: val(w, 'e-nord').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), fechaNacimiento: val(w, 'e-fn'),
+        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), cargo: val(w, 'e-cargo'), nombreOrdenes: val(w, 'e-nord').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), cuentaBancaria: soloDigitos(val(w, 'e-cta')), fechaNacimiento: val(w, 'e-fn'),
           contactoEmergencia: { nombre: val(w, 'e-cn'), parentesco: val(w, 'e-cp'), telefono: fmtTel(val(w, 'e-ct')) }, direccion: val(w, 'e-dir') };
         var falta = [];
         if(!d.nombreCompleto) falta.push('nombre completo');
@@ -13395,6 +13397,27 @@ function _cliOrdenAlCerrar(o){
     var cambios = {}; suyos.forEach(function(a){ cambios['accesos/' + a.uid + '/estado'] = 'rechazado'; cambios['accesos/' + a.uid + '/cambiadoEn'] = Date.now(); });
     window._fbDB.ref().update(cambios).then(function(){ aviso('Acceso quitado ✓'); }).catch(function(){});
   }
+  // ── Cuenta bancaria: completar desde la lista de gestores de viáticos (una vez por sesión, solo fichas vacías) ──
+  var cuentasRevisadas = false;
+  function completarCuentas(){
+    if(cuentasRevisadas || !window._fbDB) return; cuentasRevisadas = true;
+    var g = []; try{ g = (typeof GESTORES_VIATICOS !== 'undefined' && Array.isArray(GESTORES_VIATICOS)) ? GESTORES_VIATICOS : []; }catch(e){}
+    g = g.filter(function(x){ return x && soloDigitos(x.cuenta).length >= 6; });
+    if(!g.length) return;
+    var cambios = {}, n = 0;
+    lista(datos.empleados).forEach(function(e){
+      if(!e || !e.id || e.cuentaBancaria) return;
+      var idE = soloDigitos(e.identidad), hit = idE.length === 13 ? g.filter(function(x){ return soloDigitos(x.id) === idE; }) : [];
+      if(!hit.length){ var ws = normNombre(e.nombreCompleto).split(' ').filter(Boolean);
+        hit = g.filter(function(x){ var gn = normNombre(x.nombre); return ws.length >= 3 && ws.every(function(w){ return gn.indexOf(w) >= 0; }); }); }
+      if(hit.length !== 1) return;
+      cambios['rrhh/' + R + '/empleados/' + e.id + '/cuentaBancaria'] = soloDigitos(hit[0].cuenta);
+      cambios['rrhh/' + R + '/empleados/' + e.id + '/cuentaOrigen'] = 'lista de viáticos';
+      n++;
+    });
+    if(n) window._fbDB.ref().update(cambios).then(function(){ aviso('🏦 ' + n + ' cuenta' + (n === 1 ? '' : 's') + ' bancaria' + (n === 1 ? '' : 's') + ' completada' + (n === 1 ? '' : 's') + ' desde viáticos'); }).catch(function(){});
+  }
+  function cuentaOculta(c){ c = soloDigitos(c); return c ? '••••' + c.slice(-4) : ''; }
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
     var otras = EMPRESAS.filter(function(x){ return x.raiz !== R; });
