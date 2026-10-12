@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ffa7d0145239';
+  var APP_VERSION='2c91f74711c2';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1154,7 +1154,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     var l = nombresDe(tipo); if(!l) l = (original || []).slice();
     return sumarActuales(l, actuales);
   };
-  window._nxPersonas = function(){ return (personas() || []).map(function(p){ return { n: p.n, c: p.c || '', roles: (p.roles || []).slice(), tel: p.tel || '' }; }); };
+  window._nxPersonas = function(){ return (personas() || []).map(function(p){ return { n: p.n, nc: p.nc || '', c: p.c || '', roles: (p.roles || []).slice(), tel: p.tel || '' }; }); };
   // Botones de técnicos dentro de una orden (los marca la app después, como siempre)
   window._nxTecBtns = function(tipo, id, actuales, original){
     return window._nxLista('tec', original, actuales).map(function(n){
@@ -7012,7 +7012,7 @@ function renderModalViaticos(orden){
 
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
-  const gestorInfo = GESTORES_VIATICOS.find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const gestorInfo = _gestores().find(g=>g.nombre===(v.gestor_nombre||''))||{};
   const _pjM = _viatPeajes(v, destInfo.peajes);
   const cpU = _pjM.c;
   const tPeaj = _pjM.t;
@@ -7075,7 +7075,7 @@ function switchTabViaticos(mode){
 
 function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
   const hoy = new Date().toISOString().slice(0,10);
-  const gestorOpts = GESTORES_VIATICOS.map(g=>
+  const gestorOpts = _gestores().map(g=>
     `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
   ).join('');
   const destOpts = DESTINOS_VIATICOS.map(d=>
@@ -7123,8 +7123,8 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
       </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
-      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id||'—'}</div></div>
-      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta||'—'}</div></div>
+      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id || v.gestor_id || _gestorSinDato()}</div></div>
+      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta || v.gestor_cuenta || _gestorSinDato()}</div></div>
       <div><div style="color:var(--text3)">Departamento</div><div id="v-gestor-depto" style="font-weight:600">${gestorInfo.depto||'—'}</div></div>
     </div>
   </div>
@@ -7367,9 +7367,9 @@ function renderLiquidacionForm(v, montoSol, readOnly){
 function actualizarGestor(){
   const sel = document.getElementById('v-gestor');
   if(!sel) return;
-  const g = GESTORES_VIATICOS.find(x=>x.nombre===sel.value)||{};
-  document.getElementById('v-gestor-id') && (document.getElementById('v-gestor-id').textContent = g.id||'—');
-  document.getElementById('v-gestor-cuenta') && (document.getElementById('v-gestor-cuenta').textContent = g.cuenta||'—');
+  const g = _gestores().find(x=>x.nombre===sel.value)||{};
+  document.getElementById('v-gestor-id') && (document.getElementById('v-gestor-id').textContent = g.id||_gestorSinDato());
+  document.getElementById('v-gestor-cuenta') && (document.getElementById('v-gestor-cuenta').textContent = g.cuenta||_gestorSinDato());
   document.getElementById('v-gestor-depto') && (document.getElementById('v-gestor-depto').textContent = g.depto||'—');
 }
 
@@ -7419,18 +7419,29 @@ const DESTINOS_VIATICOS = [
   {nombre:"POTRERILLOS",         km:96,  peajes:0},
   {nombre:"VILLANUEVA",          km:54,  peajes:0},
 ];
-const GESTORES_VIATICOS = [
-  {nombre:"FRANCISCO NOE NARVAES FONSECA",  id:"0501-1981-08196", cuenta:"2020575644", depto:"Logística"},
-  {nombre:"MIGUEL ANGEL ORELLANA LOPEZ",    id:"0501-1990-12530", cuenta:"2020575655", depto:"Logística"},
-  {nombre:"JONATHAN JOSUE MARTINEZ LOPEZ",  id:"0501-1997-07479", cuenta:"2020575530", depto:"Taller"},
-  {nombre:"ANGEL GABRIEL CARDONA PAZ",      id:"0501-1997-03637", cuenta:"2020575527", depto:"Taller"},
-  {nombre:"DENIS RIGOBERTO LINARES REYES",  id:"0509-1994-00146", cuenta:"2020575543", depto:"Taller"},
-  {nombre:"KEVIN EDGARDO DERAS RAPALO",     id:"0512-1994-00350", cuenta:"2020575547", depto:"Taller"},
-  {nombre:"ELIBERTO PENA",                  id:"",                cuenta:"",            depto:"Taller"},
-  {nombre:"MARVIN JESUS TORRES",            id:"0502-1980-00830", cuenta:"757373211",   depto:"Taller"},
-  {nombre:"ELKIN ISAAC PEREZ HERNANDEZ",    id:"0501-1999-13499", cuenta:"2010067666",  depto:"Taller"},
-  {nombre:"MIGUEL ANTONIO ORELLANA LOPEZ",  id:"0501-1990-12443", cuenta:"2020575525", depto:"Gerencia"},
-];
+// ── Gestores de viáticos (2026-10-07) ─────────────────────────────────────────────────────────────────────
+// Ya NO se escriben en el código (el código es público). Salen de Personal:
+//  · Gerencia: de las fichas de Empleados, con identidad y cuenta bancaria (window._nxGestoresGer).
+//  · Supervisión / Logística: solo los nombres (lista de personal de las órdenes); identidad y cuenta las pone Gerencia.
+// La identidad y la cuenta NO se guardan en la solicitud: Gerencia las completa al mostrarla o imprimirla.
+const GESTORES_VIATICOS = [];
+function _nzGestor(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+function _gestores(){
+  var l = (typeof window._nxGestoresGer === 'function') ? window._nxGestoresGer() : null;
+  if(!l || !l.length){
+    var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
+    l = ps.map(function(p){ var r = p.roles || [];
+      return { nombre: String(p.nc || p.n || '').toUpperCase(), id: '', cuenta: '', depto: r.indexOf('aviso') >= 0 ? 'Gerencia' : (r.indexOf('op') >= 0 || r.indexOf('mot') >= 0) ? 'Logística' : 'Taller' }; });
+  }
+  l = l.filter(function(g){ return g && g.nombre; }).sort(function(a, b){ return a.nombre.localeCompare(b.nombre, 'es'); });
+  if(l.length){ GESTORES_VIATICOS.length = 0; Array.prototype.push.apply(GESTORES_VIATICOS, l); }
+  return GESTORES_VIATICOS;
+}
+function _gestorDato(nombre, campo){
+  var n = _nzGestor(nombre); if(!n) return '';
+  var g = _gestores().find(function(x){ return _nzGestor(x.nombre) === n; }); return g ? (g[campo] || '') : '';
+}
+function _gestorSinDato(){ return (typeof window._nxGestoresGer === 'function') ? '—' : 'Lo completa Gerencia'; }
 
 function actualizarDestino(){
   const sel = document.getElementById('v-destino');
@@ -7599,15 +7610,15 @@ function _leerFormSolicitud(){
   const destNombre=document.getElementById('v-destino')?.value||'';
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
   const gestorNombre=document.getElementById('v-gestor')?.value||'';
-  const g=GESTORES_VIATICOS.find(x=>x.nombre===gestorNombre)||{};
+  const g=_gestores().find(x=>x.nombre===gestorNombre)||{};
   return {
     fecha_doc: document.getElementById('v-fecha')?.value||'',
     cliente:   document.getElementById('v-cliente')?.value||'',
     destino:   destNombre,
     motivo:    document.getElementById('v-motivo')?.value||'',
     gestor_nombre: gestorNombre,
-    gestor_id:     g.id||'',
-    gestor_cuenta: g.cuenta||'',
+    gestor_id:     '',   // (2026-10-07) identidad y cuenta no se guardan aquí: Gerencia las toma de Personal
+    gestor_cuenta: '',
     gestor_depto:  g.depto||'',
     vehiculo:  document.getElementById('v-vehiculo')?.value||'PICK-UP',
     km_total:  d.km,
@@ -7880,7 +7891,7 @@ function _buildSolicitudHTML(v, orden){
   <table><tr>
     <th>NOMBRE DEL GESTOR</th><th>N° DE IDENTIDAD</th><th>N° DE CUENTA</th><th>ÁREA/DEPTO</th>
   </tr><tr>
-    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||''}</td><td>${v.gestor_cuenta||''}</td><td>${v.gestor_depto||''}</td>
+    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||_gestorDato(v.gestor_nombre,'id')}</td><td>${v.gestor_cuenta||_gestorDato(v.gestor_nombre,'cuenta')}</td><td>${v.gestor_depto||''}</td>
   </tr></table>
   <table>
     <tr>
