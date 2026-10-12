@@ -470,3 +470,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   datos: agregan el campo `clienteOrden` a las órdenes.
 - 2026-10-12 — Texto seguro (las 9 apps): bloque `TEXTO SEGURO` al inicio del `<body>`; las plantillas de órdenes,
   solicitudes, firmas y enlaces usan `_x`/`_img`/`_url`/`_idS`. No cambia el flujo de datos.
+- 2026-10-12 — PDF de órdenes (MTG, MTS, MTC, MHG, MHS): `cabe()` mide dentro de la hoja y estima si el navegador no da medidas
+  (iPhone). No cambia el flujo de datos.

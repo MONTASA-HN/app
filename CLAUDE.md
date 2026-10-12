@@ -785,3 +785,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).
 - 2026-10-12 — Auditoría, etapa 1: textos de la base mostrados siempre como texto (`_x`, `_img`, `_url`, `_idS`)
   en las 9 apps; Gerencia lee Personal y Accesos con la sesión del equipo.
+- 2026-10-12 — PDF de órdenes en iPhone: salía un dato por hoja; se corrige la medición de la hoja (TRAMPAS).

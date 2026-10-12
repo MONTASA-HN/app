@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='61339be83aa3';
+  var APP_VERSION='5bcf4958798e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -10584,9 +10584,28 @@ function _cliOrdenAlCerrar(o){
     var hdr2 = function(k){ return '<div class="op-codlinea">Código: <b>GM-FO-04</b> · Versión: <b>3</b> · Fecha: <b>2-9-18</b></div><div class="op-hdr2"><img src="'+logo+'"><div style="text-align:right"><div class="op-kick">'+k+'</div><div class="op-tit" style="font-size:17.3px">'+esc(d.titulo)+' · <span class="op-mono" style="font-size:16px">'+esc(d.corr)+'</span></div></div></div><div class="op-regla"></div>'; };
     function nueva(cab){ var p=document.createElement('div'); p.className='op-page'; p.innerHTML=cab+pie; host.appendChild(p); paginas.push(p); return p; }
     function meter(p, el){ p.insertBefore(el, p.querySelector('.op-pie')); }
+    // ¿Cabe todo en la hoja? Se mide DENTRO de la hoja (offsetTop/offsetHeight). En iPhone la medición por posición en
+    // pantalla daba cero y mandaba cada dato a una hoja nueva (2026-10-12). Si aun así no hay medidas, se estima.
+    var LIM = H - 77 - 8;   // (estimado) alto de la hoja menos el espacio del pie
+    function estimar(c){
+      if(c.classList.contains('op-codlinea')) return 20;
+      if(c.classList.contains('op-hdr')) return 75;
+      if(c.classList.contains('op-hdr2')) return 50;
+      if(c.classList.contains('op-regla')) return 17;
+      if(c.classList.contains('op-firma')) return 110;
+      if(c.classList.contains('op-intro')) return 22;
+      if(c.classList.contains('op-fotos')) return 8 + Math.ceil(c.children.length / 2) * 266;
+      var filas = c.querySelectorAll('tr').length, txt = (c.textContent || '').length;
+      return 40 + Math.max(filas * 32, txt * 0.9);   // de más a propósito: mejor una hoja extra que un dato cortado
+    }
     function cabe(p){
-      var lim = p.querySelector('.op-pie').getBoundingClientRect().top - 8, max = 0;
-      Array.prototype.forEach.call(p.children, function(c){ if(!c.classList.contains('op-pie')) max = Math.max(max, c.getBoundingClientRect().bottom); });
+      var max = 0, medido = p.offsetHeight > 0 && !window._opdfSinMedir, y = 40, pie = p.querySelector('.op-pie');
+      var lim = medido ? pie.offsetTop - 8 : LIM;
+      Array.prototype.forEach.call(p.children, function(c){
+        if(c.classList.contains('op-pie') || c.tagName === 'STYLE') return;
+        if(medido) max = Math.max(max, c.offsetTop + c.offsetHeight);
+        else { y += estimar(c); max = y; }
+      });
       return max <= lim;
     }
     function el(html){ var t=document.createElement('div'); t.innerHTML=html; return t.firstElementChild; }

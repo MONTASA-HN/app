@@ -645,3 +645,6 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   `_x(o.campo)` (también con `||`, `.slice()`, etc.: `_x(o.notas||'').slice(...)` NO; `_x((o.notas||'').slice(...))` SÍ),
   `_img()` para `src` de firmas/fotos, `_url()` para `href`/`window.open` y `_idS()` para ids en `onclick`.
   Con `esc()` no basta para enlaces: deja pasar `javascript:`.
+- **PDF de órdenes en iPhone**: medir con `getBoundingClientRect` el armado escondido daba cero en Safari de iPhone y
+  cada dato salía en una hoja (LG-0261, 13 hojas). `cabe()` mide con `offsetTop/offsetHeight` dentro de la hoja y, si no hay
+  medidas, estima por contenido (de más a propósito). Para probar el estimado: `window._opdfSinMedir = true`.
