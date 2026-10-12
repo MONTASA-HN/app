@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4833ebc93c9d';
+  var APP_VERSION='53f4f4107fcb';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -95,6 +95,13 @@ input,textarea,select,button{font-family:inherit}
 </style>
 </head>
 <body>
+<script>
+// ══ TEXTO SEGURO (2026-10-12, auditoría) ══ Lo que viene de la base se muestra como texto, nunca como código.
+window._x = function(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+window._idS = function(t){ return String(t == null ? '' : t).replace(/[^A-Za-z0-9_\-]/g, ''); };
+window._url = function(u){ u = String(u == null ? '' : u).trim(); return /^(https?:\/\/|data:application\/pdf)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+</script>
 <script>
 // ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
 // El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
@@ -412,7 +419,7 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
         + 'onchange="horGuardar(\''+e.id+'\')" '
         + 'style="width:88px;padding:8px 6px;border:1.5px solid '+(tiene?'#18A303':'#ccc')+';border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td>'
         + '<td style="'+td+';text-align:center;padding:3px 4px">'
-        + '<button id="hor-del-'+e.id+'" onclick="horBorrar(\''+e.id+'\')" title="Borrar lectura" '
+        + '<button id="hor-del-'+e.id+'" onclick="horBorrar(\''+_idS(e.id)+'\')" title="Borrar lectura" '
         + 'style="display:'+(tiene?'inline-block':'none')+';padding:7px 9px;border:1px solid #f5c6c6;background:#fdeaea;color:#c00;border-radius:6px;font-size:13px;cursor:pointer">🗑</button></td>';
     } else {
       celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</td>';
@@ -420,7 +427,7 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
     filas += '<tr>'
       + '<td style="'+td+';font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)
       + (e._eqManual ? ' <span style="font-size:9px;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 4px;font-weight:800">MANUAL</span>'
-        + (editable ? ' <span onclick="horEqManualQuitar(\''+e.id+'\')" title="Quitar equipo manual" style="cursor:pointer;color:#c00;font-weight:800">✕</span>' : '') : '')
+        + (editable ? ' <span onclick="horEqManualQuitar(\''+_idS(e.id)+'\')" title="Quitar equipo manual" style="cursor:pointer;color:#c00;font-weight:800">✕</span>' : '') : '')
       + '</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(e.capacidad||'—')+'</td>'
       + '<td style="'+td+';text-align:center">'+_hcEsc(horMesLabel(mes))+'</td>'
@@ -1531,12 +1538,12 @@ function _rcFotosUIHTML(r){
     fotos.forEach(function(f,i){
       h += '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">'
         + '<img src="'+f+'" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_rcVerFotoGrande(this.src)">'
-        + '<button onclick="event.stopPropagation();rcFotosEliminar(\''+r.id+'\','+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
+        + '<button onclick="event.stopPropagation();rcFotosEliminar(\''+_idS(r.id)+'\','+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
     });
     h += '</div>';
   }
   if(fotos.length < 10){
-    const inp = function(cam){ return '<input type="file" accept="image/*"'+(cam?' capture="environment"':'')+' multiple style="display:none" onchange="event.stopPropagation();rcFotosAgregar(\''+r.id+'\',this)">'; };
+    const inp = function(cam){ return '<input type="file" accept="image/*"'+(cam?' capture="environment"':'')+' multiple style="display:none" onchange="event.stopPropagation();rcFotosAgregar(\''+_idS(r.id)+'\',this)">'; };
     h += '<div style="display:flex;gap:8px">'
       + '<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2,#ccc);border-radius:8px;font-size:13px;color:#1f3864">'+inp(true)+'📷 Cámara'+(fotos.length>0?' ('+fotos.length+'/10)':'')+'</label>'
       + '<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2,#ccc);border-radius:8px;font-size:13px;color:#1f3864">'+inp(false)+'🖼️ Galería</label>'
@@ -1560,7 +1567,7 @@ function renderCobros(contId){
   }
   lista.forEach(function(r){
     const cobrado = r.estado==='Cobrado';
-    h += '<div onclick="rcVer(\''+r.id+'\')" style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:3px solid '+(cobrado?'#18A303':'#E8811A')+';border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer">'
+    h += '<div onclick="rcVer(\''+_idS(r.id)+'\')" style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:3px solid '+(cobrado?'#18A303':'#E8811A')+';border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer">'
       + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">'
       + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#fdf3e3;color:#8a4800;padding:2px 8px;border-radius:10px">'+_hcEsc(r.correlativo)+'</span>'
       + '<span style="font-size:11px;font-weight:700;background:'+(cobrado?'#e5f7e0':'#fdead9')+';color:'+(cobrado?'#1a5c1a':'#8a4800')+';padding:2px 8px;border-radius:10px">'+(cobrado?'✓ Cobrado':'Pendiente de cobro')+'</span>'
@@ -1665,7 +1672,7 @@ function rcBuscarOrden(){
     const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
     const eqTxt = eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||o.equipoTxt||'—');
     const comp = o.completado || o.estado==='Completado';
-    items += '<div onclick="rcElegirOrden(\''+x.t+'\',\''+o.id+'\')" style="border:1px solid #e2e0d8;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer">'
+    items += '<div onclick="rcElegirOrden(\''+x.t+'\',\''+_idS(o.id)+'\')" style="border:1px solid #e2e0d8;border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer">'
       + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
       + '<span style="font-size:11px;font-weight:700;font-family:monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">'+_hcEsc(o.correlativo||'—')+'</span>'
       + '<span style="font-size:11px;font-weight:700;background:'+(comp?'#e5f7e0':'#fff8e1')+';color:'+(comp?'#1a5c1a':'#b45309')+';padding:2px 8px;border-radius:10px">'+_hcEsc(o.estado||'Pendiente')+'</span>'
@@ -1758,15 +1765,15 @@ function rcVer(id){
     + fila('Equipo', r.equipoTxt) + fila('Cliente', r.cliente) + fila('Fecha del daño', r.fechaDano)
     + (r.ordenCorrelativo?fila('Orden enlazada', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + bloque('⚠️ Daño y causa', r.causa)
-    + (r.firma?'<div style="margin-top:10px"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">✍️ Firma del cliente</div><img src="'+r.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff"></div>':'')
+    + (r.firma?'<div style="margin-top:10px"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">✍️ Firma del cliente</div><img src="' + _img(r.firma) + '" style="width:100%;max-height:100px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff"></div>':'')
     + _rcFotosUIHTML(r)
     + '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
-    + '<button onclick="rcCompartirPDF(\''+r.id+'\')" style="flex:1;min-width:130px;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📄 Compartir PDF</button>'
-    + '<button onclick="rcCompartir(\''+r.id+'\')" style="flex:1;min-width:130px;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir imagen</button>'
+    + '<button onclick="rcCompartirPDF(\''+_idS(r.id)+'\')" style="flex:1;min-width:130px;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📄 Compartir PDF</button>'
+    + '<button onclick="rcCompartir(\''+_idS(r.id)+'\')" style="flex:1;min-width:130px;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir imagen</button>'
     + '</div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
-    + '<button onclick="rcEditarPin(\''+r.id+'\')" style="flex:1;padding:12px 14px;background:#eef2f8;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">✏️ Editar</button>'
-    + (!cobrado?'<button onclick="rcMarcarCobrado(\''+r.id+'\')" style="flex:1;padding:12px 14px;background:#e5f7e0;color:#1a5c1a;border:1px solid #bbf7d0;border-radius:8px;font-weight:700;cursor:pointer">✔ Cobrado</button>':'')
-    + (RC_ELIMINAR?'<button onclick="rcEliminar(\''+r.id+'\')" style="padding:12px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:8px;font-weight:700;cursor:pointer">🗑</button>':'')
+    + '<button onclick="rcEditarPin(\''+_idS(r.id)+'\')" style="flex:1;padding:12px 14px;background:#eef2f8;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">✏️ Editar</button>'
+    + (!cobrado?'<button onclick="rcMarcarCobrado(\''+_idS(r.id)+'\')" style="flex:1;padding:12px 14px;background:#e5f7e0;color:#1a5c1a;border:1px solid #bbf7d0;border-radius:8px;font-weight:700;cursor:pointer">✔ Cobrado</button>':'')
+    + (RC_ELIMINAR?'<button onclick="rcEliminar(\''+_idS(r.id)+'\')" style="padding:12px 14px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:8px;font-weight:700;cursor:pointer">🗑</button>':'')
     + '<button onclick="document.getElementById(\'rc-ver-overlay\').remove()" style="padding:12px 14px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
     + '</div></div>';
   ov.onclick = function(){ ov.remove(); };
@@ -1833,7 +1840,7 @@ function _rcConstruirDOM(r, sinFotos){
     + (r.ordenCorrelativo?fila('Orden de reparación', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + '</div>'
     + bloque('⚠️ Daño y causa (mala operación)', r.causa)
-    + (r.firma?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">✍️ Firma del cliente</div><img src="'+r.firma+'" style="width:100%;max-height:110px;object-fit:contain;background:#fff"></div>':'')
+    + (r.firma?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">✍️ Firma del cliente</div><img src="' + _img(r.firma) + '" style="width:100%;max-height:110px;object-fit:contain;background:#fff"></div>':'')
     + fotosHTML
     + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde NEXO — '+new Date().toLocaleDateString('es-HN')+'</div>';
   return cont;

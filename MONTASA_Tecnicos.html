@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6a69c4905382';
+  var APP_VERSION='c90084f2f192';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -818,16 +818,16 @@ function verViaticosResumen(ordenId, tipo){
     <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:15px;font-weight:700;color:white">📋 Resumen de Viáticos</div>
-        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo||''} · ${v.destino||'—'}</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo||''} · ${_x(v.destino||'—')}</div>
       </div>
       <button onclick="cerrarViaticosResumen()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
     </div>
     <div style="padding:16px">
       <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:14px">
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
-          <div><span style="color:var(--text3)">Gestor</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
-          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${v.vehiculo||'—'}</strong></div>
-          <div><span style="color:var(--text3)">Destino</span><br><strong>${v.destino||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Gestor</span><br><strong>${_x(v.gestor_nombre||'—')}</strong></div>
+          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${_x(v.vehiculo||'—')}</strong></div>
+          <div><span style="color:var(--text3)">Destino</span><br><strong>${_x(v.destino||'—')}</strong></div>
           <div><span style="color:var(--text3)">KM total</span><br><strong>${d.km} km</strong></div>
         </div>
       </div>
@@ -1300,6 +1300,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </style>
 </head>
 <body>
+<script>
+// ══ TEXTO SEGURO (2026-10-12, auditoría) ══ Lo que viene de la base se muestra como texto, nunca como código.
+window._x = function(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+window._idS = function(t){ return String(t == null ? '' : t).replace(/[^A-Za-z0-9_\-]/g, ''); };
+window._url = function(u){ u = String(u == null ? '' : u).trim(); return /^(https?:\/\/|data:application\/pdf)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+</script>
 <script>
 // ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
 // El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
@@ -2158,7 +2165,7 @@ function renderAgenda(){
         const enSlot=evs.filter(e=>e.fecha===fISO && e.horaIni>=slot && e.horaIni<_agSlotFin(slot)).sort((a,b)=>a.horaIni<b.horaIni?-1:1);
         h+='<td onclick="_agAbrirEvento(\''+fISO+'\',\''+slot+'\')" style="border:1px solid var(--border2);padding:2px;vertical-align:top;min-width:105px;height:44px;cursor:pointer">';
         enSlot.forEach(e=>{
-          h+='<div onclick="event.stopPropagation();_agAbrirEvento(null,null,\''+e.id+'\')" style="background:#e8f0fe;border-left:3px solid #1f3864;border-radius:5px;padding:4px 5px;margin-bottom:2px;cursor:pointer">'
+          h+='<div onclick="event.stopPropagation();_agAbrirEvento(null,null,\''+_idS(e.id)+'\')" style="background:#e8f0fe;border-left:3px solid #1f3864;border-radius:5px;padding:4px 5px;margin-bottom:2px;cursor:pointer">'
             +'<div style="font-weight:800;color:#1f3864">'+e.horaIni+'–'+(e.horaFin||'')+'</div>'
             +'<div style="font-weight:600">'+String(e.actividad||'').replace(/[<>]/g,'')+'</div>'
             +(e.orden?'<div style="color:var(--text3)">'+String(e.orden).replace(/[<>]/g,'')+'</div>':'')
@@ -2208,7 +2215,7 @@ function _agAbrirEvento(fecha, slot, evId){
     +'<div class="form-group"><label>Notas (opcional)</label><input id="ag-notas" value="'+(ev?String(ev.notas||'').replace(/"/g,'&quot;'):'')+'" placeholder="Detalles, contacto, etc."></div>'
     +'<div style="display:flex;gap:8px;margin-top:10px">'
     +'<button onclick="_agGuardarEvento(\''+(ev?ev.id:'')+'\',\''+f+'\')" style="flex:1;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar</button>'
-    +(ev?'<button onclick="_agEliminarEvento(\''+ev.id+'\')" style="padding:12px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:800;cursor:pointer">🗑</button>':'')
+    +(ev?'<button onclick="_agEliminarEvento(\''+_idS(ev.id)+'\')" style="padding:12px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:800;cursor:pointer">🗑</button>':'')
     +'<button onclick="document.getElementById(\'agenda-ev-overlay\').remove()" style="padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
     +'</div></div>';
   ov.onclick=()=>ov.remove();
@@ -2444,7 +2451,7 @@ function _srBuscar(){
   cont.innerHTML=lista.slice(0,60).map(function(r){
     const d=_srDatosOrden(r.o);
     const ya=_srDeOrden(r.o.id);
-    return '<div onclick="_srElegir(\''+r.tipo+'\',\''+r.o.id+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
+    return '<div onclick="_srElegir(\''+r.tipo+'\',\''+_idS(r.o.id)+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
       +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':'Correctivo')+'</span></div>'
       +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div>'
       +(ya.length?'<div style="font-size:11px;color:#8a6d00;font-weight:700">🔩 Ya tiene: '+ya.map(function(x){return esc(x.correlativo);}).join(', ')+'</div>':'')
@@ -2473,12 +2480,12 @@ function _srElegir(tipo, oid){
     info0.style.display='block';
     info0.innerHTML='<div style="font-weight:800;color:#8a6d00;margin-bottom:6px">🔩 La orden '+esc0(o.correlativo)+' ya tiene '+yaOrd.length+' solicitud'+(yaOrd.length===1?'':'es')+' de repuestos</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
-      + yaOrd.map(function(x){ return '<button onclick="_srVerModal(\''+x.id+'\')" style="padding:8px 11px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer">👁 '+esc0(x.correlativo)+' · '+(x.items||[]).length+' ítems</button>'; }).join('')
+      + yaOrd.map(function(x){ return '<button onclick="_srVerModal(\''+_idS(x.id)+'\')" style="padding:8px 11px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer">👁 '+esc0(x.correlativo)+' · '+(x.items||[]).length+' ítems</button>'; }).join('')
       +'</div>'
       +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Si durante el trabajo salieron más repuestos, crea otra lista para esta misma orden. Se numera como <b>'+esc0(_srCorrelativoParaOrden(oid))+'</b> y necesita tu PIN.</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
       +'<button onclick="_srNuevaExtra(\''+tipo+'\',\''+oid+'\')" style="flex:1;min-width:170px;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">➕ Nueva lista de repuestos (PIN)</button>'
-      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-overlay\').remove();_srEditarPin(\''+ult.id+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️ Editar '+esc0(ult.correlativo)+'</button>':'')
+      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-overlay\').remove();_srEditarPin(\''+_idS(ult.id)+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️ Editar '+esc0(ult.correlativo)+'</button>':'')
       +'</div>';
     return;
   }
@@ -2574,9 +2581,9 @@ function renderRepuestos(){
       +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:15px">'+esc(r.correlativo)+' <span style="font-weight:600;color:var(--text3);font-size:12px">→ '+esc(r.ordenCorrelativo)+'</span></div>'
       +'<div style="font-size:12px;color:var(--text2)">'+esc(r.equipoTxt)+(r.marca?' · '+esc(r.marca):'')+' · '+n+' repuesto'+(n===1?'':'s')+' · '+esc(r.fecha||'')+'</div></div>'
       +'<div style="display:flex;gap:6px;flex-shrink:0">'
-      +'<button onclick="_srVer(\''+r.id+'\')" style="padding:9px 12px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">👁 Ver</button>'
-      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="_srEditarPin(\''+r.id+'\')" style="padding:9px 12px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">✏️ Editar</button>':'')
-      +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="padding:9px 12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📤 Compartir</button>'
+      +'<button onclick="_srVer(\''+_idS(r.id)+'\')" style="padding:9px 12px;background:#eef4fb;color:#1f3864;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">👁 Ver</button>'
+      +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="_srEditarPin(\''+_idS(r.id)+'\')" style="padding:9px 12px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">✏️ Editar</button>':'')
+      +'<button onclick="compartirSolRepuesto(\''+_idS(r.id)+'\')" style="padding:9px 12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📤 Compartir</button>'
       +'</div></div>'
       +'<div id="sr-det-'+r.id+'" style="display:none;margin-top:8px"></div>'
       +'</div>';
@@ -2611,8 +2618,8 @@ function _srVerModal(id){
     +(r.items||[]).map(function(it){ return '<tr><td style="text-align:center;border:1px solid var(--border2);padding:6px">'+esc(it.cant)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.desc)+'</td><td style="border:1px solid var(--border2);padding:6px">'+esc(it.parte||'—')+'</td></tr>'; }).join('')
     +'</table>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
-    +'<button onclick="compartirSolRepuesto(\''+r.id+'\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir solicitud</button>'
-    +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-ver-overlay\').remove();_srEditarPin(\''+r.id+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️</button>':'')
+    +'<button onclick="compartirSolRepuesto(\''+_idS(r.id)+'\')" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir solicitud</button>'
+    +((typeof SR_EDITAR!=='undefined'&&SR_EDITAR)?'<button onclick="document.getElementById(\'sr-ver-overlay\').remove();_srEditarPin(\''+_idS(r.id)+'\')" style="padding:12px 14px;background:#fff3cd;color:#8a6d00;border:none;border-radius:8px;font-weight:800;cursor:pointer">✏️</button>':'')
     +'<button onclick="document.getElementById(\'sr-ver-overlay\').remove()" style="padding:12px 16px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
     +'</div></div>';
   ov.onclick=function(){ ov.remove(); };
@@ -2624,7 +2631,7 @@ function _srChipsHTML(oid){
     const srs=_srDeOrden(oid);
     if(!srs.length) return '';
     return '<div style="margin:8px 0"><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">🔩 Solicitudes de repuestos</span>'
-      + srs.map(function(r){ return '<button onclick="event.stopPropagation();_srVerModal(\''+r.id+'\')" style="padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;margin:0 6px 6px 0">🔩 '+r.correlativo+' · '+(r.items||[]).length+' ítems</button>'; }).join('')
+      + srs.map(function(r){ return '<button onclick="event.stopPropagation();_srVerModal(\''+_idS(r.id)+'\')" style="padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #c9d9ec;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;margin:0 6px 6px 0">🔩 '+r.correlativo+' · '+(r.items||[]).length+' ítems</button>'; }).join('')
       + '</div>';
   }catch(e){ return ''; }
 }
@@ -3185,14 +3192,14 @@ function bCorr(estado, prioridad){
 
 function _miniClientePrev(p){
   const isCli = p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente);
-  if(isCli) return (p.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+p.clienteNombre+'</div>':'')+(p.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+p.clienteMarca+(p.clienteModelo?' '+p.clienteModelo:'')+(p.clienteSerie?' · '+p.clienteSerie:'')+'</div>':'');
+  if(isCli) return (p.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+_x(p.clienteNombre)+'</div>':'')+(p.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+_x(p.clienteMarca)+(p.clienteModelo?' '+p.clienteModelo:'')+(p.clienteSerie?' · '+p.clienteSerie:'')+'</div>':'');
   return '<div class="card-sub">'+getEqLabelFull(p)+'</div>';
 }
 function _miniClienteCorr(c){
   const isCli = c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente);
   const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
   const eqSub = eq.codigo ? eq.codigo+' \u2013 '+(eq.marca||'') : (c.clienteNombre?'Cliente: '+c.clienteNombre:'\u2014');
-  if(isCli) return (c.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+c.clienteNombre+'</div>':'')+(c.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+c.clienteMarca+(c.clienteModelo?' '+c.clienteModelo:'')+(c.clienteSerie?' · '+c.clienteSerie:'')+'</div>':'');
+  if(isCli) return (c.clienteNombre?'<div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:2px">👤 '+_x(c.clienteNombre)+'</div>':'')+(c.clienteMarca?'<div style="font-size:11px;color:var(--text3);margin-top:1px">'+_x(c.clienteMarca)+(c.clienteModelo?' '+c.clienteModelo:'')+(c.clienteSerie?' · '+c.clienteSerie:'')+'</div>':'');
   return '<div class="card-sub">'+eqSub+'</div>';
 }
 function toggleCard(id){
@@ -3662,12 +3669,12 @@ function renderPreventivos(){
   }
   const el = document.getElementById('preventivos-list');
   if(!list.length){ el.innerHTML='<div class="empty">Sin registros</div>'; return; }
-  el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card" style="padding:12px 14px;cursor:pointer" onclick="toggleCard('${p.id}')">
+  el.innerHTML = list.map(p=>{ const est=estadoPrev(p); return `<div class="card" style="padding:12px 14px;cursor:pointer" onclick="toggleCard('${_idS(p.id)}')">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <div class="card-title">${p.notas||p.servicio||"Sin descripción"}</div>
-              ${p.vehiculo?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🚗 ${p.vehiculo}</div>`:''}
+          <div class="card-title">${_x(p.notas||p.servicio||"Sin descripción")}</div>
+              ${p.vehiculo?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🚗 ${_x(p.vehiculo)}</div>`:''}
               ${p.kmSalida&&p.kmRetorno&&parseFloat(p.kmRetorno)>parseFloat(p.kmSalida)?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(p.kmRetorno)-parseFloat(p.kmSalida)).toFixed(0)} km recorridos</div>`:''}
           ${p.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${p.correlativo}</span>`:''}
         </div>
@@ -3688,29 +3695,29 @@ function renderPreventivos(){
       </div>
       ${_ubLinkHTML(p)}${_contactoHTML(p)}
       <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
-        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${p.servicio||'—'}</span></div>
-        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${p.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo</span><span style="font-weight:600">${_x(p.servicio||'—')}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${_x(p.tecnico||'—')}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(p.inicioTrabajo||p.fechaInicio||'').replace('T',' ')||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fin de trabajo</span><span style="font-weight:600">${(p.finTrabajo||p.fechaFin||'').replace('T',' ')||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de reparación</span><span style="font-weight:600">${calcTiemposOrden(p).reparacion}</span></div>
         ${(p.ubicacion||'campo')==='campo'&&p.salidaPlantel?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de traslado</span><span style="font-weight:600">${calcTiemposOrden(p).traslado}</span></div>`:''}
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo total</span><span style="font-weight:600;color:var(--blue)">${calcTiemposOrden(p).total!=='—'?calcTiemposOrden(p).total:calcHoras(p.fechaInicio,p.fechaFin)}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${p.horometro||'—'} hrs</span></div>
-        ${p.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${p.vehiculo}</span></div>`:''}
+        ${p.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${_x(p.vehiculo)}</span></div>`:''}
         ${(p.kmSalida&&p.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(p.kmRetorno)-parseFloat(p.kmSalida)).toFixed(0)} km</span></div>`:''}
       </div>
-      ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${p.notas}</span></div>`:''}
-      ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${p.sugerencias}</span></div>`:''}
+      ${p.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Trabajo realizado</span><span style="font-weight:600;font-size:12px">${_x(p.notas)}</span></div>`:''}
+      ${p.sugerencias?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sugerencias próximo servicio</span><span style="font-weight:600;font-size:12px">${_x(p.sugerencias)}</span></div>`:''}
       ${(p.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===p.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
-        ${p.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${p.clienteNombre}</span></div>`:''}
-        ${p.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${p.clienteMarca}</span></div>`:''}
-        ${p.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${p.clienteModelo}</span></div>`:''}
-        ${p.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${p.clienteSerie}</span></div>`:''}
+        ${p.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${_x(p.clienteNombre)}</span></div>`:''}
+        ${p.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${_x(p.clienteMarca)}</span></div>`:''}
+        ${p.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${_x(p.clienteModelo)}</span></div>`:''}
+        ${p.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${_x(p.clienteSerie)}</span></div>`:''}
       </div>`:''}`
       : `
       ${(p.estado||'Pendiente')==='Pendiente'?`<style>#cb-${p.id} input,#cb-${p.id} textarea,#cb-${p.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${p.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
-      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${p.id}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
+      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','estado',this.value)"><option ${(p.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${p.estado==='En proceso'?'selected':''}>En proceso</option><option ${p.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${p.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(p.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
       ${_ubLinkHTML(p)}${_contactoHTML(p)}
@@ -3718,13 +3725,13 @@ function renderPreventivos(){
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${p.clienteNombre||''}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('prev','${p.id}','clienteNombre',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${p.clienteMarca||''}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('prev','${p.id}','clienteMarca',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${p.clienteModelo||''}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('prev','${p.id}','clienteModelo',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${p.clienteSerie||''}" placeholder="Número de serie" onchange="actualizarCampoOrden('prev','${p.id}','clienteSerie',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${_x(p.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteNombre',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${_x(p.clienteMarca||'')}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteMarca',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${_x(p.clienteModelo||'')}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteModelo',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${_x(p.clienteSerie||'')}" placeholder="Número de serie" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteSerie',this.value)"></div>
         </div>
       </div>`:``}
-      <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','servicio',this.value)">
+      <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','servicio',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.servicio==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
         <option value="Mantenimiento 500 horas" ${p.servicio==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option>
@@ -3738,20 +3745,20 @@ function renderPreventivos(){
         <option value="Cambio de aceite y filtros" ${p.servicio==='Cambio de aceite y filtros'?'selected':''}>🛢 Aceite y filtros</option>
         <option value="Otro mantenimiento preventivo" ${p.servicio==='Otro mantenimiento preventivo'?'selected':''}>Otro preventivo</option>
       </select></div>
-      ${(p.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🚗 Salida del plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','salidaPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
-      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.inicioTrabajo||p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.inicioTrabajo||p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','inicioTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
-      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.finTrabajo||p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.finTrabajo||p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','finTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
-      ${(p.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${p.id}','retornoPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
+      ${(p.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🚗 Salida del plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','salidaPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
+      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.inicioTrabajo||p.fechaInicio||p.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.inicioTrabajo||p.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','inicioTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
+      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.finTrabajo||p.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.finTrabajo||p.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','finTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
+      ${(p.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(p.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(p.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','retornoPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
       ${_tiemposHtml(p)}
-      <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${p.id}','horometro',this.value)"></div>
+      <div class="form-group"><label>Horómetro (hrs)</label><input type="number" value="${p.horometro||''}" placeholder="0" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','horometro',this.value)"></div>
       ${_gpsBloqueMant(p,'prev')}
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         ${_tecBtnsHTML('prev', p.id)}
       </div></div>
-      <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${p.id}','notas',this.value)">${p.notas||''}</textarea></div>
-      <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${p.id}','sugerencias',this.value)">${p.sugerencias||''}</textarea></div>
+      <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','notas',this.value)">${_x(p.notas||'')}</textarea></div>
+      <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','sugerencias',this.value)">${_x(p.sugerencias||'')}</textarea></div>
       ${_srChipsHTML(p.id)}
-      <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${p.id}','proximoMant',this.value)">
+      <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','proximoMant',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.proximoMant==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
         <option value="Mantenimiento 500 horas" ${p.proximoMant==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option>
@@ -3761,7 +3768,7 @@ function renderPreventivos(){
       ${(p.ubicacion||'campo')!=='plantel'?`
       <div style="margin-top:12px">
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
-        <select onchange="event.stopPropagation();actualizarCampoOrden('prev','${p.id}','vehiculo',this.value)">
+        <select onchange="event.stopPropagation();actualizarCampoOrden('prev','${_idS(p.id)}','vehiculo',this.value)">
           <option value="">— Seleccionar vehículo —</option>
           ${_optsVehiculos(p.vehiculo)}
         </select>
@@ -3769,9 +3776,9 @@ function renderPreventivos(){
       </div>
       `:''}
       `}
-      ${(est==='Completado' && p.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ ${_firmaTituloTxt(p)}</div><img src="${p.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
+      ${(est==='Completado' && p.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ ${_firmaTituloTxt(p)}</div><img src="${_img(p.firma)}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
       ${_renderFotosOrden(p.fotos)}
-      ${(est==='Completado' && p.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (est==='Completado' && p.vales && p.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${p.id}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
+      ${(est==='Completado' && p.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(p.id)}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (est==='Completado' && p.vales && p.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${_idS(p.id)}','preventivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${est==='Completado'
         ? ``
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -3880,15 +3887,15 @@ function _gpsFichaBorrar(equipoId){
 }
 function _gpsBloqueMant(o, tipo){
   if(((o.ubicacion)||'campo')==='plantel') return ''; // solo fuera del plantel
-  const esc = String(o.ubicacionLink||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const esc = _url(o.ubicacionLink).replace(/&/g,'&amp;');
   let h = '<div class="form-group"><label>📍 Ubicación del trabajo</label>';
   if(!o.ubicacionLink){
-    h += '<button onclick="event.stopPropagation();_gpsOrdenMant(\''+tipo+'\',\''+o.id+'\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>';
+    h += '<button onclick="event.stopPropagation();_gpsOrdenMant(\''+tipo+'\',\''+_idS(o.id)+'\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>';
     h += '<div style="font-size:11px;color:var(--text3,#888)">Obligatoria para cerrar la orden. El punto se guarda en la orden y en la ficha del equipo.</div>';
   } else {
     h += '<a href="'+esc+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;margin-bottom:6px">🗺 Ver en el mapa</a>';
     h += '<button data-l="'+esc+'" onclick="event.stopPropagation();_gpsCompartirLink(this.dataset.l)" style="display:block;width:100%;padding:9px;background:#eef7ee;color:#1a5c1a;border:1px solid #bfe3bf;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">📋 Copiar / compartir link</button>';
-    h += '<button onclick="event.stopPropagation();_gpsQuitar(\''+tipo+'\',\''+o.id+'\')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>';
+    h += '<button onclick="event.stopPropagation();_gpsQuitar(\''+tipo+'\',\''+_idS(o.id)+'\')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>';
     h += '<div style="font-size:11px;color:var(--text3,#888)">Punto guardado en la orden y en la ficha del equipo. Si está equivocado: quítalo y captúralo de nuevo.</div>';
   }
   return h + '</div>';
@@ -4279,12 +4286,12 @@ function renderCorrectivos(){
   el.innerHTML = list.map(c=>{
     const eq = DB.equipos.find(e=>e.id===c.equipoId)||{};
     const eqSub = eq.codigo ? eq.codigo+' \u2013 '+(eq.marca||'') : (c.clienteNombre?'Cliente: '+c.clienteNombre:'\u2014');
-    return `<div class="card" style="padding:12px 14px;cursor:pointer" onclick="toggleCard('${c.id}')">
+    return `<div class="card" style="padding:12px 14px;cursor:pointer" onclick="toggleCard('${_idS(c.id)}')">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <div class="card-title">${c.falla||'Sin descripción'}</div>
-              ${c.vehiculo?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🚗 ${c.vehiculo}</div>`:''}
+          <div class="card-title">${_x(c.falla||'Sin descripción')}</div>
+              ${c.vehiculo?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🚗 ${_x(c.vehiculo)}</div>`:''}
               ${c.kmSalida&&c.kmRetorno&&parseFloat(c.kmRetorno)>parseFloat(c.kmSalida)?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(c.kmRetorno)-parseFloat(c.kmSalida)).toFixed(0)} km recorridos</div>`:''}
           ${c.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:var(--accent-light,#e8edf5);color:var(--accent);padding:2px 8px;border-radius:10px">${c.correlativo}</span>`:''}
         </div>
@@ -4308,29 +4315,29 @@ function renderCorrectivos(){
       </div>
       ${_ubLinkHTML(c)}${_contactoHTML(c)}
       <div style="display:inline-flex;gap:10px;align-items:flex-end 12px;font-size:12px;margin-bottom:10px">
-        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${c.sistema||'—'}</span></div>
-        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${c.tecnico||'—'}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Sistema afectado</span><span style="font-weight:600">${_x(c.sistema||'—')}</span></div>
+        <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${_x(c.tecnico||'—')}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Inicio de trabajo</span><span style="font-weight:600">${(c.inicioTrabajo||c.fechaInicio||'').replace('T',' ')||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fin de trabajo</span><span style="font-weight:600">${(c.finTrabajo||c.fechaFin||'').replace('T',' ')||'—'}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de reparación</span><span style="font-weight:600">${calcTiemposOrden(c).reparacion}</span></div>
         ${(c.ubicacion||'campo')==='campo'&&c.salidaPlantel?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo de traslado</span><span style="font-weight:600">${calcTiemposOrden(c).traslado}</span></div>`:''}
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tiempo total</span><span style="font-weight:600;color:var(--blue)">${calcTiemposOrden(c).total!=='—'?calcTiemposOrden(c).total:calcHoras(c.fechaInicio,c.fechaFin)}</span></div>
         <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Horómetro</span><span style="font-weight:600">${c.horometro||'—'} hrs</span></div>
-        ${c.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${c.vehiculo}</span></div>`:''}
+        ${c.vehiculo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Vehículo</span><span style="font-weight:600">${_x(c.vehiculo)}</span></div>`:''}
         ${(c.kmSalida&&c.kmRetorno)?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Km recorridos</span><span style="font-weight:600">${(parseFloat(c.kmRetorno)-parseFloat(c.kmSalida)).toFixed(0)} km</span></div>`:''}
       </div>
-      ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${c.falla}</span></div>`:''}
-      ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${c.diagnostico}</span></div>`:''}
+      ${c.falla?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Falla / Trabajo a realizar</span><span style="font-weight:600;font-size:12px">${_x(c.falla)}</span></div>`:''}
+      ${c.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico / Trabajo realizado</span><span style="font-weight:600;font-size:12px">${_x(c.diagnostico)}</span></div>`:''}
       ${(c.equipoId==='__cliente__'||(DB.equipos||[]).find(e=>e.id===c.equipoId&&e.esEquipoCliente))?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px">
-        ${c.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${c.clienteNombre}</span></div>`:''}
-        ${c.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${c.clienteMarca}</span></div>`:''}
-        ${c.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${c.clienteModelo}</span></div>`:''}
-        ${c.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${c.clienteSerie}</span></div>`:''}
+        ${c.clienteNombre?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cliente</span><span style="font-weight:600">${_x(c.clienteNombre)}</span></div>`:''}
+        ${c.clienteMarca?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${_x(c.clienteMarca)}</span></div>`:''}
+        ${c.clienteModelo?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${_x(c.clienteModelo)}</span></div>`:''}
+        ${c.clienteSerie?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${_x(c.clienteSerie)}</span></div>`:''}
       </div>`:''}`
       : `
       ${(c.estado||'Pendiente')==='Pendiente'?`<style>#cb-${c.id} input,#cb-${c.id} textarea,#cb-${c.id} .tec-btn{pointer-events:none;opacity:0.5}#cb-${c.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
       <div style="border-top:1px solid var(--border);margin:10px 0 10px"></div>
-      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${c.id}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
+      <div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','estado',this.value)"><option ${(c.estado||'Pendiente')==='Pendiente'?'selected':''}>Pendiente</option><option ${c.estado==='En proceso'?'selected':''}>En proceso</option><option ${c.estado==='En espera de repuestos'?'selected':''}>En espera de repuestos</option><option ${c.estado==='En pausa'?'selected':''}>En pausa</option></select>
         ${(c.estado||'Pendiente')==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>
       ${_ubLinkHTML(c)}${_contactoHTML(c)}
@@ -4338,29 +4345,29 @@ function renderCorrectivos(){
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${c.clienteNombre||''}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('corr','${c.id}','clienteNombre',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${c.clienteMarca||''}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('corr','${c.id}','clienteMarca',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${c.clienteModelo||''}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('corr','${c.id}','clienteModelo',this.value)"></div>
-          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${c.clienteSerie||''}" placeholder="Número de serie" onchange="actualizarCampoOrden('corr','${c.id}','clienteSerie',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${_x(c.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteNombre',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${_x(c.clienteMarca||'')}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteMarca',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${_x(c.clienteModelo||'')}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteModelo',this.value)"></div>
+          <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${_x(c.clienteSerie||'')}" placeholder="Número de serie" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteSerie',this.value)"></div>
         </div>
       </div>`:``}
-      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>
+      <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${_idS(c.id)}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       ${_gpsBloqueMant(c,'corr')}
-      <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${c.id}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
-      <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${c.id}','falla',this.value)">${c.falla||''}</textarea></div>
-      ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🚗 Salida del plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','salidaPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
-      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.inicioTrabajo||c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.inicioTrabajo||c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','inicioTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
-      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.finTrabajo||c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.finTrabajo||c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','finTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
-      ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${c.id}','retornoPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
+      <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
+      <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','falla',this.value)">${_x(c.falla||'')}</textarea></div>
+      ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🚗 Salida del plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','salidaPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
+      <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.inicioTrabajo||c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.inicioTrabajo||c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','inicioTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
+      <div class="form-group"><label>✅ Fin de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.finTrabajo||c.fechaFin||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','finTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.finTrabajo||c.fechaFin||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','finTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
+      ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🏭 Retorno al plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.retornoPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','retornoPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.retornoPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','retornoPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
       ${_tiemposHtml(c)}
       <div class="form-group"><label>Técnico(s)</label><div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         ${_tecBtnsHTML('corr', c.id)}
       </div></div>
-      <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${c.id}','diagnostico',this.value)">${c.diagnostico||''}</textarea></div>
+      <div class="form-group"><label>Diagnóstico / Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','diagnostico',this.value)">${_x(c.diagnostico||'')}</textarea></div>
       ${_srChipsHTML(c.id)}
       ${(c.ubicacion||'campo')!=='plantel'?`
       <div class="form-group"><label>Vehículo <span style="color:#c9211e">*</span></label>
-        <select onchange="event.stopPropagation();actualizarCampoOrden('corr','${c.id}','vehiculo',this.value)">
+        <select onchange="event.stopPropagation();actualizarCampoOrden('corr','${_idS(c.id)}','vehiculo',this.value)">
           <option value="">— Seleccionar vehículo —</option>
           ${_optsVehiculos(c.vehiculo)}
         </select>
@@ -4368,9 +4375,9 @@ function renderCorrectivos(){
       `:''}
       `}
       <div style="margin-top:12px">
-      ${(c.estado==='Completado' && c.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ ${_firmaTituloTxt(c)}</div><img src="${c.firma}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
+      ${(c.estado==='Completado' && c.firma) ? `<div style="margin:10px 0"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">✍️ ${_firmaTituloTxt(c)}</div><img src="${_img(c.firma)}" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>` : ''}
       ${_renderFotosOrden(c.fotos)}
-      ${(c.estado==='Completado' && c.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (c.estado==='Completado' && c.vales && c.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${c.id}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
+      ${(c.estado==='Completado' && c.viaticos) ? `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(c.id)}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : (c.estado==='Completado' && c.vales && c.vales.length ? `<button onclick="event.stopPropagation();abrirValeMant('${_idS(c.id)}','correctivo')" style="width:100%;margin-bottom:8px;padding:11px;background:#856404;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🍽 Ver Vale</button>` : '')}
       ${c.estado==='Completado'
         ? ``
         : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -4653,9 +4660,9 @@ function renderHistorial(){
       var html='<div class="card" style="padding:12px 14px;border-left:3px solid #1f3864;margin-bottom:8px">';
       html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">';
       html+='<div><div style="font-size:13px;font-weight:700">🚌 '+x.correlativo+'</div>';
-      html+='<div style="font-size:12px;color:var(--text2)">'+(x.placa||'')+(x.tipoVehiculo?' — '+x.tipoVehiculo:'')+'</div></div>';
+      html+='<div style="font-size:12px;color:var(--text2)">'+_x(x.placa||'')+(x.tipoVehiculo?' — '+x.tipoVehiculo:'')+'</div></div>';
       html+='<span class="badge badge-ok">Completado</span></div>';
-      if(x.notas) html+='<div class="detail-row"><span class="detail-lbl">Descripción</span><span>'+x.notas+'</span></div>';
+      if(x.notas) html+='<div class="detail-row"><span class="detail-lbl">Descripción</span><span>'+_x(x.notas)+'</span></div>';
       html+='<div class="detail-row"><span class="detail-lbl">Técnico(s)</span><span>'+tecs+'</span></div>';
       if(x.fecha) html+='<div class="detail-row"><span class="detail-lbl">Fecha</span><span>'+x.fecha+' '+(x.horaIni||'')+'</span></div>';
       html+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: '+(x.fechaCierre||'—')+'</div></div>';
@@ -4666,13 +4673,13 @@ function renderHistorial(){
       var html='<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:8px">';
       html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">';
       html+='<div><div style="font-size:13px;font-weight:700">📋 '+x.correlativo+'</div>';
-      html+='<div style="font-size:12px;color:var(--text2)">'+(x.modelo||'')+(x.marca?' — '+x.marca:'')+'</div></div>';
+      html+='<div style="font-size:12px;color:var(--text2)">'+_x(x.modelo||'')+(x.marca?' — '+x.marca:'')+'</div></div>';
       html+='<span class="badge badge-ok">Completado</span></div>';
-      if(x.cliente) html+='<div class="detail-row"><span class="detail-lbl">Cliente</span><span>'+x.cliente+'</span></div>';
-      if(x.diagnostico) html+='<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span>'+x.diagnostico+'</span></div>';
+      if(x.cliente) html+='<div class="detail-row"><span class="detail-lbl">Cliente</span><span>'+_x(x.cliente)+'</span></div>';
+      if(x.diagnostico) html+='<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span>'+_x(x.diagnostico)+'</span></div>';
       html+='<div class="detail-row"><span class="detail-lbl">Técnico(s)</span><span>'+tecs+'</span></div>';
       if(x.fecha) html+='<div class="detail-row"><span class="detail-lbl">Fecha</span><span>'+x.fecha+' '+(x.horaIni||'')+' – '+(x.horaFin||'')+'</span></div>';
-      if(x.firma) html+='<div style="margin-top:8px"><img src="'+x.firma+'" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+      if(x.firma) html+='<div style="margin-top:8px"><img src="' + _img(x.firma) + '" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
       html+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: '+(x.fechaCierre||'—')+'</div></div>';
       return html;
     }
@@ -4681,7 +4688,7 @@ function renderHistorial(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
           <div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700">📅 ${x.servicio}</span>
+              <span style="font-size:13px;font-weight:700">📅 ${_x(x.servicio)}</span>
               ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
             </div>
             <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
@@ -4691,8 +4698,8 @@ function renderHistorial(){
         <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
         <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
         ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
-        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
-        ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${x.notas}</span></div>`:''}
+        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${_x(x.tecnico||'—')}</span></div>
+        ${x.notas?`<div class="detail-row"><span class="detail-lbl">Trabajo realizado</span><span class="detail-val">${_x(x.notas)}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCompletado||x._f)}</div>
         <div style="display:flex;gap:8px;margin-top:10px"></div>
       </div>`;
@@ -4701,7 +4708,7 @@ function renderHistorial(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
           <div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700">🔧 ${x.falla||'Correctivo'}</span>
+              <span style="font-size:13px;font-weight:700">🔧 ${_x(x.falla||'Correctivo')}</span>
               ${x.correlativo?`<span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;background:#e8edf5;color:#1f3864;padding:2px 8px;border-radius:10px">${x.correlativo}</span>`:''}
             </div>
             <div style="font-size:12px;color:var(--text2);margin-top:3px;font-weight:500">${eqLabel}</div>
@@ -4711,8 +4718,8 @@ function renderHistorial(){
         <div class="detail-row"><span class="detail-lbl">Inicio</span><span>${fmtDT(x.fechaInicio||x.fecha)}</span></div>
         <div class="detail-row"><span class="detail-lbl">Fin</span><span>${fmtDT(x.fechaFin||'')}</span></div>
         ${horas!=='—'?`<div class="detail-row" style="background:var(--blue-bg)"><span class="detail-lbl" style="color:var(--blue);font-weight:600">⏱ Horas trabajadas</span><span style="font-weight:700;font-family:'DM Mono',monospace;color:var(--blue)">${horas}</span></div>`:''}
-        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${x.tecnico||'—'}</span></div>
-        ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${x.diagnostico}</span></div>`:''}
+        <div class="detail-row"><span class="detail-lbl">Técnico</span><span class="detail-val">${_x(x.tecnico||'—')}</span></div>
+        ${x.diagnostico?`<div class="detail-row"><span class="detail-lbl">Diagnóstico</span><span class="detail-val">${_x(x.diagnostico)}</span></div>`:''}
         <div style="font-size:11px;color:var(--text3);margin-top:6px">Cerrado: ${fmt(x.fechaCierre||x._f)}</div>
         <div style="display:flex;gap:8px;margin-top:10px"></div>
       </div>`;
@@ -4779,7 +4786,7 @@ function editarOrdenHistorial(tipo, id){
             <option value="">-- Seleccionar --</option>${sistOptions}
           </select></div>
         <div class="form-group"><label>Falla reportada</label>
-          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.falla=this.value">${orden.falla||''}</textarea></div>`}
+          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.falla=this.value">${_x(orden.falla||'')}</textarea></div>`}
         <div class="form-group"><label>Fecha inicio</label>
           <input type="date" value="${(orden.fechaInicio||orden.fecha||'').slice(0,10)}"
             onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.fechaInicio=this.value"></div>
@@ -4794,7 +4801,7 @@ function editarOrdenHistorial(tipo, id){
         <div class="form-group"><label>${isPrev?'Trabajo realizado':'Diagnóstico / Trabajo realizado'}</label>
           <textarea rows="3" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.${isPrev?'notas':'diagnostico'}=this.value">${isPrev?(orden.notas||''):(orden.diagnostico||'')}</textarea></div>
         ${isPrev ? `<div class="form-group"><label>Sugerencias</label>
-          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.sugerencias=this.value">${orden.sugerencias||''}</textarea></div>` : ''}
+          <textarea rows="2" onchange="const o=DB.ordenesCerradas.find(x=>x.id==='${id}');if(o)o.sugerencias=this.value">${_x(orden.sugerencias||'')}</textarea></div>` : ''}
         <button onclick="saveDB();renderHistorial();document.getElementById('edit-hist-modal').remove();toast('Orden actualizada ✓')" 
           style="width:100%;padding:13px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px">
           💾 Guardar cambios
@@ -5652,15 +5659,15 @@ function renderRevisiones(){
         card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${(r.tecnicos||[]).filter(Boolean).join(', ')||'—'}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha inicio</span><span style="font-weight:600">${r.fecha||'—'} ${r.horaIni||''}</span></div>
-          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Placa</span><span style="font-weight:600">${r.placa||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Placa</span><span style="font-weight:600">${_x(r.placa||'—')}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo de vehículo</span><span style="font-weight:600">${r.tipoVehiculo||'—'}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Largo × Ancho × Alto</span><span style="font-weight:600">${r.largo||'—'} × ${r.ancho||'—'} × ${r.alto||'—'} mts</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 1-2</span><span style="font-weight:600">${r.ejeUnoDos?r.ejeUnoDos+' mts':'—'}</span></div>
           ${r.ejeDosTres?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 2-3</span><span style="font-weight:600">${r.ejeDosTres} mts</span></div>`:''}
           ${r.ejeTresCuatro?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 3-4</span><span style="font-weight:600">${r.ejeTresCuatro} mts</span></div>`:''}
         </div>
-        ${r.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Descripción / Notas</span><span style="font-weight:600;font-size:12px">${r.notas}</span></div>`:''}
-        ${r.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
+        ${r.notas?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Descripción / Notas</span><span style="font-weight:600;font-size:12px">${_x(r.notas)}</span></div>`:''}
+        ${r.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(r.id)}','revision')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${r.fechaCierre||''}</div>`;
         card += `</div>`;
         card += `</div>`;
@@ -5669,56 +5676,56 @@ function renderRevisiones(){
       card += est==='Pendiente'?`<style>#cb-rev-${r.id} input,#cb-rev-${r.id} textarea{pointer-events:none;opacity:0.5}#cb-rev-${r.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
-        <select class="estado-select" onchange="event.stopPropagation();actualizarRevision('${r.id}','estado',this.value)">
+        <select class="estado-select" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','estado',this.value)">
           ${['Pendiente','En proceso','En pausa','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
         </select>
         ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>`;
       // Campos editables
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${r.fecha||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${r.horaIni||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${r.fecha||''}" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${r.horaIni||''}" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `</div>`;
-      card += `<div class="form-group"><label>Hora final</label><input type="time" value="${r.horaFin||''}" onchange="event.stopPropagation();actualizarRevision('${r.id}','horaFin',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Placa del vehículo</label><input value="${r.placa||''}" placeholder="Ej: PBM-1234" onchange="event.stopPropagation();actualizarRevision('${r.id}','placa',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Hora final</label><input type="time" value="${r.horaFin||''}" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','horaFin',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Placa del vehículo</label><input value="${_x(r.placa||'')}" placeholder="Ej: PBM-1234" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','placa',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Tipo de vehículo</label>
-        <select onchange="event.stopPropagation();actualizarRevision('${r.id}','tipoVehiculo',this.value)">
+        <select onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','tipoVehiculo',this.value)">
           <option value="">— Seleccionar —</option>
           ${['Microbus','Bus','Camion no articulado','Cabezal','Cisterna','Contenedor','Remolque'].map(v=>`<option ${r.tipoVehiculo===v?'selected':''}>${v}</option>`).join('')}
         </select></div>`;
       card += `<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">📏 Dimensiones (mts)</div>`;
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Largo (mts)</label><input type="number" value="${r.largo||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','largo',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Ancho (mts)</label><input type="number" value="${r.ancho||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','ancho',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Largo (mts)</label><input type="number" value="${r.largo||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','largo',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Ancho (mts)</label><input type="number" value="${r.ancho||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','ancho',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `</div>`;
-      card += `<div class="form-group"><label>Alto (mts)</label><input type="number" value="${r.alto||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','alto',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Distancia entre eje 1-2 (mts)</label><input type="number" value="${r.ejeUnoDos||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','ejeUnoDos',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Distancia entre eje 2-3 (mts) — opcional</label><input type="number" value="${r.ejeDosTres||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','ejeDosTres',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Distancia entre eje 3-4 (mts) — opcional</label><input type="number" value="${r.ejeTresCuatro||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${r.id}','ejeTresCuatro',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Alto (mts)</label><input type="number" value="${r.alto||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','alto',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Distancia entre eje 1-2 (mts)</label><input type="number" value="${r.ejeUnoDos||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','ejeUnoDos',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Distancia entre eje 2-3 (mts) — opcional</label><input type="number" value="${r.ejeDosTres||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','ejeDosTres',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Distancia entre eje 3-4 (mts) — opcional</label><input type="number" value="${r.ejeTresCuatro||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','ejeTresCuatro',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
-        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',0,this.value)">
+        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${_idS(r.id)}',0,this.value)">
           <option value="">— Seleccionar —</option>
           ${_nxLista('revision', ['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], r.tecnicos).map(t=>`<option ${(r.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
-        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${r.id}',1,this.value)">
+        <select onchange="event.stopPropagation();actualizarRevisionTecnico('${_idS(r.id)}',1,this.value)">
           <option value="">— Ninguno —</option>
           ${_nxLista('revision', ['Francisco Narvaez','Miguel Lopez','Elvis Pineda','Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], r.tecnicos).map(t=>`<option ${(r.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
-      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${r.id}','notas',this.value)">${r.notas||''}</textarea></div>`;
+      card += `<div class="form-group"><label>Descripción / Notas</label><textarea rows="2" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','notas',this.value)">${_x(r.notas||'')}</textarea></div>`;
       // Fotos de la orden
       card += `<div class="form-group">
         <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
           ${(r.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
-            <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.revisiones||[]).find(x=>x.id==='${r.id}')||{}).fotos&&((DB.revisiones||[]).find(x=>x.id==='${r.id}')).fotos[${i}])">
-            <button onclick="event.stopPropagation();eliminarFotoOrden('rev','${r.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+            <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.revisiones||[]).find(x=>x.id==='${_idS(r.id)}')||{}).fotos&&((DB.revisiones||[]).find(x=>x.id==='${_idS(r.id)}')).fotos[${i}])">
+            <button onclick="event.stopPropagation();eliminarFotoOrden('rev','${_idS(r.id)}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
           </div>`).join('')}
         </div>
-        ${(r.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">📷 Cámara${(r.fotos||[]).length>0?' ('+(r.fotos||[]).length+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${r.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+        ${(r.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${_idS(r.id)}',this)">📷 Cámara${(r.fotos||[]).length>0?' ('+(r.fotos||[]).length+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('rev','${_idS(r.id)}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
       </div>`;
-      if(r.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${r.id}','revision')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
-      card += `<button onclick="event.stopPropagation();finalizarRevision('${r.id}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
+      if(r.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(r.id)}','revision')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
+      card += `<button onclick="event.stopPropagation();finalizarRevision('${_idS(r.id)}')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
     card += `</div>`;
@@ -5882,13 +5889,13 @@ function renderEvaluaciones(){
         card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Técnico(s)</span><span style="font-weight:600">${(v.tecnicos||[]).filter(Boolean).join(', ')||'—'}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha</span><span style="font-weight:600">${v.fecha||'—'} ${v.horaIni||''}–${v.horaFin||''}</span></div>
-          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${v.modelo||'—'}</span></div>
-          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${v.marca||'—'}</span></div>
-          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${v.serie||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Modelo</span><span style="font-weight:600">${_x(v.modelo||'—')}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Marca</span><span style="font-weight:600">${_x(v.marca||'—')}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Serie</span><span style="font-weight:600">${_x(v.serie||'—')}</span></div>
         </div>
-        ${v.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;font-size:12px">${v.diagnostico}</span></div>`:''}
-        ${v.firma?`<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ ${_firmaTituloTxt(v).toUpperCase()}</div><img src="${v.firma}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
-        ${v.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${v.id}','evaluacion')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
+        ${v.diagnostico?`<div style="margin-bottom:8px"><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Diagnóstico</span><span style="font-weight:600;font-size:12px">${_x(v.diagnostico)}</span></div>`:''}
+        ${v.firma?`<div class="form-group"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ ${_firmaTituloTxt(v).toUpperCase()}</div><img src="${_img(v.firma)}" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>`:''}
+        ${v.viaticos ? `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(v.id)}','evaluacion')" style="width:100%;margin-bottom:8px;padding:11px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Ver Viáticos</button>` : ''}
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px;font-size:12px;color:#15803d;text-align:center">✅ Orden finalizada — ${v.fechaCierre||''}</div>`;
         card += `</div>`;
         card += `</div>`;
@@ -5897,39 +5904,39 @@ function renderEvaluaciones(){
       card += est==='Pendiente'?`<style>#cb-eval-${v.id} input,#cb-eval-${v.id} textarea{pointer-events:none;opacity:0.5}#cb-eval-${v.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
       // Selector de estado
       card += `<div class="form-group"><label>Estado de la orden</label>
-        <select class="estado-select" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','estado',this.value)">
+        <select class="estado-select" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','estado',this.value)">
           ${['Pendiente','En proceso','En pausa','Cancelado'].map(s=>`<option ${est===s?'selected':''}>${s}</option>`).join('')}
         </select>
         ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}
       </div>`;
       // Campos editables
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${v.fecha||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${v.horaIni||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${v.fecha||''}" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','fecha',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${v.horaIni||''}" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','horaIni',this.value)" oninput="event.stopPropagation()"></div>`;
       card += `</div>`;
-      card += `<div class="form-group"><label>Hora final</label><input type="time" value="${v.horaFin||''}" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horaFin',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Modelo</label><input value="${v.modelo||''}" placeholder="Ej: BAOLI KBE-20" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','modelo',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Marca</label><input value="${v.marca||''}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Serie</label><input value="${v.serie||''}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
-      card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Hora final</label><input type="time" value="${v.horaFin||''}" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','horaFin',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Modelo</label><input value="${_x(v.modelo||'')}" placeholder="Ej: BAOLI KBE-20" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','modelo',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Marca</label><input value="${_x(v.marca||'')}" placeholder="Ej: BAOLI" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','marca',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Serie</label><input value="${_x(v.serie||'')}" placeholder="Ej: B16091J00102" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','serie',this.value)" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Horómetro del equipo (hrs) <span style="color:#c9211e">*</span></label><input type="number" value="${v.horometro||''}" placeholder="Ej: 1250" min="0" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','horometro',this.value)" oninput="event.stopPropagation()"></div>`;
       if((v.ubicacion||'campo')!=='plantel'){
         card += `<div class="form-group"><label>🚗 Vehículo de traslado <span style="color:#c9211e">*</span></label>
-          <select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','vehiculo',this.value)">
+          <select onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','vehiculo',this.value)">
             <option value="">— Seleccionar —</option>
             ${_optsVehiculos(v.vehiculo)}
           </select></div>`;
         card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px">
         </div>`;
       }
-      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','diagnostico',this.value)">${v.diagnostico||''}</textarea></div>`;
-      card += `<div class="form-group"><label>🔜 Mantenimiento sugerido</label><select onchange="event.stopPropagation();actualizarEvaluacion('${v.id}','mantSugerido',this.value)"><option value="">-- Seleccionar --</option><option value="Mantenimiento 250 horas" ${v.mantSugerido==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option><option value="Mantenimiento 500 horas" ${v.mantSugerido==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option><option value="Mantenimiento 1000 horas" ${v.mantSugerido==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option><option value="Mantenimiento 2000 horas" ${v.mantSugerido==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option></select></div>`;
+      card += `<div class="form-group"><label>Diagnóstico</label><textarea rows="3" onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','diagnostico',this.value)">${_x(v.diagnostico||'')}</textarea></div>`;
+      card += `<div class="form-group"><label>🔜 Mantenimiento sugerido</label><select onchange="event.stopPropagation();actualizarEvaluacion('${_idS(v.id)}','mantSugerido',this.value)"><option value="">-- Seleccionar --</option><option value="Mantenimiento 250 horas" ${v.mantSugerido==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option><option value="Mantenimiento 500 horas" ${v.mantSugerido==='Mantenimiento 500 horas'?'selected':''}>⏱ 500 horas</option><option value="Mantenimiento 1000 horas" ${v.mantSugerido==='Mantenimiento 1000 horas'?'selected':''}>⏱ 1,000 horas</option><option value="Mantenimiento 2000 horas" ${v.mantSugerido==='Mantenimiento 2000 horas'?'selected':''}>⏱ 2,000 horas</option></select></div>`;
       card += `<div class="form-group"><label>Técnico 1</label>
-        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',0,this.value)">
+        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${_idS(v.id)}',0,this.value)">
           <option value="">— Seleccionar —</option>
           ${_nxLista('tec', ['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], v.tecnicos).map(t=>`<option ${(v.tecnicos||[])[0]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
       card += `<div class="form-group"><label>Técnico 2 (opcional)</label>
-        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${v.id}',1,this.value)">
+        <select onchange="event.stopPropagation();actualizarEvaluacionTecnico('${_idS(v.id)}',1,this.value)">
           <option value="">— Ninguno —</option>
           ${_nxLista('tec', ['Jonathan Martinez','Sergio Madrid','Elkin Perez','Kevin Deras','Fernando Benavides','Eliberto Peña'], v.tecnicos).map(t=>`<option ${(v.tecnicos||[])[1]===t?'selected':''}>${t}</option>`).join('')}
         </select></div>`;
@@ -5938,11 +5945,11 @@ function renderEvaluaciones(){
         <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
         <div id="fotos-eval-${v.id}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
           ${(v.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
-            <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.evaluaciones||[]).find(x=>x.id==='${v.id}')||{}).fotos&&((DB.evaluaciones||[]).find(x=>x.id==='${v.id}')).fotos[${i}])">
-            <button onclick="event.stopPropagation();eliminarFotoOrden('eval','${v.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+            <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.evaluaciones||[]).find(x=>x.id==='${_idS(v.id)}')||{}).fotos&&((DB.evaluaciones||[]).find(x=>x.id==='${_idS(v.id)}')).fotos[${i}])">
+            <button onclick="event.stopPropagation();eliminarFotoOrden('eval','${_idS(v.id)}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
           </div>`).join('')}
         </div>
-        ${(v.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">📷 Cámara${(v.fotos||[]).length>0?' ('+((v.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${v.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+        ${(v.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${_idS(v.id)}',this)">📷 Cámara${(v.fotos||[]).length>0?' ('+((v.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosOrden('eval','${_idS(v.id)}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
       </div>`;
       card += _cliCampoHTML(v, "actualizarEvaluacion('"+v.id+"','cliente',this.value.trim());actualizarEvaluacion('"+v.id+"','clienteOrden',this.value.trim())");
       // Firma del cliente
@@ -5955,8 +5962,8 @@ function renderEvaluaciones(){
           <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
           <span class="firma-guardada-tag" style="display:none;font-size:11px;color:#27ae60;font-weight:800;margin-right:6px">✓ Firma guardada</span><button onclick="event.stopPropagation();guardarFirmaOrden('${firmaId}')" style="font-size:12px;background:#27ae60;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:700;margin-right:6px">💾 Guardar firma</button><button onclick="event.stopPropagation();limpiarFirma('${firmaId}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
         </div></div>`;
-      if(v.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${v.id}','evaluacion')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
-      card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${v.id}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
+      if(v.viaticos) card += `<button onclick="event.stopPropagation();verViaticosResumen('${_idS(v.id)}','evaluacion')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>`;
+      card += `<button onclick="event.stopPropagation();finalizarEvaluacion('${_idS(v.id)}')" style="width:100%;padding:12px;background:#2d6a9f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">✅ Finalizar orden</button>`;
       card += `</div>`;
     }
     card += `</div>`;
