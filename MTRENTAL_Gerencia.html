@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='758f5396f443';
+  var APP_VERSION='1c90cb967d54';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -14318,8 +14318,8 @@ function _cliOrdenAlCerrar(o){
   }
   function tarjetaAcceso(a, yo, tipo){
     var emp = a.empleadoId ? nombreEmpleado(a.empleadoId) : '';
-    return '<div class="card"' + (tipo === 'rech' ? ' style="margin-top:8px"' : '') + '><div class="nm">' + esc((a.nombre || '') + ' ' + (a.apellido || '')) + (a.uid === yo ? ' <span class="tag" style="margin:0 0 0 6px;background:#e8eefc;color:#1f3864">este equipo</span>' : '') + (a.rol === 'gerencia' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px">Gerencia</span>' : '') + '</div>'
-      + (emp ? '<div class="sub">🪪 Empleado: <b>' + esc(emp) + '</b></div>' : '')
+    return '<div class="card"' + (tipo === 'rech' ? ' style="margin-top:8px"' : '') + '><div class="nm">' + esc((a.nombre || '') + ' ' + (a.apellido || '')) + (a.uid === yo ? ' <span class="tag" style="margin:0 0 0 6px;background:#e8eefc;color:#1f3864">este equipo</span>' : '') + (a.rol === 'gerencia' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px">Gerencia</span>' : '') + (a.rol === 'consulta' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px;background:#eef4ff;color:#1f3864">👁 Consulta</span>' : '') + '</div>'
+      + (emp ? '<div class="sub">🪪 Empleado: <b>' + esc(emp) + '</b></div>' : '') + (a.area ? '<div class="sub">🏢 ' + esc(a.area) + '</div>' : '')
       + '<div class="sub">📱 ' + esc(a.dispositivo || '—') + ' · ' + esc(String(a.app || '').replace('.html', '').replace(/_/g, ' ')) + '</div>'
       + '<div class="sub">Pidió: ' + fechaHora(a.creado) + ' · Última vez: ' + fechaHora(a.ultimaVez) + '</div>'
       + '<div class="acc">' + (tipo === 'pend' ? '<button class="bp" data-a="acc-aprobar" data-id="' + esc(a.uid) + '">✅ Aprobar</button><button data-a="acc-rechazar" data-id="' + esc(a.uid) + '" style="color:#c9211e;border-color:#f1b5b3">✖ Rechazar</button>'
@@ -14333,19 +14333,20 @@ function _cliOrdenAlCerrar(o){
     // ¿Esta persona ya tiene otro dispositivo de Gerencia? (por el empleado enlazado o por el mismo nombre registrado)
     var gerOtro = function(empId){ return listaAccesos().some(function(x){ return x.uid !== uid && x.estado === 'aprobado' && x.rol === 'gerencia'
       && ((empId && x.empleadoId === empId) || normNombre((x.nombre || '') + ' ' + (x.apellido || '')) === nom); }); };
-    var rolDef = (a.estado === 'aprobado' && a.rol) ? a.rol : (gerOtro(sug) ? 'gerencia' : 'campo');
+    var rolDef = (a.estado === 'aprobado' && a.rol) ? a.rol : (gerOtro(sug) ? 'gerencia' : (!sug && /Comercial/i.test(a.app || '')) ? 'consulta' : 'campo');
     var AVISO_GER = 'ℹ️ Esta persona ya tiene otro dispositivo con permiso de Gerencia.';
     var w = ventana('✅ Aprobar acceso de ' + esc((a.nombre || '') + ' ' + (a.apellido || '')),
       '<div class="sub" style="margin-bottom:4px">📱 ' + esc(a.dispositivo || '') + ' · ' + esc(String(a.app || '').replace('.html', '')) + '</div>'
       + '<label>¿Quién es en Personal? <span style="font-weight:400;color:#667085">(cuenta el nombre de la ficha, no el que escribió)</span></label>'
       + '<select id="acc-emp"><option value="">— Elegir empleado —</option>' + gente.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === sug ? ' selected' : '') + '>' + esc(p.n) + ' — ' + esc(p.c) + ' (' + EMP_NOMBRE[p.empresa] + ')</option>'; }).join('') + '</select>'
-      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef !== 'gerencia' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
+      + '<label>Área o empresa <span style="font-weight:400;color:#667085">(opcional, para quien no es empleado)</span></label><input id="acc-area" placeholder="Ej: Ventas" value="' + esc(a.area || '') + '" autocomplete="off">'
+      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef === 'campo' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="consulta"' + (rolDef === 'consulta' ? ' selected' : '') + '>Consulta (solo ver y descargar reportes, p. ej. Comercial)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
       function(w){
         var emp = val(w, 'acc-emp'), rol = val(w, 'acc-rol');
-        if(!emp){ alert('Elige a qué empleado de Personal corresponde este teléfono.'); return; }
+        if(!emp && rol !== 'consulta'){ alert('Elige a qué empleado de Personal corresponde este teléfono.\n\nSi no es empleado (por ejemplo, alguien de Comercial que solo ve reportes), elige el permiso «Consulta».'); return; }
         var p = gente.find(function(x){ return x.id === emp; });
         pin(function(){
-          var cambios = { estado: 'aprobado', rol: rol, empleadoId: emp, empleadoEmpresa: p ? p.empresa : '', aprobadoPor: (window._nxAcceso || {}).uid || '', aprobadoEn: Date.now() };
+          var cambios = { estado: 'aprobado', rol: rol, empleadoId: emp || '', empleadoEmpresa: p ? p.empresa : '', area: val(w, 'acc-area'), aprobadoPor: (window._nxAcceso || {}).uid || '', aprobadoEn: Date.now() };
           window._fbDB.ref('accesos/' + uid).update(cambios).then(function(){ w.remove(); aviso('Acceso aprobado ✓'); }).catch(function(e){ aviso('No se guardó: ' + e.message, true); });
         }, '🔒 Aprobar acceso');
       });
@@ -14354,6 +14355,9 @@ function _cliOrdenAlCerrar(o){
     w.querySelector('#acc-rol').insertAdjacentElement('afterend', hint);
     // al cambiar de empleado, volver a sugerir el permiso
     w.querySelector('#acc-emp').addEventListener('change', function(){ if(gerOtro(this.value)){ w.querySelector('#acc-rol').value = 'gerencia'; hint.textContent = AVISO_GER; } else hint.textContent = ''; });
+    var AVISO_CONS = '👁 Consulta: puede ver y descargar reportes. Cuando se active el bloqueo, no podrá modificar nada.';
+    if(rolDef === 'consulta') hint.textContent = AVISO_CONS;
+    w.querySelector('#acc-rol').addEventListener('change', function(){ hint.textContent = this.value === 'consulta' ? AVISO_CONS : (this.value === 'gerencia' && gerOtro(val(w, 'acc-emp'))) ? AVISO_GER : ''; });
   }
   function cambiarEstadoAcceso(uid, estado, titulo){
     var a = accesos[uid]; if(!a) return;
