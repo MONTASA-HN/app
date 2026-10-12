@@ -188,6 +188,9 @@ Supervisiones**. No asumir que es el mismo.
   posición sacada de la copia local** (`DB.x.findIndex` / `indexOf` / `length-1`): usar
   `_fbRefPorId('<raíz>/<lista>/'+idx+…).set()/.update()`, que verifica el `id` en el servidor
   (desde 2026-09-29, TRAMPAS T2). Si la posición salió de un snapshot del servidor, `window._fbDB.ref` sirve.
+- **Texto seguro (desde 2026-10-12)**: bloque `// ══ TEXTO SEGURO` al inicio del `<body>` de las 9 apps. Todo dato que
+  viene de la base y se mete en HTML pasa por `_x()` (texto), `_img()` (firmas/fotos en `src`), `_url()` (enlaces y
+  `window.open`) o `_idS()` (ids dentro de `onclick`). Los mensajes de WhatsApp y el texto plano no se tocan.
 - **Sincronizador (desde 2026-09-29, TRAMPAS T7)**: bloque `// ══ GUARDADO POR REGISTRO (sincronizador)`,
   **idéntico** en MTG, MTS, MTT, MTL, MTC, MHG, MHS, MHT; se arranca con `_Sync.iniciar(raíz, _fbDB)` junto a
   `window._fbDB = firebase.database()`. Maneja logistica, preventivos, correctivos, revisiones, evaluaciones,
@@ -780,3 +783,5 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-09-29 — Botón «Compartir PDF» oculto en órdenes abiertas; mapa que no tapa el menú ☰;
   la app vieja `MONTASA_Tecnicos_MONHACO.html` se reemplaza por una redirección. Se mandan
   a la papelera 29 órdenes de prueba (copia en `respaldo_pruebas_20260929`).
+- 2026-10-12 — Auditoría, etapa 1: textos de la base mostrados siempre como texto (`_x`, `_img`, `_url`, `_idS`)
+  en las 9 apps; Gerencia lee Personal y Accesos con la sesión del equipo.

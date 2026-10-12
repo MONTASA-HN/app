@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='39bd7bc45173';
+  var APP_VERSION='db0c1536bab8';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -680,6 +680,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 </head>
 <body>
 <script>
+// ══ TEXTO SEGURO (2026-10-12, auditoría) ══ Lo que viene de la base se muestra como texto, nunca como código.
+window._x = function(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+window._idS = function(t){ return String(t == null ? '' : t).replace(/[^A-Za-z0-9_\-]/g, ''); };
+window._url = function(u){ u = String(u == null ? '' : u).trim(); return /^(https?:\/\/|data:application\/pdf)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+</script>
+<script>
 // ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
 // El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
 // teléfono). La primera vez pide nombre y apellido y deja accesos/<uid> como «pendiente» para que Gerencia lo apruebe.
@@ -1331,7 +1338,7 @@ function _mthTablaHTML(equipos, mes, lecturas, editable){
         + 'onchange="mthGuardar(\''+e.id+'\')" '
         + 'style="width:92px;padding:8px 6px;border:1.5px solid '+(tiene?'#18A303':'#ccc')+';border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td>'
         + '<td style="'+td+';text-align:center;padding:3px 4px">'
-        + '<button id="mth-del-'+e.id+'" onclick="mthBorrar(\''+e.id+'\')" title="Borrar lectura" '
+        + '<button id="mth-del-'+e.id+'" onclick="mthBorrar(\''+_idS(e.id)+'\')" title="Borrar lectura" '
         + 'style="display:'+(tiene?'inline-block':'none')+';padding:7px 9px;border:1px solid #f5c6c6;background:#fdeaea;color:#c00;border-radius:6px;font-size:13px;cursor:pointer">🗑</button></td>';
     } else {
       celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'
@@ -1917,7 +1924,7 @@ function getEq2LabelLog(eq2Id){
   if(!eq2Id) return '';
   const eq2 = DB.equipos.find(function(e){return e.id===eq2Id;});
   if(!eq2) return '';
-  return '<div style="font-size:12px;color:var(--text3)">🚜 2° Equipo: <strong>'+eq2.codigo+' – '+(eq2.marca||'')+'</strong></div>';
+  return '<div style="font-size:12px;color:var(--text3)">🚜 2° Equipo: <strong>'+eq2.codigo+' – '+_x(eq2.marca||'')+'</strong></div>';
 }
 
 function calcDuracionLog(ini, fin){
@@ -2041,15 +2048,15 @@ function _gpsAplicaLog(o){
 }
 function _gpsBloqueLog(o, tipo){
   if(!_gpsAplicaLog(o)) return '';
-  const esc = String(o.ubicacionLink||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const esc = _url(o.ubicacionLink).replace(/&/g,'&amp;');
   let h = '<div class="form-group"><label>📍 Ubicación del trabajo</label>';
   if(!o.ubicacionLink){
-    h += '<button onclick="event.stopPropagation();_gpsOrdenLog(\''+o.id+'\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>';
+    h += '<button onclick="event.stopPropagation();_gpsOrdenLog(\''+_idS(o.id)+'\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button>';
     h += '<div style="font-size:11px;color:var(--text3,#888)">Obligatoria para cerrar la orden. El punto se guarda en la orden y en la ficha del equipo.</div>';
   } else {
     h += '<a href="'+esc+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;margin-bottom:6px">🗺 Ver en el mapa</a>';
     h += '<button data-l="'+esc+'" onclick="event.stopPropagation();_gpsCompartirLink(this.dataset.l)" style="display:block;width:100%;padding:9px;background:#eef7ee;color:#1a5c1a;border:1px solid #bfe3bf;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">📋 Copiar / compartir link</button>';
-    h += '<button onclick="event.stopPropagation();_gpsQuitarLog(\''+o.id+'\')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>';
+    h += '<button onclick="event.stopPropagation();_gpsQuitarLog(\''+_idS(o.id)+'\')" style="display:block;width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:6px">🗑 Quitar ubicación</button>';
     h += '<div style="font-size:11px;color:var(--text3,#888)">Punto guardado en la orden y en la ficha del equipo. Si está equivocado: quítalo y captúralo de nuevo.</div>';
   }
   return h + '</div>';
@@ -2156,11 +2163,11 @@ function renderOrdenesLog(){
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
           ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
-          ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${o.descripcion.slice(0,60)}</div>`:''}
+          ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${_x(o.descripcion.slice(0,60))}</div>`:''}
           ${_ubLinkHTML(o)}${_contactoHTML(o)}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${_rentaConGrua(o) ? _gruaLabelLog(o) : ''}
-          ${o.motorista&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${o.motorista}</div>`:''}
+          ${o.motorista&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${_x(o.motorista)}</div>`:''}
           ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}">▼</span>
@@ -2174,7 +2181,7 @@ function renderOrdenesLog(){
         <div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>
         <!-- Estado -->
         <div class="form-group"><label>Estado</label>
-          <select class="estado-select" onchange="event.stopPropagation();actualizarLog('${o.id}','estado',this.value)">
+          <select class="estado-select" onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','estado',this.value)">
             <option ${o.estado==='Pendiente'?'selected':''}>Pendiente</option>
             <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
             <option ${o.estado==='Cancelado'?'selected':''}>Cancelado</option>
@@ -2224,7 +2231,7 @@ function renderOrdenesLog(){
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
         ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+          <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
@@ -2232,29 +2239,29 @@ function renderOrdenesLog(){
         <!-- 5 Operadores para apoyo a mantenimiento (pueden trabajar en simultáneo) -->
         ${(o.tipoLogistica==='apoyo_mantenimiento')?['operador','operador2','operador3','operador4','operador5'].map((k,i)=>`
         <div class="form-group"><label>Operador ${i+1}${i>0?' (opcional)':''}</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','${k}',this.value)">
+          <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','${k}',this.value)">
             <option value="">— Seleccionar —</option>
             ${_listaApoyoLog(o[k], OPERADORES_LOGISTICA).map(op=>`<option value="${op}" ${o[k]===op?'selected':''}>${op}</option>`).join('')}
           </select></div>`).join(''):``}
         <!-- Motorista: solo fuera del plantel -->
         ${(o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))?`
         <div class="form-group"><label>Operador (opcional — puede ir un técnico o un operador)</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','operador',this.value)">
+          <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','operador',this.value)">
             <option value="">— Sin operador —</option>
             ${_viatPersonal().map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
         ${(_rentaConGrua(o)||(o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
-          <select onchange="event.stopPropagation();actualizarLog('${o.id}','motorista',this.value)">
+          <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','motorista',this.value)">
             <option value="">— Seleccionar motorista —</option>
             ${(o.tipoLogistica==='atencion_compras' ? _listaApoyoLog(o.motorista, MOTORISTAS_LOGISTICA.concat(OPERADORES_LOGISTICA)) : MOTORISTAS_LOGISTICA).map(m=>`<option value="${m}" ${o.motorista===m?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>`:``}
         <!-- Descripción -->
         <div class="form-group"><label>Descripción / Trabajo realizado</label>
-          <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${o.id}','descripcion',this.value)"
-            oninput="event.stopPropagation()">${o.descripcion||''}</textarea>
+          <textarea rows="3" onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','descripcion',this.value)"
+            oninput="event.stopPropagation()">${_x(o.descripcion||'')}</textarea>
         </div>
         <!-- Foto -->
         <div class="form-group">
@@ -2262,11 +2269,11 @@ function renderOrdenesLog(){
           ${_fotosPendientes(o) ? (_hidratarFotos(o), _fotosCargandoHTML()) : ''}
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
             ${(o.fotos||[]).map((f,i)=>`<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0">
-              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.logistica||[]).find(x=>x.id==='${o.id}')||{}).fotos&&((DB.logistica||[]).find(x=>x.id==='${o.id}')).fotos[${i}])">
-              <button onclick="event.stopPropagation();eliminarFotoLog('${o.id}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
+              <img src="${f}" style="width:100%;height:100%;object-fit:cover" onclick="event.stopPropagation();_verFotoGrande(((DB.logistica||[]).find(x=>x.id==='${_idS(o.id)}')||{}).fotos&&((DB.logistica||[]).find(x=>x.id==='${_idS(o.id)}')).fotos[${i}])">
+              <button onclick="event.stopPropagation();eliminarFotoLog('${_idS(o.id)}',${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button>
             </div>`).join('')}
           </div>
-          ${(o.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">📷 Cámara${(o.fotos||[]).length>0?' ('+((o.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${o.id}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
+          ${(o.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${_idS(o.id)}',this)">📷 Cámara${(o.fotos||[]).length>0?' ('+((o.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${_idS(o.id)}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
         </div>
         <!-- Cliente de la orden (renta, entrega, retiro, apoyo_mantenimiento) -->
         ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?_cliCampoHTML(o,"actualizarLog('"+o.id+"','clienteOrden',this.value.trim())"):''}
@@ -2279,7 +2286,7 @@ function renderOrdenesLog(){
             onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
             <span style="font-size:11px;color:var(--text3)">Firme con el dedo</span>
-            <button onclick="event.stopPropagation();guardarFirmaLog('${o.id}')" style="font-size:12px;background:#27ae60;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:700;margin-right:6px">💾 Guardar firma</button><button onclick="event.stopPropagation();limpiarFirma('firma-log-${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
+            <button onclick="event.stopPropagation();guardarFirmaLog('${_idS(o.id)}')" style="font-size:12px;background:#27ae60;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:700;margin-right:6px">💾 Guardar firma</button><button onclick="event.stopPropagation();limpiarFirma('firma-log-${o.id}')" style="font-size:12px;background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer">🗑 Borrar</button>
           </div>
           ${o.firma?'<div style="font-size:12px;color:#27ae60;margin-top:4px">✓ Firma guardada</div>':''}
         </div>`:``}
@@ -2299,7 +2306,7 @@ function renderOrdenesLog(){
         <!-- P9: Motorista asignado (entrega/retiro/compras) -->
         ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras') && o.motorista ? `
         <div style="margin-top:8px;font-size:13px;background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px">
-          <span style="color:var(--text3)">🚗 Motorista: </span><strong>${o.motorista}</strong>
+          <span style="color:var(--text3)">🚗 Motorista: </span><strong>${_x(o.motorista)}</strong>
         </div>` : ''}
         <!-- PUNTO 2: Km recorridos si aplica transporte -->
         ${o.kmSalida && o.kmRetorno ? `
@@ -2348,7 +2355,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Estado</div><div style="font-weight:600">'+(o.estado||'Completado')+'</div></div>';
   if(eqLabel&&eqLabel!=='—') h += '<div style="grid-column:1/-1"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Equipo</div><div style="font-weight:600">'+eqLabel+'</div></div>';
   if(o.operador)         h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Operador(es)</div><div style="font-weight:600">'+[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')+'</div></div>';
-  if(o.motorista)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Motorista</div><div style="font-weight:600">'+o.motorista+'</div></div>';
+  if(o.motorista)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Motorista</div><div style="font-weight:600">'+_x(o.motorista)+'</div></div>';
   if(o.prioridad)        h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Prioridad</div><div style="font-weight:600">'+o.prioridad+'</div></div>';
   if(o.equipoCompra)     h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Vehículo</div><div style="font-weight:600">'+o.equipoCompra+'</div></div>';
   if(o.diasRenta && _rentaIniTexto(o)) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Inicio de renta</div><div style="font-weight:600">'+_rentaIniTexto(o)+'</div></div>';
@@ -2363,7 +2370,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   // Km recorridos — todas las órdenes con vehículo fuera del plantel
   if(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))
     h += '<div style="background:#e8f4e8;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:13px"><span style="color:#1a5c1a;font-weight:600">🛣 Km recorridos: '+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+' km</span><span style="color:var(--text3);font-size:11px;margin-left:8px">(Salida '+o.kmSalida+' → Retorno '+o.kmRetorno+')</span></div>';
-  if(o.descripcion) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Descripción</div><div style="font-size:13px;background:var(--surface2);border-radius:6px;padding:8px">'+o.descripcion+'</div></div>';
+  if(o.descripcion) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Descripción</div><div style="font-size:13px;background:var(--surface2);border-radius:6px;padding:8px">'+_x(o.descripcion)+'</div></div>';
   h += '<div style="display:inline-flex;gap:10px;align-items:flex-end;margin-bottom:10px">';
   h += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🕐 Inicio</div><div style="font-size:13px;font-weight:700;color:var(--accent)">'+_fdt(o.fechaInicio)+'</div></div>';
   h += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🕑 Fin</div><div style="font-size:13px;font-weight:700;color:var(--accent)">'+_fdt(o.fechaFin)+'</div></div>';
@@ -2371,15 +2378,15 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
   if(o.fechaCierre) h += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">📅 Cerrado: '+fmt(o.fechaCierre)+'</div>';
   if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px;background:#dce6f1;border-radius:var(--radius-sm);padding:10px"><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">⏱ HORAS EQUIPO</div><div style="font-size:18px;font-weight:800;color:#1f3864">'+hEq+'</div></div><div style="text-align:center"><div style="font-size:10px;color:#1f3864;font-weight:600">👷 HORAS OPERADOR</div><div style="font-size:18px;font-weight:800;color:#1f3864">'+hOp+'</div></div></div>';
-  if(o.foto) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">📷 Foto</div><img src="'+o.foto+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)" onclick="event.stopPropagation();_verFotoGrandeLog(\''+o.id+'\',0)"></div>';
-  if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="'+o.firma+'" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+  if(o.foto) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">📷 Foto</div><img src="' + _img(o.foto) + '" style="width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius-sm)" onclick="event.stopPropagation();_verFotoGrandeLog(\''+_idS(o.id)+'\',0)"></div>';
+  if(o.firma) h += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">✍️ Firma</div><img src="' + _img(o.firma) + '" style="width:100%;max-height:100px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
   if(_fotosPendientes(o)){ h += _fotosCargandoHTML(); _hidratarFotos(o); }
   if(o.fotos&&o.fotos.length){
     h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📷 Fotografías ('+o.fotos.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
-    o.fotos.forEach(function(f,i){ h += '<div style="width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0" onclick="event.stopPropagation();_verFotoGrandeLog(\''+o.id+'\','+i+')"><img src="'+f+'" style="width:100%;height:100%;object-fit:cover"></div>'; });
+    o.fotos.forEach(function(f,i){ h += '<div style="width:80px;height:80px;border-radius:8px;overflow:hidden;cursor:zoom-in;flex-shrink:0" onclick="event.stopPropagation();_verFotoGrandeLog(\''+_idS(o.id)+'\','+i+')"><img src="'+f+'" style="width:100%;height:100%;object-fit:cover"></div>'; });
     h += '</div></div>';
   }
-  if(o.viaticos) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos</span><button onclick="event.stopPropagation();abrirViaticos(\''+o.id+'\')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button></div>';
+  if(o.viaticos) h += '<div style="display:flex;gap:6px;margin-bottom:8px"><span style="font-size:11px;background:#dce6f1;color:#1f3864;padding:2px 10px;border-radius:10px;font-weight:600">📋 Viáticos</span><button onclick="event.stopPropagation();abrirViaticos(\''+_idS(o.id)+'\')" style="font-size:11px;background:#1f3864;color:white;padding:2px 10px;border-radius:10px;border:none;cursor:pointer">Ver / PDF</button></div>';
   if(o.vales&&o.vales.length) h += '<div style="background:#fff3cd;border-radius:6px;padding:8px 10px;font-size:12px;color:#856404"><strong>🍽 Vale:</strong> '+o.vales.map(v=>({desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media noche'}[v.tipo]||v.tipo)).join(', ')+' — L. '+o.vales.reduce((s,v)=>s+v.monto,0).toFixed(2)+'</div>';
   return h;
 }
@@ -3872,7 +3879,7 @@ function abrirViaticos(ordenId){
     <div style="background:#1f3864;padding:14px 16px;border-radius:var(--radius) var(--radius) 0 0;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:15px;font-weight:700;color:white">📋 Resumen de Viáticos</div>
-        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo} · ${v.destino||'—'}</div>
+        <div style="font-size:12px;color:#a0c0e8">${orden.correlativo} · ${_x(v.destino||'—')}</div>
       </div>
       <button onclick="cerrarViaticos()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">×</button>
     </div>
@@ -3880,9 +3887,9 @@ function abrirViaticos(ordenId){
       <!-- Info básica -->
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px">
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
-          <div><span style="color:var(--text3)">Gestor</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
-          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${v.vehiculo||'—'}</strong></div>
-          <div><span style="color:var(--text3)">Destino</span><br><strong>${v.destino||'—'}</strong></div>
+          <div><span style="color:var(--text3)">Gestor</span><br><strong>${_x(v.gestor_nombre||'—')}</strong></div>
+          <div><span style="color:var(--text3)">Vehículo</span><br><strong>${_x(v.vehiculo||'—')}</strong></div>
+          <div><span style="color:var(--text3)">Destino</span><br><strong>${_x(v.destino||'—')}</strong></div>
           <div><span style="color:var(--text3)">KM total</span><br><strong>${d.km} km</strong></div>
         </div>
       </div>
@@ -4023,7 +4030,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
     <input type="date" id="v-fecha" value="${v.fecha_doc||hoy}">
   </div>
   <div class="form-group"><label>Cliente</label>
-    <input type="text" id="v-cliente" value="${v.cliente||''}" placeholder="Nombre del cliente">
+    <input type="text" id="v-cliente" value="${_x(v.cliente||'')}" placeholder="Nombre del cliente">
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     <div class="form-group"><label>Destino</label>
@@ -4042,7 +4049,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   </div>
   <div id="v-intl" style="display:${_viatEsInternacional(v.destino)?'block':'none'}">${_viatAvisoIntlHTML(v.destino)}</div>
   <div class="form-group"><label>Motivo del viaje</label>
-    <input type="text" id="v-motivo" value="${v.motivo||''}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
+    <input type="text" id="v-motivo" value="${_x(v.motivo||'')}" placeholder="ENTREGA DE EQUIPO, RETIRO, VISITA...">
   </div>
   <!-- GESTOR -->
   <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
@@ -4106,7 +4113,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
     </div>
   </div>
   <div class="form-group"><label>Observaciones</label>
-    <textarea id="v-obs" rows="2" placeholder="Observaciones del viaje...">${v.observaciones||''}</textarea>
+    <textarea id="v-obs" rows="2" placeholder="Observaciones del viaje...">${_x(v.observaciones||'')}</textarea>
   </div>
   <!-- BOTONES -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px">
@@ -4201,7 +4208,7 @@ function renderLiquidacionForm(v, montoSol){
   <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
       <div><span style="color:var(--text3)">Monto solicitado:</span><br><strong>L. ${montoSol.toFixed(2)}</strong></div>
-      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${v.gestor_nombre||'—'}</strong></div>
+      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${_x(v.gestor_nombre||'—')}</strong></div>
     </div>
   </div>
   <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🧾 Facturas del viaje (máx. 14)</div>
@@ -4648,16 +4655,16 @@ function _buildSolicitudHTML(v, orden){
     <div><h1>MONTASA HANDLING CO.</h1><div style="font-size:10pt">SOLICITUD DE VIÁTICOS</div></div>
     <div class="sub">REGISTRO N°: ${v.registro||''}<br>CÓDIGO: GL-FO-10 | VER: 6<br>FECHA: ${v.fecha_doc||''}</div>
   </div>
-  <div class="ot-bar">N° ORDEN DE TRABAJO: <span>${orden.correlativo||''}</span> &nbsp;|&nbsp; ${orden.descripcion||''}</div>
+  <div class="ot-bar">N° ORDEN DE TRABAJO: <span>${orden.correlativo||''}</span> &nbsp;|&nbsp; ${_x(orden.descripcion||'')}</div>
   <table><tr>
     <th>NOMBRE DEL CLIENTE</th><th>LUGAR DE DESTINO</th><th>MOTIVO DEL VIAJE</th>
   </tr><tr>
-    <td>${v.cliente||''}</td><td>${v.destino||''}</td><td>${v.motivo||''}</td>
+    <td>${_x(v.cliente||'')}</td><td>${_x(v.destino||'')}</td><td>${_x(v.motivo||'')}</td>
   </tr></table>
   <table><tr>
     <th>NOMBRE DEL GESTOR</th><th>N° DE IDENTIDAD</th><th>N° DE CUENTA</th><th>ÁREA/DEPTO</th>
   </tr><tr>
-    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||_gestorDato(v.gestor_nombre,'id')}</td><td>${v.gestor_cuenta||_gestorDato(v.gestor_nombre,'cuenta')}</td><td>${v.gestor_depto||''}</td>
+    <td>${_x(v.gestor_nombre||'')}</td><td>${v.gestor_id||_gestorDato(v.gestor_nombre,'id')}</td><td>${v.gestor_cuenta||_gestorDato(v.gestor_nombre,'cuenta')}</td><td>${_x(v.gestor_depto||'')}</td>
   </tr></table>
   <table>
     <tr>
@@ -4685,14 +4692,14 @@ function _buildSolicitudHTML(v, orden){
       <th class="mid">COMBUSTIBLE</th><th class="mid">OTROS</th><th class="mid">TOTAL FLETE</th>
     </tr>
     <tr>
-      <td>${v.vehiculo||''}</td><td>${vehCod}</td><td class="num">${d.km} km</td>
+      <td>${_x(v.vehiculo||'')}</td><td>${vehCod}</td><td class="num">${d.km} km</td>
       <td class="num">${_pj.n}</td><td class="num">L.${cpU}</td>
       <td class="num">L.${tPeaj}</td><td class="num">L.${comb}</td>
       <td class="num">L.${otros}</td><td class="num tot"><strong>L.${tPeaj+comb+otros}</strong></td>
     </tr>
   </table>
   <div class="presup">
-    <div class="presup-left"><strong>OBSERVACIONES:</strong><br>${v.observaciones||''}</div>
+    <div class="presup-left"><strong>OBSERVACIONES:</strong><br>${_x(v.observaciones||'')}</div>
     <div class="presup-right">
       <div style="font-size:9pt;font-weight:700;margin-bottom:6px;text-align:center">PRESUPUESTO CONSOLIDADO</div>
       <div class="row"><span>Alimentación:</span><span>L. ${tAlim}</span></div>
@@ -4756,8 +4763,8 @@ function _buildLiquidacionHTML(v, orden){
   </div>
   <div class="info-bar">
     <div><strong>Monto solicitado:</strong> L. ${montoSol.toFixed(2)}</div>
-    <div><strong>Destinatario:</strong> ${v.gestor_nombre||'—'}</div>
-    <div><strong>Destino:</strong> ${v.destino||'—'}</div>
+    <div><strong>Destinatario:</strong> ${_x(v.gestor_nombre||'—')}</div>
+    <div><strong>Destino:</strong> ${_x(v.destino||'—')}</div>
   </div>
   <table>
     <tr><th style="width:30px">N°</th><th>DESCRIPCIÓN</th><th style="width:70px">FECHA</th><th style="width:80px">N° DOCUMENTO</th><th style="width:70px" class="num">MONTO</th></tr>
@@ -4768,7 +4775,7 @@ function _buildLiquidacionHTML(v, orden){
   <div style="font-size:7pt;margin-bottom:10px">NOTA: Reporte de documentación física entregada a Finanzas</div>
   <div class="firmas">
     <div class="firma">MIGUEL ORELLANA<br>___________<br>LOGÍSTICA</div>
-    <div class="firma">${v.gestor_nombre||''}<br>___________<br>GESTOR</div>
+    <div class="firma">${_x(v.gestor_nombre||'')}<br>___________<br>GESTOR</div>
     <div class="firma"><br>___________<br>ACUSE DE RECIBIDO FINANZAS</div>
   </div>
   </body></html>`;

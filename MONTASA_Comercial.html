@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c9e71b24ce29';
+  var APP_VERSION='03fbe274be64';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -603,6 +603,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
+<script>
+// ══ TEXTO SEGURO (2026-10-12, auditoría) ══ Lo que viene de la base se muestra como texto, nunca como código.
+window._x = function(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+window._idS = function(t){ return String(t == null ? '' : t).replace(/[^A-Za-z0-9_\-]/g, ''); };
+window._url = function(u){ u = String(u == null ? '' : u).trim(); return /^(https?:\/\/|data:application\/pdf)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+</script>
 <script>
 // ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
 // El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
@@ -1429,11 +1436,11 @@ function renderEquipos(){
       const itemsFiltrados = filtroActivo ? items.filter(e=>(e.estado||'DISPONIBLE')===filtroActivo) : items;
       itemsFiltrados.forEach(e=>{
         const est = e.estado||'DISPONIBLE';
-        out += `<div class="${cardClass(est)}" onclick="abrirModal('${e.id}')" style="padding:14px 16px;margin-top:8px">
+        out += `<div class="${cardClass(est)}" onclick="abrirModal('${_idS(e.id)}')" style="padding:14px 16px;margin-top:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
             <div>
               <div style="font-weight:600;font-size:18px;line-height:1.2">${e.codigo}</div>
-              <div style="font-size:14px;color:var(--text2);margin-top:4px">${e.marca}</div>
+              <div style="font-size:14px;color:var(--text2);margin-top:4px">${_x(e.marca)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               ${bEstado(est)}
@@ -1479,12 +1486,12 @@ function renderEquipos(){
         out += `<div class="empty" style="padding:16px">Sin equipos vendidos${vBuscar?' encontrados':''}</div>`;
       } else {
         vList.forEach(v => {
-          out += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${v.id}')">
+          out += `<div class="card" style="padding:14px 16px;margin-top:8px;border-left:3px solid #f39c12;cursor:pointer" onclick="abrirModalVendido('${_idS(v.id)}')">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
               <div>
                 <div style="font-weight:600;font-size:18px;line-height:1.2">${v.codigo}</div>
-                <div style="font-size:13px;color:var(--text2);margin-top:2px">${v.marca||''} ${v.modelo||''}</div>
-                <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:2px">${_x(v.marca||'')} ${_x(v.modelo||'')}</div>
+                <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${_x(v.serie||'Sin serie')}</div>
                 ${v.clienteVenta?`<div style="font-size:12px;color:#f39c12;margin-top:2px">👤 ${v.clienteVenta}</div>`:''}
               </div>
               <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -1592,7 +1599,7 @@ function abrirModal(id){
         <div>
           <div style="font-size:26px;font-weight:800;color:${estadoColor}">${e.codigo}</div>
           <div style="font-size:13px;color:var(--text2);margin-top:2px">${e.desc||(e.marca+' · '+e.tipo)}</div>
-          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${e.serie||'Sin serie'}</div>
+          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${_x(e.serie||'Sin serie')}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <button onclick="cerrarModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text2);line-height:1">×</button>
@@ -1603,13 +1610,13 @@ function abrirModal(id){
     <div style="padding:14px 16px;overflow-y:auto;max-height:60vh">
       <!-- Info operativa -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-        ${e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${e.ubicacion}</div></div>`:''}
-        ${e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${e.cliente}</div></div>`:''}
+        ${e.ubicacion?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📍 Ubicación</div><div style="font-size:13px;font-weight:600">${_x(e.ubicacion)}</div></div>`:''}
+        ${e.cliente?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">👤 Cliente</div><div style="font-size:13px;font-weight:600">${_x(e.cliente)}</div></div>`:''}
         ${e.horometro?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⏱ Horómetro</div><div style="font-size:13px;font-weight:600">${e.horometro} hrs</div></div>`:''}
         ${e.combustible?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">⛽ Combustible</div><div style="font-size:13px;font-weight:600">${e.combustible}</div></div>`:''}
       </div>
-      ${e.observaciones?`<div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📝 Observaciones</div><div style="font-size:13px;color:var(--text)">${e.observaciones}</div></div>`:''}
-      ${e.foto?`<div style="margin-bottom:14px"><img src="${e.foto}" onclick="verFotoCompleta('${e.foto}')" style="width:100%;border-radius:var(--radius-sm);object-fit:cover;max-height:180px;cursor:zoom-in"></div>`:''}
+      ${e.observaciones?`<div style="background:var(--amber-bg);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">📝 Observaciones</div><div style="font-size:13px;color:var(--text)">${_x(e.observaciones)}</div></div>`:''}
+      ${e.foto?`<div style="margin-bottom:14px"><img src="${_img(e.foto)}" onclick="verFotoCompleta('${e.foto}')" style="width:100%;border-radius:var(--radius-sm);object-fit:cover;max-height:180px;cursor:zoom-in"></div>`:''}
       <!-- Especificaciones técnicas -->
       ${specsFields.length?`
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text3);margin-bottom:8px">Especificaciones técnicas</div>
@@ -1746,8 +1753,8 @@ function abrirModalVendido(id){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div>
           <div style="font-size:22px;font-weight:700">${v.codigo}</div>
-          <div style="font-size:13px;color:var(--text2)">${v.marca||''} ${v.modelo||''}</div>
-          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${v.serie||'Sin serie'}</div>
+          <div style="font-size:13px;color:var(--text2)">${_x(v.marca||'')} ${_x(v.modelo||'')}</div>
+          <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace">${_x(v.serie||'Sin serie')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;background:#fef3e2;color:#f39c12;padding:4px 10px;border-radius:10px;font-weight:700">VENDIDO</span>
@@ -1770,7 +1777,7 @@ function abrirModalVendido(id){
           <input type="text" id="vnd-cliente" value="${v.clienteVenta||''}" placeholder="Nombre del cliente"
             style="width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);font-size:14px">
         </div>
-        <button onclick="guardarTodoVendido('${v.id}')"
+        <button onclick="guardarTodoVendido('${_idS(v.id)}')"
           style="width:100%;margin-top:8px;padding:14px;background:#1f3864;color:white;border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:600;cursor:pointer">
           🔒 Guardar cambios
         </button>
@@ -2071,7 +2078,7 @@ async function copiarImagenEquipo(){
       + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">'+String(subT||'').replace(/[<>]/g,'')+'</div></div>'
       + '<div style="flex-shrink:0"><img src="'+_LOGO_MONTASA_B64+'" style="height:44px;display:block"></div>'
       + '</div>'
-      + (e.foto ? '<div style="padding:14px 22px 0"><img src="'+e.foto+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;border:1px solid #e2e0d8"></div>' : '')
+      + (e.foto ? '<div style="padding:14px 22px 0"><img src="' + _img(e.foto) + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;border:1px solid #e2e0d8"></div>' : '')
       + '<div style="padding:18px 22px 6px">'+campos.map(function(c){ return _campoRow(c[0], c[1]); }).join('')+'</div>'
       + '<div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde NEXO — '+new Date().toLocaleDateString('es-HN')+'</div>';
     document.body.appendChild(cont);
@@ -2271,7 +2278,7 @@ async function _copiarImagenOrdenIMG(tipo, id){
       </div>
       ${o.firma ? `<div style="padding:14px 22px 6px">
         <div style="color:#6b6960;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px">Firma del cliente</div>
-        <img src="${o.firma}" style="width:100%;max-height:110px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff">
+        <img src="${_img(o.firma)}" style="width:100%;max-height:110px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff">
       </div>` : ''}
       <div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">
         Documento generado desde NEXO — ${new Date().toLocaleDateString('es-HN')}
@@ -2560,7 +2567,7 @@ function _cardOrdenCom(x, tipo){
   var color=esRV?'#18A303':'#E8811A', bgc=esRV?'#e3f5d9':'#fdead9';
   var titulo=esRV?(x.notas||x.placa||'Revisión Físico-Técnica'):(x.modelo||x.serie||'Evaluación de Equipo');
   var ico=esRV?'✅ Revisión':'📄 Evaluación';
-  var h='<div class="card" style="padding:12px 14px;border-left:3px solid '+color+';margin-bottom:8px;cursor:pointer" onclick="_toggleOrdCom(\''+x.id+'\')">';
+  var h='<div class="card" style="padding:12px 14px;border-left:3px solid '+color+';margin-bottom:8px;cursor:pointer" onclick="_toggleOrdCom(\''+_idS(x.id)+'\')">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1;min-width:0">';
   h+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">';
   h+='<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:'+bgc+';color:'+color+';padding:2px 7px;border-radius:10px">'+(x.correlativo||'—')+'</span>';
@@ -2579,7 +2586,7 @@ function _detalleOrdenCom(x, tipo, est){
   d+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">';
   campos.forEach(function(c){ if(c[1]&&c[1]!=='—'){ d+='<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">'+c[0]+'</span><span style="font-weight:600;color:var(--text);word-break:break-word">'+c[1]+'</span></div>'; } });
   d+='</div>';
-  if(x.firma) d+='<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="'+x.firma+'" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
+  if(x.firma) d+='<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="' + _img(x.firma) + '" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:6px;background:#fff"></div>';
   if(_fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos&&x.fotos.length){
     d+=_btnDescFotos(x.id);
@@ -2589,7 +2596,7 @@ function _detalleOrdenCom(x, tipo, est){
   }
   // PDF solo de evaluaciones completadas; la revisión físico-técnica sigue como imagen
   if(tipo==='revision' || x.completado===true || x.estado==='Completado')
-    d+='<button onclick="event.stopPropagation();copiarImagenOrden(\''+(tipo==='revision'?'revision':'evaluacion')+'\',\''+x.id+'\')" style="width:100%;margin-top:4px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">'+(tipo==='revision'?'📤 Compartir imagen':'📄 Compartir PDF')+'</button>';
+    d+='<button onclick="event.stopPropagation();copiarImagenOrden(\''+(tipo==='revision'?'revision':'evaluacion')+'\',\''+_idS(x.id)+'\')" style="width:100%;margin-top:4px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">'+(tipo==='revision'?'📤 Compartir imagen':'📄 Compartir PDF')+'</button>';
   d+='</div>';
   return d;
 }
@@ -2885,7 +2892,7 @@ function _detalleOrdenCom(x, tipo, est){
       meter(p, n);
       if(!cabe(p)){ n.remove(); p = nueva(hdr2('Continuación de la orden')); meter(p, n); }
     });
-    var f = el('<div class="op-firma"><div><div class="z">'+(d.firma?'<img src="'+d.firma+'">':'')+'</div><div class="n">Recibido conforme</div></div></div>');
+    var f = el('<div class="op-firma"><div><div class="z">'+(d.firma?'<img src="' + _img(d.firma) + '">':'')+'</div><div class="n">Recibido conforme</div></div></div>');
     meter(p, f);
     if(!cabe(p)){ f.remove(); p = nueva(hdr2('Continuación de la orden')); meter(p, f); }
     if(d.fotos.length){

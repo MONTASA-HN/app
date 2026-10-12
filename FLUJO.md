@@ -468,3 +468,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-09-29 (`9a4619e`) — PDF de órdenes (MTG, MTS, MTC, MHG, MHS) y campo Cliente
   obligatorio al cerrar (MTT, MHT, MTL, MTG, MTS, MHG, MHS). No cambian el flujo de
   datos: agregan el campo `clienteOrden` a las órdenes.
+- 2026-10-12 — Texto seguro (las 9 apps): bloque `TEXTO SEGURO` al inicio del `<body>`; las plantillas de órdenes,
+  solicitudes, firmas y enlaces usan `_x`/`_img`/`_url`/`_idS`. No cambia el flujo de datos.
