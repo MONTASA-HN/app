@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1c90cb967d54';
+  var APP_VERSION='354abab9001b';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13863,9 +13863,22 @@ function _cliOrdenAlCerrar(o){
   function escribir(ruta, valor){ if(!window._fbDB) return Promise.reject(new Error('sin conexión')); return window._fbDB.ref('rrhh/' + R + '/' + ruta).set(valor); }
   function pin(cb, titulo){ if(typeof solicitarPINAccion === 'function') solicitarPINAccion(cb, titulo || '🔒 Personal', 'Ingresa tu PIN de Gerencia'); else cb(); }
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
+  // Personal y Accesos solo se leen con sesión de un equipo aprobado como Gerencia (reglas de la base)
+  function miUid(){ return (window._nxAcceso || {}).uid || null; }
+  var vigilandoMiAcceso = false;
+  function sinPermiso(){
+    datos._sinPermiso = true; escuchando = false; escuchandoAcc = false;
+    if(document.getElementById('vac-ov')) pintar();
+    // cuando este equipo quede aprobado como Gerencia, volver a intentar solo
+    var uid = miUid(); if(!uid || vigilandoMiAcceso) return; vigilandoMiAcceso = true;
+    window._fbDB.ref('accesos/' + uid).on('value', function(s){ var a = s.val() || {};
+      if(datos._sinPermiso && a.estado === 'aprobado' && a.rol === 'gerencia'){ datos._sinPermiso = false; escuchar(); escucharAccesos(); } });
+  }
   function escuchar(){
-    if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
+    if(escuchando || !window._fbDB) return;
+    if(!miUid()){ setTimeout(escuchar, 1500); return; }   // esperar la sesión del equipo
+    escuchando = true;
+    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; datos._sinPermiso = false; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); }, sinPermiso);
     window._fbDB.ref(R + '/rrhh/plantilla').on('value', function(s){ datos.plantilla = s.val() || null; datos._plantCargada = true; publicarPlantilla(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
@@ -13914,6 +13927,8 @@ function _cliOrdenAlCerrar(o){
     var ov = document.getElementById('vac-ov'); if(!ov) return;
     ov.querySelectorAll('.vt button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v') === vista); });
     var c = document.getElementById('vac-c');
+    if(datos._sinPermiso){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:30px">🔒</div><div class="nm" style="margin:6px 0">Este equipo no tiene permiso de Gerencia</div>'
+      + '<div class="sub">Personal y Accesos solo se ven en equipos aprobados como <b>Gerencia</b>. Desde un equipo de Gerencia: Personal → 📱 Accesos → este equipo → «Cambiar empleado / rol» → Permiso: Gerencia. Esta pantalla se abre sola cuando quede aprobado.</div></div>'; return; }
     if(vista === 'col'){
       c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="vac-buscar" placeholder="🔍 Buscar colaborador" value="' + esc(filtroTxt) + '">'
         + '<button class="bt bp" data-a="nuevo" style="flex:none">➕ Nuevo</button></div><div id="vac-lista"></div>';
@@ -14274,8 +14289,10 @@ function _cliOrdenAlCerrar(o){
   function nombreEmpleado(id){ var t = todosPersonal().find(function(x){ return x.id === id; }); return t ? t.n + ' (' + EMP_NOMBRE[t.empresa] + ')' : ''; }
   function fechaHora(ms){ if(!ms) return '—'; var d = new Date(ms); return fmt(iso(d)) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
   function escucharAccesos(){
-    if(escuchandoAcc || !window._fbDB) return; escuchandoAcc = true;
-    window._fbDB.ref('accesos').on('value', function(s){ accesos = s.val() || {}; avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); });
+    if(escuchandoAcc || !window._fbDB) return;
+    if(!miUid()){ setTimeout(escucharAccesos, 1500); return; }
+    escuchandoAcc = true;
+    window._fbDB.ref('accesos').on('value', function(s){ accesos = s.val() || {}; avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); }, sinPermiso);
     ['montasa', 'monhaco'].forEach(function(r){ window._fbDB.ref(r + '/rrhh/plantilla').on('value', function(s){ plantillas[r] = s.val() || {}; if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); }); });
   }
   // Aviso en Notificaciones y número en el botón de Personal
@@ -14306,9 +14323,7 @@ function _cliOrdenAlCerrar(o){
       + '</div>';
     // Arranque: el primer aprobador (Gerencia) se aprueba a sí mismo con PIN, solo mientras no haya ninguno
     var hayGer = apro.some(function(a){ return a.rol === 'gerencia'; });
-    if(!hayGer && yo) h += '<div class="card" style="background:#fff8e6;border-color:#f5d48a"><div class="nm" style="color:#b45309">🔑 Primer paso</div>'
-      + '<div class="sub" style="color:#1d2433;margin-top:4px">Todavía no hay ningún teléfono de Gerencia aprobado. Aprueba <b>este</b> equipo como Gerencia (con tu PIN) para poder aprobar a los demás.</div>'
-      + '<div class="acc"><button class="bp" data-a="acc-yo">✅ Este equipo es de Gerencia</button></div></div>';
+    // (2026-10-12) Sin «Primer paso»: un equipo ya no puede aprobarse a sí mismo (lo bloquean las reglas de la base).
     h += '<div class="nm" style="margin:14px 2px 6px">⏳ Esperando acceso (' + pend.length + ')</div>';
     h += pend.length ? pend.map(function(a){ return tarjetaAcceso(a, yo, 'pend'); }).join('') : '<div class="card" style="color:#667085;text-align:center">Nadie esperando.</div>';
     h += '<div class="nm" style="margin:14px 2px 6px">✅ Con acceso (' + apro.length + ')</div>';
