@@ -79,7 +79,8 @@ accesos/<uid>: {
   creado:     1696600000000,
   ultimaVez:  1696600000000,
   estado:     "pendiente" | "aprobado" | "rechazado",
-  rol:        "campo" | "gerencia",        // lo pone Miguel al aprobar
+  rol:        "campo" | "gerencia" | "consulta",   // lo pone Miguel al aprobar (consulta: solo ver/descargar, p. ej. Comercial)
+  area:       "Ventas",                  // opcional, para quien no es empleado
   empleadoId: "…",                          // opcional: lo enlaza Miguel al aprobar
   aprobadoPor:"<uid de quien aprobó>",
   aprobadoEn: 1696600000000
@@ -137,6 +138,9 @@ repite. Abreviada acá como:
 
 - `APROBADO` = `auth != null && root.child('accesos/'+auth.uid+'/estado').val() === 'aprobado'`
 - `GERENCIA` = `APROBADO && root.child('accesos/'+auth.uid+'/rol').val() === 'gerencia'`
+- `ESCRIBE` = `APROBADO && root.child('accesos/'+auth.uid+'/rol').val() !== 'consulta'` — el permiso **consulta** (2026-10-12, gente de
+  Comercial que no es técnico ni operador) solo lee: en las reglas de abajo, cada `".write": "APROBADO"` debe ser `"ESCRIBE"`.
+  Antes de publicar, confirmar que la app Comercial no escribe nada que esas personas necesiten (si escribe, revisar).
 
 ```
 {
@@ -265,6 +269,7 @@ Cada uno necesita algo para seguir funcionando **el día del paso 2**. Medido el
 
 ## Historial
 
+- 2026-10-12 — Permiso «consulta» (sin empleado de Personal, campo `area` opcional), sugerido para registros de Comercial.
 - 2026-10-06 — Personal movido a `rrhh/<raíz>` (decisión de Miguel). Agregado el respaldo diario a la tabla de lectores externos.
 - 2026-10-06 — Paso 1 construido (registro + aprobación en Gerencia). Probado en copias con sesión simulada.
 
