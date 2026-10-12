@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='459e6739a70b';
+  var APP_VERSION='95599295a4ed';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1098,7 +1098,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     var l = nombresDe(tipo); if(!l) l = (original || []).slice();
     return sumarActuales(l, actuales);
   };
-  window._nxPersonas = function(){ return (personas() || []).map(function(p){ return { n: p.n, c: p.c || '', roles: (p.roles || []).slice(), tel: p.tel || '' }; }); };
+  window._nxPersonas = function(){ return (personas() || []).map(function(p){ return { n: p.n, nc: p.nc || '', c: p.c || '', roles: (p.roles || []).slice(), tel: p.tel || '' }; }); };
   // Botones de técnicos dentro de una orden (los marca la app después, como siempre)
   window._nxTecBtns = function(tipo, id, actuales, original){
     return window._nxLista('tec', original, actuales).map(function(n){
@@ -10278,18 +10278,29 @@ _iniciarConexionFirebase(false);
 // ══════════════════════════════════════════════════════════════════════════
 // MÓDULO DE VIÁTICOS
 // ══════════════════════════════════════════════════════════════════════════
-const GESTORES_VIATICOS = [
-  {nombre:"FRANCISCO NOE NARVAES FONSECA",  id:"0501-1981-08196", cuenta:"2020575644", depto:"Logística"},
-  {nombre:"MIGUEL ANGEL ORELLANA LOPEZ",    id:"0501-1990-12530", cuenta:"2020575655", depto:"Logística"},
-  {nombre:"JONATHAN JOSUE MARTINEZ LOPEZ",  id:"0501-1997-07479", cuenta:"2020575530", depto:"Taller"},
-  {nombre:"ANGEL GABRIEL CARDONA PAZ",      id:"0501-1997-03637", cuenta:"2020575527", depto:"Taller"},
-  {nombre:"DENIS RIGOBERTO LINARES REYES",  id:"0509-1994-00146", cuenta:"2020575543", depto:"Taller"},
-  {nombre:"KEVIN EDGARDO DERAS RAPALO",     id:"0512-1994-00350", cuenta:"2020575547", depto:"Taller"},
-  {nombre:"ELIBERTO PENA",                  id:"",                cuenta:"",            depto:"Taller"},
-  {nombre:"MARVIN JESUS TORRES",            id:"0502-1980-00830", cuenta:"757373211",   depto:"Taller"},
-  {nombre:"ELKIN ISAAC PEREZ HERNANDEZ",    id:"0501-1999-13499", cuenta:"2010067666",  depto:"Taller"},
-  {nombre:"MIGUEL ANTONIO ORELLANA LOPEZ",  id:"0501-1990-12443", cuenta:"2020575525", depto:"Gerencia"},
-];
+// ── Gestores de viáticos (2026-10-07) ─────────────────────────────────────────────────────────────────────
+// Ya NO se escriben en el código (el código es público). Salen de Personal:
+//  · Gerencia: de las fichas de Empleados, con identidad y cuenta bancaria (window._nxGestoresGer).
+//  · Supervisión / Logística: solo los nombres (lista de personal de las órdenes); identidad y cuenta las pone Gerencia.
+// La identidad y la cuenta NO se guardan en la solicitud: Gerencia las completa al mostrarla o imprimirla.
+const GESTORES_VIATICOS = [];
+function _nzGestor(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+function _gestores(){
+  var l = (typeof window._nxGestoresGer === 'function') ? window._nxGestoresGer() : null;
+  if(!l || !l.length){
+    var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
+    l = ps.map(function(p){ var r = p.roles || [];
+      return { nombre: String(p.nc || p.n || '').toUpperCase(), id: '', cuenta: '', depto: r.indexOf('aviso') >= 0 ? 'Gerencia' : (r.indexOf('op') >= 0 || r.indexOf('mot') >= 0) ? 'Logística' : 'Taller' }; });
+  }
+  l = l.filter(function(g){ return g && g.nombre; }).sort(function(a, b){ return a.nombre.localeCompare(b.nombre, 'es'); });
+  if(l.length){ GESTORES_VIATICOS.length = 0; Array.prototype.push.apply(GESTORES_VIATICOS, l); }
+  return GESTORES_VIATICOS;
+}
+function _gestorDato(nombre, campo){
+  var n = _nzGestor(nombre); if(!n) return '';
+  var g = _gestores().find(function(x){ return _nzGestor(x.nombre) === n; }); return g ? (g[campo] || '') : '';
+}
+function _gestorSinDato(){ return (typeof window._nxGestoresGer === 'function') ? '—' : 'Lo completa Gerencia'; }
 // ── Destinos fuera de Honduras: la tabla nacional de alimentación y hospedaje
 // no aplica, y hay gastos de frontera que van en "otros gastos" ─────────────
 const DESTINOS_INTERNACIONALES = ['SANTA ANA, EL SALVADOR'];
@@ -10512,7 +10523,7 @@ function renderModalViaticos(orden){
 
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
-  const gestorInfo = GESTORES_VIATICOS.find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const gestorInfo = _gestores().find(g=>g.nombre===(v.gestor_nombre||''))||{};
   const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
   const tPeaj = destInfo.peajes * cpU;
   const comb = v.combustible||0;
@@ -10565,7 +10576,7 @@ function switchTabViaticos(mode){
 
 function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
   const hoy = new Date().toISOString().slice(0,10);
-  const gestorOpts = GESTORES_VIATICOS.map(g=>
+  const gestorOpts = _gestores().map(g=>
     `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
   ).join('');
   const destOpts = DESTINOS_VIATICOS.map(d=>
@@ -10611,8 +10622,8 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
       </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
-      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id||'—'}</div></div>
-      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta||'—'}</div></div>
+      <div><div style="color:var(--text3)">N° Identidad</div><div id="v-gestor-id" style="font-weight:600">${gestorInfo.id || v.gestor_id || _gestorSinDato()}</div></div>
+      <div><div style="color:var(--text3)">N° Cuenta</div><div id="v-gestor-cuenta" style="font-weight:600">${gestorInfo.cuenta || v.gestor_cuenta || _gestorSinDato()}</div></div>
       <div><div style="color:var(--text3)">Departamento</div><div id="v-gestor-depto" style="font-weight:600">${gestorInfo.depto||'—'}</div></div>
     </div>
   </div>
@@ -10846,9 +10857,9 @@ function renderLiquidacionForm(v, montoSol, readOnly){
 function actualizarGestor(){
   const sel = document.getElementById('v-gestor');
   if(!sel) return;
-  const g = GESTORES_VIATICOS.find(x=>x.nombre===sel.value)||{};
-  document.getElementById('v-gestor-id') && (document.getElementById('v-gestor-id').textContent = g.id||'—');
-  document.getElementById('v-gestor-cuenta') && (document.getElementById('v-gestor-cuenta').textContent = g.cuenta||'—');
+  const g = _gestores().find(x=>x.nombre===sel.value)||{};
+  document.getElementById('v-gestor-id') && (document.getElementById('v-gestor-id').textContent = g.id||_gestorSinDato());
+  document.getElementById('v-gestor-cuenta') && (document.getElementById('v-gestor-cuenta').textContent = g.cuenta||_gestorSinDato());
   document.getElementById('v-gestor-depto') && (document.getElementById('v-gestor-depto').textContent = g.depto||'—');
 }
 
@@ -11021,15 +11032,15 @@ function _leerFormSolicitud(){
   const destNombre=document.getElementById('v-destino')?.value||'';
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
   const gestorNombre=document.getElementById('v-gestor')?.value||'';
-  const g=GESTORES_VIATICOS.find(x=>x.nombre===gestorNombre)||{};
+  const g=_gestores().find(x=>x.nombre===gestorNombre)||{};
   return {
     fecha_doc: document.getElementById('v-fecha')?.value||'',
     cliente:   document.getElementById('v-cliente')?.value||'',
     destino:   destNombre,
     motivo:    document.getElementById('v-motivo')?.value||'',
     gestor_nombre: gestorNombre,
-    gestor_id:     g.id||'',
-    gestor_cuenta: g.cuenta||'',
+    gestor_id:     '',   // (2026-10-07) identidad y cuenta no se guardan aquí: Gerencia las toma de Personal
+    gestor_cuenta: '',
     gestor_depto:  g.depto||'',
     vehiculo:  document.getElementById('v-vehiculo')?.value||'PICK-UP',
     km_total:  d.km,
@@ -11285,7 +11296,7 @@ function _buildSolicitudHTML(v, orden){
   <table><tr>
     <th>NOMBRE DEL GESTOR</th><th>N° DE IDENTIDAD</th><th>N° DE CUENTA</th><th>ÁREA/DEPTO</th>
   </tr><tr>
-    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||''}</td><td>${v.gestor_cuenta||''}</td><td>${v.gestor_depto||''}</td>
+    <td>${v.gestor_nombre||''}</td><td>${v.gestor_id||_gestorDato(v.gestor_nombre,'id')}</td><td>${v.gestor_cuenta||_gestorDato(v.gestor_nombre,'cuenta')}</td><td>${v.gestor_depto||''}</td>
   </tr></table>
   <table>
     <tr>
@@ -12883,7 +12894,7 @@ function _cliOrdenAlCerrar(o){
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   function escuchar(){
     if(escuchando || !window._fbDB) return; escuchando = true;
-    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); completarCuentas(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
+    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); });
     window._fbDB.ref(R + '/rrhh/plantilla').on('value', function(s){ datos.plantilla = s.val() || null; datos._plantCargada = true; publicarPlantilla(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
@@ -13185,7 +13196,7 @@ function _cliOrdenAlCerrar(o){
     return r;
   }
   var NOMBRE_ROL = { tec: 'Mantenimiento', jefe: 'Jefe de taller', op: 'Operador', mot: 'Motorista', aviso: 'Recibe avisos' };
-  function entradaPlantilla(e){ return { n: e.nombreOrdenes || nombreOrdenesAuto(e.nombreCompleto), c: e.cargo || '', roles: rolesDeCargo(e.cargo), tel: e.telefono || '' }; }
+  function entradaPlantilla(e){ return { n: e.nombreOrdenes || nombreOrdenesAuto(e.nombreCompleto), nc: e.nombreCompleto || '', c: e.cargo || '', roles: rolesDeCargo(e.cargo), tel: e.telefono || '' }; }
   function canon(o){ return JSON.stringify(o, function(k, v){ return v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce(function(a, x){ a[x] = v[x]; return a; }, {}) : v; }); }
   function publicarPlantilla(){
     if(!window._fbDB || !datos._cargado || !datos._plantCargada) return;   // esperar a tener Personal y la plantilla
@@ -13397,27 +13408,13 @@ function _cliOrdenAlCerrar(o){
     var cambios = {}; suyos.forEach(function(a){ cambios['accesos/' + a.uid + '/estado'] = 'rechazado'; cambios['accesos/' + a.uid + '/cambiadoEn'] = Date.now(); });
     window._fbDB.ref().update(cambios).then(function(){ aviso('Acceso quitado ✓'); }).catch(function(){});
   }
-  // ── Cuenta bancaria: completar desde la lista de gestores de viáticos (una vez por sesión, solo fichas vacías) ──
-  var cuentasRevisadas = false;
-  function completarCuentas(){
-    if(cuentasRevisadas || !window._fbDB) return; cuentasRevisadas = true;
-    var g = []; try{ g = (typeof GESTORES_VIATICOS !== 'undefined' && Array.isArray(GESTORES_VIATICOS)) ? GESTORES_VIATICOS : []; }catch(e){}
-    g = g.filter(function(x){ return x && soloDigitos(x.cuenta).length >= 6; });
-    if(!g.length) return;
-    var cambios = {}, n = 0;
-    lista(datos.empleados).forEach(function(e){
-      if(!e || !e.id || e.cuentaBancaria) return;
-      var idE = soloDigitos(e.identidad), hit = idE.length === 13 ? g.filter(function(x){ return soloDigitos(x.id) === idE; }) : [];
-      if(!hit.length){ var ws = normNombre(e.nombreCompleto).split(' ').filter(Boolean);
-        hit = g.filter(function(x){ var gn = normNombre(x.nombre); return ws.length >= 3 && ws.every(function(w){ return gn.indexOf(w) >= 0; }); }); }
-      if(hit.length !== 1) return;
-      cambios['rrhh/' + R + '/empleados/' + e.id + '/cuentaBancaria'] = soloDigitos(hit[0].cuenta);
-      cambios['rrhh/' + R + '/empleados/' + e.id + '/cuentaOrigen'] = 'lista de viáticos';
-      n++;
-    });
-    if(n) window._fbDB.ref().update(cambios).then(function(){ aviso('🏦 ' + n + ' cuenta' + (n === 1 ? '' : 's') + ' bancaria' + (n === 1 ? '' : 's') + ' completada' + (n === 1 ? '' : 's') + ' desde viáticos'); }).catch(function(){});
-  }
   function cuentaOculta(c){ c = soloDigitos(c); return c ? '••••' + c.slice(-4) : ''; }
+  // Gestores de viáticos para Gerencia: de Personal, con identidad y cuenta bancaria
+  window._nxGestoresGer = function(){
+    if(!datos._cargado) return null;
+    return lista(datos.empleados).filter(function(e){ return e.activo !== false && e.nombreCompleto; }).map(function(e){ var r = rolesDeCargo(e.cargo);
+      return { nombre: String(e.nombreCompleto).toUpperCase(), id: e.identidad || '', cuenta: e.cuentaBancaria || '', depto: r.indexOf('aviso') >= 0 ? 'Gerencia' : (r.indexOf('op') >= 0 || r.indexOf('mot') >= 0) ? 'Logística' : 'Taller' }; });
+  };
   function trasladar(emp, col){
     var p = paqueteDe(emp, col); if(!p.emp && !p.col) return;
     var otras = EMPRESAS.filter(function(x){ return x.raiz !== R; });
