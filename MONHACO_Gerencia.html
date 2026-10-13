@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='99833879ff92';
+  var APP_VERSION='69ffa98e3b9d';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -4750,14 +4750,23 @@ function _rcHidratar(r, cb){
     if(arr.length){ r.fotos = arr; if(cb) cb(); }
   }).catch(function(){ delete window._rcFotoCargando[r.id]; });
 }
-function _rcPersistirFotos(r){
+function _rcPersistirFotos(r, opc){
+  // (2026-10-13, auditoría etapa 5) Guardado SEGURO, igual que las fotos de órdenes de MT: se suma a lo que ya está en la base
+  // (una foto que este teléfono no había cargado nunca se borra) y solo se quita la que se eliminó a propósito (opc.quitar).
   if(!r || !r.id || !window._fbDB) return;
-  const fotos = (r.fotos||[]).filter(Boolean);
-  window._fbDB.ref('fotosOrden_monhaco/'+r.id).set({fotos:fotos}).then(function(){
-    r.nFotos = fotos.length;
+  const local = (r.fotos||[]).filter(Boolean), quitar = opc && opc.quitar;
+  window._fbDB.ref('fotosOrden_monhaco/'+r.id).transaction(function(cur){
+    var srv = (cur && Array.isArray(cur.fotos)) ? cur.fotos.filter(Boolean) : (Array.isArray(cur) ? cur.filter(Boolean) : []);
+    var fin = srv.slice(); local.forEach(function(f){ if(fin.indexOf(f) < 0) fin.push(f); });
+    if(quitar) fin = fin.filter(function(f){ return f !== quitar; });
+    return { fotos: fin };
+  }).then(function(res){
+    var v = res && res.snapshot && res.snapshot.val();
+    var fotos = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : local;
+    r.fotos = fotos; r.nFotos = fotos.length;
     window._rcFotoCache[r.id] = fotos;
     try{ window._fbDB.ref('monhaco/cobros/'+r.id+'/nFotos').set(fotos.length); }catch(e){}
-  });
+  }).catch(function(e){ try{ toast('⚠️ Las fotos no se pudieron guardar. Revisa tu conexión e inténtalo de nuevo.', true); }catch(_){} });
 }
 function rcFotosAgregar(id, input){
   const r = _rcLista().find(function(x){ return x.id===id; }); if(!r) return;
@@ -4805,8 +4814,8 @@ function rcFotosEliminar(id, idx){
   if(!confirm('¿Eliminar esta foto?')) return;
   const r = _rcLista().find(function(x){ return x.id===id; });
   if(!r || !r.fotos) return;
-  r.fotos.splice(idx, 1);
-  _rcPersistirFotos(r);
+  const quitada = r.fotos.splice(idx, 1)[0];
+  _rcPersistirFotos(r, { quitar: quitada });
   rcVer(id);
 }
 function _rcVerFotoGrande(src){
@@ -10625,7 +10634,7 @@ function renderModalViaticos(orden){
 
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
-  const gestorInfo = _gestores().find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const gestorInfo = (v.gestor_nombre && _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre))) || {};   // (2026-10-13) sin importar tildes/mayúsculas
   const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
   const tPeaj = destInfo.peajes * cpU;
   const comb = v.combustible||0;
@@ -10678,8 +10687,11 @@ function switchTabViaticos(mode){
 
 function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
   const hoy = new Date().toISOString().slice(0,10);
-  const gestorOpts = _gestores().map(g=>
-    `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
+  // (2026-10-13, auditoría etapa 5) Una solicitud vieja no pierde su gestor al editarla: se busca sin importar tildes/mayúsculas y,
+  // si ya no está en Personal, se agrega como opción elegida.
+  const _gSel = v.gestor_nombre ? _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre)) : null;
+  const gestorOpts = ((v.gestor_nombre && !_gSel) ? `<option value="${_x(v.gestor_nombre)}" selected>${_x(v.gestor_nombre)} (no está en Personal)</option>` : '') + _gestores().map(g=>
+    `<option value="${_x(g.nombre)}" ${g===_gSel?'selected':''}>${_x(g.nombre)}</option>`
   ).join('');
   const destOpts = DESTINOS_VIATICOS.map(d=>
     `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
@@ -11146,7 +11158,7 @@ function _leerFormSolicitud(){
   const destNombre=document.getElementById('v-destino')?.value||'';
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
   const gestorNombre=document.getElementById('v-gestor')?.value||'';
-  const g=_gestores().find(x=>x.nombre===gestorNombre)||{};
+  const g=(gestorNombre && _gestores().find(x=>_nzGestor(x.nombre)===_nzGestor(gestorNombre)))||{};
   return {
     fecha_doc: document.getElementById('v-fecha')?.value||'',
     cliente:   document.getElementById('v-cliente')?.value||'',
@@ -13599,6 +13611,8 @@ function _cliOrdenAlCerrar(o){
           cambios[R + '/rrhh/plantilla/' + p.emp.id] = null; if(p.emp.activo !== false) cambios[dest + '/rrhh/plantilla/' + p.emp.id] = entradaPlantilla(p.emp); }
         if(p.col){ cambios[otro + 'colaboradores/' + p.col.id] = Object.assign({}, p.col, { trasladadoDe: R, fechaTraslado: hoyISO(), actualizado: ahora }); cambios[base + 'colaboradores/' + p.col.id] = null; }
         p.acc.forEach(function(a){ cambios[otro + 'acciones/' + a.id] = Object.assign({}, a, { trasladadoDe: a.trasladadoDe || R }); cambios[base + 'acciones/' + a.id] = null; });
+        // (2026-10-13, auditoría etapa 5) Los teléfonos registrados de esta persona pasan a la empresa nueva
+        if(p.emp) Object.keys(accesos || {}).forEach(function(u){ var ac = accesos[u]; if(ac && ac.empleadoId === p.emp.id && ac.empleadoEmpresa !== dest) cambios['accesos/' + u + '/empleadoEmpresa'] = dest; });
         if(!window._fbDB){ aviso('Sin conexión: no se trasladó', true); return; }
         window._fbDB.ref().update(cambios).then(function(){
           w.remove(); aviso(p.nombre + ' trasladado a ' + nombreEmpresa(dest) + ' ✓');

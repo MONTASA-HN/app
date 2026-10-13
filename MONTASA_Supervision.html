@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7a0e292e4314';
+  var APP_VERSION='430fc815004e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7115,7 +7115,7 @@ function renderModalViaticos(orden){
 
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
-  const gestorInfo = _gestores().find(g=>g.nombre===(v.gestor_nombre||''))||{};
+  const gestorInfo = (v.gestor_nombre && _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre))) || {};   // (2026-10-13) sin importar tildes/mayúsculas
   const _pjM = _viatPeajes(v, destInfo.peajes);
   const cpU = _pjM.c;
   const tPeaj = _pjM.t;
@@ -7178,8 +7178,11 @@ function switchTabViaticos(mode){
 
 function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otros, tGen){
   const hoy = new Date().toISOString().slice(0,10);
-  const gestorOpts = _gestores().map(g=>
-    `<option value="${g.nombre}" ${v.gestor_nombre===g.nombre?'selected':''}>${g.nombre}</option>`
+  // (2026-10-13, auditoría etapa 5) Una solicitud vieja no pierde su gestor al editarla: se busca sin importar tildes/mayúsculas y,
+  // si ya no está en Personal, se agrega como opción elegida.
+  const _gSel = v.gestor_nombre ? _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre)) : null;
+  const gestorOpts = ((v.gestor_nombre && !_gSel) ? `<option value="${_x(v.gestor_nombre)}" selected>${_x(v.gestor_nombre)} (no está en Personal)</option>` : '') + _gestores().map(g=>
+    `<option value="${_x(g.nombre)}" ${g===_gSel?'selected':''}>${_x(g.nombre)}</option>`
   ).join('');
   const destOpts = DESTINOS_VIATICOS.map(d=>
     `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
@@ -7725,7 +7728,7 @@ function _leerFormSolicitud(){
   const destNombre=document.getElementById('v-destino')?.value||'';
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
   const gestorNombre=document.getElementById('v-gestor')?.value||'';
-  const g=_gestores().find(x=>x.nombre===gestorNombre)||{};
+  const g=(gestorNombre && _gestores().find(x=>_nzGestor(x.nombre)===_nzGestor(gestorNombre)))||{};
   return {
     fecha_doc: document.getElementById('v-fecha')?.value||'',
     cliente:   document.getElementById('v-cliente')?.value||'',
