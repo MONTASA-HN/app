@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='5bcf4958798e';
+  var APP_VERSION='f72326b80d7a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7287,22 +7287,15 @@ function renderPersonaRow(p, i){
   </div>`;
 }
 
-function renderLiquidacionForm(v, montoSol, readOnly){
-  const facturas = v.facturas || [];
-  const totalFact = facturas.reduce((s,f)=>s+(f&&f.monto||0),0); // f puede ser null (filas vacías)
-  const diff = montoSol - totalFact;
-  const hoy = new Date().toISOString().slice(0,10);
-
-  return `
-  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
-      <div><span style="color:var(--text3)">Monto solicitado:</span><br><strong>L. ${montoSol.toFixed(2)}</strong></div>
-      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${_x(v.gestor_nombre||'—')}</strong></div>
-    </div>
-  </div>
-  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🧾 Facturas del viaje (máx. 14)</div>
-  <div id="vliq-facturas">
-    ${Array.from({length:14},(_,i)=>{
+// Filas de la liquidación: 10 al inicio y de 5 en 5 con «➕ Agregar 5 filas» (2026-10-13; antes 14 fijas)
+function _vliqContar(facturas){ var u = 0; (facturas || []).forEach(function(f, i){ if(f && (f.descripcion || f.monto)) u = i + 1; }); return Math.max(10, Math.ceil(u / 5) * 5); }
+function _vliqFilas(){ return document.querySelectorAll('#vliq-facturas [id^="vlf-desc-"]').length; }
+function _vliqAgregar5(){ var c = document.getElementById('vliq-facturas'); if(!c) return; var n = _vliqFilas();
+  c.insertAdjacentHTML('beforeend', _vliqFilasHTML([], false, new Date().toISOString().slice(0,10), n, n + 5));
+  var el = document.getElementById('vlf-desc-' + n); if(el) el.scrollIntoView({ behavior:'smooth', block:'center' }); }
+function _vliqFilasHTML(facturas, readOnly, hoy, desde, hasta){
+  var h = '';
+  for(let i = desde; i < hasta; i++){ h += (function(){
       const f = facturas[i]||{};
       // En modo lectura: solo mostrar facturas con datos
       if(readOnly && !f.descripcion && !f.monto) return '';
@@ -7333,8 +7326,27 @@ function renderLiquidacionForm(v, montoSol, readOnly){
           </div>
         </div>
       </div>`;
-    }).join('')}
+  })(); }
+  return h;
+}
+function renderLiquidacionForm(v, montoSol, readOnly){
+  const facturas = v.facturas || [];
+  const totalFact = facturas.reduce((s,f)=>s+(f&&f.monto||0),0); // f puede ser null (filas vacías)
+  const diff = montoSol - totalFact;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  return `
+  <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;font-size:13px">
+      <div><span style="color:var(--text3)">Monto solicitado:</span><br><strong>L. ${montoSol.toFixed(2)}</strong></div>
+      <div><span style="color:var(--text3)">Destinatario:</span><br><strong>${_x(v.gestor_nombre||'—')}</strong></div>
+    </div>
   </div>
+  <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🧾 Facturas del viaje</div>
+  <div id="vliq-facturas">
+    ${_vliqFilasHTML(facturas, readOnly, hoy, 0, _vliqContar(facturas))}
+  </div>
+  ${readOnly ? '' : '<button type="button" id="vliq-mas" onclick="_vliqAgregar5()" style="width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin:0 0 12px">➕ Agregar 5 filas</button>'}
   <!-- RESUMEN -->
   <div style="background:#1f3864;border-radius:var(--radius-sm);padding:12px;color:white;margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7549,7 +7561,7 @@ function editarLiquidacionConPin(){
 
 function recalcFacturas(){
   let total=0;
-  for(let i=0;i<14;i++){
+  for(let i=0, n=_vliqFilas();i<n;i++){
     total+=parseFloat(document.getElementById('vlf-monto-'+i)?.value||0)||0;
   }
   document.getElementById('vliq-total')&&(document.getElementById('vliq-total').textContent='L. '+total.toFixed(2));
@@ -7643,7 +7655,7 @@ function _leerFormSolicitud(){
 
 function _leerFormLiquidacion(){
   const facturas=[];
-  for(let i=0;i<14;i++){
+  for(let i=0, n=_vliqFilas();i<n;i++){
     const desc=document.getElementById('vlf-desc-'+i)?.value||'';
     const monto=parseFloat(document.getElementById('vlf-monto-'+i)?.value||0)||0;
     if(desc||monto){
@@ -7965,7 +7977,7 @@ function _buildLiquidacionHTML(v, orden){
   const totalFact=facturas.reduce((s,f)=>s+(f&&f.monto||0),0);
   const diff=montoSol-totalFact;
 
-  const factRows=Array.from({length:14},(_,i)=>{
+  const factRows=Array.from({length:_vliqContar(facturas)},(_,i)=>{
     const f=facturas[i];
     if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${_viatEsc(_viatDescTexto(f))}</td><td>${f.fecha||''}</td><td>${f.ndocumento||''}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
     return `<tr><td class="num">${i+1}</td><td></td><td></td><td></td><td></td></tr>`;
