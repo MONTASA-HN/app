@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d0c95e2afe81';
+  var APP_VERSION='cbfd03bdbef1';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2236,6 +2236,13 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
+        <!-- Renta: hasta 3 operadores adicionales trabajando en simultáneo (2026-10-13, pedido de Miguel) -->
+        ${(o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))?['operador2','operador3','operador4'].map((k,i)=>`
+        <div class="form-group"><label>Operador adicional ${i+1} (opcional)</label>
+          <select onchange="event.stopPropagation();_logOperadorExtra(this,'${_idS(o.id)}','${k}')">
+            <option value="">— Sin operador adicional —</option>
+            ${Array.from(new Set(OPERADORES_LOGISTICA.concat(o[k]?[o[k]]:[]))).map(op=>`<option value="${_x(op)}" ${o[k]===op?'selected':''}>${_x(op)}</option>`).join('')}
+          </select></div>`).join(''):``}
         <!-- 5 Operadores para apoyo a mantenimiento (pueden trabajar en simultáneo) -->
         ${(o.tipoLogistica==='apoyo_mantenimiento')?['operador','operador2','operador3','operador4','operador5'].map((k,i)=>`
         <div class="form-group"><label>Operador ${i+1}${i>0?' (opcional)':''}</label>
@@ -2648,6 +2655,15 @@ function _eliminarOrdenLog(id){
 }
 
 
+// Operador adicional en renta: no repetir a alguien que ya está en la orden
+function _logOperadorExtra(sel, id, campo){
+  const o = (DB.logistica||[]).find(x=>x&&x.id===id); if(!o) return;
+  const v = sel.value;
+  if(v && ['operador','operador2','operador3','operador4','operador5','motorista'].some(k=>k!==campo && o[k]===v)){
+    alert('⚠️ '+v+' ya está asignado en esta orden.'); sel.value = o[campo]||''; return;
+  }
+  actualizarLog(id, campo, v);
+}
 function actualizarLog(id, campo, valor){
   const o = (DB.logistica||[]).find(x=>x&&x.id===id);
   if(!o) return;

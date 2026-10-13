@@ -474,3 +474,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   (iPhone). No cambia el flujo de datos.
 - 2026-10-13 — Liquidaciones (MTG, MTS, MTL, MHG, MHS): 10 filas al inicio y «➕ Agregar 5 filas» (`_vliqFilasHTML`, `_vliqContar`,
   `_vliqAgregar5`); leer y sumar recorren las filas en pantalla (`_vliqFilas`). El PDF lleva las filas usadas (mín. 10). Antes 14 fijas.
+- 2026-10-13 — Renta (MTL): operador principal + hasta 3 adicionales (`operador2..4`, `_logOperadorExtra` no repite nombres).
+  Vales, firmas, productividad y vistas ya leían `operador..operador5`. Detalle de Gerencia (MTG, MHG) muestra todos.

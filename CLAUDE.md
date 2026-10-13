@@ -787,3 +787,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
   en las 9 apps; Gerencia lee Personal y Accesos con la sesión del equipo.
 - 2026-10-12 — PDF de órdenes en iPhone: salía un dato por hoja; se corrige la medición de la hoja (TRAMPAS).
 - 2026-10-13 — Liquidaciones: 10 filas al inicio y botón «➕ Agregar 5 filas» (antes 14 fijas).
+- 2026-10-13 — Órdenes de renta: hasta 3 operadores adicionales en simultáneo (Logística MT).
