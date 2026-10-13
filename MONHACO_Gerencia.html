@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='404b91e14f53';
+  var APP_VERSION='94d1e7406104';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2115,6 +2115,16 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     <div id="personal-list"></div>
   </div>
 
+  <!-- DASHBOARD DE GERENCIA (2026-10-13) -->
+  <div id="tab-tablero" class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+      <div style="font-size:22px;font-weight:600">📊 Dashboard</div>
+      <select id="tablero-mes-sel" onchange="renderTableroGer()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border2);font-size:13px;background:var(--surface)"></select>
+    </div>
+    <div id="tablero-mes-label" style="font-size:12px;color:var(--text2);margin-bottom:14px"></div>
+    <div id="tablero-cont"></div>
+  </div>
+
   <!-- NOTIFICACIONES -->
   <div id="tab-notificaciones" class="section">
     <div style="font-size:22px;font-weight:600;margin-bottom:4px">🔔 Notificaciones</div>
@@ -3252,6 +3262,7 @@ function showTab(id, el){
   if(id === 'loghc') _hcRenderCarpetas();
   if(id === 'reportes') renderReporteMensual();
   if(id === 'personal')  renderPersonal();
+  if(id === 'tablero')   renderTableroGer();
   if(id === 'dashboard') renderDashboard();
   if(id === 'notificaciones') renderNotificacionesTab();
   if(id === 'mapa') renderMapaFlota();
@@ -6195,6 +6206,262 @@ function validarFechasOrden(fechaInicio, fechaFin){
   return null;
 }
 
+// ══ DASHBOARD DE GERENCIA (2026-10-13, pedido de Miguel) ═════════════════════════════════════════════════════
+// Pestaña «📊 Dashboard». Órdenes abiertas (hoy, totales por estado), cerradas en el mes (con desglose), horas trabajadas
+// (MISMO cálculo que Productividad: _horasDelMes) y fallas: ranking por sistema y equipos con más correctivos, contando
+// los correctivos REPORTADOS en el mes (los que no tienen sistema no entran al ranking). Mes actual con selector (12 meses).
+// Diseño: tarjetas sólidas, números grandes en tinta (no en color), barras de un solo tono con el valor al final.
+// Solo modo claro, igual que el resto de Gerencia.
+const _TAB_CORTINAS = true;   // MONHACO: las órdenes de cortinas cuentan como mantenimiento
+function _tableroCSS(){
+  if(document.getElementById('tb-css')) return;
+  var st = document.createElement('style'); st.id = 'tb-css';
+  st.textContent = ''
+    + '.tb{--tb-card:#ffffff;--tb-sub:#f4f6f9;--tb-borde:#e3e7ee;--tb-tinta:#111827;--tb-tinta2:#4b5563;--tb-tinta3:#8a94a3;--tb-barra:#2a78d6;--tb-pista:#e8eef7;--tb-sombra:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.06)}'
+    + '.tb{color:var(--tb-tinta);font-family:inherit;position:relative;z-index:1}'   /* por encima de la marca de agua de la app */
+    + '.tb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}'
+    + '.tb-kpi{background:var(--tb-card);border:1px solid var(--tb-borde);border-radius:16px;padding:14px 16px 12px;box-shadow:var(--tb-sombra);position:relative;overflow:hidden}'
+    + '.tb-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tb-acento,#2a78d6)}'
+    + '.tb-kpi-eti{font-size:12px;font-weight:600;color:var(--tb-tinta2);letter-spacing:.2px}'
+    + '.tb-kpi-num{font-size:44px;line-height:1.05;font-weight:700;color:var(--tb-tinta);margin:6px 0 2px;letter-spacing:-1px}'
+    + '.tb-kpi-pie{font-size:12px;color:var(--tb-tinta3)}'
+    + '.tb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}'
+    + '.tb-card{background:var(--tb-card);border:1px solid var(--tb-borde);border-radius:16px;padding:16px 18px;box-shadow:var(--tb-sombra);min-width:0}'
+    + '.tb-ancha{grid-column:1/-1}'
+    + '.tb-tit{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}'
+    + '.tb-tit b{font-size:15px;font-weight:700}'
+    + '.tb-tit span{font-size:12px;color:var(--tb-tinta3)}'
+    + '.tb-sub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tb-tinta3);margin:14px 0 6px}'
+    + '.tb-sub:first-child{margin-top:0}'
+    + '.tb-fila{display:grid;grid-template-columns:minmax(0,38%) minmax(0,1fr) auto;align-items:center;gap:10px;padding:5px 0}'
+    + '.tb-fila-n{font-size:13px;color:var(--tb-tinta);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '.tb-pista{background:var(--tb-pista);border-radius:4px;height:12px;overflow:hidden}'
+    + '.tb-barra{height:12px;border-radius:0 4px 4px 0;background:var(--tb-barra);min-width:3px}'
+    + '.tb-fila-v{font-size:15px;font-weight:700;color:var(--tb-tinta);text-align:right;min-width:34px}'
+    + '.tb-fila-v small{display:block;font-size:11px;font-weight:500;color:var(--tb-tinta3)}'
+    + '.tb-estados{display:flex;flex-wrap:wrap;gap:8px}'
+    + '.tb-est{background:var(--tb-sub);border-radius:12px;padding:8px 12px;min-width:92px}'
+    + '.tb-est b{display:block;font-size:22px;line-height:1.1;font-weight:700;color:var(--tb-tinta)}'
+    + '.tb-est span{font-size:12px;color:var(--tb-tinta2)}'
+    + '.tb-vacio{font-size:13px;color:var(--tb-tinta3);padding:6px 0}'
+    + '.tb-nota{font-size:11.5px;color:var(--tb-tinta3);margin-top:8px;line-height:1.4}'
+    + '.tb-total{font-size:13px;color:var(--tb-tinta2)}.tb-total b{font-size:15px;color:var(--tb-tinta)}'
+    + '@media (max-width:820px){.tb-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.tb-grid{grid-template-columns:1fr}.tb-kpi-num{font-size:38px}}';
+  document.head.appendChild(st);
+}
+function renderTableroGer(){
+  const cont = document.getElementById('tablero-cont'); if(!cont) return;
+  _tableroCSS();
+  function fLocal(val){
+    if(!val) return new Date(NaN);
+    if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)){ const p = val.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+    return new Date(val);
+  }
+  const sel = document.getElementById('tablero-mes-sel');
+  if(sel && !sel.options.length){
+    const now = new Date();
+    for(let i = 0; i < 12; i++){
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1), o = document.createElement('option');
+      o.value = d.getFullYear() + '-' + d.getMonth();
+      const l = d.toLocaleString('es-HN', {month:'long', year:'numeric'}); o.textContent = l.charAt(0).toUpperCase() + l.slice(1);
+      if(i === 0) o.selected = true; sel.appendChild(o);
+    }
+  }
+  let anio, mes;
+  if(sel && sel.value){ const p = sel.value.split('-'); anio = parseInt(p[0], 10); mes = parseInt(p[1], 10); }
+  else { const n = new Date(); anio = n.getFullYear(); mes = n.getMonth(); }
+  const enMes = v => { const f = fLocal(v); return !isNaN(f) && f.getMonth() === mes && f.getFullYear() === anio; };
+  const nomMes = (() => { const t = new Date(anio, mes, 1).toLocaleString('es-HN', {month:'long', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); })();
+  const lab = document.getElementById('tablero-mes-label');
+  if(lab) lab.textContent = 'Datos de ' + nomMes + ' · las órdenes abiertas son al día de hoy';
+
+  const L = k => (Array.isArray(DB[k]) ? DB[k] : Object.values(DB[k] || {})).filter(o => o && typeof o === 'object');
+  const prev = L('preventivos'), corr = L('correctivos'), cort = _TAB_CORTINAS ? L('cortinas') : [], logi = L('logistica');
+  const prevCerr = p => !!p.completado || p.estado === 'Completado';
+  const corrCerr = c => c.estado === 'Completado';
+  const cancel = o => o.estado === 'Cancelado';
+  const contar = arr => { const m = {}; arr.forEach(o => { const e = o.estado || 'Pendiente'; m[e] = (m[e] || 0) + 1; }); return m; };
+  // Abiertas (hoy)
+  const mantAb = [...prev.filter(p => !prevCerr(p) && !cancel(p)), ...corr.filter(c => !corrCerr(c) && !cancel(c)), ...cort.filter(o => !prevCerr(o) && !cancel(o))];
+  const logAb = logi.filter(o => !o.cerrado && !cancel(o));
+  // Cerradas en el mes (mismas fechas que Productividad)
+  const pM = prev.filter(p => prevCerr(p) && enMes(p.fechaCompletado || p.fechaFin || p.fecha));
+  const cM = corr.filter(c => corrCerr(c) && enMes(c.fechaCierre || c.fechaFin || c.fecha));
+  const kM = cort.filter(o => prevCerr(o) && enMes(o.fechaCierre || o.fechaFin || o.fecha));
+  const lM = logi.filter(o => o.cerrado && !cancel(o) && enMes(o.fechaCierre || o.fechaFin || o.fecha));
+  const TIPOS = { entrega:'Entrega', retiro:'Retiro', renta:'Renta', apoyo_mantenimiento:'Apoyo a mantenimiento', atencion_compras:'Atención de compras', entrega_retiro:'Entrega / retiro' };
+  const porTipo = {}; lM.forEach(o => { const t = TIPOS[o.tipoLogistica] || o.tipoLogistica || 'Sin tipo'; porTipo[t] = (porTipo[t] || 0) + 1; });
+  const desgMant = { 'Preventivos': pM.length, 'Correctivos': cM.length }; if(_TAB_CORTINAS) desgMant['Cortinas'] = kM.length;
+  // Horas trabajadas (mismo cálculo que Productividad)
+  const hm = _horasDelMes(mes, anio);
+  // Fallas: correctivos reportados en el mes
+  const cF = corr.filter(c => !cancel(c) && enMes(c.fecha || String(c.fechaInicio || '').slice(0, 10)));
+  const porSis = {}; let sinSis = 0;
+  cF.forEach(c => { const s = String(c.sistema || '').trim(); if(!s){ sinSis++; return; } porSis[s] = (porSis[s] || 0) + 1; });
+  const eqs = {}; L('equipos').forEach(e => { if(e.id) eqs[e.id] = e; });
+  const porEq = {};
+  cF.forEach(c => {
+    const e = eqs[c.equipoId];
+    const n = e ? (e.codigo || e.serie || 'Equipo') + ((e.marca || e.modelo) ? ' · ' + [e.marca, e.modelo].filter(Boolean).join(' ') : '') : (c.equipoTxt || c.clienteNombre || 'Equipo sin identificar');
+    porEq[n] = (porEq[n] || 0) + 1;
+  });
+  const top10 = Object.fromEntries(Object.entries(porEq).sort((a, b) => b[1] - a[1]).slice(0, 10));
+
+  // ── Dibujo ──
+  const fmt = n => Number(n).toLocaleString('es-HN');
+  const hhmm = m => Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+  const kpi = (num, eti, pie, acento) => `<div class="tb-kpi" style="--tb-acento:${acento}"><div class="tb-kpi-eti">${eti}</div><div class="tb-kpi-num">${fmt(num)}</div><div class="tb-kpi-pie">${pie}</div></div>`;
+  const tarjeta = (titulo, nota, cuerpo, ancha) => `<div class="tb-card${ancha ? ' tb-ancha' : ''}"><div class="tb-tit"><b>${titulo}</b>${nota ? '<span>' + nota + '</span>' : ''}</div>${cuerpo}</div>`;
+  const sub = t => `<div class="tb-sub">${t}</div>`;
+  // Barras horizontales de un solo tono: nombre · barra · valor (y detalle al pasar el dedo/ratón)
+  const barras = (filas, unidad) => {
+    if(!filas.length) return '<div class="tb-vacio">Sin datos en este mes</div>';
+    const mx = Math.max.apply(null, filas.map(f => f.v)) || 1;
+    return filas.map(f => `<div class="tb-fila" title="${_x(f.n)}: ${_x(f.det || (fmt(f.v) + ' ' + unidad))}"><div class="tb-fila-n">${_x(f.n)}</div><div class="tb-pista"><div class="tb-barra" style="width:${Math.max(2, Math.round(f.v / mx * 100))}%"></div></div><div class="tb-fila-v">${f.txt || fmt(f.v)}${f.peq ? '<small>' + f.peq + '</small>' : ''}</div></div>`).join('');
+  };
+  const deObj = obj => Object.entries(obj).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([n, v]) => ({ n: n, v: v }));
+  const estados = obj => {
+    const e = Object.entries(obj).sort((a, b) => b[1] - a[1]);
+    return e.length ? '<div class="tb-estados">' + e.map(([k, v]) => `<div class="tb-est"><b>${fmt(v)}</b><span>${_x(k)}</span></div>`).join('') + '</div>' : '<div class="tb-vacio">Ninguna</div>';
+  };
+  const horas = lista => barras(lista.map(([n, s]) => ({ n: n, v: s.minutos, txt: hhmm(s.minutos), peq: s.ordenes + ' órd.', det: hhmm(s.minutos) + ' en ' + s.ordenes + ' órdenes' })), '');
+  const totMin = l => l.reduce((a, [, s]) => a + s.minutos, 0);
+
+  cont.innerHTML = '<div class="tb">'
+    + '<div class="tb-kpis">'
+    +   kpi(mantAb.length, 'Mantenimiento abiertas', 'al día de hoy', '#eda100')
+    +   kpi(logAb.length, 'Logística abiertas', 'al día de hoy', '#eda100')
+    +   kpi(pM.length + cM.length + kM.length, 'Mantenimiento cerradas', nomMes, '#1baf7a')
+    +   kpi(lM.length, 'Logística cerradas', nomMes, '#1baf7a')
+    + '</div>'
+    + '<div class="tb-grid">'
+    +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento') + estados(contar(mantAb)) + sub('Logística') + estados(contar(logAb)))
+    +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'))
+    +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec))
+    +   tarjeta('Horas trabajadas · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', horas(hm.sortedLog) + '<div class="tb-nota">Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>')
+    +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''))
+    +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'))
+    + '</div></div>';
+}
+
+// Horas trabajadas del mes: el MISMO cálculo para Productividad y para el Dashboard
+function _horasDelMes(mes, anio){
+  function parseFechaLocal(val){
+    if(!val) return new Date(NaN);
+    if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)){
+      const [y,m,d] = val.split('-').map(Number);
+      return new Date(y, m-1, d);
+    }
+    return new Date(val);
+  }
+  const TECNICOS_LIST = _nxLista('tec', ['Maynor Paz','Jose Escoto','Ramon Moreno','Marvin Torres']);
+  const statsTec = {};
+  TECNICOS_LIST.forEach(t => { statsTec[t] = { ordenes:0, minutos:0 }; });
+
+  // PERSONAL_LOG se define aquí (antes) porque el personal de logística a veces
+  // también participa como "técnico" en órdenes de preventivo/correctivo, y sus
+  // horas deben repartirse a Logística, no quedar separadas en Técnicos.
+  const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
+  const statsLog = {};
+  PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
+
+  const ordenesDelMes = [
+    ...DB.preventivos.filter(p => {
+      if(!p.completado) return false;
+      const f = parseFechaLocal(p.fechaCompletado||p.fechaFin||p.fecha);
+      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    }),
+    ...DB.correctivos.filter(c => {
+      if(c.estado!=='Completado') return false;
+      const f = parseFechaLocal(c.fechaCierre||c.fechaFin||c.fecha);
+      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    }),
+    ...(DB.cortinas||[]).filter(o => {
+      if(!o.completado && o.estado!=='Completado') return false;
+      const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
+      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    })
+  ];
+  ordenesDelMes.forEach(o => {
+    const tecs = (o.tecnicos && o.tecnicos.length)
+      ? o.tecnicos.filter(Boolean)
+      : (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+    // Usar tiempo total (incluye traslado si aplica) para las horas del personal
+    const t = calcTiemposOrden(o);
+    const mins = t.minsTotal || 0;
+    tecs.forEach(t => {
+      if(PERSONAL_LOG.includes(t) && !TECNICOS_LIST.includes(t)){   // un técnico siempre suma a su productividad de técnico
+        if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
+        statsLog[t].ordenes++;
+        statsLog[t].minutos += mins;
+      } else {
+        if(!statsTec[t]) statsTec[t] = {ordenes:0, minutos:0};
+        statsTec[t].ordenes++;
+        statsTec[t].minutos += mins;
+      }
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
+  // ══════════════════════════════════════════════════════════════════════
+  const logCerradasMes = (DB.logistica||[]).filter(o => {
+    if(!o.cerrado || o.estado==='Cancelado') return false;
+    const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
+    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+  });
+  logCerradasMes.forEach(o => {
+    const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
+    if(!asignados.length) return;
+    const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
+      // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
+      const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
+      if(!st[p]) st[p] = {ordenes:0, minutos:0};
+      st[p].ordenes++;
+      st[p].minutos += mins;
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // REVISIONES FÍSICO-TÉCNICAS — el técnico1/técnico2 puede ser personal
+  // técnico o de logística; se reparte el tiempo al grupo correspondiente.
+  // ══════════════════════════════════════════════════════════════════════
+  const revisionesDelMes = (DB.revisiones||[]).filter(r => {
+    if(!r.completado) return false;
+    const f = parseFechaLocal(r.fechaCierre||r.fecha);
+    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+  });
+  revisionesDelMes.forEach(r => {
+    const tecs = (r.tecnicos||[]).filter(Boolean);
+    if(!tecs.length) return;
+    const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
+    const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
+    const ini = new Date(iniStr), fin = new Date(finStr);
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    tecs.forEach(nombre => {
+      if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
+        if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
+        statsLog[nombre].ordenes++;
+        statsLog[nombre].minutos += mins;
+      } else {
+        if(!statsTec[nombre]) statsTec[nombre] = {ordenes:0, minutos:0};
+        statsTec[nombre].ordenes++;
+        statsTec[nombre].minutos += mins;
+      }
+    });
+  });
+
+  const sortedTec = Object.entries(statsTec)
+    .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
+    .sort((a,b) => b[1].minutos - a[1].minutos);
+  const sortedLog = Object.entries(statsLog)
+    .filter(([,s]) => s.ordenes>0 || s.minutos>0)
+    .sort((a,b) => b[1].minutos - a[1].minutos);
+  return { sortedTec: sortedTec, sortedLog: sortedLog };
+}
+
 function renderPersonal(){
   const META_MINS = 189 * 60; // 189 horas en minutos
 
@@ -6351,111 +6618,8 @@ function renderPersonal(){
   // ══════════════════════════════════════════════════════════════════════
   // TÉCNICOS — Mantenimiento (preventivos + correctivos completados)
   // ══════════════════════════════════════════════════════════════════════
-  const TECNICOS_LIST = _nxLista('tec', ['Maynor Paz','Jose Escoto','Ramon Moreno','Marvin Torres']);
-  const statsTec = {};
-  TECNICOS_LIST.forEach(t => { statsTec[t] = { ordenes:0, minutos:0 }; });
-
-  // PERSONAL_LOG se define aquí (antes) porque el personal de logística a veces
-  // también participa como "técnico" en órdenes de preventivo/correctivo, y sus
-  // horas deben repartirse a Logística, no quedar separadas en Técnicos.
-  const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
-  const statsLog = {};
-  PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
-
-  const ordenesDelMes = [
-    ...DB.preventivos.filter(p => {
-      if(!p.completado) return false;
-      const f = parseFechaLocal(p.fechaCompletado||p.fechaFin||p.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
-    }),
-    ...DB.correctivos.filter(c => {
-      if(c.estado!=='Completado') return false;
-      const f = parseFechaLocal(c.fechaCierre||c.fechaFin||c.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
-    }),
-    ...(DB.cortinas||[]).filter(o => {
-      if(!o.completado && o.estado!=='Completado') return false;
-      const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
-    })
-  ];
-  ordenesDelMes.forEach(o => {
-    const tecs = (o.tecnicos && o.tecnicos.length)
-      ? o.tecnicos.filter(Boolean)
-      : (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
-    // Usar tiempo total (incluye traslado si aplica) para las horas del personal
-    const t = calcTiemposOrden(o);
-    const mins = t.minsTotal || 0;
-    tecs.forEach(t => {
-      if(PERSONAL_LOG.includes(t) && !TECNICOS_LIST.includes(t)){   // un técnico siempre suma a su productividad de técnico
-        if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
-        statsLog[t].ordenes++;
-        statsLog[t].minutos += mins;
-      } else {
-        if(!statsTec[t]) statsTec[t] = {ordenes:0, minutos:0};
-        statsTec[t].ordenes++;
-        statsTec[t].minutos += mins;
-      }
-    });
-  });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
-  // ══════════════════════════════════════════════════════════════════════
-  const logCerradasMes = (DB.logistica||[]).filter(o => {
-    if(!o.cerrado || o.estado==='Cancelado') return false;
-    const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
-    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
-  });
-  logCerradasMes.forEach(o => {
-    const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
-    if(!asignados.length) return;
-    const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
-    asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
-      // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
-      const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
-      if(!st[p]) st[p] = {ordenes:0, minutos:0};
-      st[p].ordenes++;
-      st[p].minutos += mins;
-    });
-  });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // REVISIONES FÍSICO-TÉCNICAS — el técnico1/técnico2 puede ser personal
-  // técnico o de logística; se reparte el tiempo al grupo correspondiente.
-  // ══════════════════════════════════════════════════════════════════════
-  const revisionesDelMes = (DB.revisiones||[]).filter(r => {
-    if(!r.completado) return false;
-    const f = parseFechaLocal(r.fechaCierre||r.fecha);
-    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
-  });
-  revisionesDelMes.forEach(r => {
-    const tecs = (r.tecnicos||[]).filter(Boolean);
-    if(!tecs.length) return;
-    const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
-    const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
-    const ini = new Date(iniStr), fin = new Date(finStr);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
-    tecs.forEach(nombre => {
-      if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
-        if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
-        statsLog[nombre].ordenes++;
-        statsLog[nombre].minutos += mins;
-      } else {
-        if(!statsTec[nombre]) statsTec[nombre] = {ordenes:0, minutos:0};
-        statsTec[nombre].ordenes++;
-        statsTec[nombre].minutos += mins;
-      }
-    });
-  });
-
-  const sortedTec = Object.entries(statsTec)
-    .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
-    .sort((a,b) => b[1].minutos - a[1].minutos);
-  const sortedLog = Object.entries(statsLog)
-    .filter(([,s]) => s.ordenes>0 || s.minutos>0)
-    .sort((a,b) => b[1].minutos - a[1].minutos);
+  // (2026-10-13) Cálculo de horas en _horasDelMes: el Dashboard usa exactamente el mismo
+  const _hm = _horasDelMes(mes, anio), sortedTec = _hm.sortedTec, sortedLog = _hm.sortedLog;
 
   // ══════════════════════════════════════════════════════════════════════
   // Render final — dos bloques independientes
@@ -10369,6 +10533,7 @@ function _iniciarConexionFirebase(esReintento){
         if(id==='flota')     renderEquipos();
         if(id==='historial')   renderHistorial();
         if(id==='personal')    renderPersonal();
+        else if(id==='tablero')     renderTableroGer();
       }
     });
    } // fin del guard _fbListenersRegistrados
@@ -12355,6 +12520,9 @@ function _verFotoGrande(src){
   </button>
   <button class="nav-btn" onclick="showTab('personal',this)">
     <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/></svg>Productividad
+  </button>
+  <button class="nav-btn" onclick="showTab('tablero',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard
   </button>
   <button class="nav-btn" onclick="showTab('notificaciones',this)">
     <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="nav-badge" id="badge-notif-mant"></span></span>Notificaciones
