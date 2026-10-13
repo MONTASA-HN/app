@@ -652,3 +652,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   pantalla) o `_vliqContar(facturas)` (las guardadas, de 5 en 5, mínimo 10).
 - **Renta de grúa = renta de vehículo**: una renta cuyo equipo es la grúa (`equipoId` `veh_…`) cumple `_esVehiculoOrdenLog(o)` y
   tiene su propio bloque de operador. Todo lo que sea «para rentas» debe cubrir los dos casos.
+- **Firmas**: guardar SIEMPRE con `_firmaLigera(canvas)`, nunca `canvas.toDataURL('image/png')` directo (pesa 4 veces más y todas
+  las apps de MT descargan la base entera al abrir).

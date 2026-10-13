@@ -477,3 +477,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-10-13 — Renta (MTL): operador principal + hasta 3 adicionales (`operador2..4`, `_logOperadorExtra` no repite nombres).
   Vales, firmas, productividad y vistas ya leían `operador..operador5`. Detalle de Gerencia (MTG, MHG) muestra todos.
 - 2026-10-13 — Operadores adicionales también en renta de grúa/vehículo (`_esVehiculoOrdenLog`, p. ej. LG-0260); lista `_viatPersonal()`.
+- 2026-10-13 — Auditoría etapa 2: firmas livianas en las 9 apps (`window._firmaLigera(canvas)` en el bloque TEXTO SEGURO: máx. 400 px,
+  fondo blanco, tinta de un solo tono, ≈ 4 KB). La usan getFirmaData, guardarFirmaOrden, _autoGuardarFirma, guardarFirmaLog,
+  _firmaPostGuardar, finalizarEvaluacion, mthFirmaGuardar, horFirmaGuardar y rcFirmaGuardarOverlay. Datos: las fotos de 12 órdenes
+  viejas de logística se quitaron de la orden (ya estaban en `fotosOrden_montasa`; quedó `nFotos`). `montasa` bajó de 6.9 a 2.5 MB.
