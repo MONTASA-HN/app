@@ -497,3 +497,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-10-13 — Acceso paso 2 (apps): bloque «ACCESO NEXO · PASO 2» en las 9 apps; `window._nxPuerta(db)` se llama justo después de
   `window._fbDB = firebase.database()`. En MT (CERRADA) la base arranca con `goOffline()` y `goOnline()` cuando el acceso propio
   (REST + `getIdToken`) está aprobado. Registro y `ultimaVez` también por REST. MONHACO: sin cerrar todavía.
+- 2026-10-13 — Dashboard de Gerencia (MTG, MHG): pestaña `tablero` (`renderTableroGer`, estilos `.tb-*` en `_tableroCSS`). Abiertas hoy por
+  estado; cerradas del mes (mant.: preventivos/correctivos [+cortinas en MONHACO]; logística por tipo); horas con `_horasDelMes`
+  (separado de `renderPersonal`, mismo cálculo); fallas: correctivos REPORTADOS en el mes por `sistema` (vacíos fuera) y top 10 equipos.
+  Menú ☰ de MTG (`_gerMenuGo(n,…)`) va por POSICIÓN en la barra: se renumeró.

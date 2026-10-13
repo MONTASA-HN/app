@@ -665,3 +665,6 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **Puerta de acceso**: no crear otra conexión a la base (`firebase.database()`) sin pasar por `window._nxPuerta`; si no, esa
   conexión salta la espera de aprobación. Para abrir MONHACO: cambiar `CERRADA` en el bloque «ACCESO NEXO · PASO 2» de sus 4 apps.
   Prueba: en la copia, `localStorage.__accMock` simula el acceso propio (`null` = sin registro).
+- **Menú ☰ de Gerencia MT**: `_gerMenuGo(n, tab)` y `_gerMenuSync` usan la POSICIÓN del botón en `.bottom-nav`. Al agregar o mover un
+  botón de la barra, renumerar el menú. **Marca de agua**: `.watermark` es fija y queda encima de lo que no tenga capa propia
+  (`position:relative;z-index:1`).
