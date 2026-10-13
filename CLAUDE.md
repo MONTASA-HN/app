@@ -790,3 +790,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Órdenes de renta: hasta 3 operadores adicionales en simultáneo (Logística MT).
 - 2026-10-13 — Auditoría etapa 2: firmas nuevas livianas (`_firmaLigera`); fotos viejas fuera de las órdenes (montasa 6.9 → 2.5 MB).
 - 2026-10-13 — Auditoría etapa 3: lo hecho sin señal (cierres, firmas, órdenes nuevas) ya no se pierde al reabrir la app con señal.
+- 2026-10-13 — Auditoría etapa 4: números MH/LG que nunca quedan repetidos; Personal guarda solo lo cambiado.

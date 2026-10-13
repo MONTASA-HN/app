@@ -657,3 +657,7 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **Lectores de la raíz y lo pendiente**: todo `FB_REF.once/on('value')` que asigne listas a `DB` debe llamar
   `_Sync.mezclar(datos)` sobre el MISMO objeto que luego asigna (no volver a llamar `snap.val()`: da una copia nueva sin mezclar).
   Probar sin señal: en la copia de prueba `localStorage.__sinSenal=1` (las escrituras no llegan) y `__raizPrimero=1` (otro orden de avisos).
+- **Números de orden**: `nextCorrelativo` sigue siendo local; la garantía de que no se repitan está en `_Sync` (renumera la orden
+  creada en este teléfono si choca). No quitar `_marcarCreado` de `_agregar`. Personal: al editar, pasar el registro original a
+  `escribir(..., antes)`; sin él se reescribe entero y se pisan cambios de otro equipo.
+- **Reemplazos en scripts**: nunca `s.replace(a, 'texto con …')` (el `` inserta el resto del archivo). Usar `split(a).join(b)`.

@@ -486,3 +486,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   agrega los registros creados aquí; luego sube. Antes, al volver la señal, `_Sync` intentaba subir antes de `_fbReady` y el lector de la
   raíz reemplazaba las listas → el cierre se perdía. La copia local ya guarda la firma. MTG/MTS/MHG/MHS: `saveDB` guarda la logística en el
   teléfono (sin fotos) y `loadDB` la lee primero; MTG muestra lo del teléfono al arrancar (sin señal quedaba vacía).
+- 2026-10-13 — Auditoría etapa 4: (1) `_Sync._revisarRepetidos`: si llegan del servidor dos órdenes con el mismo MH (preventivos+correctivos)
+  o LG (logística), se queda la de id menor; la otra, si se creó en ESTE teléfono (`_sync_creados_<raíz>` en localStorage, 30 días), toma
+  número nuevo del contador `<raíz>/lastCorrelativo_<MH|LG>` (transacción) y se corrige también su solicitud. (2) Personal (MTG, MHG):
+  `escribir(ruta, valor, antes)` sube solo los datos cambiados respecto de como se abrió el registro (antes: `set` del registro entero).
