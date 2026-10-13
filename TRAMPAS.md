@@ -654,3 +654,6 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   tiene su propio bloque de operador. Todo lo que sea «para rentas» debe cubrir los dos casos.
 - **Firmas**: guardar SIEMPRE con `_firmaLigera(canvas)`, nunca `canvas.toDataURL('image/png')` directo (pesa 4 veces más y todas
   las apps de MT descargan la base entera al abrir).
+- **Lectores de la raíz y lo pendiente**: todo `FB_REF.once/on('value')` que asigne listas a `DB` debe llamar
+  `_Sync.mezclar(datos)` sobre el MISMO objeto que luego asigna (no volver a llamar `snap.val()`: da una copia nueva sin mezclar).
+  Probar sin señal: en la copia de prueba `localStorage.__sinSenal=1` (las escrituras no llegan) y `__raizPrimero=1` (otro orden de avisos).

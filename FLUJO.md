@@ -481,3 +481,8 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   fondo blanco, tinta de un solo tono, ≈ 4 KB). La usan getFirmaData, guardarFirmaOrden, _autoGuardarFirma, guardarFirmaLog,
   _firmaPostGuardar, finalizarEvaluacion, mthFirmaGuardar, horFirmaGuardar y rcFirmaGuardarOverlay. Datos: las fotos de 12 órdenes
   viejas de logística se quitaron de la orden (ya estaban en `fotosOrden_montasa`; quedó `nFotos`). `montasa` bajó de 6.9 a 2.5 MB.
+- 2026-10-13 — Auditoría etapa 3 (sin señal), 8 apps con `_Sync`: `_Sync.mezclar(copiaDelServidor)` se llama en cada lector de la raíz
+  (once/on `value`) justo después de `snap.val()`: vuelve a poner lo que el teléfono cambió y no subió (según la base en localStorage) y
+  agrega los registros creados aquí; luego sube. Antes, al volver la señal, `_Sync` intentaba subir antes de `_fbReady` y el lector de la
+  raíz reemplazaba las listas → el cierre se perdía. La copia local ya guarda la firma. MTG/MTS/MHG/MHS: `saveDB` guarda la logística en el
+  teléfono (sin fotos) y `loadDB` la lee primero; MTG muestra lo del teléfono al arrancar (sin señal quedaba vacía).

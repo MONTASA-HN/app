@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7f8a1306a8b0';
+  var APP_VERSION='3198b9ae10d1';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -620,6 +620,35 @@ var _Sync = (function(){
     });
   }
 
+  // ── Llega la copia ENTERA del servidor (cargador de la raíz) ──────────────── (2026-10-13, auditoría etapa 3)
+  // Antes de que la app reemplace sus listas con esa copia, se le vuelve a poner lo que este teléfono cambió y aún no
+  // subió (sin señal, app cerrada…) y los registros creados aquí que el servidor todavía no tiene. Luego se sube.
+  // Nunca quita datos del servidor (la copia local no guarda fotos) ni agrega equipos/vendidos.
+  function mezclar(obj){
+    if(!obj || typeof obj !== 'object' || !raiz) return obj;
+    var hubo = false;
+    activas.forEach(function(col){
+      var loc = _lista(col), b = base[col], lista = obj[col];
+      if(!loc || !b || !lista || typeof lista !== 'object') return;
+      var srv = {}; _entradas(lista).forEach(function(e){ if(e[1].id) srv[e[1].id] = e[1]; });
+      var conBase = Object.keys(b).length > 0;
+      loc.forEach(function(o){
+        if(!o || !o.id) return;
+        var s = srv[o.id], hb = b[o.id];
+        if(s && hb){
+          _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k) && _h(o[k]) !== _h(s[k])){ s[k] = JSON.parse(JSON.stringify(o[k])); hubo = true; } });
+        } else if(!s && !hb && conBase && col !== 'equipos' && col !== 'vendidos' && !_borradoAposta(o.id)){
+          var c = JSON.parse(JSON.stringify(o));
+          if(Array.isArray(lista)) lista.push(c);
+          else { var mx = -1; Object.keys(lista).forEach(function(k){ var n = parseInt(k, 10); if(!isNaN(n) && n > mx) mx = n; }); lista[String(mx + 1)] = c; }
+          hubo = true;
+        }
+      });
+    });
+    if(hubo){ _avisar('se conservaron cambios pendientes de este teléfono'); setTimeout(function(){ guardar(); }, 1500); }
+    return obj;
+  }
+
   function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
@@ -631,7 +660,7 @@ var _Sync = (function(){
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
   }
-  return { iniciar: iniciar, guardar: guardar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -2003,7 +2032,7 @@ function _dbSinFotos(){
   const clone = {}; for(const k in DB) clone[k]=DB[k];
   const strip = a => Array.isArray(a) ? a.map(o=>{
     if(!o || typeof o!=='object') return o;
-    const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
+    const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto') continue; /* (2026-10-13) la firma sí se guarda: es liviana y una firma sin señal no debe perderse */ c[kk]=o[kk]; }
     if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
     return c;
   }) : a;
@@ -5235,7 +5264,7 @@ renderDashboardTec();
   const FB_REF = window._fbDB.ref('montasa');
 
   FB_REF.once('value').then(snap=>{
-    const remote = snap.val();
+    const remote = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(remote); }catch(_e){}
     if(remote && remote._ts){
       const local = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
       if(remote._ts >= (local._ts||0)){
@@ -5315,7 +5344,7 @@ renderDashboardTec();
     }
     FB_REF.on('value', function(snap){
       if(window._uiDeferir && window._uiDeferir('fb-root', arguments.callee, arguments)) return;
-      const d = snap.val();
+      const d = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(d); }catch(_e){}
       if(!d||!d._ts) return;
       const ownWrite = d._sid && d._sid === _SESSION_ID;
       if(ownWrite) return; // Es el eco de nuestra propia escritura — nuestros datos en memoria ya son correctos
