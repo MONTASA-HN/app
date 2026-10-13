@@ -472,3 +472,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   solicitudes, firmas y enlaces usan `_x`/`_img`/`_url`/`_idS`. No cambia el flujo de datos.
 - 2026-10-12 — PDF de órdenes (MTG, MTS, MTC, MHG, MHS): `cabe()` mide dentro de la hoja y estima si el navegador no da medidas
   (iPhone). No cambia el flujo de datos.
+- 2026-10-13 — Liquidaciones (MTG, MTS, MTL, MHG, MHS): 10 filas al inicio y «➕ Agregar 5 filas» (`_vliqFilasHTML`, `_vliqContar`,
+  `_vliqAgregar5`); leer y sumar recorren las filas en pantalla (`_vliqFilas`). El PDF lleva las filas usadas (mín. 10). Antes 14 fijas.

@@ -648,3 +648,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **PDF de órdenes en iPhone**: medir con `getBoundingClientRect` el armado escondido daba cero en Safari de iPhone y
   cada dato salía en una hoja (LG-0261, 13 hojas). `cabe()` mide con `offsetTop/offsetHeight` dentro de la hoja y, si no hay
   medidas, estima por contenido (de más a propósito). Para probar el estimado: `window._opdfSinMedir = true`.
+- **Filas de la liquidación**: ya no son 14 fijas. Nunca recorrer con un número fijo: usar `_vliqFilas()` (las que hay en
+  pantalla) o `_vliqContar(facturas)` (las guardadas, de 5 en 5, mínimo 10).
