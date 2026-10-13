@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='cb18c253c680';
+  var APP_VERSION='18c2e6a25127';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -363,6 +363,35 @@ var _Sync = (function(){
     });
   }
 
+  // ── Llega la copia ENTERA del servidor (cargador de la raíz) ──────────────── (2026-10-13, auditoría etapa 3)
+  // Antes de que la app reemplace sus listas con esa copia, se le vuelve a poner lo que este teléfono cambió y aún no
+  // subió (sin señal, app cerrada…) y los registros creados aquí que el servidor todavía no tiene. Luego se sube.
+  // Nunca quita datos del servidor (la copia local no guarda fotos) ni agrega equipos/vendidos.
+  function mezclar(obj){
+    if(!obj || typeof obj !== 'object' || !raiz) return obj;
+    var hubo = false;
+    activas.forEach(function(col){
+      var loc = _lista(col), b = base[col], lista = obj[col];
+      if(!loc || !b || !lista || typeof lista !== 'object') return;
+      var srv = {}; _entradas(lista).forEach(function(e){ if(e[1].id) srv[e[1].id] = e[1]; });
+      var conBase = Object.keys(b).length > 0;
+      loc.forEach(function(o){
+        if(!o || !o.id) return;
+        var s = srv[o.id], hb = b[o.id];
+        if(s && hb){
+          _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k) && _h(o[k]) !== _h(s[k])){ s[k] = JSON.parse(JSON.stringify(o[k])); hubo = true; } });
+        } else if(!s && !hb && conBase && col !== 'equipos' && col !== 'vendidos' && !_borradoAposta(o.id)){
+          var c = JSON.parse(JSON.stringify(o));
+          if(Array.isArray(lista)) lista.push(c);
+          else { var mx = -1; Object.keys(lista).forEach(function(k){ var n = parseInt(k, 10); if(!isNaN(n) && n > mx) mx = n; }); lista[String(mx + 1)] = c; }
+          hubo = true;
+        }
+      });
+    });
+    if(hubo){ _avisar('se conservaron cambios pendientes de este teléfono'); setTimeout(function(){ guardar(); }, 1500); }
+    return obj;
+  }
+
   function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
@@ -374,7 +403,7 @@ var _Sync = (function(){
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
   }
-  return { iniciar: iniciar, guardar: guardar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
   <link rel="manifest" href="/app/manifest_comercial.json">
@@ -1926,7 +1955,7 @@ function _estaVendido(e){
   // Handler del listener en vivo (extraído para poder adjuntarlo SIEMPRE,
   // aunque la primera lectura .once() falle). Así nunca se queda en la base.
   function _liveHandlerCom(snap){
-    const d = snap.val();
+    const d = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(d); }catch(_e){}
     if(!d) return;
     const ownWrite = d._sid && d._sid === _SESSION_ID;
     if(d.vendidos && d.vendidos.length) DB.vendidos = _dedupeVendidos(d.vendidos);

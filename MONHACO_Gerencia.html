@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='333570419932';
+  var APP_VERSION='0b921d8327c6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -620,6 +620,35 @@ var _Sync = (function(){
     });
   }
 
+  // ── Llega la copia ENTERA del servidor (cargador de la raíz) ──────────────── (2026-10-13, auditoría etapa 3)
+  // Antes de que la app reemplace sus listas con esa copia, se le vuelve a poner lo que este teléfono cambió y aún no
+  // subió (sin señal, app cerrada…) y los registros creados aquí que el servidor todavía no tiene. Luego se sube.
+  // Nunca quita datos del servidor (la copia local no guarda fotos) ni agrega equipos/vendidos.
+  function mezclar(obj){
+    if(!obj || typeof obj !== 'object' || !raiz) return obj;
+    var hubo = false;
+    activas.forEach(function(col){
+      var loc = _lista(col), b = base[col], lista = obj[col];
+      if(!loc || !b || !lista || typeof lista !== 'object') return;
+      var srv = {}; _entradas(lista).forEach(function(e){ if(e[1].id) srv[e[1].id] = e[1]; });
+      var conBase = Object.keys(b).length > 0;
+      loc.forEach(function(o){
+        if(!o || !o.id) return;
+        var s = srv[o.id], hb = b[o.id];
+        if(s && hb){
+          _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k) && _h(o[k]) !== _h(s[k])){ s[k] = JSON.parse(JSON.stringify(o[k])); hubo = true; } });
+        } else if(!s && !hb && conBase && col !== 'equipos' && col !== 'vendidos' && !_borradoAposta(o.id)){
+          var c = JSON.parse(JSON.stringify(o));
+          if(Array.isArray(lista)) lista.push(c);
+          else { var mx = -1; Object.keys(lista).forEach(function(k){ var n = parseInt(k, 10); if(!isNaN(n) && n > mx) mx = n; }); lista[String(mx + 1)] = c; }
+          hubo = true;
+        }
+      });
+    });
+    if(hubo){ _avisar('se conservaron cambios pendientes de este teléfono'); setTimeout(function(){ guardar(); }, 1500); }
+    return obj;
+  }
+
   function iniciar(r, fbdb, soloCols){
     if(raiz) return;
     raiz = r; db = fbdb;
@@ -631,7 +660,7 @@ var _Sync = (function(){
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
   }
-  return { iniciar: iniciar, guardar: guardar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -2091,7 +2120,7 @@ function _dbSinFotos(){
     if(Array.isArray(v)){
       clone[k]=v.map(function(o){
         if(!o||typeof o!=='object') return o;
-        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
+        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto') continue; /* (2026-10-13) la firma sí se guarda: es liviana y una firma sin señal no debe perderse */ c[kk]=o[kk]; }
         if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
         return c;
       });
@@ -2250,6 +2279,8 @@ function saveDB(){
   // Órdenes, equipos y demás listas se guardan registro por registro (sincronizador, T7)
   try{ if(typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){}
   try{ _cacheLocal(); }catch(e){}
+  // (2026-10-13, auditoría etapa 3) Logística también queda en el teléfono en CADA guardado (sin fotos). Nunca una lista vacía.
+  try{ if(Array.isArray(DB.logistica) && DB.logistica.length) localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica.map(function(o){ if(!o || typeof o !== 'object' || (!o.fotos && !o.foto)) return o; var c = Object.assign({}, o); delete c.fotos; delete c.foto; return c; }))); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
       // Contador MH: solo se sube si es mayor que el del servidor, nunca lo baja (T13)
@@ -2748,6 +2779,8 @@ function saveAllEquipos(){
   try{ _Sync.guardar(); }catch(e){}
 }
 function loadDB(){
+  // (2026-10-13, auditoría etapa 3) Logística primero: si algo de abajo llama saveDB, no debe guardar una logística vieja encima
+  try{ const _lc0 = localStorage.getItem('monhaco_log_cache'); if(_lc0) DB.logistica = JSON.parse(_lc0); }catch(e){}
   try{
     const d = localStorage.getItem(LS_KEY);
     if(d){
@@ -10038,7 +10071,7 @@ function _iniciarConexionFirebase(esReintento){
    // IMPORTANTE: NO habilitar escritura (_fbReady) aquí arriba. _fbReady se activa más
    // abajo, sólo después de haber cargado el snapshot real (fotos/firmas incluidas).
    try {
-    const remote = snap.val();
+    const remote = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(remote); }catch(_e){}
     if(remote){
       loadDB();
       // Equipos: Firebase ALWAYS wins — estados en Firebase son la fuente de verdad
@@ -10100,8 +10133,8 @@ function _iniciarConexionFirebase(esReintento){
     if(!DB.equipos || DB.equipos.length === 0) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
     if(!DB.vendidos || DB.vendidos.length === 0) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
     // logística siempre desde Firebase — su _ts puede diferir del main app
-    if(snap.val() && snap.val().logistica){
-      DB.logistica = _mergeLogistica(snap.val().logistica);
+    if(remote && remote.logistica){   // (2026-10-13) la misma copia ya mezclada con lo pendiente (_Sync.mezclar)
+      DB.logistica = _mergeLogistica(remote.logistica);
       try{ localStorage.setItem('monhaco_log_cache', JSON.stringify(DB.logistica)); }catch(e){}
     }
     renderDashboard();
@@ -10161,7 +10194,7 @@ function _iniciarConexionFirebase(esReintento){
     }
     FB_REF.on('value', function(snap){
       if(window._uiDeferir && window._uiDeferir('fb-root', arguments.callee, arguments)) return;
-      const d = snap.val();
+      const d = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(d); }catch(_e){}
       if(!d || !d._ts) return;
       // T9: si al abrir la base respondió vacía, la escritura queda apagada; se enciende cuando llega este primer
       // dato real (al terminar de cargarlo, por eso el setTimeout).
