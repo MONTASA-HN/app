@@ -795,3 +795,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Acceso paso 2 en las apps de MT: solo entran teléfonos aprobados (MONHACO todavía abierto).
 - 2026-10-13 — Gerencia MT y MONHACO: pestaña «📊 Dashboard» (abiertas, cerradas del mes, horas, fallas por sistema y equipos).
 - 2026-10-13 — Dashboard con revisiones y evaluaciones; Productividad suma las horas de las evaluaciones (pedido de Miguel).
+- 2026-10-13 — Revisiones físico-técnicas MT: campos Cilindraje (cc) y Capacidad (kg), obligatorios para finalizar.

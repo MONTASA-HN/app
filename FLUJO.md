@@ -503,3 +503,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   Menú ☰ de MTG (`_gerMenuGo(n,…)`) va por POSICIÓN en la barra: se renumeró.
 - 2026-10-13 — Dashboard: revisiones (RV) y evaluaciones (EV) cuentan como mantenimiento (abiertas, cerradas por `fechaCierre||fecha`,
   líneas propias). `_horasDelMes` suma también las EVALUACIONES (mismas reglas que revisiones): cambia Productividad y Dashboard.
+- 2026-10-13 — Revisiones físico-técnicas (MT): campos `cilindraje` (cc) y `capacidad` (kg), números, obligatorios al finalizar
+  (`finalizarRevision`). Se llenan en MTT (formulario y tarjeta abierta); se muestran en MTG/MTS (`_buildDetalleRV`, `_construirCamposOrden`) y MTC.
