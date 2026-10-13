@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='700df456f287';
+  var APP_VERSION='4bb6d4e24f62';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1048,6 +1048,13 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 window._x = function(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
 window._idS = function(t){ return String(t == null ? '' : t).replace(/[^A-Za-z0-9_\-]/g, ''); };
 window._url = function(u){ u = String(u == null ? '' : u).trim(); return /^(https?:\/\/|data:application\/pdf)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
+// (2026-10-13, auditoría) Firma liviana: máx. 400 px, fondo blanco y tinta de un solo tono → PNG de ≈ 4 KB.
+window._firmaLigera = function(cv){ try{
+  var W = Math.min(cv.width, 400), H = Math.max(1, Math.round(cv.height * W / cv.width)), c = document.createElement('canvas'); c.width = W; c.height = H;
+  var x = c.getContext('2d'); x.drawImage(cv, 0, 0, W, H); var d = x.getImageData(0, 0, W, H), p = d.data;
+  for(var i = 0; i < p.length; i += 4){ var tinta = p[i+3] > 60 && (p[i] + p[i+1] + p[i+2]) / 3 < 160; p[i] = tinta ? 31 : 255; p[i+1] = tinta ? 56 : 255; p[i+2] = tinta ? 100 : 255; p[i+3] = 255; }
+  x.putImageData(d, 0, 0); return c.toDataURL('image/png');
+}catch(e){ return cv.toDataURL('image/png'); } };
 window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
 </script>
 <script>
@@ -3283,7 +3290,7 @@ function horFirmaGuardar(ck, rol){
   if(!window._horFirmaHayTrazo){ toast('Firme dentro del recuadro antes de guardar', true); return; }
   const mes = _horMesVista || horMesActual();
   if(_horCierres(mes)[ck] || _horCierre(mes)){ toast('Esa toma ya fue finalizada \u2014 solo lectura', true); return; }
-  const data = c.toDataURL('image/png');
+  const data = _firmaLigera(c);
   if(!DB.horometros) DB.horometros = {};
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   if(!DB.horometros[mes]._firmas) DB.horometros[mes]._firmas = {};
@@ -3733,7 +3740,7 @@ function _rcFirmaLimpiarLienzo(){
 function rcFirmaGuardarOverlay(){
   const c = document.getElementById('rc-firma-canvas'); if(!c) return;
   if(!window._rcFirmaHayTrazo){ toast('Primero firme en el recuadro', true); return; }
-  _rcFirmaTmp = c.toDataURL('image/png');
+  _rcFirmaTmp = _firmaLigera(c);
   const ov = document.getElementById('rc-firma-overlay'); if(ov) ov.remove();
   _rcFormFirmaUI();
   toast('Firma guardada ✓');
@@ -5721,7 +5728,7 @@ function getFirmaData(ordenId){
   const ctx = canvas.getContext('2d');
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const hasDrawing = pixels.some((v, i) => i % 4 === 3 && v > 0);
-  return hasDrawing ? canvas.toDataURL('image/png') : '';
+  return hasDrawing ? _firmaLigera(canvas) : '';
 }
 
 function updateBadgeLogGer(){
