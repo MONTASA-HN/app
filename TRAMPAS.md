@@ -650,3 +650,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   medidas, estima por contenido (de más a propósito). Para probar el estimado: `window._opdfSinMedir = true`.
 - **Filas de la liquidación**: ya no son 14 fijas. Nunca recorrer con un número fijo: usar `_vliqFilas()` (las que hay en
   pantalla) o `_vliqContar(facturas)` (las guardadas, de 5 en 5, mínimo 10).
+- **Renta de grúa = renta de vehículo**: una renta cuyo equipo es la grúa (`equipoId` `veh_…`) cumple `_esVehiculoOrdenLog(o)` y
+  tiene su propio bloque de operador. Todo lo que sea «para rentas» debe cubrir los dos casos.

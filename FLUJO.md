@@ -476,3 +476,4 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   `_vliqAgregar5`); leer y sumar recorren las filas en pantalla (`_vliqFilas`). El PDF lleva las filas usadas (mín. 10). Antes 14 fijas.
 - 2026-10-13 — Renta (MTL): operador principal + hasta 3 adicionales (`operador2..4`, `_logOperadorExtra` no repite nombres).
   Vales, firmas, productividad y vistas ya leían `operador..operador5`. Detalle de Gerencia (MTG, MHG) muestra todos.
+- 2026-10-13 — Operadores adicionales también en renta de grúa/vehículo (`_esVehiculoOrdenLog`, p. ej. LG-0260); lista `_viatPersonal()`.
