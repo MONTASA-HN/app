@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='cbfd03bdbef1';
+  var APP_VERSION='c92cb0a29030';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2236,13 +2236,6 @@ function renderOrdenesLog(){
             ${OPERADORES_LOGISTICA.map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
-        <!-- Renta: hasta 3 operadores adicionales trabajando en simultáneo (2026-10-13, pedido de Miguel) -->
-        ${(o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))?['operador2','operador3','operador4'].map((k,i)=>`
-        <div class="form-group"><label>Operador adicional ${i+1} (opcional)</label>
-          <select onchange="event.stopPropagation();_logOperadorExtra(this,'${_idS(o.id)}','${k}')">
-            <option value="">— Sin operador adicional —</option>
-            ${Array.from(new Set(OPERADORES_LOGISTICA.concat(o[k]?[o[k]]:[]))).map(op=>`<option value="${_x(op)}" ${o[k]===op?'selected':''}>${_x(op)}</option>`).join('')}
-          </select></div>`).join(''):``}
         <!-- 5 Operadores para apoyo a mantenimiento (pueden trabajar en simultáneo) -->
         ${(o.tipoLogistica==='apoyo_mantenimiento')?['operador','operador2','operador3','operador4','operador5'].map((k,i)=>`
         <div class="form-group"><label>Operador ${i+1}${i>0?' (opcional)':''}</label>
@@ -2258,6 +2251,13 @@ function renderOrdenesLog(){
             ${_viatPersonal().map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
+        <!-- Renta (de equipo o de grúa/vehículo): hasta 3 operadores adicionales en simultáneo (2026-10-13, pedido de Miguel) -->
+        ${(o.tipoLogistica==='renta')?['operador2','operador3','operador4'].map((k,i)=>`
+        <div class="form-group"><label>Operador adicional ${i+1} (opcional)</label>
+          <select onchange="event.stopPropagation();_logOperadorExtra(this,'${_idS(o.id)}','${k}')">
+            <option value="">— Sin operador adicional —</option>
+            ${Array.from(new Set((_esVehiculoOrdenLog(o)?_viatPersonal():OPERADORES_LOGISTICA).concat(o[k]?[o[k]]:[]))).map(op=>`<option value="${_x(op)}" ${o[k]===op?'selected':''}>${_x(op)}</option>`).join('')}
+          </select></div>`).join(''):``}
         ${(_rentaConGrua(o)||(o.tipoLogistica==='renta'&&_esVehiculoOrdenLog(o))||(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')&&(o.ubicacionLog||'fuera')==='fuera'||o.tipoLogistica==='atencion_compras'||(o.tipoLogistica==='apoyo_mantenimiento'&&(o.ubicacionLog||'fuera')!=='plantel'))?`
         <div class="form-group"><label>Motorista</label>
           <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','motorista',this.value)">
