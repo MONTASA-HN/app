@@ -792,3 +792,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Auditoría etapa 3: lo hecho sin señal (cierres, firmas, órdenes nuevas) ya no se pierde al reabrir la app con señal.
 - 2026-10-13 — Auditoría etapa 4: números MH/LG que nunca quedan repetidos; Personal guarda solo lo cambiado.
 - 2026-10-13 — Auditoría etapa 5: viáticos viejos conservan el gestor; fotos de RC (MONHACO) con guardado seguro; traslado actualiza Accesos.
+- 2026-10-13 — Acceso paso 2 en las apps de MT: solo entran teléfonos aprobados (MONHACO todavía abierto).

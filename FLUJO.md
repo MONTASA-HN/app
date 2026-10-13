@@ -494,3 +494,6 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   si ya no está en Personal, queda como opción elegida «(no está en Personal)»; antes una solicitud vieja lo perdía al editarla.
   (2) RC MONHACO (MHG, MHS, MHL): `_rcPersistirFotos(r, {quitar})` con transacción que suma (antes `set` que podía borrar fotos).
   (3) Traslado de empleado (MTG, MHG): también cambia `accesos/<uid>/empleadoEmpresa` de sus teléfonos.
+- 2026-10-13 — Acceso paso 2 (apps): bloque «ACCESO NEXO · PASO 2» en las 9 apps; `window._nxPuerta(db)` se llama justo después de
+  `window._fbDB = firebase.database()`. En MT (CERRADA) la base arranca con `goOffline()` y `goOnline()` cuando el acceso propio
+  (REST + `getIdToken`) está aprobado. Registro y `ultimaVez` también por REST. MONHACO: sin cerrar todavía.

@@ -119,6 +119,13 @@ las reglas del paso 2 lo consultan desde cualquier ruta.
 
 ## 4. Paso 2 — Bloqueo
 
+> **13/10/2026 — Apps de MT listas (pedido de Miguel).** MTG, MTS, MTT, MTL y MTC arrancan con la base desconectada
+> (`goOffline`) y se conectan solo si `accesos/<uid>` está aprobado (consulta por REST con la sesión anónima). Pendiente:
+> «⏳ Esperando aprobación», se abre sola al aprobarlo (revisa cada 20 s). Rechazado: «⛔ sin acceso». La última aprobación
+> se recuerda en el teléfono (`nx_acc_ok_montasa`) para no frenar el arranque. MONHACO sigue abierto hasta registrar a su
+> personal (`CERRADA = EMPRESA === 'montasa'` en el bloque «ACCESO NEXO · PASO 2»). Las reglas de la base van aparte.
+
+
 **Cuándo:** cuando Miguel y Rodrigo decidan que hay suficientes registrados. Criterio
 propuesto: todos los técnicos y operadores activos de Personal con al menos un
 teléfono aprobado. **No antes**: si el día que se activa medio taller queda

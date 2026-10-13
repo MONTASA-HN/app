@@ -662,3 +662,6 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   `escribir(..., antes)`; sin él se reescribe entero y se pisan cambios de otro equipo.
 - **Reemplazos en scripts**: nunca `s.replace(a, 'texto con …')` (el `` inserta el resto del archivo). Usar `split(a).join(b)`.
 - **Nombres de gestores**: comparar siempre con `_nzGestor()`; en la base hay solicitudes con el nombre en otro formato que Personal.
+- **Puerta de acceso**: no crear otra conexión a la base (`firebase.database()`) sin pasar por `window._nxPuerta`; si no, esa
+  conexión salta la espera de aprobación. Para abrir MONHACO: cambiar `CERRADA` en el bloque «ACCESO NEXO · PASO 2» de sus 4 apps.
+  Prueba: en la copia, `localStorage.__accMock` simula el acceso propio (`null` = sin registro).
