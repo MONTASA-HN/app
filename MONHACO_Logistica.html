@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ddf58ebaf6ea';
+  var APP_VERSION='00ff81276e49';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1467,14 +1467,23 @@ function _rcHidratar(r, cb){
     if(arr.length){ r.fotos = arr; if(cb) cb(); }
   }).catch(function(){ delete window._rcFotoCargando[r.id]; });
 }
-function _rcPersistirFotos(r){
+function _rcPersistirFotos(r, opc){
+  // (2026-10-13, auditoría etapa 5) Guardado SEGURO, igual que las fotos de órdenes de MT: se suma a lo que ya está en la base
+  // (una foto que este teléfono no había cargado nunca se borra) y solo se quita la que se eliminó a propósito (opc.quitar).
   if(!r || !r.id || !window._fbDB) return;
-  const fotos = (r.fotos||[]).filter(Boolean);
-  window._fbDB.ref('fotosOrden_monhaco/'+r.id).set({fotos:fotos}).then(function(){
-    r.nFotos = fotos.length;
+  const local = (r.fotos||[]).filter(Boolean), quitar = opc && opc.quitar;
+  window._fbDB.ref('fotosOrden_monhaco/'+r.id).transaction(function(cur){
+    var srv = (cur && Array.isArray(cur.fotos)) ? cur.fotos.filter(Boolean) : (Array.isArray(cur) ? cur.filter(Boolean) : []);
+    var fin = srv.slice(); local.forEach(function(f){ if(fin.indexOf(f) < 0) fin.push(f); });
+    if(quitar) fin = fin.filter(function(f){ return f !== quitar; });
+    return { fotos: fin };
+  }).then(function(res){
+    var v = res && res.snapshot && res.snapshot.val();
+    var fotos = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : local;
+    r.fotos = fotos; r.nFotos = fotos.length;
     window._rcFotoCache[r.id] = fotos;
     try{ window._fbDB.ref('monhaco/cobros/'+r.id+'/nFotos').set(fotos.length); }catch(e){}
-  });
+  }).catch(function(e){ try{ toast('⚠️ Las fotos no se pudieron guardar. Revisa tu conexión e inténtalo de nuevo.', true); }catch(_){} });
 }
 function rcFotosAgregar(id, input){
   const r = _rcLista().find(function(x){ return x.id===id; }); if(!r) return;
@@ -1522,8 +1531,8 @@ function rcFotosEliminar(id, idx){
   if(!confirm('¿Eliminar esta foto?')) return;
   const r = _rcLista().find(function(x){ return x.id===id; });
   if(!r || !r.fotos) return;
-  r.fotos.splice(idx, 1);
-  _rcPersistirFotos(r);
+  const quitada = r.fotos.splice(idx, 1)[0];
+  _rcPersistirFotos(r, { quitar: quitada });
   rcVer(id);
 }
 function _rcVerFotoGrande(src){

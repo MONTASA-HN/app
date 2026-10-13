@@ -490,3 +490,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   o LG (logística), se queda la de id menor; la otra, si se creó en ESTE teléfono (`_sync_creados_<raíz>` en localStorage, 30 días), toma
   número nuevo del contador `<raíz>/lastCorrelativo_<MH|LG>` (transacción) y se corrige también su solicitud. (2) Personal (MTG, MHG):
   `escribir(ruta, valor, antes)` sube solo los datos cambiados respecto de como se abrió el registro (antes: `set` del registro entero).
+- 2026-10-13 — Auditoría etapa 5: (1) Viáticos (MTG, MTS, MTL, MHG, MHS): el gestor se busca con `_nzGestor` (sin tildes/mayúsculas) y,
+  si ya no está en Personal, queda como opción elegida «(no está en Personal)»; antes una solicitud vieja lo perdía al editarla.
+  (2) RC MONHACO (MHG, MHS, MHL): `_rcPersistirFotos(r, {quitar})` con transacción que suma (antes `set` que podía borrar fotos).
+  (3) Traslado de empleado (MTG, MHG): también cambia `accesos/<uid>/empleadoEmpresa` de sus teléfonos.

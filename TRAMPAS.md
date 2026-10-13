@@ -661,3 +661,4 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   creada en este teléfono si choca). No quitar `_marcarCreado` de `_agregar`. Personal: al editar, pasar el registro original a
   `escribir(..., antes)`; sin él se reescribe entero y se pisan cambios de otro equipo.
 - **Reemplazos en scripts**: nunca `s.replace(a, 'texto con …')` (el `` inserta el resto del archivo). Usar `split(a).join(b)`.
+- **Nombres de gestores**: comparar siempre con `_nzGestor()`; en la base hay solicitudes con el nombre en otro formato que Personal.
