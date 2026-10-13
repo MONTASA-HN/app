@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b1640f7758a9';
+  var APP_VERSION='60933b9a042d';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1399,13 +1399,18 @@ window._firmaLigera = function(cv){ try{
 window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data:image\/(png|jpe?g|webp|gif);base64,|https:\/\/)/i.test(u) ? u.replace(/"/g, '%22') : ''; };
 </script>
 <script>
-// ══ ACCESO NEXO · PASO 1: REGISTRO DEL TELÉFONO (2026-10-06, ver ACCESO.md) ══════════════════════════════════
-// El teléfono se identifica solo (inicio anónimo de Firebase: sin pantalla ni contraseña; queda guardado en el
-// teléfono). La primera vez pide nombre y apellido y deja accesos/<uid> como «pendiente» para que Gerencia lo apruebe.
-// En este paso NO se bloquea nada: si no hay sesión, no hay señal o el teléfono no está aprobado, la app sigue igual.
+// ══ ACCESO NEXO · PASO 2: SOLO TELÉFONOS APROBADOS (2026-10-13, ver ACCESO.md) ═════════════════════════
+// El teléfono se identifica solo (inicio anónimo de Firebase, guardado en el teléfono). La primera vez pide nombre y
+// apellido y deja accesos/<uid> como «pendiente». En las apps de MT (CERRADA) la base arranca DESCONECTADA y se conecta
+// solo cuando Gerencia aprobó el teléfono; mientras tanto se ve una pantalla de espera que se abre sola al aprobarlo.
+// La consulta del propio acceso va por REST con la sesión (no depende de la conexión de la app, que está cerrada).
+// Sin señal la app sigue con lo guardado en el teléfono. MONHACO aún no se cierra (su personal se registra esta semana).
 (function(){
   var APP = 'MONTASA_Tecnicos.html', EMPRESA = 'montasa';
+  var CERRADA = EMPRESA === 'montasa';
+  var URL_BD = 'https://montasa-app-default-rtdb.firebaseio.com/', CLAVE_OK = 'nx_acc_ok_' + EMPRESA;
   window._nxAcceso = window._nxAcceso || { uid: null, registro: null };
+  var db = null, abierta = !CERRADA, user = null, sondeo = null, hecho = false;
   function dispositivo(){
     var u = navigator.userAgent || '';
     var so = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
@@ -1416,9 +1421,49 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     so = String(so).trim(); if(so.length <= 2) so = 'Android';   // Chrome nuevo esconde el modelo («K»)
     return (so + ' · ' + nav).slice(0, 60);
   }
+  function guardado(){ try{ return localStorage.getItem(CLAVE_OK) || ''; }catch(e){ return ''; } }
+  function recordar(uid){ try{ if(uid) localStorage.setItem(CLAVE_OK, uid); else localStorage.removeItem(CLAVE_OK); }catch(e){} }
+  // Lectura/escritura del PROPIO acceso por REST con la sesión del teléfono
+  function rest(ruta, metodo, cuerpo){
+    if(!user) return Promise.reject(new Error('sin sesión'));
+    return user.getIdToken().then(function(t){
+      return fetch(URL_BD + ruta + '.json?auth=' + encodeURIComponent(t), metodo ? { method: metodo, body: JSON.stringify(cuerpo) } : undefined);
+    }).then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function abrir(){
+    quitarAviso();
+    if(abierta) return; abierta = true;
+    try{ if(db) db.goOnline(); }catch(e){}
+  }
+  function cerrar(){
+    if(!CERRADA) return; abierta = false; recordar('');
+    try{ if(db) db.goOffline(); }catch(e){}
+  }
+  // Puerta: la llama la app justo al crear la conexión a la base (window._fbDB = firebase.database())
+  window._nxPuerta = function(d){
+    db = d; if(!CERRADA) return;
+    if(guardado()){ abierta = true; return; }            // aprobado la última vez: entra ya (se confirma por detrás)
+    abierta = false; try{ db.goOffline(); }catch(e){}
+  };
   var EST = 'width:100%;box-sizing:border-box;padding:12px;border:1px solid #c9d1dc;border-radius:10px;font-size:16px;font-family:inherit;margin-top:8px';
+  function quitarAviso(){ var o = document.getElementById('nx-acc-esp'); if(o) o.remove(); }
+  function aviso(tipo){
+    quitarAviso(); if(!CERRADA || document.getElementById('nx-acc-ov')) return;
+    var r = window._nxAcceso.registro || {}, quien = ((r.nombre || '') + ' ' + (r.apellido || '')).trim();
+    var t = tipo === 'rechazado'
+      ? '<div style="font-size:34px;text-align:center">⛔</div><div style="font-weight:800;font-size:17px;color:#b42318;text-align:center;margin:6px 0">Este teléfono no tiene acceso a Nexo</div>'
+        + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.5">Si crees que es un error, habla con Gerencia.</div>'
+      : '<div style="font-size:34px;text-align:center">⏳</div><div style="font-weight:800;font-size:17px;color:#1f3864;text-align:center;margin:6px 0">Esperando aprobación</div>'
+        + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.5">' + (quien ? 'Teléfono registrado a nombre de <b>' + quien.replace(/[<>&"]/g, '') + '</b>.<br>' : '')
+        + 'Pídele a Gerencia que lo apruebe en <b>Personal → 📱 Accesos</b>.<br>Esta pantalla se abre sola cuando lo aprueben.</div>';
+    var ov = document.createElement('div'); ov.id = 'nx-acc-esp';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99980;background:rgba(15,23,42,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-sizing:border-box;font-family:Arial,sans-serif;color:#1d2433">' + t + '</div>';
+    document.body.appendChild(ov);
+  }
   function pedirNombre(uid){
     if(document.getElementById('nx-acc-ov')) return;
+    quitarAviso();
     var ov = document.createElement('div'); ov.id = 'nx-acc-ov';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
     ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;color:#1d2433">'
@@ -1435,35 +1480,48 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       if(!n || !a){ alert('Escribe tu nombre y tu apellido.'); return; }
       var ahora = Date.now(), reg = { nombre: n, apellido: a, app: APP, empresa: EMPRESA, dispositivo: dispositivo(), creado: ahora, ultimaVez: ahora, estado: 'pendiente' };
       btn.disabled = true; btn.textContent = 'Guardando…';
-      window._fbDB.ref('accesos/' + uid).set(reg).then(function(){
-        ov.remove(); window._nxAcceso.registro = reg;
+      rest('accesos/' + uid, 'PUT', reg).then(function(){
+        ov.remove();
         try{ toast('✓ Gracias, ' + n + '. Teléfono registrado'); }catch(e){}
-        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+        estado(reg);
       }).catch(function(){ btn.disabled = false; btn.textContent = 'Guardar'; alert('No se pudo guardar. Revisa tu conexión e intenta de nuevo.'); });
     };
   }
-  function revisar(uid){
-    window._fbDB.ref('accesos/' + uid).once('value').then(function(s){
-      var r = s.val();
-      if(r){
-        window._nxAcceso.registro = r;
-        window._fbDB.ref('accesos/' + uid + '/ultimaVez').set(Date.now()).catch(function(){});   // una vez por sesión
-        try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
-      } else pedirNombre(uid);
-    }).catch(function(){});
+  function estado(r){
+    window._nxAcceso.registro = r;
+    try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
+    if(!CERRADA || (r && r.estado === 'aprobado')){
+      if(sondeo){ clearInterval(sondeo); sondeo = null; try{ toast('✓ Teléfono aprobado'); }catch(e){} }
+      recordar(user && user.uid); abrir(); return;
+    }
+    cerrar(); aviso(r && r.estado === 'rechazado' ? 'rechazado' : 'pendiente');
+    // revisar cada 20 s: al aprobarlo en Gerencia se abre sola
+    if(!sondeo) sondeo = setInterval(function(){ rest('accesos/' + user.uid).then(function(x){ if(x) estado(x); }).catch(function(){}); }, 20000);
   }
-  function iniciar(){
-    if(!window._fbDB || !window.firebase){ setTimeout(iniciar, 1000); return; }
-    if(typeof firebase.auth !== 'function') return;          // sin el módulo de sesión: la app sigue igual
-    var a, hecho = false;
-    try{ a = firebase.auth(); }catch(e){ return; }
-    a.onAuthStateChanged(function(u){
-      if(u){ window._nxAcceso.uid = u.uid; if(!hecho){ hecho = true; revisar(u.uid); } }
-      else a.signInAnonymously().catch(function(e){ console.warn('Acceso Nexo:', e && e.code); });   // p. ej. «Anónimo» aún sin activar
+  function revisar(uid){
+    rest('accesos/' + uid).then(function(r){
+      if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){}); estado(r); }   // una vez por sesión
+      else { if(CERRADA) cerrar(); pedirNombre(uid); }
+    }).catch(function(){
+      // Sin señal: la app sigue con lo guardado en el teléfono; se vuelve a intentar
+      if(!CERRADA) return; setTimeout(function(){ revisar(uid); }, 15000);
     });
   }
-  // No se espera la sesión para leer datos: el arranque con mala señal no se hace más lento por esto
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 1500); }); else setTimeout(iniciar, 1500);
+  function iniciar(){
+    if(!window.firebase || !firebase.apps || !firebase.apps.length){ setTimeout(iniciar, 400); return; }
+    if(typeof firebase.auth !== 'function'){ abrir(); return; }          // sin el módulo de sesión: no se puede revisar
+    var a; try{ a = firebase.auth(); }catch(e){ abrir(); return; }
+    a.onAuthStateChanged(function(u){
+      if(u){
+        user = u; window._nxAcceso.uid = u.uid;
+        if(CERRADA && guardado() && guardado() !== u.uid) cerrar();       // otra sesión en este teléfono: volver a revisar
+        if(!hecho){ hecho = true; revisar(u.uid); }
+      } else {
+        a.signInAnonymously().catch(function(e){ console.warn('Acceso Nexo:', e && e.code); setTimeout(function(){ try{ if(!a.currentUser) a.signInAnonymously().catch(function(){}); }catch(_){} }, 10000); });
+      }
+    });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
 </script>
 <script>
@@ -5315,7 +5373,7 @@ renderDashboardTec();
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
-  window._fbDB = firebase.database(); try{ _Sync.iniciar('montasa', window._fbDB); }catch(e){ console.warn('Sync', e); }
+  window._fbDB = firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar('montasa', window._fbDB); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._fbDB.ref('montasa');
 
   FB_REF.once('value').then(snap=>{
