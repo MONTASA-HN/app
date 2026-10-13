@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='94d1e7406104';
+  var APP_VERSION='d20866150912';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6277,21 +6277,24 @@ function renderTableroGer(){
 
   const L = k => (Array.isArray(DB[k]) ? DB[k] : Object.values(DB[k] || {})).filter(o => o && typeof o === 'object');
   const prev = L('preventivos'), corr = L('correctivos'), cort = _TAB_CORTINAS ? L('cortinas') : [], logi = L('logistica');
+  const revi = L('revisiones'), eval_ = L('evaluaciones');   // (2026-10-13) revisiones (RV) y evaluaciones (EV) cuentan como mantenimiento
   const prevCerr = p => !!p.completado || p.estado === 'Completado';
   const corrCerr = c => c.estado === 'Completado';
   const cancel = o => o.estado === 'Cancelado';
   const contar = arr => { const m = {}; arr.forEach(o => { const e = o.estado || 'Pendiente'; m[e] = (m[e] || 0) + 1; }); return m; };
   // Abiertas (hoy)
-  const mantAb = [...prev.filter(p => !prevCerr(p) && !cancel(p)), ...corr.filter(c => !corrCerr(c) && !cancel(c)), ...cort.filter(o => !prevCerr(o) && !cancel(o))];
+  const mantAb = [...prev.filter(p => !prevCerr(p) && !cancel(p)), ...corr.filter(c => !corrCerr(c) && !cancel(c)), ...cort.filter(o => !prevCerr(o) && !cancel(o)), ...revi.filter(o => !prevCerr(o) && !cancel(o)), ...eval_.filter(o => !prevCerr(o) && !cancel(o))];
   const logAb = logi.filter(o => !o.cerrado && !cancel(o));
   // Cerradas en el mes (mismas fechas que Productividad)
   const pM = prev.filter(p => prevCerr(p) && enMes(p.fechaCompletado || p.fechaFin || p.fecha));
   const cM = corr.filter(c => corrCerr(c) && enMes(c.fechaCierre || c.fechaFin || c.fecha));
   const kM = cort.filter(o => prevCerr(o) && enMes(o.fechaCierre || o.fechaFin || o.fecha));
+  const rM = revi.filter(o => prevCerr(o) && enMes(o.fechaCierre || o.fecha));
+  const eM = eval_.filter(o => prevCerr(o) && enMes(o.fechaCierre || o.fecha));
   const lM = logi.filter(o => o.cerrado && !cancel(o) && enMes(o.fechaCierre || o.fechaFin || o.fecha));
   const TIPOS = { entrega:'Entrega', retiro:'Retiro', renta:'Renta', apoyo_mantenimiento:'Apoyo a mantenimiento', atencion_compras:'Atención de compras', entrega_retiro:'Entrega / retiro' };
   const porTipo = {}; lM.forEach(o => { const t = TIPOS[o.tipoLogistica] || o.tipoLogistica || 'Sin tipo'; porTipo[t] = (porTipo[t] || 0) + 1; });
-  const desgMant = { 'Preventivos': pM.length, 'Correctivos': cM.length }; if(_TAB_CORTINAS) desgMant['Cortinas'] = kM.length;
+  const desgMant = { 'Preventivos': pM.length, 'Correctivos': cM.length, 'Revisiones': rM.length, 'Evaluaciones': eM.length }; if(_TAB_CORTINAS) desgMant['Cortinas'] = kM.length;
   // Horas trabajadas (mismo cálculo que Productividad)
   const hm = _horasDelMes(mes, anio);
   // Fallas: correctivos reportados en el mes
@@ -6331,7 +6334,7 @@ function renderTableroGer(){
     + '<div class="tb-kpis">'
     +   kpi(mantAb.length, 'Mantenimiento abiertas', 'al día de hoy', '#eda100')
     +   kpi(logAb.length, 'Logística abiertas', 'al día de hoy', '#eda100')
-    +   kpi(pM.length + cM.length + kM.length, 'Mantenimiento cerradas', nomMes, '#1baf7a')
+    +   kpi(pM.length + cM.length + kM.length + rM.length + eM.length, 'Mantenimiento cerradas', nomMes, '#1baf7a')
     +   kpi(lM.length, 'Logística cerradas', nomMes, '#1baf7a')
     + '</div>'
     + '<div class="tb-grid">'
@@ -6434,6 +6437,32 @@ function _horasDelMes(mes, anio){
     return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
   });
   revisionesDelMes.forEach(r => {
+    const tecs = (r.tecnicos||[]).filter(Boolean);
+    if(!tecs.length) return;
+    const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
+    const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
+    const ini = new Date(iniStr), fin = new Date(finStr);
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    tecs.forEach(nombre => {
+      if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
+        if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
+        statsLog[nombre].ordenes++;
+        statsLog[nombre].minutos += mins;
+      } else {
+        if(!statsTec[nombre]) statsTec[nombre] = {ordenes:0, minutos:0};
+        statsTec[nombre].ordenes++;
+        statsTec[nombre].minutos += mins;
+      }
+    });
+  });
+
+  // (2026-10-13, pedido de Miguel) EVALUACIONES: mismas reglas que las revisiones
+  const evaluacionesDelMes = (DB.evaluaciones||[]).filter(r => {
+    if(!r.completado) return false;
+    const f = parseFechaLocal(r.fechaCierre||r.fecha);
+    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+  });
+  evaluacionesDelMes.forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean);
     if(!tecs.length) return;
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');

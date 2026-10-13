@@ -794,3 +794,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Auditoría etapa 5: viáticos viejos conservan el gestor; fotos de RC (MONHACO) con guardado seguro; traslado actualiza Accesos.
 - 2026-10-13 — Acceso paso 2 en las apps de MT: solo entran teléfonos aprobados (MONHACO todavía abierto).
 - 2026-10-13 — Gerencia MT y MONHACO: pestaña «📊 Dashboard» (abiertas, cerradas del mes, horas, fallas por sistema y equipos).
+- 2026-10-13 — Dashboard con revisiones y evaluaciones; Productividad suma las horas de las evaluaciones (pedido de Miguel).

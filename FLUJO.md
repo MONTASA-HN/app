@@ -501,3 +501,5 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   estado; cerradas del mes (mant.: preventivos/correctivos [+cortinas en MONHACO]; logística por tipo); horas con `_horasDelMes`
   (separado de `renderPersonal`, mismo cálculo); fallas: correctivos REPORTADOS en el mes por `sistema` (vacíos fuera) y top 10 equipos.
   Menú ☰ de MTG (`_gerMenuGo(n,…)`) va por POSICIÓN en la barra: se renumeró.
+- 2026-10-13 — Dashboard: revisiones (RV) y evaluaciones (EV) cuentan como mantenimiento (abiertas, cerradas por `fechaCierre||fecha`,
+  líneas propias). `_horasDelMes` suma también las EVALUACIONES (mismas reglas que revisiones): cambia Productividad y Dashboard.
