@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7a0762675ebb';
+  var APP_VERSION='fa0bb6f346d0';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6315,7 +6315,8 @@ function _tableroCSS(){
     + '.tb-kpi-num{font-size:44px;line-height:1.05;font-weight:700;color:var(--tb-tinta);margin:6px 0 2px;letter-spacing:-1px}'
     + '.tb-kpi-pie{font-size:12px;color:var(--tb-tinta3)}'
     + '.tb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}'
-    + '.tb-card{background:var(--tb-card);border:1px solid var(--tb-borde);border-radius:16px;padding:16px 18px;box-shadow:var(--tb-sombra);min-width:0}'
+    + '.tb-card{background:var(--tb-card);border:1px solid var(--tb-borde);border-top:4px solid var(--tb-barra);border-radius:16px;padding:14px 18px 16px;box-shadow:var(--tb-sombra);min-width:0}'
+    + '.tb-card .tb-pista{background:color-mix(in srgb, var(--tb-barra) 14%, #ffffff)}'   /* pista del mismo tono, más clara */
     + '.tb-ancha{grid-column:1/-1}'
     + '.tb-tit{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}'
     + '.tb-tit b{font-size:15px;font-weight:700}'
@@ -6403,7 +6404,8 @@ function renderTableroGer(){
   const fmt = n => Number(n).toLocaleString('es-HN');
   const hhmm = m => Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
   const kpi = (num, eti, pie, acento) => `<div class="tb-kpi" style="--tb-acento:${acento}"><div class="tb-kpi-eti">${eti}</div><div class="tb-kpi-num">${fmt(num)}</div><div class="tb-kpi-pie">${pie}</div></div>`;
-  const tarjeta = (titulo, nota, cuerpo, ancha) => `<div class="tb-card${ancha ? ' tb-ancha' : ''}"><div class="tb-tit"><b>${titulo}</b>${nota ? '<span>' + nota + '</span>' : ''}</div>${cuerpo}</div>`;
+  // (2026-10-13, pedido de Miguel) cada recuadro con su color (barras y franja superior); los números siguen en tinta
+  const tarjeta = (titulo, nota, cuerpo, color) => `<div class="tb-card" style="--tb-barra:${color || '#2a78d6'}"><div class="tb-tit"><b>${titulo}</b>${nota ? '<span>' + nota + '</span>' : ''}</div>${cuerpo}</div>`;
   const sub = t => `<div class="tb-sub">${t}</div>`;
   // Barras horizontales de un solo tono: nombre · barra · valor (y detalle al pasar el dedo/ratón)
   const barras = (filas, unidad) => {
@@ -6427,12 +6429,12 @@ function renderTableroGer(){
     +   kpi(lM.length, 'Logística cerradas', nomMes, '#1baf7a')
     + '</div>'
     + '<div class="tb-grid">'
-    +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'))   // (2026-10-13) mismo estilo de barras que los demás recuadros
-    +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'))
-    +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec))
-    +   tarjeta('Horas trabajadas · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', horas(hm.sortedLog) + '<div class="tb-nota">Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>')
-    +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''))
-    +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'))
+    +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'), '#eda100')   // (2026-10-13) mismo estilo de barras que los demás recuadros
+    +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'), '#1baf7a')
+    +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec), '#2a78d6')
+    +   tarjeta('Horas trabajadas · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', horas(hm.sortedLog) + '<div class="tb-nota">Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
+    +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''), '#e34948')
+    +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'), '#eb6834')
     + '</div></div>';
 }
 
