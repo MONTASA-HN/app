@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='60933b9a042d';
+  var APP_VERSION='7c1b7dadb8ac';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1953,6 +1953,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       <div class="form-group"><label>Placa del vehículo a revisar</label><input id="rev-placa" placeholder="Ej: PBM-1234"></div>
       <div class="form-group"><label>Tipo de vehículo a revisar</label>
         <select id="rev-tipo-vehiculo"><option value="">— Seleccionar —</option><option>Microbus</option><option>Bus</option><option>Camion no articulado</option><option>Cabezal</option><option>Contenedor</option><option>Remolque</option><option>Cisterna</option></select>
+      </div>
+      <!-- (2026-10-13) Cilindraje y capacidad: obligatorios para finalizar -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Cilindraje (cc)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-cilindraje" placeholder="Ej: 2400"></div>
+        <div class="form-group"><label>Capacidad (kg)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-capacidad" placeholder="Ej: 10000"></div>
       </div>
       <div id="rev-km-wrap" style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">
       </div>
@@ -5722,6 +5727,8 @@ function guardarRevision(){
   const horaFin   = document.getElementById('rev-hora-fin')?.value||'';
   const placa     = document.getElementById('rev-placa')?.value.trim()||'';
   const tipoVeh   = document.getElementById('rev-tipo-vehiculo')?.value||'';
+  const cilindraje = (document.getElementById('rev-cilindraje')?.value||'').trim();
+  const capacidad  = (document.getElementById('rev-capacidad')?.value||'').trim();
   const kmSal     = document.getElementById('rev-km-sal')?.value||'';
   const kmRet     = document.getElementById('rev-km-ret')?.value||'';
   const deptoRev  = (document.getElementById('rev-departamento')||{}).value||'';
@@ -5741,7 +5748,7 @@ function guardarRevision(){
     notas: desc, fecha, horaIni, horaFin,
     fechaInicio: fecha&&horaIni ? fecha+'T'+horaIni : fecha,
     fechaFin: fecha&&horaFin ? fecha+'T'+horaFin : fecha,
-    placa, tipoVehiculo: tipoVeh,
+    placa, tipoVehiculo: tipoVeh, cilindraje, capacidad,
     ubicacionLink:(document.getElementById('rev-ublink')||{}).value||'', departamento: deptoRev, ciudad: ciudadRev,
     kmSalida: kmSal, kmRetorno: kmRet,
     completado: estado==='Completado'
@@ -5750,7 +5757,7 @@ function guardarRevision(){
   saveDB();
   if(window._fbDB && window._fbReady)
     _Sync.guardar();
-  ['rev-placa','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
+  ['rev-placa','rev-cilindraje','rev-capacidad','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('rev-estado').selectedIndex=0;
@@ -5810,6 +5817,8 @@ function renderRevisiones(){
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Fecha inicio</span><span style="font-weight:600">${r.fecha||'—'} ${r.horaIni||''}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Placa</span><span style="font-weight:600">${_x(r.placa||'—')}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Tipo de vehículo</span><span style="font-weight:600">${r.tipoVehiculo||'—'}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Cilindraje</span><span style="font-weight:600">${(r.cilindraje ? Number(r.cilindraje).toLocaleString('es-HN') + ' cc' : '—')}</span></div>
+          <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Capacidad</span><span style="font-weight:600">${(r.capacidad ? Number(r.capacidad).toLocaleString('es-HN') + ' kg' : '—')}</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Largo × Ancho × Alto</span><span style="font-weight:600">${r.largo||'—'} × ${r.ancho||'—'} × ${r.alto||'—'} mts</span></div>
           <div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 1-2</span><span style="font-weight:600">${r.ejeUnoDos?r.ejeUnoDos+' mts':'—'}</span></div>
           ${r.ejeDosTres?`<div><span style="color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Dist. eje 2-3</span><span style="font-weight:600">${r.ejeDosTres} mts</span></div>`:''}
@@ -5842,6 +5851,10 @@ function renderRevisiones(){
           <option value="">— Seleccionar —</option>
           ${['Microbus','Bus','Camion no articulado','Cabezal','Cisterna','Contenedor','Remolque'].map(v=>`<option ${r.tipoVehiculo===v?'selected':''}>${v}</option>`).join('')}
         </select></div>`;
+      card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px">`;
+      card += `<div class="form-group"><label>Cilindraje (cc)</label><input type="number" inputmode="numeric" min="0" step="1" value="${_x(r.cilindraje||'')}" placeholder="Ej: 2400" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','cilindraje',this.value.trim())" oninput="event.stopPropagation()"></div>`;
+      card += `<div class="form-group"><label>Capacidad (kg)</label><input type="number" inputmode="numeric" min="0" step="1" value="${_x(r.capacidad||'')}" placeholder="Ej: 10000" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','capacidad',this.value.trim())" oninput="event.stopPropagation()"></div>`;
+      card += `</div>`;
       card += `<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">📏 Dimensiones (mts)</div>`;
       card += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">`;
       card += `<div class="form-group" style="margin-bottom:0"><label>Largo (mts)</label><input type="number" value="${r.largo||''}" placeholder="0" onchange="event.stopPropagation();actualizarRevision('${_idS(r.id)}','largo',this.value)" oninput="event.stopPropagation()"></div>`;
@@ -5901,6 +5914,8 @@ function finalizarRevision(id){
   if(!r.horaFin) faltantes.push('Hora final');
   if(!r.placa) faltantes.push('Placa del vehículo');
   if(!r.tipoVehiculo) faltantes.push('Tipo de vehículo');
+  if(!r.cilindraje) faltantes.push('Cilindraje (cc)');
+  if(!r.capacidad) faltantes.push('Capacidad (kg)');
   if(!r.notas) faltantes.push('Descripción / Notas');
   if(!r.largo) faltantes.push('Largo (mts)');
   if(!r.ancho) faltantes.push('Ancho (mts)');
