@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9e460e0c3bce';
+  var APP_VERSION='a8f085ff96ce';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -393,7 +393,7 @@ function _faltanEquipoClienteForm(pref){
 // (siguen siendo listas), así el tablero de flota y el mundo isométrico no se enteran.
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
 var _Sync = (function(){
-  var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos','soldaduras'];   // soldaduras: 2026-10-14
   var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
@@ -448,7 +448,7 @@ var _Sync = (function(){
   // Dos teléfonos (o uno sin señal) pueden calcular el mismo MH/LG. Al llegar el servidor se revisa: entre las órdenes
   // con el mismo número se queda la de id menor; las demás que se crearon EN ESTE teléfono reciben un número nuevo del
   // contador <raíz>/lastCorrelativo_<MH|LG> (transacción). Todos los teléfonos deciden igual, así cambia una sola.
-  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] } ];
+  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] }, { p: 'SP', cols: ['soldaduras'] } ];
   var ultimoSrv = {}, renumerando = {};
   function _creadosAqui(){ try{ return JSON.parse(localStorage.getItem('_sync_creados_' + raiz) || '{}') || {}; }catch(e){ return {}; } }
   function _marcarCreado(id){
@@ -857,6 +857,7 @@ function _getOrdenPorTipoViaticos(id, tipo){
   const arr = tipo==='preventivo' ? (DB.preventivos||[])
             : tipo==='correctivo' ? (DB.correctivos||[])
             : tipo==='revision'   ? (DB.revisiones||[])
+            : tipo==='soldadura'  ? (DB.soldaduras||[])
             : (DB.evaluaciones||[]);
   return arr.find(o=>o.id===id);
 }
@@ -1972,6 +1973,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   </div>
   <div id="revision-list"></div>
 </div>
+<div id="tab-soldadura" class="section">
+  <div style="font-size:20px;font-weight:700;margin:0 0 4px">🔥 Soldadura / Pintura</div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Órdenes creadas desde Solicitudes. Toca una orden para trabajarla.</div>
+  <div id="soldadura-list"></div>
+</div>
 <div id="tab-evaluacion" class="section">
   <div style="padding:0 0 14px">
     <button class="btn btn-primary btn-full" onclick="toggleForm('form-eval')">+ Nueva evaluación</button>
@@ -2068,6 +2074,9 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <button class="nav-btn" onclick="showTab('repuestos',this)">
     <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><circle cx="19" cy="19" r="3.2"/></svg>Repuestos
   </button>
+  <button class="nav-btn" onclick="showTab('soldadura',this)">
+    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M12 2c1 3.5 4 5.5 4 9a4 4 0 0 1-8 0c0-1.6.7-2.8 1.5-3.8.3 1.4 1.1 2.3 2 2.6-.2-2.6.1-5.3.5-7.8z"/><path d="M5 22h14"/></svg><span class="nav-badge" id="badge-sp" style="display:none"></span></span>Soldadura
+  </button>
 </nav>
 
 <script>
@@ -2139,6 +2148,7 @@ function loadDB(){
       if(d && d.repuestos) DB.repuestos = d.repuestos;
     if(d.revisiones)      DB.revisiones      = d.revisiones||[];
     if(d.evaluaciones)    DB.evaluaciones    = d.evaluaciones||[];
+    if(d.soldaduras)    DB.soldaduras    = (Array.isArray(d.soldaduras) ? d.soldaduras : Object.values(d.soldaduras||{}).filter(Boolean));
     if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
     if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
     if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
@@ -2157,7 +2167,7 @@ function _dbSinFotos(){
     if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
     return c;
   }) : a;
-  ['preventivos','correctivos','revisiones','evaluaciones','cortinas','ordenesCerradas'].forEach(k=>{ if(clone[k]) clone[k]=strip(clone[k]); });
+  ['preventivos','correctivos','revisiones','evaluaciones','cortinas','ordenesCerradas','soldaduras'].forEach(k=>{ if(clone[k]) clone[k]=strip(clone[k]); });
   return clone;
 }
 function _cacheLocal(){
@@ -2211,7 +2221,7 @@ function _persistirFotosOrden(o, opc){
 }
 // Pone las fotos y el contador en la orden que está AHORA en memoria (la lista pudo reemplazarse mientras subían)
 function _fotosAplicarVigente(id, fotos){
-  var listas = ['logistica','revisiones','evaluaciones','cortinas','preventivos','correctivos'], o = null;
+  var listas = ['logistica','revisiones','evaluaciones','cortinas','preventivos','correctivos','soldaduras'], o = null;
   for(var i = 0; i < listas.length && !o; i++){ var a = DB[listas[i]]; if(Array.isArray(a)) o = a.find(function(x){ return x && x.id === id; }) || null; }
   if(!o) return;
   o.fotos = fotos.slice(); o.nFotos = fotos.length;
@@ -2930,6 +2940,7 @@ function showTab(id, el){
   if(id==='correctivo') { fillSel('corr-equipo'); renderCorrectivos(); }
   if(id==='revision')   renderRevisiones();
   if(id==='evaluacion') renderEvaluaciones();
+  if(id==='soldadura') renderSoldaduras();
   if(id==='agenda') renderAgenda();
   if(id==='repuestos') renderRepuestos();
   window.scrollTo(0,0);
@@ -3621,6 +3632,7 @@ function _autoGuardarFirma(canvas){
   if(cid.indexOf('firma-cort-')===0){ oid=cid.slice(11); arrays=[DB.cortinas]; }
   else if(cid.indexOf('firma-eval-')===0){ oid=cid.slice(11); arrays=[DB.evaluaciones]; }
   else if(cid.indexOf('firma-rev-')===0){ oid=cid.slice(10); arrays=[DB.revisiones]; }
+  else if(cid.indexOf('firma-sp-')===0){ oid=cid.slice(9); arrays=[DB.soldaduras]; }
   else { oid=cid.slice(6); arrays=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.cortinas]; }
   let o=null;
   for(let i=0;i<arrays.length;i++){ const a=arrays[i]; if(a){ const fnd=a.find(x=>x&&x.id===oid); if(fnd){o=fnd;break;} } }
@@ -3649,6 +3661,7 @@ function guardarFirmaOrden(canvasId){
   if(cid.indexOf('firma-eval-')===0){ oid=cid.slice(11); arrays=[DB.evaluaciones]; }
   else if(cid.indexOf('firma-rev-')===0){ oid=cid.slice(10); arrays=[DB.revisiones]; }
   else if(cid.indexOf('firma-cort-')===0){ oid=cid.slice(11); arrays=[DB.cortinas]; }
+  else if(cid.indexOf('firma-sp-')===0){ oid=cid.slice(9); arrays=[DB.soldaduras]; }
   else { oid=cid.slice(6); arrays=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.cortinas]; }
   let o=null, esPrev=false, esCorr=false;
   for(const a of arrays){ if(a){ const f=(Array.isArray(a)?a:Object.values(a)).find(x=>x&&x.id===oid); if(f){ o=f; esPrev=(a===DB.preventivos); esCorr=(a===DB.correctivos); break; } } }
@@ -3660,6 +3673,7 @@ function guardarFirmaOrden(canvasId){
     try{
       if(DB.evaluaciones && (Array.isArray(DB.evaluaciones)?DB.evaluaciones:[]).some(x=>x&&x.id===oid)) _Sync.guardar();
       else if(DB.revisiones && (Array.isArray(DB.revisiones)?DB.revisiones:[]).some(x=>x&&x.id===oid)) _Sync.guardar();
+      else if((DB.soldaduras||[]).some(x=>x&&x.id===oid)) _Sync.guardar();
     }catch(e){}
   }
   toast('✍️ Firma guardada ✓');
@@ -3678,6 +3692,7 @@ function _restaurarFirmasTec(){
       if(cid.indexOf('firma-eval-')===0){ oid=cid.slice(11); arrays=[DB.evaluaciones]; }
       else if(cid.indexOf('firma-rev-')===0){ oid=cid.slice(10); arrays=[DB.revisiones]; }
       else if(cid.indexOf('firma-cort-')===0){ oid=cid.slice(11); arrays=[DB.cortinas]; }
+      else if(cid.indexOf('firma-sp-')===0){ oid=cid.slice(9); arrays=[DB.soldaduras]; }
       else { oid=cid.slice(6); arrays=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.cortinas]; }
       let o=null; for(const a of (arrays||[])){ if(a){ const f=(Array.isArray(a)?a:Object.values(a)).find(x=>x&&x.id===oid); if(f){o=f;break;} } }
       if(!o || !o.firma) return;
@@ -5393,6 +5408,7 @@ renderDashboardTec();
         if(remote.correctivos)     DB.correctivos     = remote.correctivos;
         if(remote.revisiones)      DB.revisiones      = remote.revisiones||[];
         if(remote.evaluaciones)    DB.evaluaciones    = remote.evaluaciones||[];
+        if(remote.soldaduras)    DB.soldaduras    = (Array.isArray(remote.soldaduras) ? remote.soldaduras : Object.values(remote.soldaduras||{}).filter(Boolean));
         if(remote.ordenesCerradas) DB.ordenesCerradas = remote.ordenesCerradas;
         if(remote.solicitudes)     DB.solicitudes     = remote.solicitudes;
         if(remote.equipos && remote.equipos.length){ DB.equipos = remote.equipos; window._equiposFBok = true; }
@@ -5476,6 +5492,7 @@ renderDashboardTec();
       if(d && d.repuestos) DB.repuestos = d.repuestos;
       if(d.revisiones && !_blockFBrev)      DB.revisiones      = d.revisiones||[];
       if(d.evaluaciones && !_blockFBeval)    DB.evaluaciones    = d.evaluaciones||[];
+      if(d.soldaduras)    DB.soldaduras    = (Array.isArray(d.soldaduras) ? d.soldaduras : Object.values(d.soldaduras||{}).filter(Boolean));
       if(d.ordenesCerradas) DB.ordenesCerradas = d.ordenesCerradas;
       if(d.solicitudes)     DB.solicitudes     = d.solicitudes;
       if(d.equipos && d.equipos.length){ DB.equipos = d.equipos; window._equiposFBok = true; }
@@ -5492,6 +5509,7 @@ renderDashboardTec();
       if(id==='correctivo') renderCorrectivos();
       if(id==='revision')   renderRevisiones();
       if(id==='evaluacion') renderEvaluaciones();
+      if(id==='soldadura') renderSoldaduras();
     });
   }).catch(()=>{ loadDB(); renderPreventivos(); });
   if(typeof updateBadges==='function') updateBadges();
@@ -6527,5 +6545,206 @@ function _cliOrdenAlCerrar(o){
   FileReader.prototype._nexoFotoLiviana = true;
 })();
 </script>
+<script>
+// ══ SOLDADURA / PINTURA (SP) — 2026-10-14, pedido de Miguel ═══════════════════════════════════════════════
+// Orden de mantenimiento SP-0001… (colección «soldaduras», sincronizada por _Sync). Se crea desde Solicitudes
+// (Gerencia/Supervisión); aquí el técnico la trabaja y la cierra. Equipo opcional (flota, vehículos o de cliente) y
+// NO cambia el estado del equipo. Hasta 4 asignados (técnicos u operadores; el 1.º obligatorio). Para cerrar: inicio,
+// final, trabajo realizado, técnico 1, firma (cliente, o supervisor si es equipo propio en plantel) y GPS si es fuera.
+var _openSP = new Set();
+var SP_ESTADOS = ['Pendiente','En proceso','En pausa','En espera de repuestos','Cancelado'];
+function _spLista(){ if(!Array.isArray(DB.soldaduras)) DB.soldaduras = DB.soldaduras ? Object.values(DB.soldaduras).filter(Boolean) : []; return DB.soldaduras; }
+function _spGet(id){ return _spLista().find(function(x){ return x && x.id === id; }); }
+function _spGuardar(){ try{ saveDB(); }catch(e){} try{ if(window._fbDB && window._fbReady) _Sync.guardar(); }catch(e){} }
+function _spEquipoTxt(e){
+  if(!e) return '';
+  if(e.esEquipoCliente) return [e.clienteNombre || e.cliente, [e.marca, e.modelo].filter(Boolean).join(' '), e.serie ? 'Serie ' + e.serie : ''].filter(Boolean).join(' · ');
+  return [e.codigo, [e.marca, e.modelo || e.subtipo].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+}
+// Todos los equipos: flota, vehículos y de clientes (agrupados)
+function _spOptsEquipos(sel){
+  var eqs = (DB.equipos || []).filter(function(e){ return e && e.id; });
+  var esVeh = function(e){ return !!e.esVehiculo || /^veh_/.test(e.id); };
+  var grupos = [['🏗 Flota', eqs.filter(function(e){ return !e.esEquipoCliente && !esVeh(e); })], ['🚚 Vehículos', eqs.filter(esVeh)], ['👤 Equipos de clientes', eqs.filter(function(e){ return e.esEquipoCliente; })]];
+  var h = '<option value="">— Sin equipo —</option>';
+  grupos.forEach(function(g){
+    if(!g[1].length) return;
+    h += '<optgroup label="' + g[0] + '">' + g[1].slice().sort(function(a, b){ return _spEquipoTxt(a).localeCompare(_spEquipoTxt(b)); })
+      .map(function(e){ return '<option value="' + _x(e.id) + '"' + (e.id === sel ? ' selected' : '') + '>' + _x(_spEquipoTxt(e)) + '</option>'; }).join('') + '</optgroup>';
+  });
+  return h;
+}
+// Técnicos y operadores (Personal), sin perder los que ya están en la orden
+function _spPersonal(actuales){
+  var base = (typeof _nxLista === 'function') ? _nxLista('revision', (typeof TECNICOS_VIAT !== 'undefined' ? TECNICOS_VIAT : []), actuales) : (typeof TECNICOS_VIAT !== 'undefined' ? TECNICOS_VIAT : []);
+  return Array.from(new Set([].concat(base || [], (actuales || []).filter(Boolean)))).sort(function(a, b){ return String(a).localeCompare(String(b)); });
+}
+function _spFechaPartes(o){
+  var ini = String(o.fechaInicio || ''), fin = String(o.fechaFin || '');
+  o.fecha = ini.slice(0, 10) || o.fecha || ''; o.horaIni = ini.slice(11, 16); o.fechaFinFecha = fin.slice(0, 10); o.horaFin = fin.slice(11, 16);
+}
+function actualizarSP(id, campo, valor){
+  var o = _spGet(id); if(!o) return;
+  if((campo === 'fechaFin' && valor && o.fechaInicio && valor <= o.fechaInicio) || (campo === 'fechaInicio' && valor && o.fechaFin && o.fechaFin <= valor)){
+    alert('⚠️ La fecha y hora final debe ser posterior a la de inicio.'); renderSoldaduras(); return;
+  }
+  o[campo] = valor;
+  if(campo === 'fechaInicio' || campo === 'fechaFin') _spFechaPartes(o);
+  if(campo === 'equipoId'){ var e = (DB.equipos || []).find(function(x){ return x && x.id === valor; }); o.equipoTxt = e ? _spEquipoTxt(e) : ''; }
+  _spGuardar();
+  if(campo === 'estado' || campo === 'equipoId' || campo === 'ubicacion') renderSoldaduras();
+}
+function actualizarSPTecnico(id, pos, valor){
+  var o = _spGet(id); if(!o) return;
+  var t = (o.tecnicos || []).slice(0, 4); while(t.length < 4) t.push('');
+  if(valor && t.some(function(x, i){ return i !== pos && x === valor; })){ alert('⚠️ ' + valor + ' ya está asignado en esta orden.'); renderSoldaduras(); return; }
+  t[pos] = valor || '';
+  o.tecnicos = t.filter(Boolean); o.tecnico = o.tecnicos.join(', ');
+  _spGuardar(); renderSoldaduras();
+}
+// GPS: usa la captura de la app si existe (MT); si no (MONHACO), la del teléfono directamente
+function _spCapturarGPS(cb){
+  if(typeof _gpsCapturar === 'function') return _gpsCapturar(cb);
+  if(!navigator.geolocation){ alert('Este teléfono no permite capturar la ubicación.'); return; }
+  try{ toast('📍 Obteniendo ubicación…'); }catch(e){}
+  navigator.geolocation.getCurrentPosition(function(p){ cb('https://www.google.com/maps?q=' + p.coords.latitude.toFixed(6) + ',' + p.coords.longitude.toFixed(6)); },
+    function(){ alert('No se pudo obtener la ubicación. Revisa que el GPS esté encendido y que la app tenga permiso.'); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+function _spGps(id){
+  _spCapturarGPS(function(link){
+    var o = _spGet(id); if(!o) return;
+    o.ubicacionLink = link; _spGuardar();
+    try{ if(o.equipoId && typeof _gpsFichaLink === 'function') _gpsFichaLink(o.equipoId, link); }catch(e){}
+    toast('📍 Ubicación guardada en la orden'); renderSoldaduras();
+  });
+}
+function _spGpsQuitar(id){ var o = _spGet(id); if(!o || !confirm('¿Quitar la ubicación guardada?')) return; o.ubicacionLink = ''; _spGuardar(); renderSoldaduras(); }
+function _spFotosAgregar(id, input){
+  var o = _spGet(id); if(!o) return;
+  if(!o.fotos) o.fotos = [];
+  var archivos = Array.from(input.files), espacio = 10 - o.fotos.length; input.value = '';
+  if(espacio <= 0){ toast('Límite de 10 fotos alcanzado', true); return; }
+  var procesar = archivos.slice(0, espacio), pend = procesar.length, agregadas = 0;
+  if(archivos.length > espacio) toast('Solo se agregaron ' + espacio + ' de ' + archivos.length + ' (límite 10)', true);
+  var fin = function(){ var x = _spGet(id); if(x) _persistirFotosOrden(x); _spGuardar(); renderSoldaduras();
+    if(agregadas > 0) toast(agregadas + ' foto' + (agregadas > 1 ? 's' : '') + ' agregada' + (agregadas > 1 ? 's' : '') + ' ✓'); else toast('No se pudo procesar ninguna foto', true); };
+  var listo = function(){ pend--; if(pend <= 0) fin(); };
+  procesar.forEach(function(file){
+    var rd = new FileReader(); rd.onerror = listo;
+    rd.onload = function(ev){ var img = new Image(); img.onerror = listo;
+      img.onload = function(){ try{ var c = document.createElement('canvas'), MAX = 1024, w = img.width, h = img.height;
+        if(w > MAX){ h = Math.round(h * MAX / w); w = MAX; } if(h > MAX){ w = Math.round(w * MAX / h); h = MAX; }
+        c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+        var x = _spGet(id); if(x){ if(!x.fotos) x.fotos = []; x.fotos.push(c.toDataURL('image/jpeg', 0.7)); agregadas++; } }catch(e){} listo(); };
+      img.src = ev.target.result; };
+    rd.readAsDataURL(file);
+  });
+}
+function _spFotoQuitar(id, idx){
+  if(!confirm('¿Eliminar esta foto?')) return;
+  var o = _spGet(id); if(!o || !o.fotos) return;
+  var q = o.fotos.splice(idx, 1)[0]; _persistirFotosOrden(o, { quitar: q }); _spGuardar(); renderSoldaduras();
+}
+function renderSoldaduras(){
+  var el = document.getElementById('soldadura-list'); if(!el) return;
+  var lista = _spLista().slice().sort(function(a, b){ return (parseInt(String(b.correlativo || '').replace(/[^0-9]/g, '')) || 0) - (parseInt(String(a.correlativo || '').replace(/[^0-9]/g, '')) || 0); });
+  var badge = document.getElementById('badge-sp'); var abiertas = lista.filter(function(o){ return !o.completado && o.estado !== 'Cancelado'; }).length;
+  if(badge){ badge.textContent = abiertas; badge.style.display = abiertas ? '' : 'none'; }
+  if(!lista.length){ el.innerHTML = '<div class="empty">Sin órdenes de soldadura / pintura</div>'; return; }
+  var COL = { Pendiente:['#fff0f0','#c00','#f5c6c6'], 'En proceso':['#fff8e1','#b45309','#fde68a'], 'En pausa':['#f3e8ff','#6b21a8','#e9d5ff'], 'En espera de repuestos':['#eff6ff','#1d4ed8','#bfdbfe'], Cancelado:['#f5f5f5','#888','#ddd'], Completado:['#f0fdf4','#15803d','#bbf7d0'] };
+  var ETI = 'color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px';
+  var fmt = function(s){ return s ? String(s).replace('T', ' ') : '—'; };
+  el.innerHTML = lista.map(function(o){
+    var abierta = _openSP.has(o.id), est = o.completado ? 'Completado' : (o.estado || 'Pendiente'), cc = COL[est] || ['#f5f5f5','#333','#ddd'];
+    var tecs = (o.tecnicos || []).filter(Boolean).join(', ') || '—';
+    var c = '<div class="card" style="padding:12px 14px;border-left:3px solid #7c3aed;margin-bottom:8px;cursor:pointer" data-spid="' + _x(o.id) + '">';
+    c += '<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none"><div style="flex:1;min-width:0">';
+    c += '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:11px;font-weight:700;font-family:monospace;background:#f3e8ff;color:#6b21a8;padding:2px 7px;border-radius:10px">' + _x(o.correlativo || '—') + '</span>'
+      + '<span style="font-size:11px;font-weight:700;background:' + cc[0] + ';color:' + cc[1] + ';border:1px solid ' + cc[2] + ';padding:2px 8px;border-radius:10px">' + est + '</span></div>';
+    c += '<div style="font-size:13px;font-weight:600;margin-bottom:2px">' + _x(String(o.descripcion || 'Soldadura / Pintura').slice(0, 70)) + '</div>';
+    c += '<div style="font-size:12px;color:var(--text2)">👷 ' + _x(tecs) + (o.equipoTxt ? ' · 🔧 ' + _x(o.equipoTxt) : '') + '</div>';
+    c += '</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">' + (abierta ? '⌃' : '⌄') + '</span></div>';
+    if(abierta){
+      c += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-sp-' + _x(o.id) + '" onclick="event.stopPropagation()">';
+      c += _ubLinkHTML(o) + _contactoHTML(o);
+      if(_fotosPendientes(o)){ c += _fotosCargandoHTML(); _hidratarFotos(o); }
+      c += '<div class="form-group"><label>Trabajo a realizar</label><div style="font-size:13px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap">' + _x(o.descripcion || '—') + '</div></div>';
+      if(o.completado){
+        c += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:13px;margin-bottom:12px">'
+          + '<div><span style="' + ETI + '">Asignados</span><span style="font-weight:600">' + _x(tecs) + '</span></div>'
+          + '<div><span style="' + ETI + '">Equipo</span><span style="font-weight:600">' + _x(o.equipoTxt || '— Sin equipo —') + '</span></div>'
+          + '<div><span style="' + ETI + '">Inicio</span><span style="font-weight:600">' + fmt(o.fechaInicio) + '</span></div>'
+          + '<div><span style="' + ETI + '">Final</span><span style="font-weight:600">' + fmt(o.fechaFin) + '</span></div>'
+          + '<div style="grid-column:1/-1"><span style="' + ETI + '">Trabajo realizado</span><span style="font-weight:600;white-space:pre-wrap">' + _x(o.trabajoRealizado || '—') + '</span></div></div>';
+        if(o.firma) c += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ ' + _firmaTituloTxt(o).toUpperCase() + '</div><img src="' + _img(o.firma) + '" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>';
+        if(o.fotos && o.fotos.length) c += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' + o.fotos.map(function(f){ return '<img src="' + _img(f) + '" style="width:72px;height:72px;object-fit:cover;border-radius:8px">'; }).join('') + '</div>';
+        c += '<div style="font-size:12px;color:#15803d;font-weight:700">✅ Orden cerrada ' + _x(o.fechaCierre || '') + '</div>';
+      } else {
+        var bloq = est === 'Pendiente';
+        c += '<div class="form-group"><label>Estado de la orden</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'estado\',this.value)">' + SP_ESTADOS.map(function(s){ return '<option' + (est === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
+          + (bloq ? '<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a «En proceso» para poder editar los campos</div>' : '') + '</div>';
+        c += '<div' + (bloq ? ' style="pointer-events:none;opacity:.5"' : '') + '>';
+        c += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+          + '<div class="form-group"><label>Fecha y hora de inicio</label><input type="datetime-local" value="' + _x(o.fechaInicio || '') + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'fechaInicio\',this.value)"></div>'
+          + '<div class="form-group"><label>Fecha y hora final</label><input type="datetime-local" value="' + _x(o.fechaFin || '') + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'fechaFin\',this.value)"></div></div>';
+        c += '<div class="form-group"><label>Equipo (opcional)</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'equipoId\',this.value)">' + _spOptsEquipos(o.equipoId || '') + '</select></div>';
+        c += '<div class="form-group"><label>Lugar del trabajo</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'ubicacion\',this.value)"><option value="plantel"' + (o.ubicacion === 'plantel' ? ' selected' : '') + '>🏭 En plantel</option><option value="campo"' + (o.ubicacion !== 'plantel' ? ' selected' : '') + '>🚗 Fuera del plantel</option></select></div>';
+        if(o.ubicacion !== 'plantel'){
+          c += '<div class="form-group"><label>📍 Ubicación del trabajo</label>' + (o.ubicacionLink
+            ? '<a href="' + _url(o.ubicacionLink).replace(/&/g, '&amp;') + '" target="_blank" rel="noopener" style="display:block;text-align:center;padding:9px;background:#e8f0fe;color:#1a56db;border:1px solid #c3d4fd;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;margin-bottom:6px">🗺 Ver ubicación guardada</a><button onclick="_spGpsQuitar(\'' + _idS(o.id) + '\')" style="width:100%;padding:9px;background:#fdecec;color:#c9211e;border:1px solid #f3c1c1;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">Quitar ubicación</button>'
+            : '<button onclick="_spGps(\'' + _idS(o.id) + '\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer">📍 Capturar ubicación</button><div style="font-size:11px;color:var(--text3);margin-top:4px">Obligatoria para cerrar la orden.</div>') + '</div>';
+        }
+        var t = (o.tecnicos || []).slice(0, 4), lst = _spPersonal(o.tecnicos);
+        c += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + [0, 1, 2, 3].map(function(i){
+          return '<div class="form-group"><label>' + (i === 0 ? 'Técnico asignado *' : 'Asignado ' + (i + 1) + ' (opcional)') + '</label><select onchange="actualizarSPTecnico(\'' + _idS(o.id) + '\',' + i + ',this.value)"><option value="">— Seleccionar —</option>'
+            + lst.map(function(n){ return '<option value="' + _x(n) + '"' + (t[i] === n ? ' selected' : '') + '>' + _x(n) + '</option>'; }).join('') + '</select></div>'; }).join('') + '</div>';
+        c += '<div class="form-group"><label>Trabajo realizado *</label><textarea style="min-height:80px" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'trabajoRealizado\',this.value.trim())" placeholder="Describe lo que se hizo">' + _x(o.trabajoRealizado || '') + '</textarea></div>';
+        var fotos = o.fotos || [];
+        c += '<div class="form-group"><label>📷 Fotografías (' + fotos.length + '/10)</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">'
+          + fotos.map(function(f, i){ return '<div style="position:relative;width:76px;height:76px"><img src="' + _img(f) + '" style="width:76px;height:76px;object-fit:cover;border-radius:8px"><button onclick="_spFotoQuitar(\'' + _idS(o.id) + '\',' + i + ')" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;background:#c00;color:#fff;font-size:12px;cursor:pointer">✕</button></div>'; }).join('') + '</div>'
+          + (fotos.length < 10 ? '<label style="display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="_spFotosAgregar(\'' + _idS(o.id) + '\',this)">📷 Agregar fotos</label>' : '') + '</div>';
+        var fid = 'firma-sp-' + o.id;
+        c += '<div class="form-group"><label>✍️ ' + _firmaTituloTxt(o) + ' *</label><canvas id="' + _x(fid) + '" class="firma-canvas" width="600" height="160" ontouchstart="firmaStart(event,this)" ontouchmove="firmaMove(event,this)" ontouchend="firmaStop(this)" onmousedown="firmaStart(event,this)" onmousemove="firmaMove(event,this)" onmouseup="firmaStop(this)" onmouseleave="firmaStop(this)"></canvas>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="font-size:11px;color:var(--text3)">Toque el recuadro para firmar</span><span class="firma-guardada-tag" style="display:none;font-size:11px;color:#27ae60;font-weight:800;margin-right:6px">✓ Firma guardada</span>'
+          + '<button onclick="event.stopPropagation();guardarFirmaOrden(\'' + _x(fid) + '\')" style="font-size:12px;background:#27ae60;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer">Guardar firma</button></div></div>';
+        c += '</div>';
+        if(o.viaticos) c += '<button onclick="verViaticosResumen(\'' + _idS(o.id) + '\',\'soldadura\')" style="width:100%;padding:12px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">📋 Ver Viáticos</button>';
+        c += '<button onclick="finalizarSoldadura(\'' + _idS(o.id) + '\')" style="width:100%;padding:12px;background:#7c3aed;color:white;border:none;border-radius:6px;font-size:14px;font-weight:800;cursor:pointer;margin-top:6px">✅ Cerrar orden</button>';
+      }
+      c += '</div>';
+    }
+    return c + '</div>';
+  }).join('');
+  el.onclick = function(e){
+    var card = e.target.closest('[data-spid]');
+    if(card && !e.target.closest('button,input,select,textarea,canvas,label,a')){ var id = card.dataset.spid; if(_openSP.has(id)) _openSP.delete(id); else _openSP.add(id); renderSoldaduras(); }
+  };
+  setTimeout(function(){ try{ _restaurarFirmasTec(); }catch(e){} }, 0);
+}
+function finalizarSoldadura(id){
+  var o = _spGet(id); if(!o) return;
+  var fc = document.getElementById('firma-sp-' + id), firmado = !!(fc && fc.classList.contains('firmado'));
+  var falta = [];
+  if(!(o.tecnicos || [])[0]) falta.push('Técnico asignado');
+  if(!o.fechaInicio) falta.push('Fecha y hora de inicio');
+  if(!o.fechaFin) falta.push('Fecha y hora final');
+  if(o.fechaInicio && o.fechaFin && o.fechaFin <= o.fechaInicio) falta.push('La fecha final debe ser posterior al inicio');
+  if(!String(o.trabajoRealizado || '').trim()) falta.push('Trabajo realizado');
+  if(o.ubicacion !== 'plantel' && !o.ubicacionLink) falta.push('📍 Ubicación GPS (usa el botón Capturar)');
+  if(!firmado && !o.firma) falta.push(_firmaTituloTxt(o));
+  if(falta.length){ alert('Para cerrar la orden falta:\n• ' + falta.join('\n• ')); return; }
+  if(!confirm('¿Cerrar la orden ' + (o.correlativo || '') + '? Después solo Gerencia puede reabrirla.')) return;
+  if(firmado) o.firma = _firmaLigera(fc);
+  _spFechaPartes(o);
+  o.estado = 'Completado'; o.completado = true;
+  var h = new Date(); o.fechaCierre = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0');
+  // Vales de comida como en los correctivos (si no hay viáticos)
+  try{ if(!o.viaticos && (!o.vales || !o.vales.length) && typeof calcularVales === 'function'){ var v = calcularVales(o.fechaInicio, o.fechaFin, _valePersonasDe(o)); if(v && v.length) o.vales = v; } }catch(e){}
+  _spGuardar();
+  toast('✅ Orden ' + (o.correlativo || '') + ' cerrada');
+  renderSoldaduras();
+}
+</script>
+
 </body>
 </html>

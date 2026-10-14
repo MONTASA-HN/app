@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='560d4700f00e';
+  var APP_VERSION='ecb9779152f2';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -382,7 +382,7 @@ function _faltanEquipoClienteForm(pref){
 // (siguen siendo listas), así el tablero de flota y el mundo isométrico no se enteran.
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
 var _Sync = (function(){
-  var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos'];
+  var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos','soldaduras'];   // soldaduras: 2026-10-14
   var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
@@ -437,7 +437,7 @@ var _Sync = (function(){
   // Dos teléfonos (o uno sin señal) pueden calcular el mismo MH/LG. Al llegar el servidor se revisa: entre las órdenes
   // con el mismo número se queda la de id menor; las demás que se crearon EN ESTE teléfono reciben un número nuevo del
   // contador <raíz>/lastCorrelativo_<MH|LG> (transacción). Todos los teléfonos deciden igual, así cambia una sola.
-  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] } ];
+  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] }, { p: 'SP', cols: ['soldaduras'] } ];
   var ultimoSrv = {}, renumerando = {};
   function _creadosAqui(){ try{ return JSON.parse(localStorage.getItem('_sync_creados_' + raiz) || '{}') || {}; }catch(e){ return {}; } }
   function _marcarCreado(id){
@@ -1511,6 +1511,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
           <option value="correctivo" data-depto="mantenimiento">🔧 Correctivo</option>
           <option value="preventivo" data-depto="mantenimiento">📅 Preventivo</option>
           <option value="cortinas" data-depto="mantenimiento">🚪 Cortinas / Niveladoras</option>
+          <option value="soldadura" data-depto="mantenimiento">🔥 Soldadura / Pintura</option>
         </select>
       </div>
 
@@ -1609,6 +1610,14 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
           <option value="Cambio de aceite y filtros">🛢 Aceite y filtros</option>
           <option value="Otro mantenimiento preventivo">Otro preventivo</option>
         </select>
+      </div>
+
+      <!-- (2026-10-14) Soldadura / Pintura: equipo opcional y hasta 4 asignados -->
+      <div id="sol-sp-wrap" style="display:none">
+        <div class="form-group"><label>🔧 Equipo (opcional)</label><select id="sol-sp-equipo"></select></div>
+        <div class="form-group"><label>👷 Asignados — técnicos u operadores (máx. 4, el primero obligatorio)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><select id="sol-sp-tec1"></select><select id="sol-sp-tec2"></select><select id="sol-sp-tec3"></select><select id="sol-sp-tec4"></select></div>
+        </div>
       </div>
 
       <!-- 4e. Ubicación del trabajo (solo mantenimiento) -->
@@ -5518,6 +5527,12 @@ function renderPersonal(){
     });
   });
 
+  // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
+  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio; }).forEach(r => {
+    const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
+    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
+  });
   const sortedTec = Object.entries(statsTec)
     .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
     .sort((a,b) => b[1].minutos - a[1].minutos);
@@ -6817,10 +6832,11 @@ function _renderCarpetasMantSup(el){
     {tipo:'P',  icon:'📋', label:'Preventivos',               color:'#2E83C3'},
     {tipo:'C',  icon:'🔧', label:'Correctivos',               color:'#C9211E'},
     {tipo:'CT', icon:'🚪', label:'Cortinas\nNiveladoras',     color:'#9B59B6'},
+    {tipo:'SP', icon:'🔥', label:'Soldadura /\nPintura',    color:'#7c3aed'},
   ];
   el.innerHTML = `<div class="carpeta-grid">
     ${CARPETAS.map(c=>{
-      const CNTS = {P:(DB.preventivos||[]).length, C:(DB.correctivos||[]).length, CT:(DB.cortinas||[]).length};
+      const CNTS = {P:(DB.preventivos||[]).length, C:(DB.correctivos||[]).length, CT:(DB.cortinas||[]).length, SP:(DB.soldaduras||[]).length};
       const cnt = CNTS[c.tipo]||0;
       return `
       <div class="carpeta-item" style="--carpeta-color:${c.color};position:relative" onclick="_abrirCarpetaMantSup('${c.tipo}')">
@@ -6852,6 +6868,7 @@ function _renderOrdenesMantSup(el, tipo){
     'P':  {icon:'📋', label:'Preventivos',              color:'#2E83C3'},
     'C':  {icon:'🔧', label:'Correctivos',              color:'#C9211E'},
     'CT': {icon:'🚪', label:'Cortinas / Niveladoras',   color:'#9B59B6'},
+    'SP': {icon:'🔥', label:'Soldadura / Pintura',      color:'#7c3aed'},
   };
   const info = INFO[tipo];
 
@@ -6867,6 +6884,7 @@ function _renderOrdenesMantSup(el, tipo){
   if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
   if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
   if(tipo==='CT') all = (DB.cortinas||[]).map(o=>({...o,_t:'CT',_f:o.fechaCierre||o.fecha||''}));
+  if(tipo==='SP') all = (DB.soldaduras||[]).map(v=>({...v,_t:'SP',_f:v.fechaCierre||v.fecha||''}));
 
   all.sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -6900,6 +6918,7 @@ function _renderOrdenesMantSup(el, tipo){
       const tiempos = calcTiemposOrden(x);
       const horas = tiempos.total !== '—' ? tiempos.total : calcHoras(x.fechaInicio, x.fechaFin||x.fechaCompletado||'');
       if(x._t==='CT') return _buildCardCTSup(x, ESTADOS_COLOR);
+      if(x._t==='SP') return _buildCardSP(x, eq, eqLabel, ESTADOS_COLOR);
       if(x._t==='P')  return _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
       if(x._t==='C')  return _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
     } catch(e){ return ''; }
@@ -7659,6 +7678,8 @@ function solTipoChange(){
   const logGrp=document.getElementById('sol-logistica-personal');
   const ubicWrap=document.getElementById('sol-ubicacion-wrap');
   [eqGroup,eqManual,eq2,descWrap,mantWrap,prioGrp,opGrp,tecGrp,logGrp,ubicWrap].forEach(el=>visEl(el,false));
+  const spWrap=document.getElementById('sol-sp-wrap'); visEl(spWrap,false);
+  if(tipo==='soldadura'){ visEl(descWrap,true); if(descLbl) descLbl.textContent='Trabajo a realizar'; visEl(ubicWrap,true); visEl(spWrap,true); _spPrepararForm(); try{ _ubLinkToggle(); }catch(e){} return; }   // 2026-10-14
   if(tipo==='revision_fisica'||tipo==='evaluacion'){
     visEl(descWrap,true);
     if(descLbl) descLbl.textContent=tipo==='revision_fisica'?'Descripción de la revisión':'Descripción de la evaluación';
@@ -7760,7 +7781,7 @@ function _ubLinkToggle(){
     var tipo = (tEl && tEl.offsetParent!==null ? tEl : document.getElementById('sol-tipo'));
     tipo = tipo ? tipo.value : '';
     var show = false;
-    if(tipo==='evaluacion'||tipo==='revision_fisica') show = true;
+    if(tipo==='evaluacion'||tipo==='revision_fisica'||tipo==='soldadura') show = true;
     else if(tipo==='renta'||tipo==='entrega'||tipo==='retiro'||tipo==='apoyo_mantenimiento'){
       var u1=document.getElementById('sol-ublog'), u2=document.getElementById('sol-ublog2');
       var v=(u1&&u1.offsetParent!==null)?u1.value:((u2&&u2.offsetParent!==null)?u2.value:(u1?u1.value:'fuera'));
@@ -7778,6 +7799,7 @@ function _ubLinkToggle(){
 async function enviarSolicitudWA(){
   const tipo      = document.getElementById('sol-tipo').value;
   const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
+  if(tipo === 'soldadura'){ _spCrearDesdeSolicitud(false); return; }   // 2026-10-14
 
   const fechaRevEval = document.getElementById('sol-fecha')?.value||new Date().toISOString().slice(0,10);
   if(tipo === 'revision_fisica' || tipo === 'evaluacion'){
@@ -7979,6 +8001,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
 async function copiarMensajeWA(){
   const tipo      = document.getElementById('sol-tipo').value;
   const descRaw   = document.getElementById('sol-desc')?.value.trim()||'';
+  if(tipo === 'soldadura'){ _spCrearDesdeSolicitud(true); return; }   // 2026-10-14
 
   // ── REVISIÓN Y EVALUACIÓN ─────────────────────────────────────────────────
   if(tipo === 'revision_fisica' || tipo === 'evaluacion'){
@@ -8472,6 +8495,7 @@ function _getViaticosArray(tipo){
   if(tipo==='correctivo') return DB.correctivos||[];
   if(tipo==='revision')   return DB.revisiones||[];
   if(tipo==='evaluacion') return DB.evaluaciones||[];
+  if(tipo==='soldadura')  return DB.soldaduras||[];
   return DB.logistica||[];
 }
 function _getViaticosOrden(){
@@ -8480,7 +8504,7 @@ function _getViaticosOrden(){
 function _viaticosOrdenCompletada(orden, tipo){
   if(tipo==='preventivo') return !!orden.completado;
   if(tipo==='correctivo') return orden.estado==='Completado';
-  if(tipo==='revision'||tipo==='evaluacion') return !!orden.completado || orden.estado==='Completado';
+  if(tipo==='revision'||tipo==='evaluacion'||tipo==='soldadura') return !!orden.completado || orden.estado==='Completado';
   return !!orden.cerrado || orden.estado==='Completado'; // logistica
 }
 function _renderListaSegunTipo(tipo){
@@ -10412,6 +10436,7 @@ function _reabrirOrdenMant(tipo, id){
       orden = (DB.evaluaciones||[]).find(function(x){ return x.id===id; });
       if(orden){ orden.completado = false; orden.estado = 'En proceso'; delete orden.fechaCierre; }
     }
+    if(tipo==='sp'){ orden = (DB.soldaduras||[]).find(function(x){ return x.id===id; }); if(orden){ orden.completado = false; orden.estado = 'En proceso'; delete orden.fechaCierre; } }   // 2026-10-14
     if(!orden){ toast('Orden no encontrada'); return; }
     saveDB();
     renderHistorial();
@@ -10982,6 +11007,7 @@ function _iniciarConexionFirebase(esReintento){
         if(_toArr(remote.vendidos).length) DB.vendidos = _toArr(remote.vendidos);
         else if(!DB.vendidos || !DB.vendidos.length) DB.vendidos = JSON.parse(JSON.stringify(VENDIDOS_INICIALES));
         if(remote.correctivos)    DB.correctivos    = _toArr(remote.correctivos);
+        if(remote.soldaduras) DB.soldaduras = (Array.isArray(remote.soldaduras) ? remote.soldaduras : Object.values(remote.soldaduras||{}).filter(Boolean));   // 2026-10-14
         if(remote.cortinas || remote.cortinasReg) DB.cortinas = _mergeCort(remote.cortinas, remote.cortinasReg);
         if(remote.ordenesCerradas)DB.ordenesCerradas= _toArr(remote.ordenesCerradas);
         if(remote.notifCompletadas) DB.notifCompletadas = remote.notifCompletadas;
@@ -11105,6 +11131,7 @@ function _iniciarConexionFirebase(esReintento){
       if(d.evaluaciones)   DB.evaluaciones   = _toArr(d.evaluaciones);
       if(_toArr(d.vendidos).length) DB.vendidos = _toArr(d.vendidos);
       if(d.correctivos)    DB.correctivos    = _toArr(d.correctivos);
+      if(d.soldaduras) DB.soldaduras = (Array.isArray(d.soldaduras) ? d.soldaduras : Object.values(d.soldaduras||{}).filter(Boolean));   // 2026-10-14
       _protegerOrdenesRecientes();
       if(d.cortinas || d.cortinasReg) DB.cortinas = _mergeCort(d.cortinas, d.cortinasReg);
       if(d.ordenesCerradas)DB.ordenesCerradas= _toArr(d.ordenesCerradas);
@@ -11174,9 +11201,11 @@ function _iniciarConexionFirebase(esReintento){
       if(!d) return;
       if(d.preventivos)   DB.preventivos   = d.preventivos;
       if(d.correctivos)   DB.correctivos   = d.correctivos;
+      if(d.soldaduras) DB.soldaduras = (Array.isArray(d.soldaduras) ? d.soldaduras : Object.values(d.soldaduras||{}).filter(Boolean));   // 2026-10-14
       _protegerOrdenesRecientes();
       if(d.revisiones)    DB.revisiones    = d.revisiones||[];
       if(d.evaluaciones)  DB.evaluaciones  = d.evaluaciones||[];
+      if(d.soldaduras)  DB.soldaduras  = d.soldaduras||[];
       if(d.lastCorrelativo_MH) DB['lastCorrelativo_MH'] = Math.max(parseInt(DB['lastCorrelativo_MH'],10)||0, parseInt(d.lastCorrelativo_MH,10)||0); // T13
       if(d.solicitudes)   DB.solicitudes   = d.solicitudes;
       if(d.horometros)    DB.horometros    = d.horometros;
@@ -11354,7 +11383,7 @@ function _cliOrdenAlCerrar(o){
   // sigue «En proceso»; logística: cerrado=true (estado «Completado» o «Cerrado»), nunca canceladas.
   function completada(tipo, o){
     if(!o) return false;
-    if(tipo==='preventivo' || tipo==='correctivo' || tipo==='evaluacion' || tipo==='cortinas')
+    if(tipo==='preventivo' || tipo==='correctivo' || tipo==='evaluacion' || tipo==='cortinas' || tipo==='soldadura')
       return o.completado===true || o.estado==='Completado';
     // Todo lo demás es logística (incluye tipos viejos como «entrega_retiro»)
     return o.cerrado===true && o.estado!=='Cancelado';
@@ -11404,6 +11433,7 @@ function _cliOrdenAlCerrar(o){
     preventivo:['Orden de trabajo · Mantenimiento','Mantenimiento Preventivo'],
     correctivo:['Orden de trabajo · Mantenimiento','Mantenimiento Correctivo'],
     evaluacion:['Orden de trabajo · Mantenimiento','Evaluación de Equipo'],
+    soldadura:['Orden de trabajo · Mantenimiento','Soldadura / Pintura'],
     cortinas:['Orden de trabajo · Cortinas y niveladoras','Cortinas / Niveladoras'],
     renta:['Orden de trabajo · Logística','Renta de Equipo'],
     entrega:['Orden de trabajo · Logística','Entrega de Equipo'],
@@ -11433,6 +11463,11 @@ function _cliOrdenAlCerrar(o){
       S('Datos del equipo evaluado', kv([['Marca', esc(o.marca||'')], ['Modelo', esc(o.modelo||'')], ['Serie', mono(esc(o.serie||''))], ['Horómetro', mono(num(o.horometro,' hrs'))],
                                          ['Cliente', esc(clienteDe(o, eq))], ['Técnico(s)', esc(tecnicosDe(o))]]));
       S('Resultado de la evaluación', txt('Diagnóstico', o.diagnostico) + txt('Mantenimiento sugerido', o.mantSugerido) + txt('Notas', o.notas));
+    } else if(tipo==='soldadura'){   // 2026-10-14
+      S('Datos del servicio', kv([['Equipo', esc(o.equipoTxt||'Sin equipo')], ['Lugar', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'], ['Asignados', esc(tecnicosDe(o))]]));
+      S('Detalle del trabajo', txt('Trabajo a realizar', o.descripcion) + txt('Trabajo realizado', o.trabajoRealizado));
+      S('Tiempos de la orden', tiempos([['Inicio del trabajo', o.fechaInicio||''], ['Fin del trabajo', o.fechaFin||'', 'Trabajo']]));
+      d.meta[2] = ['Lugar del servicio', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'];
     } else if(tipo==='cortinas'){
       S('Datos del servicio', kv([['Cliente', esc(clienteDe(o, eq))], ['Ubicación', esc(o.ubicacion&&o.ubicacion!=='plantel'&&o.ubicacion!=='campo'?o.ubicacion:'')], ['Técnico(s)', esc(tecnicosDe(o))]]));
       S('Detalle del trabajo', txt('Trabajo a realizar', o.descripcion) + txt('Trabajo realizado', o.trabajoRealizado));
@@ -11590,6 +11625,7 @@ function _cliOrdenAlCerrar(o){
     if(tipo==='preventivo') return db.preventivos||[];
     if(tipo==='correctivo') return db.correctivos||[];
     if(tipo==='evaluacion') return db.evaluaciones||[];
+    if(tipo==='soldadura') return db.soldaduras||[];
     if(tipo==='cortinas') return db.cortinas||[];
     return db.logistica||[];
   }
@@ -11868,5 +11904,149 @@ function _cliOrdenAlCerrar(o){
   };
 })();
 </script>
+<script>
+// ══ SOLDADURA / PINTURA (SP) — 2026-10-14, pedido de Miguel ═══════════════════════════════════════════════
+// Solicitud (departamento Mantenimiento → «Soldadura / Pintura»): trabajo a realizar, equipo opcional (flota, vehículos
+// o de clientes; NO cambia su estado), hasta 4 asignados (técnicos u operadores; el 1.º obligatorio) y lugar
+// (plantel / fuera con link). Crea la orden SP-0001… en «soldaduras» y avisa por WhatsApp a cada asignado.
+// En el historial: carpeta «Soldadura / Pintura» con detalle, PDF, viáticos, reabrir y eliminar.
+var _SP_RAIZ = 'monhaco', _SP_APP_TEC = 'MONHACO_Tecnicos.html', _SP_EMPRESA = 'MONHACO';
+function _spLista(){ if(!Array.isArray(DB.soldaduras)) DB.soldaduras = DB.soldaduras ? Object.values(DB.soldaduras).filter(Boolean) : []; return DB.soldaduras; }
+function _spEquipoTxt(e){
+  if(!e) return '';
+  if(e.esEquipoCliente) return [e.clienteNombre || e.cliente, [e.marca, e.modelo].filter(Boolean).join(' '), e.serie ? 'Serie ' + e.serie : ''].filter(Boolean).join(' · ');
+  return [e.codigo, [e.marca, e.modelo || e.subtipo].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+}
+function _spOptsEquipos(sel){
+  var eqs = (DB.equipos || []).filter(function(e){ return e && e.id; });
+  var esVeh = function(e){ return !!e.esVehiculo || /^veh_/.test(e.id); };
+  var grupos = [['🏗 Flota', eqs.filter(function(e){ return !e.esEquipoCliente && !esVeh(e); })], ['🚚 Vehículos', eqs.filter(esVeh)], ['👤 Equipos de clientes', eqs.filter(function(e){ return e.esEquipoCliente; })]];
+  var h = '<option value="">— Sin equipo —</option>';
+  grupos.forEach(function(g){
+    if(!g[1].length) return;
+    h += '<optgroup label="' + g[0] + '">' + g[1].slice().sort(function(a, b){ return _spEquipoTxt(a).localeCompare(_spEquipoTxt(b)); })
+      .map(function(e){ return '<option value="' + _x(e.id) + '"' + (e.id === sel ? ' selected' : '') + '>' + _x(_spEquipoTxt(e)) + '</option>'; }).join('') + '</optgroup>';
+  });
+  return h;
+}
+// Técnicos y operadores de Personal (con su teléfono para el aviso)
+function _spPersonas(){
+  var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
+  ps = ps.filter(function(p){ return (p.roles || []).some(function(r){ return r === 'tec' || r === 'jefe' || r === 'op' || r === 'mot'; }); });
+  if(!ps.length && typeof TECNICOS_VIAT !== 'undefined') ps = TECNICOS_VIAT.map(function(n){ return { n: n, tel: '' }; });
+  return ps.sort(function(a, b){ return String(a.n).localeCompare(String(b.n)); });
+}
+function _spPrepararForm(){
+  var eq = document.getElementById('sol-sp-equipo'); if(eq) eq.innerHTML = _spOptsEquipos(eq.value || '');
+  var ps = _spPersonas();
+  for(var i = 1; i <= 4; i++){
+    var s = document.getElementById('sol-sp-tec' + i); if(!s) continue; var cur = s.value;
+    s.innerHTML = '<option value="">' + (i === 1 ? '— Seleccionar (obligatorio) —' : '— Opcional —') + '</option>' + ps.map(function(p){ return '<option value="' + _x(p.n) + '"' + (p.n === cur ? ' selected' : '') + '>' + _x(p.n) + (p.tel ? '' : ' (sin teléfono)') + '</option>'; }).join('');
+  }
+}
+function _spSiguiente(){
+  var mx = parseInt(DB.lastCorrelativo_SP, 10) || 0;
+  _spLista().forEach(function(o){ var n = parseInt(String(o && o.correlativo || '').replace(/^SP-/, ''), 10); if(!isNaN(n) && n > mx) mx = n; });
+  DB.lastCorrelativo_SP = mx + 1;
+  try{ var nn = mx + 1; window._fbDB.ref(_SP_RAIZ + '/lastCorrelativo_SP').transaction(function(c){ c = parseInt(c, 10) || 0; return nn > c ? nn : undefined; }).catch(function(){}); }catch(e){}
+  return 'SP-' + String(mx + 1).padStart(4, '0');
+}
+// Crea la orden desde la solicitud. copiar = true → copia el mensaje en vez de abrir WhatsApp
+function _spCrearDesdeSolicitud(copiar){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden sin conexión con la base de datos.'); return; }
+  var desc = (document.getElementById('sol-desc') || {}).value; desc = String(desc || '').trim();
+  var nombres = [1, 2, 3, 4].map(function(i){ return ((document.getElementById('sol-sp-tec' + i) || {}).value || ''); });
+  var falta = [];
+  if(!desc) falta.push('Trabajo a realizar');
+  if(!nombres[0]) falta.push('Técnico asignado (el primero es obligatorio)');
+  if(falta.length){ toast('Falta: ' + falta.join(', '), true); return; }
+  var tecs = []; nombres.forEach(function(n){ if(n && tecs.indexOf(n) < 0) tecs.push(n); });
+  var eqId = (document.getElementById('sol-sp-equipo') || {}).value || '';
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === eqId; });
+  var ubic = (document.getElementById('sol-ubicacion') || {}).value === 'plantel' ? 'plantel' : 'campo';
+  var link = (typeof _leerUbLinkForm === 'function') ? _leerUbLinkForm() : '';
+  var ctc = (typeof _leerContactoForm === 'function') ? _leerContactoForm() : '';
+  var fecha = (document.getElementById('sol-fecha') || {}).value || new Date().toISOString().slice(0, 10);
+  var corr = _spSiguiente(), id = uid();
+  var orden = { id: id, correlativo: corr, estado: 'Pendiente', descripcion: desc, equipoId: eqId, equipoTxt: eq ? _spEquipoTxt(eq) : '',
+    tecnicos: tecs, tecnico: tecs.join(', '), ubicacion: ubic, ubicacionLink: link, contactoCliente: ctc, fecha: fecha, completado: false, creado: Date.now() };
+  _spLista().push(orden);
+  if(!DB.solicitudes) DB.solicitudes = [];
+  DB.solicitudes.unshift({ id: id, correlativo: corr, equipoTxt: orden.equipoTxt || 'Sin equipo', equipoId: eqId, desc: desc, fecha: fecha, tecnicoNombre: orden.tecnico, prioridad: 'Normal', tipo: 'soldadura', estado: 'Enviada' });
+  saveDB();
+  try{ if(window._fbDB && window._fbReady) _Sync.guardar(); }catch(e){}
+  try{ _agendarDesdeOrden(corr, tecs, fecha, 'Soldadura / Pintura — ' + desc.slice(0, 60), 240); }catch(e){}
+  var msg = '🔥 *SOLDADURA / PINTURA - ' + _SP_EMPRESA + '*\n🔗 https://montasa-hn.github.io/app/' + _SP_APP_TEC + '\n\n🔢 *Orden:* ' + corr + '\n👷 *Asignados:* ' + orden.tecnico
+    + '\n📝 *Trabajo a realizar:* ' + desc + (orden.equipoTxt ? '\n🔧 *Equipo:* ' + orden.equipoTxt : '') + '\n📍 *Lugar:* ' + (ubic === 'plantel' ? 'En plantel' : 'Fuera del plantel')
+    + (link ? '\n🗺 *Ubicación:* ' + link : '') + (ctc ? '\n📞 *Contacto:* ' + ctc : '') + '\n📅 *Fecha:* ' + fecha;
+  try{ clearSolicitudForm(); }catch(e){}
+  try{ if(typeof renderDashboard === 'function') renderDashboard(); }catch(e){}
+  toast('Orden ' + corr + ' creada ✓');
+  if(copiar){ try{ navigator.clipboard.writeText(msg); toast('Orden ' + corr + ' creada ✓ — mensaje copiado'); }catch(e){} return; }
+  var ps = _spPersonas(), n = 0;
+  tecs.forEach(function(nom){
+    var p = ps.find(function(x){ return x.n === nom; }), tel = p ? String(p.tel || '').replace(/[^0-9]/g, '') : '';
+    if(!tel) return; if(tel.length === 8) tel = '504' + tel;
+    var url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
+    setTimeout(function(){ window.open(url, '_blank'); }, 800 * n++);
+  });
+  if(!n) toast('Ningún asignado tiene teléfono en Personal: avísales tú', true);
+}
+// ── Historial ──
+function _buildCardSP(x, eq, eqLabel, ESTADOS_COLOR){
+  var tecs = (x.tecnicos || []).filter(Boolean).join(', ') || '—';
+  var est = x.completado ? 'Completado' : (x.estado || 'Pendiente');
+  var cfg = ESTADOS_COLOR[est] || { bg:'#f5f5f5', border:'#888', txt:'#333' };
+  var abierta = (typeof openHistGer !== 'undefined') && openHistGer.has(x.id);
+  var c = '<div class="card" style="padding:12px 14px;border-left:3px solid #7c3aed;margin-bottom:8px;cursor:pointer" data-hid="' + _x(x.id) + '">';
+  c += '<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1;min-width:0">';
+  c += '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#f3e8ff;color:#6b21a8;padding:2px 7px;border-radius:10px">' + _x(x.correlativo || '—') + '</span>'
+    + '<span style="font-size:11px;font-weight:700;background:' + cfg.bg + ';color:' + cfg.txt + ';padding:2px 8px;border-radius:10px;border:1px solid ' + cfg.border + '">' + est + '</span></div>';
+  c += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">' + _x(String(x.descripcion || 'Soldadura / Pintura').slice(0, 80)) + '</div>';
+  c += '<div style="font-size:11px;color:var(--text3)">🔥 Soldadura / Pintura · 📅 ' + _x(x.fecha || '—') + ' · 👷 ' + _x(tecs) + '</div>';
+  if(x.equipoTxt) c += '<div style="font-size:11px;color:var(--text3)">🔧 ' + _x(x.equipoTxt) + '</div>';
+  if(x.viaticos && typeof _viatTotalAsignado === 'function'){ c += '<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ' + _viatTotalAsignado(x).toFixed(2) + '</div>'; }
+  c += '</div><span style="font-size:18px;color:var(--text3);margin-left:8px;flex-shrink:0">' + (abierta ? '⌃' : '⌄') + '</span></div>';
+  if(abierta) c += _buildDetalleSP(x, tecs, est);
+  return c + '</div>';
+}
+function _buildDetalleSP(x, tecs, est){
+  var ETI = 'color:var(--text3);display:block;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px';
+  var f = function(s){ return s ? String(s).replace('T', ' ') : '—'; };
+  var d = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">';
+  d += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:13px;margin-bottom:14px">';
+  [['Correlativo', x.correlativo || '—'], ['Estado', est], ['Asignados', tecs], ['Equipo', x.equipoTxt || '— Sin equipo —'], ['Lugar', x.ubicacion === 'plantel' ? 'En plantel' : 'Fuera del plantel'],
+   ['Inicio', f(x.fechaInicio)], ['Final', f(x.fechaFin)], ['Cerrada', x.fechaCierre || '—']].forEach(function(kv){ d += '<div><span style="' + ETI + '">' + kv[0] + '</span><span style="font-weight:600;color:var(--text)">' + _x(kv[1]) + '</span></div>'; });
+  d += '<div style="grid-column:1/-1"><span style="' + ETI + '">Trabajo a realizar</span><span style="font-weight:600;white-space:pre-wrap">' + _x(x.descripcion || '—') + '</span></div>';
+  d += '<div style="grid-column:1/-1"><span style="' + ETI + '">Trabajo realizado</span><span style="font-weight:600;white-space:pre-wrap">' + _x(x.trabajoRealizado || '—') + '</span></div></div>';
+  if(x.ubicacionLink) d += '<a href="' + _url(x.ubicacionLink).replace(/&/g, '&amp;') + '" target="_blank" rel="noopener" style="display:block;text-align:center;padding:8px;background:#e8f0fe;color:#1a56db;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;margin-bottom:8px">🗺 Ver ubicación</a>';
+  if(x.firma) d += '<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">✍️ FIRMA</div><img src="' + _img(x.firma) + '" style="width:100%;max-height:90px;object-fit:contain;border:1px solid var(--border2);border-radius:8px;background:#fff"></div>';
+  if(typeof _fotosPendientes === 'function' && _fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
+  if(x.fotos && x.fotos.length){
+    if(typeof _btnDescFotos === 'function') d += _btnDescFotos(x.id);
+    d += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">' + x.fotos.map(function(ft){ return '<a href="' + _img(ft) + '" target="_blank" rel="noopener"><img src="' + _img(ft) + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px"></a>'; }).join('') + '</div>';
+  }
+  var B = 'width:100%;margin-top:4px;padding:8px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;';
+  d += '<button onclick="event.stopPropagation();abrirViaticos(\'' + _idS(x.id) + '\',\'soldadura\')" style="' + B + 'background:' + (x.viaticos ? '#1f3864' : '#2d6a9f') + ';color:white;border:none">' + (x.viaticos ? '📋 Ver / editar viáticos' : '📋 Solicitar viáticos') + '</button>';
+  if(est === 'Completado'){
+    d += '<button onclick="event.stopPropagation();_reabrirOrdenMant(\'sp\',\'' + _idS(x.id) + '\')" style="' + B + 'background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef">🔓 Reabrir para editar</button>';
+    d += '<button onclick="event.stopPropagation();compartirPDFOrden(\'soldadura\',\'' + _idS(x.id) + '\')" style="' + B + 'background:#2d6a2d;color:white;border:none">📄 Compartir PDF</button>';
+  }
+  d += '<button onclick="event.stopPropagation();_elimSP(\'' + _idS(x.id) + '\')" style="' + B + 'background:#fdeaea;color:#c00;border:none">🗑 Eliminar orden</button>';
+  return d + '</div>';
+}
+function _elimSP(id){
+  if(typeof _papeleraGuardar !== 'function'){ toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return; }   // Supervisión
+  solicitarPINAccion(function(){
+    _papeleraGuardar(_spLista().find(function(x){ return x && x.id === id; }), 'sp');
+    _marcarOrdenBorrada(id);
+    DB.soldaduras = _spLista().filter(function(x){ return x.id !== id; });
+    try{ _cacheLocal(); }catch(e){}
+    var fin = function(){ renderHistorial(); toast('Orden eliminada ✓'); };
+    if(window._fbDB && window._fbReady) _Sync.guardar().then(fin).catch(fin); else fin();
+  }, '🗑 Eliminar orden de soldadura / pintura', 'Ingresa tu PIN para eliminar esta orden');
+}
+</script>
+
 </body>
 </html>
