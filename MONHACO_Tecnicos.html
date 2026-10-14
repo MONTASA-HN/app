@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f1bcee68c57f';
+  var APP_VERSION='cfc991fce055';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -5710,7 +5710,8 @@ function _spFechaPartes(o){
 }
 function actualizarSP(id, campo, valor){
   var o = _spGet(id); if(!o) return;
-  if((campo === 'fechaFin' && valor && o.fechaInicio && valor <= o.fechaInicio) || (campo === 'fechaInicio' && valor && o.fechaFin && o.fechaFin <= valor)){
+  var _comp = function(x){ return String(x || '').length >= 16; };   // solo con fecha Y hora
+  if((campo === 'fechaFin' && _comp(valor) && _comp(o.fechaInicio) && valor <= o.fechaInicio) || (campo === 'fechaInicio' && _comp(valor) && _comp(o.fechaFin) && o.fechaFin <= valor)){
     alert('⚠️ La fecha y hora final debe ser posterior a la de inicio.'); renderSoldaduras(); return;
   }
   o[campo] = valor;
@@ -5809,9 +5810,12 @@ function renderSoldaduras(){
         c += '<div class="form-group"><label>Estado de la orden</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'estado\',this.value)">' + SP_ESTADOS.map(function(s){ return '<option' + (est === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
           + (bloq ? '<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a «En proceso» para poder editar los campos</div>' : '') + '</div>';
         c += '<div' + (bloq ? ' style="pointer-events:none;opacity:.5"' : '') + '>';
-        c += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-          + '<div class="form-group"><label>Fecha y hora de inicio</label><input type="datetime-local" value="' + _x(o.fechaInicio || '') + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'fechaInicio\',this.value)"></div>'
-          + '<div class="form-group"><label>Fecha y hora final</label><input type="datetime-local" value="' + _x(o.fechaFin || '') + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'fechaFin\',this.value)"></div></div>';
+        // Fecha y hora en casillas separadas, como en las demás órdenes
+        var fh = function(campo, eti){ var v = String(o[campo] || '');
+          return '<div class="form-group"><label>' + eti + '</label><div style="display:inline-flex;gap:10px;align-items:flex-end">'
+            + '<input type="date" value="' + _x(v.slice(0, 10)) + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'' + campo + '\',this.value+(this.nextElementSibling.value?\'T\'+this.nextElementSibling.value:\'\'))">'
+            + '<input type="time" value="' + _x(v.slice(11, 16)) + '" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'' + campo + '\',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+\'T\'+this.value)"></div></div>'; };
+        c += fh('fechaInicio', '🔧 Inicio del trabajo') + fh('fechaFin', '✅ Fin del trabajo');
         c += '<div class="form-group"><label>Equipo (opcional)</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'equipoId\',this.value)">' + _spOptsEquipos(o.equipoId || '') + '</select></div>';
         c += '<div class="form-group"><label>Lugar del trabajo</label><select onchange="actualizarSP(\'' + _idS(o.id) + '\',\'ubicacion\',this.value)"><option value="plantel"' + (o.ubicacion === 'plantel' ? ' selected' : '') + '>🏭 En plantel</option><option value="campo"' + (o.ubicacion !== 'plantel' ? ' selected' : '') + '>🚗 Fuera del plantel</option></select></div>';
         if(o.ubicacion !== 'plantel'){
@@ -5851,8 +5855,8 @@ function finalizarSoldadura(id){
   var fc = document.getElementById('firma-sp-' + id), firmado = !!(fc && fc.classList.contains('firmado'));
   var falta = [];
   if(!(o.tecnicos || [])[0]) falta.push('Técnico asignado');
-  if(!o.fechaInicio) falta.push('Fecha y hora de inicio');
-  if(!o.fechaFin) falta.push('Fecha y hora final');
+  if(String(o.fechaInicio || '').length < 16) falta.push('Inicio del trabajo (fecha y hora)');
+  if(String(o.fechaFin || '').length < 16) falta.push('Fin del trabajo (fecha y hora)');
   if(o.fechaInicio && o.fechaFin && o.fechaFin <= o.fechaInicio) falta.push('La fecha final debe ser posterior al inicio');
   if(!String(o.trabajoRealizado || '').trim()) falta.push('Trabajo realizado');
   if(o.ubicacion !== 'plantel' && !o.ubicacionLink) falta.push('📍 Ubicación GPS (usa el botón Capturar)');
