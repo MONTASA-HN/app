@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6e4ef72afc5e';
+  var APP_VERSION='f1b5cbe2c9d9';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -5258,6 +5258,8 @@ function renderDashboardTec(){
   const corr = contarEstados(DB.correctivos, o=>o.estado||'Pendiente');
   const revs = contarEstados(DB.revisiones||[], o=>o.completado?'Completado':(o.estado||'Pendiente'));
   const evls = contarEstados(DB.evaluaciones||[], o=>o.completado?'Completado':(o.estado||'Pendiente'));
+  const sold = contarEstados(Array.isArray(DB.soldaduras) ? DB.soldaduras : Object.values(DB.soldaduras||{}).filter(Boolean), o=>o.completado?'Completado':(o.estado||'Pendiente'));   // 2026-10-14
+  const _navSP = [...document.querySelectorAll('.bottom-nav .nav-btn')].findIndex(b=>/showTab\('soldadura'/.test(b.getAttribute('onclick')||''))+1;
 
   // ── Completadas este mes ────────────────────────────────────────────────
   function esMes(f){ const d=new Date(f); return !isNaN(d)&&d.getMonth()===mes&&d.getFullYear()===anio; }
@@ -5369,6 +5371,7 @@ function renderDashboardTec(){
     ${typeCard('🔧','Correctivos','#C9211E','#fbe8e8',corr,3)}
     ${typeCard('✅','Revisión Físico-Técnica','#18A303','#e3f5d9',revs,4)}
     ${typeCard('📄','Evaluación de Equipo','#E8811A','#fdead9',evls,5)}
+    ${typeCard('🔥','Soldadura / Pintura','#7c3aed','#f3e8ff',sold,_navSP)}
     </div>
 
     <!-- Leyenda de colores de estado -->
@@ -6705,9 +6708,9 @@ function renderSoldaduras(){
             : '<button onclick="_spGps(\'' + _idS(o.id) + '\')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer">📍 Capturar ubicación</button><div style="font-size:11px;color:var(--text3);margin-top:4px">Obligatoria para cerrar la orden.</div>') + '</div>';
         }
         var t = (o.tecnicos || []).slice(0, 4), lst = _spPersonal(o.tecnicos);
-        c += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + [0, 1, 2, 3].map(function(i){
+        c += [0, 1, 2, 3].map(function(i){   // uno debajo del otro, como en las demás órdenes
           return '<div class="form-group"><label>' + (i === 0 ? 'Técnico asignado *' : 'Asignado ' + (i + 1) + ' (opcional)') + '</label><select onchange="actualizarSPTecnico(\'' + _idS(o.id) + '\',' + i + ',this.value)"><option value="">— Seleccionar —</option>'
-            + lst.map(function(n){ return '<option value="' + _x(n) + '"' + (t[i] === n ? ' selected' : '') + '>' + _x(n) + '</option>'; }).join('') + '</select></div>'; }).join('') + '</div>';
+            + lst.map(function(n){ return '<option value="' + _x(n) + '"' + (t[i] === n ? ' selected' : '') + '>' + _x(n) + '</option>'; }).join('') + '</select></div>'; }).join('');
         c += '<div class="form-group"><label>Trabajo realizado *</label><textarea style="min-height:80px" onchange="actualizarSP(\'' + _idS(o.id) + '\',\'trabajoRealizado\',this.value.trim())" placeholder="Describe lo que se hizo">' + _x(o.trabajoRealizado || '') + '</textarea></div>';
         var fotos = o.fotos || [];
         c += '<div class="form-group"><label>📷 Fotografías (' + fotos.length + '/10)</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">'
