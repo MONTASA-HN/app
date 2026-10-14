@@ -798,3 +798,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Revisiones físico-técnicas MT: campos Cilindraje (cc) y Capacidad (kg), obligatorios para finalizar.
 - 2026-10-14 — URGENTE: se deshace la etapa 3 (mezcla de pendientes y carga temprana de la copia del teléfono): subía datos viejos.
 - 2026-10-14 — Nuevo tipo de orden Soldadura / Pintura (SP) en MT y MONHACO: solicitud, Técnicos, historial, PDF, Dashboard, horas, vales.
+- 2026-10-14 — Cierre de órdenes: obligatorios hora de llegada al plantel (fuera), sistema afectado y fecha de finalización donde faltaban.

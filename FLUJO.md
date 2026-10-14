@@ -512,3 +512,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   trabajo realizado, firma, GPS si es fuera); firma `firma-sp-<id>`; vales como correctivos. NO cambia el estado del equipo. Gerencia y
   Supervisión: carpeta «SP» del historial (`_buildCardSP`), PDF (`soldadura` en el bloque PDF), viáticos (`soldadura`), reabrir (`sp`),
   papelera (`sp`), Dashboard y horas (`_horasDelMes` MTG/MHG; `renderPersonal` MTS/MHS): operadores a logística, técnicos a técnicos.
+- 2026-10-14 — Obligatorios al cerrar (revisión pedida por Miguel): «Hora de llegada al plantel» (`retornoPlantel`) en preventivos y
+  correctivos FUERA del plantel (Técnicos, Gerencia y Supervisión, MT y MONHACO); «Sistema afectado» al cerrar correctivo en Técnicos y
+  al crear un correctivo ya terminado (se agregó el campo `#corr-sistema` al formulario, que no existía); «Fecha y hora de finalización»
+  al crear un correctivo ya terminado; cortinas (MHT): fecha de finalización además del cliente. «Cliente» ya era obligatorio donde aplica.

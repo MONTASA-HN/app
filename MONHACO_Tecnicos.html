@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e85e5342869a';
+  var APP_VERSION='f1bcee68c57f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1809,6 +1809,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
         </div>
       </div>
       <div class="form-group"><label>Falla reportada</label><input id="corr-falla" placeholder="Descripción breve"></div>
+      <div class="form-group"><label>Sistema afectado</label><select id="corr-sistema"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión">Motor / Transmisión</option><option value="Sistema hidráulico">Sistema hidráulico</option><option value="Sistema eléctrico">Sistema eléctrico</option><option value="Sistema de frenos">Sistema de frenos</option><option value="Sistema de dirección">Sistema de dirección</option><option value="Mástil / Elevación">Mástil / Elevación</option><option value="Chasis / Estructura">Chasis / Estructura</option><option value="Llantas / Rodos">Llantas / Rodos</option><option value="Sistema de enfriamiento">Sistema de enfriamiento</option><option value="Cabina / Tablero">Cabina / Tablero</option><option value="Batería / Cargador">Batería / Cargador</option><option value="Sistema de gas / Combustible">Sistema de gas / Combustible</option><option value="Otro">Otro</option></select></div>
       <div class="form-group"><label>Prioridad</label><select id="corr-prioridad"><option>Alta</option><option>Media</option><option>Baja</option></select></div>
       <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Fecha y hora de inicio</div>
       <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px">
@@ -3236,6 +3237,7 @@ function completarPreventivo(id){
   const faltantes = [];
   if(!p.inicioTrabajo && !p.fechaInicio) faltantes.push('Inicio de trabajo');
   if(!p.finTrabajo && !p.fechaFin)      faltantes.push('Fin de trabajo');
+  if((p.ubicacion||'campo')==='campo' && !p.retornoPlantel) faltantes.push('🏭 Hora de llegada al plantel');   // 2026-10-14
   if((p.ubicacion||'campo')!=='plantel'){
     if(!p.vehiculo)   faltantes.push('Vehículo');
   }
@@ -3672,6 +3674,8 @@ function cerrarCorrectivo(id){
   const faltantes = [];
   if(!c.inicioTrabajo && !c.fechaInicio) faltantes.push('Inicio de trabajo');
   if(!c.finTrabajo && !c.fechaFin)      faltantes.push('Fin de trabajo');
+  if((c.ubicacion||'campo')==='campo' && !c.retornoPlantel) faltantes.push('🏭 Hora de llegada al plantel');   // 2026-10-14
+  if(!c.sistema) faltantes.push('Sistema afectado');   // 2026-10-14
   if((c.ubicacion||'campo')!=='plantel'){
     if(!c.vehiculo)   faltantes.push('Vehículo');
   }
@@ -3755,6 +3759,8 @@ function finalizarOrdenCorrectivo(){
   if(!equipoId)    faltantes.push('Equipo');
   if(!falla)       faltantes.push('Falla reportada');
   if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
+  if(!corrFFD)     faltantes.push('Fecha y hora de finalización');   // 2026-10-14
+  if(!((document.getElementById('corr-sistema')||{}).value)) faltantes.push('Sistema afectado');   // 2026-10-14
   if(!tecnico)     faltantes.push('Técnico asignado');
   if(!diag)        faltantes.push('Diagnóstico / Trabajos realizados');
   const clienteOrdenC = ((document.getElementById('corr-cliente-orden')||{}).value||'').trim()
@@ -5308,10 +5314,11 @@ function finalizarCortina(id){
   // Capturar la firma actual del canvas si el técnico firmó pero no la guardó
   const firmaActual = getFirmaData('cort-'+id);
   if(firmaActual) o.firma = firmaActual;
-  if(!_cliOrdenAlCerrar(o)){
-    alert('No se puede finalizar.\nFalta:\n\n• 🏢 Cliente');
-    return;
-  }
+  // (2026-10-14) Cliente y fecha de finalización obligatorios
+  const faltan = [];
+  if(!_cliOrdenAlCerrar(o)) faltan.push('🏢 Cliente');
+  if(!o.fechaFinFecha && !o.fechaFin) faltan.push('Fecha de finalización');
+  if(faltan.length){ alert('No se puede finalizar.\nFalta:\n\n• ' + faltan.join('\n• ')); return; }
   o.estado = 'Completado';
   o.completado = true;
   o.fechaCierre = new Date().toISOString().slice(0,10);
