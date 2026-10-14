@@ -505,3 +505,10 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   líneas propias). `_horasDelMes` suma también las EVALUACIONES (mismas reglas que revisiones): cambia Productividad y Dashboard.
 - 2026-10-13 — Revisiones físico-técnicas (MT): campos `cilindraje` (cc) y `capacidad` (kg), números, obligatorios al finalizar
   (`finalizarRevision`). Se llenan en MTT (formulario y tarjeta abierta); se muestran en MTG/MTS (`_buildDetalleRV`, `_construirCamposOrden`) y MTC.
+- 2026-10-14 — Nuevo tipo de orden **Soldadura / Pintura (SP-0001…)**, MT y MONHACO. Colección `soldaduras` (en `_Sync` COLS de las 8 apps;
+  `GRUPOS` con `SP` y contador `<raíz>/lastCorrelativo_SP`). Se crea desde Solicitudes (MTG/MTS/MHG/MHS: opción `soldadura`, bloque
+  `#sol-sp-wrap` con equipo opcional y 4 asignados; `_spCrearDesdeSolicitud`, también en `DB.solicitudes`). Técnicos (MTT/MHT): pestaña
+  `soldadura` (último botón de la barra), `renderSoldaduras`, `actualizarSP`, `finalizarSoldadura` (obligatorios: técnico 1, inicio, fin,
+  trabajo realizado, firma, GPS si es fuera); firma `firma-sp-<id>`; vales como correctivos. NO cambia el estado del equipo. Gerencia y
+  Supervisión: carpeta «SP» del historial (`_buildCardSP`), PDF (`soldadura` en el bloque PDF), viáticos (`soldadura`), reabrir (`sp`),
+  papelera (`sp`), Dashboard y horas (`_horasDelMes` MTG/MHG; `renderPersonal` MTS/MHS): operadores a logística, técnicos a técnicos.

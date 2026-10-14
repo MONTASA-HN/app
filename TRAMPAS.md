@@ -672,3 +672,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   copias viejas subieran datos viejos encima de los buenos (equipos que cambiaban de estado solos, liquidación de LG-0207 vaciada).
   La copia local NO es confiable como «cambios pendientes» si la base (`_sync_base_*`) y la copia (`*_v1`, `montasa_log_cache`) se
   guardan en momentos distintos. No reintentar sin guardar copia y base JUNTAS y sin prueba con copias viejas de días.
+- **Soldadura/Pintura**: la colección nueva puede llegar como objeto (lista que empezó vacía): siempre `_spLista()` o la carga
+  normalizada `Array.isArray(x)?x:Object.values(x)`. El botón de Técnicos va al FINAL de la barra (otros usan la posición).
