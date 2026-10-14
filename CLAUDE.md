@@ -796,3 +796,4 @@ sin escribir si no calza. Evita parches aplicados a medias o dos veces.
 - 2026-10-13 — Gerencia MT y MONHACO: pestaña «📊 Dashboard» (abiertas, cerradas del mes, horas, fallas por sistema y equipos).
 - 2026-10-13 — Dashboard con revisiones y evaluaciones; Productividad suma las horas de las evaluaciones (pedido de Miguel).
 - 2026-10-13 — Revisiones físico-técnicas MT: campos Cilindraje (cc) y Capacidad (kg), obligatorios para finalizar.
+- 2026-10-14 — URGENTE: se deshace la etapa 3 (mezcla de pendientes y carga temprana de la copia del teléfono): subía datos viejos.

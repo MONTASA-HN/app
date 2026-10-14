@@ -668,3 +668,7 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **Menú ☰ de Gerencia MT**: `_gerMenuGo(n, tab)` y `_gerMenuSync` usan la POSICIÓN del botón en `.bottom-nav`. Al agregar o mover un
   botón de la barra, renumerar el menú. **Marca de agua**: `.watermark` es fija y queda encima de lo que no tenga capa propia
   (`position:relative;z-index:1`).
+- **⚠️ 14/10/2026 — Etapa 3 DESHECHA**: `_Sync.mezclar` y cargar la copia del teléfono antes de Firebase hicieron que teléfonos con
+  copias viejas subieran datos viejos encima de los buenos (equipos que cambiaban de estado solos, liquidación de LG-0207 vaciada).
+  La copia local NO es confiable como «cambios pendientes» si la base (`_sync_base_*`) y la copia (`*_v1`, `montasa_log_cache`) se
+  guardan en momentos distintos. No reintentar sin guardar copia y base JUNTAS y sin prueba con copias viejas de días.

@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3520b371cec9';
+  var APP_VERSION='95ca70dc287d';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2719,7 +2719,7 @@ function _dbSinFotos(){
     if(Array.isArray(v)){
       clone[k]=v.map(function(o){
         if(!o||typeof o!=='object') return o;
-        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto') continue; /* (2026-10-13) la firma sí se guarda: es liviana y una firma sin señal no debe perderse */ c[kk]=o[kk]; }
+        const c={}; for(const kk in o){ if(kk==='fotos'||kk==='foto'||kk==='firma') continue; c[kk]=o[kk]; }
         if(Array.isArray(o.fotos)) c._nFotos=o.fotos.length;
         return c;
       });
@@ -3016,9 +3016,6 @@ function saveDB(){
   // Órdenes, equipos y demás listas se guardan registro por registro (sincronizador, T7)
   try{ if(typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){}
   try{ _cacheLocal(); }catch(e){}
-  // (2026-10-13, auditoría etapa 3) Logística también queda en el teléfono en CADA guardado (sin fotos): una liquidación o un
-  // cierre hecho sin señal no se pierde al cerrar la app. Nunca se guarda una lista vacía (aún sin cargar).
-  try{ if(Array.isArray(DB.logistica) && DB.logistica.length) localStorage.setItem('montasa_log_cache', JSON.stringify(DB.logistica.map(function(o){ if(!o || typeof o !== 'object' || (!o.fotos && !o.foto)) return o; var c = Object.assign({}, o); delete c.fotos; delete c.foto; return c; }))); }catch(e){}
   try{
     if(window._fbDB && window._fbReady){
       // Contador MH: solo se sube si es mayor que el del servidor, nunca lo baja (T13)
@@ -3555,8 +3552,6 @@ function saveAllEquipos(){
   try{ _Sync.guardar(); }catch(e){}
 }
 function loadDB(){
-  // (2026-10-13, auditoría etapa 3) Logística primero: si algo de abajo llama saveDB, no debe guardar una logística vieja encima
-  try{ const _lc0 = localStorage.getItem('montasa_log_cache'); if(_lc0) DB.logistica = JSON.parse(_lc0); }catch(e){}
   try{
     const d = localStorage.getItem(LS_KEY);
     if(d){
@@ -10976,9 +10971,6 @@ function cerrarExito(){
   firebase.initializeApp(firebaseConfig);
   window._fbDB = firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar('montasa', window._fbDB); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._fbDB.ref('montasa');
-  // (2026-10-13, auditoría etapa 3) Mostrar enseguida lo guardado en el teléfono: sin señal Firebase no responde y la app
-  // quedaba vacía. No habilita escrituras (_fbReady sigue en false hasta tener los datos reales).
-  try{ loadDB(); if(!DB.equipos || !DB.equipos.length) DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES)); renderDashboard(); }catch(e){}
 
 function _iniciarConexionFirebase(esReintento){
   FB_REF.once('value').then(snap => {
