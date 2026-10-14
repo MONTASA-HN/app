@@ -375,8 +375,11 @@ Supervisiones**. No asumir que es el mismo.
   `// ══ ESTADO DEL EQUIPO AL ABRIR Y CERRAR MANTENIMIENTO` idéntico en MTG, MTS, MTT, MHG, MHS, MHT.
   Al **abrir** cualquier preventivo/correctivo (`_eqAbrirMant`) el equipo pasa a EN MANTENIMIENTO y la
   orden guarda `estadoEquipoAnterior` (el formulario de Gerencia ya no pone MAL ESTADO). Al **cerrar**
-  (`_eqCerrarMant`) se pregunta «¿Cómo quedó el equipo?»: ✅ operativo → EN RENTA / DEMO-PRESTAMO si
-  estaba así, si no DISPONIBLE; ⚠️ sigue con falla → MAL ESTADO; se guarda `o.equipoQuedo`. Con otra
+  (`_eqCerrarMant`) manda el campo de la orden «🔧 ¿Cómo quedó el equipo?» (`o.equipoQuedo`, OBLIGATORIO desde
+  2026-10-14, también en equipos de cliente, sale en el PDF en color): `funcional` (100% funcional) → EN RENTA /
+  DEMO-PRESTAMO si estaba así, si no DISPONIBLE; `parcial` (Parcialmente funcional) → `estadoEquipoAnterior`;
+  `inhabilitado` → MAL ESTADO. Valores viejos: operativo = funcional, falla = inhabilitado (`_eqQuedoNorm`).
+  Si una orden se cierra sin el campo, sale el recuadro de respaldo con las 3 opciones. Con otra
   orden de mantenimiento abierta del mismo equipo, sigue EN MANTENIMIENTO. Una orden «En espera de
   repuestos» no se puede cerrar (`_eqEsperaRepuestos`). No aplica a equipos de cliente ni genéricos.
 - **Estados de equipo**: al cerrar una renta o retiro, el equipo vuelve a

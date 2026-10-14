@@ -674,3 +674,6 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   guardan en momentos distintos. No reintentar sin guardar copia y base JUNTAS y sin prueba con copias viejas de días.
 - **Soldadura/Pintura**: la colección nueva puede llegar como objeto (lista que empezó vacía): siempre `_spLista()` o la carga
   normalizada `Array.isArray(x)?x:Object.values(x)`. El botón de Técnicos va al FINAL de la barra (otros usan la posición).
+- **¿Cómo quedó el equipo?**: órdenes viejas guardan `operativo`/`falla`; siempre leer con `_eqQuedoNorm`/`_eqQuedoTxt` (y `quedoDe` en el
+  PDF), nunca comparar el valor crudo. Al editar archivos con node: si se parte con `indexOf` y no se encuentra el ancla, `-1` corta el
+  archivo al inicio (pasó el 2026-10-14; se restauró con git): comprobar siempre que el ancla exista antes de cortar.

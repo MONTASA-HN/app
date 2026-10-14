@@ -516,3 +516,8 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   correctivos FUERA del plantel (Técnicos, Gerencia y Supervisión, MT y MONHACO); «Sistema afectado» al cerrar correctivo en Técnicos y
   al crear un correctivo ya terminado (se agregó el campo `#corr-sistema` al formulario, que no existía); «Fecha y hora de finalización»
   al crear un correctivo ya terminado; cortinas (MHT): fecha de finalización además del cliente. «Cliente» ya era obligatorio donde aplica.
+- 2026-10-14 — «🔧 ¿Cómo quedó el equipo?» en preventivos y correctivos (pedido de Miguel): campo `equipoQuedo` dentro de la orden
+  (tarjetas y formularios de MTT, MHT, MTG, MTS, MHG, MHS), OBLIGATORIO al cerrar (también equipos de cliente). Reemplaza el recuadro
+  «Operativo / Sigue con falla». Estado del equipo de la flota al cerrar: 100% funcional → como estaba antes (renta/demo/disponible);
+  Parcialmente funcional → el estado que tenía antes de la orden; Inhabilitado → MAL ESTADO. PDF (MTG, MTS, MTC, MHG, MHS): fila
+  «Estado del equipo tras el servicio» en color (verde / naranja fuerte / rojo, `quedoHtml`). Ayudantes globales `_eqQuedo*` al final.

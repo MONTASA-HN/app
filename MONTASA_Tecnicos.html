@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b85bc0d192f6';
+  var APP_VERSION='77366c984bb6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -179,14 +179,19 @@ function _eqCerrarMant(orden){
     try{ toast('🔧 '+eq.codigo+' sigue EN MANTENIMIENTO: tiene otra orden abierta'); }catch(e){}
     return;
   }
-  _eqPreguntarComoQuedo(eq, orden, function(resp){
-    orden.equipoQuedo = resp;
-    var destino = resp==='falla' ? 'MAL ESTADO' : _eqDestinoOperativo(orden);
+  // (2026-10-14) Según «¿Cómo quedó el equipo?» de la orden: 100% funcional → como estaba antes (en renta / demo /
+  // disponible); Parcialmente funcional → el estado que tenía antes de la orden; Inhabilitado → MAL ESTADO.
+  var aplicar = function(q){
+    orden.equipoQuedo = q;
+    var destino = q==='inhabilitado' ? 'MAL ESTADO' : (q==='parcial' ? (orden.estadoEquipoAnterior || _eqDestinoOperativo(orden)) : _eqDestinoOperativo(orden));
+    if(destino==='EN MANTENIMIENTO') destino = _eqDestinoOperativo(orden);
     _eqPonerEstado(eq, destino);
     try{ saveDB(); }catch(e){}
     try{ if(typeof renderEquipos==='function') renderEquipos(); }catch(e){}
     try{ toast('Equipo '+eq.codigo+' → '+destino); }catch(e){}
-  });
+  };
+  var q = _eqQuedoNorm(orden.equipoQuedo);
+  if(_eqQuedoValido(q)) aplicar(q); else _eqPreguntarComoQuedo(eq, orden, aplicar);   // respaldo: órdenes sin el campo
 }
 // «Cerrar» bloqueado mientras la orden espera repuestos
 function _eqEsperaRepuestos(orden){
@@ -197,21 +202,21 @@ function _eqEsperaRepuestos(orden){
   return false;
 }
 function _eqPreguntarComoQuedo(eq, orden, cb){
+  // (2026-10-14) Solo de respaldo, si la orden llega a cerrarse sin el campo «¿Cómo quedó el equipo?»: las mismas 3 opciones
   var viejo = document.getElementById('eq-quedo-ov'); if(viejo) viejo.remove();
   var limpio = function(t){ return String(t==null?'':t).replace(/[<>"&]/g,''); };
   var ov = document.createElement('div'); ov.id = 'eq-quedo-ov';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99997;display:flex;align-items:center;justify-content:center;padding:16px';
+  var B = 'display:block;width:100%;padding:14px;margin-bottom:10px;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:DM Sans,Arial,sans-serif">'
     + '<div style="font-size:17px;font-weight:800;color:#1f3864;margin-bottom:4px">¿Cómo quedó el equipo?</div>'
     + '<div style="font-size:13px;color:#555;margin-bottom:14px">'+limpio(eq.codigo)+' · orden '+limpio(orden.correlativo)+'</div>'
-    + '<button type="button" id="eq-quedo-ok" style="display:block;width:100%;padding:14px;margin-bottom:10px;border:none;border-radius:10px;background:#1d6b45;color:#fff;font-size:15px;font-weight:800;cursor:pointer">✅ Quedó operativo</button>'
-    + '<button type="button" id="eq-quedo-mal" style="display:block;width:100%;padding:14px;border:none;border-radius:10px;background:#a32d2d;color:#fff;font-size:15px;font-weight:800;cursor:pointer">⚠️ Sigue con falla</button>'
-    + '<div style="font-size:11.5px;color:#777;margin-top:10px;line-height:1.4">Operativo: pasa a <b>'+_eqDestinoOperativo(orden)+'</b>. Con falla: queda <b>MAL ESTADO</b> y no se puede rentar.</div>'
+    + '<button type="button" data-q="funcional" style="'+B+'background:#1d6b45">✅ 100% funcional</button>'
+    + '<button type="button" data-q="parcial" style="'+B+'background:#b45309">⚠️ Parcialmente funcional</button>'
+    + '<button type="button" data-q="inhabilitado" style="'+B+'background:#a32d2d">⛔ Inhabilitado</button>'
     + '</div>';
   document.body.appendChild(ov);
-  var fin = function(r){ ov.remove(); cb(r); };
-  ov.querySelector('#eq-quedo-ok').onclick = function(){ fin('operativo'); };
-  ov.querySelector('#eq-quedo-mal').onclick = function(){ fin('falla'); };
+  ov.querySelectorAll('[data-q]').forEach(function(b){ b.onclick = function(){ ov.remove(); cb(b.getAttribute('data-q')); }; });
 }
 </script>
 <script>
@@ -1812,6 +1817,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
         </div>
       </div>
       <div class="form-group"><label>Trabajo realizado</label><textarea id="prev-notas" placeholder="Descripción del trabajo realizado..."></textarea></div>
+      <div class="form-group"><label>🔧 ¿Cómo quedó el equipo? *</label><select id="prev-equipo-quedo"><option value="">-- Seleccionar --</option><option value="funcional">100% funcional</option><option value="parcial">Parcialmente funcional</option><option value="inhabilitado">Inhabilitado</option></select></div>
       <div class="form-group"><label>Sugerencias para el próximo servicio</label><textarea id="prev-sugerencias" placeholder="Recomendaciones y sugerencias..."></textarea></div>
       <div class="form-group"><label>🔜 Próximo mantenimiento</label>
         <select id="prev-proximo">
@@ -1877,6 +1883,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       </div>
       <div class="form-group"><label>Falla reportada</label><input id="corr-falla" placeholder="Descripción breve"></div>
       <div class="form-group"><label>Sistema afectado</label><select id="corr-sistema"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión">Motor / Transmisión</option><option value="Sistema hidráulico">Sistema hidráulico</option><option value="Sistema eléctrico">Sistema eléctrico</option><option value="Sistema de frenos">Sistema de frenos</option><option value="Sistema de dirección">Sistema de dirección</option><option value="Mástil / Elevación">Mástil / Elevación</option><option value="Chasis / Estructura">Chasis / Estructura</option><option value="Llantas / Rodos">Llantas / Rodos</option><option value="Sistema de enfriamiento">Sistema de enfriamiento</option><option value="Cabina / Tablero">Cabina / Tablero</option><option value="Batería / Cargador">Batería / Cargador</option><option value="Sistema de gas / Combustible">Sistema de gas / Combustible</option><option value="Otro">Otro</option></select></div>
+      <div class="form-group"><label>🔧 ¿Cómo quedó el equipo? *</label><select id="corr-equipo-quedo"><option value="">-- Seleccionar --</option><option value="funcional">100% funcional</option><option value="parcial">Parcialmente funcional</option><option value="inhabilitado">Inhabilitado</option></select></div>
       <div class="form-group"><label>Prioridad</label><select id="corr-prioridad"><option>Alta</option><option>Media</option><option>Baja</option></select></div>
       
       <div class="form-group"><label>📍 Ubicación del trabajo</label><button type="button" onclick="_gpsFormulario('corr')" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;margin-bottom:6px">📍 Capturar ubicación actual (GPS)</button><input type="hidden" id="corr-ublink"><div style="font-size:11px;color:#888">El punto exacto se guarda en la orden y en la ficha del equipo.</div></div>
@@ -3929,6 +3936,7 @@ function renderPreventivos(){
         ${_tecBtnsHTML('prev', p.id)}
       </div></div>
       <div class="form-group"><label>Trabajo realizado</label><textarea rows="3" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','notas',this.value)">${_x(p.notas||'')}</textarea></div>
+      <div class="form-group"><label>🔧 ¿Cómo quedó el equipo? *</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','equipoQuedo',this.value)">${_eqQuedoOpts(p.equipoQuedo)}</select></div>
       <div class="form-group"><label>Sugerencias próximo servicio</label><textarea rows="2" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','sugerencias',this.value)">${_x(p.sugerencias||'')}</textarea></div>
       ${_srChipsHTML(p.id)}
       <div class="form-group"><label>🔜 Próximo mantenimiento</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','proximoMant',this.value)">
@@ -4153,7 +4161,7 @@ function guardarPreventivo(finalizar=false){
     if(!_ubF && !(_eqFichaF && _eqFichaF.ubicacionLink)){ toast('Para finalizar la orden: captura la ubicación GPS 📍', true); return; }
   }
   const correlativoPrev = nextCorrelativo();
-  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,ubicacionLink:(document.getElementById('prev-ublink')||{}).value||'',departamento:(document.getElementById('prev-departamento')||{}).value||'',ciudad:((document.getElementById('prev-ciudad')||{}).value||'').trim(),tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),proximoMant:document.getElementById('prev-proximo')?.value||'',completado:false};
+  const entry = {id:uid(),correlativo:correlativoPrev,equipoId,equipoQuedo:(document.getElementById('prev-equipo-quedo')||{}).value||'',servicio:document.getElementById('prev-servicio').value||document.getElementById('prev-notas').value,fecha:fechaInicio,fechaInicio,fechaFin,horometro:document.getElementById('prev-horometro').value,ubicacionLink:(document.getElementById('prev-ublink')||{}).value||'',departamento:(document.getElementById('prev-departamento')||{}).value||'',ciudad:((document.getElementById('prev-ciudad')||{}).value||'').trim(),tecnico:getTecnicos('prev-tecnicos-grid'),notas:document.getElementById('prev-notas').value.trim(),sugerencias:document.getElementById('prev-sugerencias').value.trim(),proximoMant:document.getElementById('prev-proximo')?.value||'',completado:false};
   entry.clienteOrden = _cliFormValor('prev', equipoId);
   if(equipoId === '__cliente__' || document.getElementById('prev-equipo-cliente-sel')?.value){
     const nom   = document.getElementById('prev-cliente-nombre').value.trim();
@@ -4241,6 +4249,7 @@ function completarPreventivo(id){
   const faltantes = [];
   if(!p.inicioTrabajo && !p.fechaInicio) faltantes.push('Inicio de trabajo');
   if(!p.finTrabajo && !p.fechaFin)      faltantes.push('Fin de trabajo');
+  if(!_eqQuedoValido(p.equipoQuedo)) faltantes.push('🔧 ¿Cómo quedó el equipo?');   // 2026-10-14
   if((p.ubicacion||'campo')==='campo' && !p.retornoPlantel) faltantes.push('🏭 Hora de llegada al plantel');   // 2026-10-14
   if((p.ubicacion||'campo')!=='plantel'){
     if(!p.vehiculo)   faltantes.push('Vehículo');
@@ -4401,6 +4410,7 @@ function finalizarOrdenPreventivo(){
   if(!equipoId)    faltantes.push('Equipo');
   if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
   if(!fechaFin)    faltantes.push('Fecha y hora de finalización');
+  if(!_eqQuedoValido((document.getElementById('prev-equipo-quedo')||{}).value)) faltantes.push('🔧 ¿Cómo quedó el equipo?');   // 2026-10-14
   if(!tecnico)     faltantes.push('Técnico responsable');
   if(!notas)       faltantes.push('Trabajo realizado');
   if(!document.getElementById('prev-proximo')?.value) faltantes.push('🔜 Próximo mantenimiento');
@@ -4528,6 +4538,7 @@ function renderCorrectivos(){
       <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${_idS(c.id)}','horometro',this.value)" oninput="event.stopPropagation()"></div>
       ${_gpsBloqueMant(c,'corr')}
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
+      <div class="form-group"><label>🔧 ¿Cómo quedó el equipo? *</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','equipoQuedo',this.value)">${_eqQuedoOpts(c.equipoQuedo)}</select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','falla',this.value)">${_x(c.falla||'')}</textarea></div>
       ${(c.ubicacion||'campo')==='campo'?`<div class="form-group"><label>🚗 Salida del plantel</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.salidaPlantel||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','salidaPlantel',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.salidaPlantel||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','salidaPlantel',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>`:''}
       <div class="form-group"><label>🔧 Inicio de trabajo</label><div style="display:inline-flex;gap:10px;align-items:flex-end"><input type="date" value="${(c.inicioTrabajo||c.fechaInicio||c.fecha||'').slice(0,10)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','inicioTrabajo',this.value+'T'+(this.nextElementSibling.value||'00:00'))"><input type="time" value="${(c.inicioTrabajo||c.fechaInicio||'').slice(11,16)}" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','inicioTrabajo',(this.previousElementSibling.value||new Date().toISOString().slice(0,10))+'T'+this.value)"></div></div>
@@ -4609,7 +4620,7 @@ function guardarCorrectivo(finalizar=false){
   const correlativoCorr = nextCorrelativo();
   const fechaFinCorr = corrFFD ? (corrFFT ? corrFFD+'T'+corrFFT : corrFFD) : '';
   const entry = {
-    id:uid(), correlativo:correlativoCorr, equipoId, sistema:document.getElementById('corr-sistema')?.value||'',
+    id:uid(), correlativo:correlativoCorr, equipoId, equipoQuedo:(document.getElementById('corr-equipo-quedo')||{}).value||'', sistema:document.getElementById('corr-sistema')?.value||'',
     falla, prioridad:document.getElementById('corr-prioridad').value,
     fecha:fechaInicio, fechaInicio, fechaFin:fechaFinCorr, ubicacionLink:(document.getElementById('corr-ublink')||{}).value||'',departamento:(document.getElementById('corr-departamento')||{}).value||'',ciudad:((document.getElementById('corr-ciudad')||{}).value||'').trim(),
     tecnico:getTecnicos('corr-tecnicos-grid'),
@@ -4702,6 +4713,7 @@ function cerrarCorrectivo(id){
   const faltantes = [];
   if(!c.inicioTrabajo && !c.fechaInicio) faltantes.push('Inicio de trabajo');
   if(!c.finTrabajo && !c.fechaFin)      faltantes.push('Fin de trabajo');
+  if(!_eqQuedoValido(c.equipoQuedo)) faltantes.push('🔧 ¿Cómo quedó el equipo?');   // 2026-10-14
   if((c.ubicacion||'campo')==='campo' && !c.retornoPlantel) faltantes.push('🏭 Hora de llegada al plantel');   // 2026-10-14
   if(!c.sistema) faltantes.push('Sistema afectado');   // 2026-10-14
   if((c.ubicacion||'campo')!=='plantel'){
@@ -4790,6 +4802,7 @@ function finalizarOrdenCorrectivo(){
   if(!falla)       faltantes.push('Falla reportada');
   if(!fechaInicio) faltantes.push('Fecha y hora de inicio');
   if(!corrFFD)     faltantes.push('Fecha y hora de finalización');   // 2026-10-14
+  if(!_eqQuedoValido((document.getElementById('corr-equipo-quedo')||{}).value)) faltantes.push('🔧 ¿Cómo quedó el equipo?');   // 2026-10-14
   if(!((document.getElementById('corr-sistema')||{}).value)) faltantes.push('Sistema afectado');   // 2026-10-14
   if(!tecnico)     faltantes.push('Técnico asignado');
   if(!diag)        faltantes.push('Diagnóstico / Trabajos realizados');
@@ -6761,5 +6774,13 @@ function finalizarSoldadura(id){
 }
 </script>
 
+<script>
+// ══ ¿CÓMO QUEDÓ EL EQUIPO? (2026-10-14, pedido de Miguel) ══ Campo de la orden (preventivo/correctivo), obligatorio al cerrar.
+var EQ_QUEDO = [['funcional','100% funcional'],['parcial','Parcialmente funcional'],['inhabilitado','Inhabilitado']];
+function _eqQuedoNorm(v){ return v === 'operativo' ? 'funcional' : (v === 'falla' ? 'inhabilitado' : (v || '')); }   // valores viejos
+function _eqQuedoTxt(v){ v = _eqQuedoNorm(v); var e = EQ_QUEDO.find(function(x){ return x[0] === v; }); return e ? e[1] : ''; }
+function _eqQuedoValido(v){ return !!_eqQuedoTxt(v); }
+function _eqQuedoOpts(v){ v = _eqQuedoNorm(v); return '<option value="">-- Seleccionar --</option>' + EQ_QUEDO.map(function(x){ return '<option value="' + x[0] + '"' + (x[0] === v ? ' selected' : '') + '>' + x[1] + '</option>'; }).join(''); }
+</script>
 </body>
 </html>
