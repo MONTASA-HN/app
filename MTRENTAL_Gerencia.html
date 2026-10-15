@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9de0aff2183e';
+  var APP_VERSION='2490ff687cb0';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2598,6 +2598,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 
   <!-- LOGÍSTICA -->
   <div id="tab-logistica" class="section">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:4px 0 14px"><select id="filt-log-estado" style="font-size:13px"><option value="">Estado de la orden…</option><option>Pendiente</option><option>En proceso</option><option>Cerrada</option><option>Cancelado</option></select><button type="button" onclick="_estBuscarLog()" style="font-size:13px;padding:8px 14px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Buscar</button></div>
     <div id="logistica-list"></div>
   </div>
 
@@ -2659,6 +2660,8 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
           <option value="">Todos los equipos</option>
         </select>
         <input id="hist-buscar" type="text" placeholder="Buscar..." style="font-size:13px">
+        <select id="filt-hist-estado" style="font-size:13px"><option value="">Estado de la orden…</option><option>Pendiente</option><option>En proceso</option><option>En pausa</option><option>En espera de repuestos</option><option>Completado</option><option>Cancelado</option></select>
+        <button type="button" onclick="_estBuscarMant()" style="font-size:13px;padding:8px 14px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Buscar</button>
       </div>
     </div>
     <div id="historial-list"></div>
@@ -7234,6 +7237,7 @@ function _abrirCarpetaLog(tipo){
 }
 
 function _cerrarCarpetaLog(){
+  if(_carpetaLog==='EST'){ var _se=document.getElementById('filt-log-estado'); if(_se) _se.value=''; _estadoLog=''; }
   _carpetaLog = null;
   const el = document.getElementById('logistica-list');
   if(el) _renderCarpetasLog(el);
@@ -7247,16 +7251,17 @@ function _renderOrdenesLog(el, tipoFiltro){
     apoyo_mantenimiento: {icon:'🔩', label:'Apoyo Mantenimiento', color:'#9B59B6'},
     atencion_compras:    {icon:'🛒', label:'Atención de Compras', color:'#C9211E'},
   };
-  const info = INFO[tipoFiltro]||{icon:'📋',label:tipoFiltro,color:'#2d6a9f'};
+  const info = tipoFiltro==='EST' ? {icon:'🔎', label:'Órdenes «' + _estadoLog + '»', color:'#1f3864'} : INFO[tipoFiltro]||{icon:'📋',label:tipoFiltro,color:'#2d6a9f'};
 
   const list = [...(DB.logistica||[])]
-    .filter(o=>o.tipoLogistica===tipoFiltro)
+    .filter(o=>o && (tipoFiltro==='EST' ? _logEstado(o)===_estadoLog : o.tipoLogistica===tipoFiltro))   // (2026-10-15) EST = buscar por estado
     .sort((a,b)=>{
       const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
       const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
       return nb-na;
     });
 
+  if(tipoFiltro==='EST') info.label += ' · ' + list.length;
   const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro/Recepción',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaLog()">← <span>Volver a carpetas</span></div>
@@ -8660,6 +8665,7 @@ function _abrirCarpetaMant(tipo){
 }
 
 function _cerrarCarpetaMant(){
+  if(_carpetaMant==='EST'){ var _se=document.getElementById('filt-hist-estado'); if(_se) _se.value=''; _estadoMant=''; }
   _carpetaMant = null;
   const el = document.getElementById('historial-list');
   if(el) _renderCarpetasMant(el);
@@ -8683,7 +8689,7 @@ function _renderOrdenesMant(el, tipo){
       + _papeleraCardsHTML();
     return;
   }
-  const info = INFO[tipo];
+  const info = tipo==='EST' ? {icon:'🔎', label:'Órdenes «' + _estadoMant + '»', color:'#1f3864'} : INFO[tipo];
 
   const ESTADOS_COLOR = {
     'Pendiente':               {bg:'#fff0f0',border:'#c00',txt:'#c00'},
@@ -8694,11 +8700,11 @@ function _renderOrdenesMant(el, tipo){
   };
 
   let all = [];
-  if(tipo==='P')  all = (DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''}));
-  if(tipo==='C')  all = (DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''}));
-  if(tipo==='RV') all = (DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''}));
-  if(tipo==='EV') all = (DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''}));
-  if(tipo==='SP') all = (DB.soldaduras||[]).map(v=>({...v,_t:'SP',_f:v.fechaCierre||v.fecha||''}));
+  if(tipo==='P'||tipo==='EST')  all = all.concat((DB.preventivos||[]).map(p=>({...p,_t:'P', _f:p.fechaCompletado||p.fechaInicio||''})));
+  if(tipo==='C'||tipo==='EST')  all = all.concat((DB.correctivos||[]).map(c=>({...c,_t:'C', _f:c.fechaCierre||c.fechaInicio||''})));
+  if(tipo==='RV'||tipo==='EST') all = all.concat((DB.revisiones||[]).map(r=>({...r,_t:'RV',_f:r.fechaCierre||r.fecha||''})));
+  if(tipo==='EV'||tipo==='EST') all = all.concat((DB.evaluaciones||[]).map(v=>({...v,_t:'EV',_f:v.fechaCierre||v.fecha||''})));
+  if(tipo==='SP'||tipo==='EST') all = all.concat((DB.soldaduras||[]).map(v=>({...v,_t:'SP',_f:v.fechaCierre||v.fecha||''})));
 
   all.sort((a,b)=>{
     const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
@@ -8713,6 +8719,10 @@ function _renderOrdenesMant(el, tipo){
     (x.tecnico||'').toLowerCase().includes(buscar)
   );
 
+  if(tipo==='EST'){   // (2026-10-15) buscar por estado: todas las carpetas, agrupadas por tipo
+    all = all.filter(x=>_mantEstado(x)===_estadoMant).sort((a,b)=>_EST_ORDEN.indexOf(a._t)-_EST_ORDEN.indexOf(b._t));
+    info.label += ' · ' + all.length;
+  }
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaMant()">
     ← <span>Volver a carpetas</span>
   </div>
@@ -8725,7 +8735,7 @@ function _renderOrdenesMant(el, tipo){
     return;
   }
 
-  const cards = all.map(x=>{
+  const cards = all.map((x,_i)=>_estHdr(tipo,all,_i)+(x=>{
     try{
       const eq = DB.equipos.find(e=>e.id===x.equipoId)||{};
       const eqLabel = eq.codigo ? eq.codigo+' – '+(eq.marca||'') : '—';
@@ -8738,7 +8748,7 @@ function _renderOrdenesMant(el, tipo){
       if(x._t==='P')  return _buildCardP(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
       if(x._t==='C')  return _buildCardC(x, eq, eqLabel, ESTADOS_COLOR, horas, tiempos);
     } catch(e){ return ''; }
-  }).join('');
+  })(x)).join('');
 
   el.innerHTML = backBtn + cards;
   // Restaurar firmas en canvas
@@ -15273,6 +15283,30 @@ function _eqQuedoNorm(v){ return v === 'operativo' ? 'funcional' : (v === 'falla
 function _eqQuedoTxt(v){ v = _eqQuedoNorm(v); var e = EQ_QUEDO.find(function(x){ return x[0] === v; }); return e ? e[1] : ''; }
 function _eqQuedoValido(v){ return !!_eqQuedoTxt(v); }
 function _eqQuedoOpts(v){ v = _eqQuedoNorm(v); return '<option value="">-- Seleccionar --</option>' + EQ_QUEDO.map(function(x){ return '<option value="' + x[0] + '"' + (x[0] === v ? ' selected' : '') + '>' + x[1] + '</option>'; }).join(''); }
+</script>
+<script>
+// ══ BUSCAR ÓRDENES POR ESTADO (2026-10-15, pedido de Miguel) ══ Lista única con las órdenes del estado elegido.
+var _estadoMant = '', _estadoLog = '';
+var _EST_ORDEN = ['P','C','CT','RV','EV','SP'];
+var _EST_NOM = {P:'📋 Preventivos', C:'🔧 Correctivos', CT:'🚪 Cortinas / Niveladoras', RV:'✅ Revisión Físico-Técnica', EV:'📄 Evaluación de Equipo', SP:'🔥 Soldadura / Pintura'};
+function _mantEstado(x){ if(!x) return ''; if(x.estado === 'Cancelado') return 'Cancelado'; if(x.completado || x.estado === 'Completado') return 'Completado'; return x.estado || 'Pendiente'; }
+function _logEstado(o){ if(!o) return ''; if(o.estado === 'Cancelado') return 'Cancelado'; if(o.cerrado) return 'Cerrada'; return o.estado || 'Pendiente'; }
+function _estHdr(tipo, all, i){
+  if(tipo !== 'EST') return '';
+  var t = all[i]._t; if(i && all[i-1]._t === t) return '';
+  var n = all.filter(function(y){ return y._t === t; }).length;
+  return '<div style="font-size:13px;font-weight:800;color:#1f3864;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #d9dfe6">' + (_EST_NOM[t] || t) + ' · ' + n + '</div>';
+}
+function _estBuscarMant(){
+  var s = document.getElementById('filt-hist-estado');
+  if(!s || !s.value){ alert('Elige el estado de las órdenes que quieres buscar.'); return; }
+  _estadoMant = s.value; _abrirCarpetaMant('EST');
+}
+function _estBuscarLog(){
+  var s = document.getElementById('filt-log-estado');
+  if(!s || !s.value){ alert('Elige el estado de las órdenes que quieres buscar.'); return; }
+  _estadoLog = s.value; _abrirCarpetaLog('EST');
+}
 </script>
 </body>
 </html>
