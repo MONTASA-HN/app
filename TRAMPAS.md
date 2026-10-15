@@ -679,3 +679,7 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   archivo al inicio (pasó el 2026-10-14; se restauró con git): comprobar siempre que el ancla exista antes de cortar.
 - **Buscar por estado**: `_renderOrdenesMant*` con `tipo==='EST'` junta TODAS las colecciones (`all = all.concat(...)`); al agregar
   un tipo de orden nuevo, sumar su línea `if(tipo==='X'||tipo==='EST')` y su nombre en `_EST_ORDEN`/`_EST_NOM`, o no aparecerá.
+- **Mantenimiento es de solo lectura por CSS**: `#tab-historial input/select/textarea/canvas{pointer-events:none!important}` (MTG, MTS,
+  MHG). Todo control nuevo dentro de `#tab-historial` queda SIN clic: hay que exceptuarlo con `#tab-historial #su-id{pointer-events:auto!important}`
+  (así están los filtros de arriba desde 2026-10-15; antes el filtro de equipo y «Buscar…» tampoco funcionaban). Probar con clics reales,
+  no cambiando el valor por programa.
