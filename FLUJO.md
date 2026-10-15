@@ -537,3 +537,6 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   (`.sol-cli-input`, `_solCliFiltrar`) y solo acepta la lista oficial `<raíz>/clientesLista` ({sap, nombre}; 1,330 clientes del Excel de
   Miguel, subida a montasa y monhaco) + «MONTASA HANDLING CO. (USO INTERNO)» / «MONHACO (USO INTERNO)». `_solClienteValidar` al inicio de
   `enviarSolicitudWA`/`copiarMensajeWA`; las órdenes se crean con `_solCliPush` → `clienteOrden`. La lista NO va en el código (repo público).
+- 2026-10-15 — Base: nombres de clientes estandarizados con la lista oficial según la revisión de Miguel (Excel): 168 campos
+  (`cliente`, `clienteNombre`, `clienteOrden`) en 148 registros de equipos y órdenes de MT y MONHACO; vendidos no. Respaldo previo en
+  montasa-respaldos. Lo que no tenía SÍ quedó igual.
