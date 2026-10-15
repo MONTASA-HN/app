@@ -533,3 +533,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-10-15 — «🔓 Editar orden (PIN)» (reabrir para editar) en TODAS las órdenes completadas, solo en Gerencia (MTG/MHG): faltaba en
   Revisión Físico-Técnica (`_reabrirOrdenMant('rv')` en `_buildDetalleRV`). Ya estaba en preventivos, correctivos, evaluaciones,
   soldadura/pintura, cortinas (MHG) y logística (`_reabrirOrdenLogGer`). Se quitó el de Soldadura/Pintura de Supervisión (MTS/MHS).
+- 2026-10-15 — «🏢 Cliente» obligatorio en las solicitudes (MTG, MTS, MHG, MHS; pedido de Miguel): casilla que filtra al escribir
+  (`.sol-cli-input`, `_solCliFiltrar`) y solo acepta la lista oficial `<raíz>/clientesLista` ({sap, nombre}; 1,330 clientes del Excel de
+  Miguel, subida a montasa y monhaco) + «MONTASA HANDLING CO. (USO INTERNO)» / «MONHACO (USO INTERNO)». `_solClienteValidar` al inicio de
+  `enviarSolicitudWA`/`copiarMensajeWA`; las órdenes se crean con `_solCliPush` → `clienteOrden`. La lista NO va en el código (repo público).

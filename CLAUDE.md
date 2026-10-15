@@ -382,6 +382,8 @@ Supervisiones**. No asumir que es el mismo.
   Si una orden se cierra sin el campo, sale el recuadro de respaldo con las 3 opciones. Con otra
   orden de mantenimiento abierta del mismo equipo, sigue EN MANTENIMIENTO. Una orden «En espera de
   repuestos» no se puede cerrar (`_eqEsperaRepuestos`). No aplica a equipos de cliente ni genéricos.
+- **Lista oficial de clientes** (2026-10-15): `<raíz>/clientesLista` en la base (no en el código: repo público). La usan las
+  solicitudes (cliente obligatorio). Estandarizar nombres viejos solo con la revisión de Miguel (Excel en montasa-respaldos).
 - **Gastos en el Dashboard** (2026-10-15): `_tbGastos(mes, anio)` en MTG/MHG suma lo SOLICITADO (vales + viáticos) por la fecha
   de inicio de la orden; si cambia el cálculo de viáticos (`_calcTotalSol`), revisar que esta suma siga igual por concepto.
 - **Estados de equipo**: al cerrar una renta o retiro, el equipo vuelve a

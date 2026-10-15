@@ -683,3 +683,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   MHG). Todo control nuevo dentro de `#tab-historial` queda SIN clic: hay que exceptuarlo con `#tab-historial #su-id{pointer-events:auto!important}`
   (así están los filtros de arriba desde 2026-10-15; antes el filtro de equipo y «Buscar…» tampoco funcionaban). Probar con clics reales,
   no cambiando el valor por programa.
+- **Cliente de la solicitud**: toda orden nueva creada desde la solicitud debe usar `_solCliPush(DB.x, obj)` (no `DB.x.push`) o no
+  guarda el cliente. La lista de clientes vive en la base (`<raíz>/clientesLista`); para actualizarla se reemplaza ese nodo.
