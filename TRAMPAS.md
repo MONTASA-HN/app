@@ -677,3 +677,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
 - **¿Cómo quedó el equipo?**: órdenes viejas guardan `operativo`/`falla`; siempre leer con `_eqQuedoNorm`/`_eqQuedoTxt` (y `quedoDe` en el
   PDF), nunca comparar el valor crudo. Al editar archivos con node: si se parte con `indexOf` y no se encuentra el ancla, `-1` corta el
   archivo al inicio (pasó el 2026-10-14; se restauró con git): comprobar siempre que el ancla exista antes de cortar.
+- **Buscar por estado**: `_renderOrdenesMant*` con `tipo==='EST'` junta TODAS las colecciones (`all = all.concat(...)`); al agregar
+  un tipo de orden nuevo, sumar su línea `if(tipo==='X'||tipo==='EST')` y su nombre en `_EST_ORDEN`/`_EST_NOM`, o no aparecerá.

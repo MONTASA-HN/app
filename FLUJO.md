@@ -525,3 +525,8 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   `_tbGastosHTML`). Montos SOLICITADOS: alimentación = vales de las órdenes + desayuno/almuerzo/cena/media noche de todas las solicitudes
   de viáticos; combustible y peajes de los viáticos (peajes con `_viatPeajes` si existe; MHG usa destino × costo por vehículo). Mes según
   la fecha de inicio de la orden; sin canceladas. Desglose Logística / Mantenimiento (MHG suma cortinas) y comparación con el mes anterior.
+- 2026-10-15 — Buscar órdenes por estado (pedido de Miguel): arriba de las carpetas de Mantenimiento (MTG, MTS, MHG, MHS:
+  `#filt-hist-estado` + «🔍 Buscar», `_estBuscarMant`) y de Logística (solo MTG/MHG: `#filt-log-estado`, `_estBuscarLog`). Abre la
+  «carpeta» `EST`: una sola lista con las órdenes del estado (mantenimiento agrupado por tipo con `_estHdr`), combinada con el filtro
+  de equipo y «Buscar…». Estados: `_mantEstado` (Completado = completado o estado Completado) y `_logEstado` (Cerrada = `cerrado`).
+  «Volver a carpetas» quita el filtro.
