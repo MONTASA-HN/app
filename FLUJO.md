@@ -521,3 +521,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   «Operativo / Sigue con falla». Estado del equipo de la flota al cerrar: 100% funcional → como estaba antes (renta/demo/disponible);
   Parcialmente funcional → el estado que tenía antes de la orden; Inhabilitado → MAL ESTADO. PDF (MTG, MTS, MTC, MHG, MHS): fila
   «Estado del equipo tras el servicio» en color (verde / naranja fuerte / rojo, `quedoHtml`). Ayudantes globales `_eqQuedo*` al final.
+- 2026-10-15 — Dashboard de Gerencia (MTG/MHG): recuadro «Gastos del mes · alimentación, combustible y peajes» (`_tbGastos`,
+  `_tbGastosHTML`). Montos SOLICITADOS: alimentación = vales de las órdenes + desayuno/almuerzo/cena/media noche de todas las solicitudes
+  de viáticos; combustible y peajes de los viáticos (peajes con `_viatPeajes` si existe; MHG usa destino × costo por vehículo). Mes según
+  la fecha de inicio de la orden; sin canceladas. Desglose Logística / Mantenimiento (MHG suma cortinas) y comparación con el mes anterior.
