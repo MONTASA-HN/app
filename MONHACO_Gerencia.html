@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1fcb8b4d8c5c';
+  var APP_VERSION='dc6889466240';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1928,6 +1928,14 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       </div>
 
       <!-- 2. Prioridad (solo mantenimiento) -->
+      <div class="form-group sol-cli-group">
+        <label>🏢 Cliente <span style="color:#c00">*</span></label>
+        <div style="position:relative">
+          <input class="sol-cli-input" type="text" autocomplete="off" placeholder="Escribe para buscar el cliente…" oninput="_solCliFiltrar(this)" onfocus="_solCliFiltrar(this)" onblur="_solCliSalir(this)">
+          <div class="sol-cli-lista" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid #cfd6df;border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
+        </div>
+        <div class="sol-cli-ok" style="font-size:12px;margin-top:4px"></div>
+      </div>
       <div class="form-group" id="sol-prioridad-group">
         <label>Prioridad</label>
         <select id="sol-prioridad">
@@ -9812,6 +9820,7 @@ function _ubLinkToggle(){
 }
 
 async function enviarSolicitudWA(){
+  if(!_solClienteValidar()) return;   // (2026-10-15) cliente obligatorio
   if(!window._fbDB || !window._fbReady || !navigator.onLine){
     alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden porque no hay conexión con la base de datos.\n\nLa orden NO se ha guardado. Verifica tu conexión e intenta de nuevo.');
     return;
@@ -9837,7 +9846,7 @@ async function enviarSolicitudWA(){
       if(!DB.revisiones) DB.revisiones = [];
       const n = DB.revisiones.length + 1;
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
+      _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
       if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
@@ -9848,7 +9857,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
+      _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
       if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
@@ -9921,8 +9930,8 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
     const modeloCli= eqCli ? (eqCli.modelo||eqCli.desc||'') : '';
     const serieCli = eqCli ? (eqCli.serie||'') : '';
     const entryCli = {id:ordenId,correlativo,equipoId:equipoIdCli,clienteNombre:nomCli,clienteMarca:marcaCli,clienteModelo:modeloCli,clienteSerie:serieCli,descripcion:desc,tecnico:tecnicoNombre,prioridad,fecha:fechaISO,estado:'Pendiente',estadoEquipoAnterior:'',ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc};
-    if(tipo==='preventivo') DB.preventivos.push({...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
-    else DB.correctivos.push({...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
+    if(tipo==='preventivo') _solCliPush(DB.preventivos, {...entryCli,servicio:desc,notas:desc,completado:false,fechaInicio:'',fechaFin:'',horometro:'',sugerencias:'',foto:''});
+    else _solCliPush(DB.correctivos, {...entryCli,sistema:'',falla:desc,diagnostico:'',fechaInicio:'',fechaFin:'',horometro:'',foto:''});
     _guardarOrdenMantResiliente(tipo==='preventivo'?'prev':'corr', (tipo==='preventivo'?DB.preventivos:DB.correctivos)[(tipo==='preventivo'?DB.preventivos:DB.correctivos).length-1]);
     if(!DB.solicitudes) DB.solicitudes=[];
     DB.solicitudes.unshift({id:ordenId,correlativo,equipoTxt:nomCli||'Equipo de cliente',equipoId:equipoIdCli,desc,fecha,tecnicoNombre,prioridad,tipo,estado:'Enviada'});
@@ -9942,7 +9951,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
   const estadoEquipoAnterior = eq ? (eq.estado || 'DISPONIBLE') : '';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
+    _solCliPush(DB.preventivos, {id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
     _guardarOrdenMantResiliente('prev', DB.preventivos[DB.preventivos.length-1]);
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
@@ -9955,7 +9964,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
     ubicacionLog = ubicacionLog2;
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
-    DB.logistica.push(entry);
+    _solCliPush(DB.logistica, entry);
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
@@ -9969,7 +9978,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
+    _solCliPush(DB.correctivos, {id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
     _guardarOrdenMantResiliente('corr', DB.correctivos[DB.correctivos.length-1]);
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
@@ -10003,6 +10012,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
 
 
 async function copiarMensajeWA(){
+  if(!_solClienteValidar()) return;   // (2026-10-15) cliente obligatorio
   if(!window._fbDB || !window._fbReady || !navigator.onLine){
     alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden porque no hay conexión con la base de datos.\n\nLa orden NO se ha guardado. Verifica tu conexión e intenta de nuevo.');
     return;
@@ -10028,7 +10038,7 @@ async function copiarMensajeWA(){
       if(!DB.revisiones) DB.revisiones = [];
       const n = DB.revisiones.length + 1;
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.revisiones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
+      _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
       if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
@@ -10039,7 +10049,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
       if(!DB.evaluaciones) DB.evaluaciones = [];
       const n = DB.evaluaciones.length + 1;
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
-      DB.evaluaciones.push({id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
+      _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
       if(window._fbDB && window._fbReady) _Sync.guardar();
       clearSolicitudForm(); renderDashboard();
@@ -10105,7 +10115,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
   const ubicacion = document.getElementById('sol-ubicacion')?.value || 'plantel';
   let ubicacionLog = '';
   if(tipo === 'preventivo'){
-    DB.preventivos.push({id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
+    _solCliPush(DB.preventivos, {id:ordenId,correlativo,equipoId,servicio:desc,fecha:fechaISO,fechaInicio:'',fechaFin:'',horometro:'',tecnico:'',notas:desc,sugerencias:'',foto:'',estado:'Pendiente',prioridad,completado:false,clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
     _guardarOrdenMantResiliente('prev', DB.preventivos[DB.preventivos.length-1]);
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   } else if(tipo === 'cortinas'){
@@ -10118,7 +10128,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
     ubicacionLog = document.getElementById('sol-ublog2')?.offsetParent !== null ? (document.getElementById('sol-ublog2')?.value||'fuera') : (document.getElementById('sol-ublog')?.value||'fuera');
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
-    DB.logistica.push(entry);
+    _solCliPush(DB.logistica, entry);
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
@@ -10132,7 +10142,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
     saveDB();
     _guardarLogisticaResiliente(ordenId);
   } else {
-    DB.correctivos.push({id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
+    _solCliPush(DB.correctivos, {id:ordenId,correlativo,equipoId,sistema:'',falla:desc,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',diagnostico:'',foto:'',estado:'Pendiente',clienteNombre:eq?'':equipoTxt,estadoEquipoAnterior,ubicacion,ubicacionLink:_ubL,contactoCliente:_ctc});
     _guardarOrdenMantResiliente('corr', DB.correctivos[DB.correctivos.length-1]);
     if(eq) _cambiarEstadoEquipoAuto(equipoId, 'EN MANTENIMIENTO');
   }
@@ -14235,7 +14245,7 @@ function _spCrearDesdeSolicitud(copiar){
   var corr = _spSiguiente(), id = uid();
   var orden = { id: id, correlativo: corr, estado: 'Pendiente', descripcion: desc, equipoId: eqId, equipoTxt: eq ? _spEquipoTxt(eq) : '',
     tecnicos: tecs, tecnico: tecs.join(', '), ubicacion: ubic, ubicacionLink: link, contactoCliente: ctc, fecha: fecha, completado: false, creado: Date.now() };
-  _spLista().push(orden);
+  _solCliPush(_spLista(), orden);
   if(!DB.solicitudes) DB.solicitudes = [];
   DB.solicitudes.unshift({ id: id, correlativo: corr, equipoTxt: orden.equipoTxt || 'Sin equipo', equipoId: eqId, desc: desc, fecha: fecha, tecnicoNombre: orden.tecnico, prioridad: 'Normal', tipo: 'soldadura', estado: 'Enviada' });
   saveDB();
@@ -14344,6 +14354,76 @@ function _estBuscarLog(){
   if(!s || !s.value){ alert('Elige el estado de las órdenes que quieres buscar.'); return; }
   _estadoLog = s.value; _abrirCarpetaLog('EST');
 }
+</script>
+<script>
+// ══ CLIENTE EN LAS SOLICITUDES (2026-10-15, pedido de Miguel) ══ Lista oficial en <raíz>/clientesLista ({sap, nombre}).
+var _SOL_CLI = null;
+var _SOL_CLI_INTERNO = { montasa: 'MONTASA HANDLING CO. (USO INTERNO)', monhaco: 'MONHACO (USO INTERNO)' };
+function _solCliNorm(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+function _solCliEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _solCliCargar(){
+  if(_SOL_CLI) return Promise.resolve(_SOL_CLI);
+  var k = 'nx_cli_lista_' + _SP_RAIZ;
+  try{ var c = JSON.parse(localStorage.getItem(k) || 'null'); if(c && c.length) _SOL_CLI = c; }catch(e){}
+  if(!window._fbDB) return Promise.resolve(_SOL_CLI || []);
+  return window._fbDB.ref(_SP_RAIZ + '/clientesLista').once('value').then(function(s){
+    var v = s.val(), L = (Array.isArray(v) ? v : Object.values(v || {})).filter(function(x){ return x && x.nombre; });
+    if(L.length){ _SOL_CLI = L; try{ localStorage.setItem(k, JSON.stringify(L)); }catch(e){} }
+    return _SOL_CLI || [];
+  }).catch(function(){ return _SOL_CLI || []; });
+}
+function _solCliTodos(){ return [{ sap: '', nombre: _SOL_CLI_INTERNO[_SP_RAIZ] || 'USO INTERNO' }].concat(_SOL_CLI || []); }
+function _solCliExacto(t){ var q = _solCliNorm(t); if(!q) return ''; var e = _solCliTodos().find(function(c){ return _solCliNorm(c.nombre) === q; }); return e ? e.nombre : ''; }
+function _solCliMarca(inp){
+  var ok = inp.closest('.sol-cli-group').querySelector('.sol-cli-ok'); if(!ok) return;
+  var e = _solCliExacto(inp.value);
+  ok.style.color = e ? '#15803d' : '#b45309';
+  ok.textContent = e ? '✓ Cliente de la lista' : (inp.value.trim() ? 'Elige un cliente de la lista' : '');
+}
+function _solCliFiltrar(inp){
+  var box = inp.parentNode.querySelector('.sol-cli-lista');
+  var pinta = function(){
+    var q = _solCliNorm(inp.value), L = _solCliTodos();
+    var r = q ? L.filter(function(c){ return _solCliNorm(c.nombre).indexOf(q) >= 0; }) : L;
+    if(q) r.sort(function(a, b){ return (_solCliNorm(a.nombre).indexOf(q) === 0 ? 0 : 1) - (_solCliNorm(b.nombre).indexOf(q) === 0 ? 0 : 1); });
+    r = r.slice(0, 40);
+    box.innerHTML = r.length
+      ? r.map(function(c){ return '<div onmousedown="event.preventDefault()" onclick="_solCliElegir(this)" style="padding:10px 12px;border-bottom:1px solid #eef1f5;cursor:pointer;font-size:14px;color:#1c2330">' + _solCliEsc(c.nombre) + '</div>'; }).join('')
+      : '<div style="padding:10px 12px;color:#888;font-size:13px">' + (_SOL_CLI ? 'Sin coincidencias' : 'Cargando lista de clientes…') + '</div>';
+    box.style.display = 'block';
+  };
+  pinta(); if(!_SOL_CLI) _solCliCargar().then(pinta);
+  _solCliMarca(inp);
+}
+function _solCliElegir(div){
+  var g = div.closest('.sol-cli-group'), inp = g.querySelector('.sol-cli-input');
+  inp.value = div.textContent; g.querySelector('.sol-cli-lista').style.display = 'none'; _solCliMarca(inp);
+}
+function _solCliSalir(inp){
+  setTimeout(function(){ var b = inp.parentNode.querySelector('.sol-cli-lista'); if(b) b.style.display = 'none';
+    var e = _solCliExacto(inp.value); if(e) inp.value = e; _solCliMarca(inp); }, 250);
+}
+// Al crear la orden: cliente elegido o '' (avisa). Sin lista cargada (sin señal la primera vez) acepta lo escrito.
+function _solClienteValidar(){
+  var ins = Array.prototype.slice.call(document.querySelectorAll('.sol-cli-input'));
+  var inp = ins.find(function(i){ return i.offsetParent; }) || ins[0];
+  var v = inp ? inp.value.trim() : '';
+  var e = _solCliExacto(v);
+  if(!e && v && !(_SOL_CLI && _SOL_CLI.length)) e = v;
+  if(!e){ alert('No se puede crear la orden.\nFalta:\n\n• 🏢 Cliente (escribe y elige uno de la lista)'); window._solCliActual = ''; return ''; }
+  window._solCliActual = e; return e;
+}
+function _solCliPush(arr, o){ if(o && window._solCliActual) o.clienteOrden = window._solCliActual; return arr.push(o); }
+(function(){
+  if(typeof clearSolicitudForm !== 'function') return;
+  var orig = clearSolicitudForm;
+  clearSolicitudForm = function(){
+    var r = orig.apply(this, arguments);
+    document.querySelectorAll('.sol-cli-input').forEach(function(i){ i.value = ''; _solCliMarca(i); });
+    return r;
+  };
+})();
+setTimeout(function(){ try{ _solCliCargar(); }catch(e){} }, 8000);
 </script>
 </body>
 </html>
