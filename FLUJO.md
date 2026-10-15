@@ -530,3 +530,6 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   «carpeta» `EST`: una sola lista con las órdenes del estado (mantenimiento agrupado por tipo con `_estHdr`), combinada con el filtro
   de equipo y «Buscar…». Estados: `_mantEstado` (Completado = completado o estado Completado) y `_logEstado` (Cerrada = `cerrado`).
   «Volver a carpetas» quita el filtro.
+- 2026-10-15 — «🔓 Editar orden (PIN)» (reabrir para editar) en TODAS las órdenes completadas, solo en Gerencia (MTG/MHG): faltaba en
+  Revisión Físico-Técnica (`_reabrirOrdenMant('rv')` en `_buildDetalleRV`). Ya estaba en preventivos, correctivos, evaluaciones,
+  soldadura/pintura, cortinas (MHG) y logística (`_reabrirOrdenLogGer`). Se quitó el de Soldadura/Pintura de Supervisión (MTS/MHS).
