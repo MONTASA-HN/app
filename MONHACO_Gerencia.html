@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='dc6889466240';
+  var APP_VERSION='c52d885e4772';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6377,6 +6377,7 @@ function renderTableroGer(){
     + '</div>'
     + '<div class="tb-grid">'
     +   _tbGastosHTML(mes, anio, nomMes)   // (2026-10-15) gastos del mes
+    +   _tbCombHTML(mes, anio, nomMes)   // (2026-10-15) combustible vehicular
     +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'), '#eda100')   // (2026-10-13) mismo estilo de barras que los demás recuadros
     +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'), '#1baf7a')
     +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec), '#2a78d6')
@@ -6434,6 +6435,28 @@ function _tbGastosHTML(mes, anio, nomMes){
   return '<div class="tb-card tb-ancha" style="--tb-barra:#1f3864"><div class="tb-tit"><b>Gastos del mes · alimentación, combustible y peajes</b><span>' + nomMes + '</span></div>'
     + '<div class="tb-gastos">' + caja('🍽 Alimentación', 'alim', '#e8811a') + caja('⛽ Combustible', 'comb', '#2a78d6') + caja('🛣 Peajes', 'peaj', '#7c3aed') + caja('Total', 'total', '#1f3864') + '</div>'
     + '<div class="tb-nota">Montos solicitados en ' + nOrd + ' orden' + (nOrd === 1 ? '' : 'es') + ' (todas sus solicitudes de viáticos). Alimentación incluye los vales de alimentación. El mes es el de la fecha de inicio de la orden; no cuenta órdenes canceladas.</div></div>';
+}
+
+
+// ══ COMBUSTIBLE VEHICULAR EN EL DASHBOARD (2026-10-15, pedido de Miguel) ══ Lee <raíz>/combustible (sin fotos).
+function _tbCombHTML(mes, anio, nomMes){
+  setTimeout(function(){
+    var el = document.getElementById('tb-comb'); if(!el || !window._fbDB) return;
+    window._fbDB.ref(_RAIZ_APP + '/combustible').once('value').then(function(s){
+      var v = s.val() || {}, L = Object.keys(v).map(function(k){ return v[k]; }).filter(function(r){ if(!r) return false; var d = new Date(r.fecha || r.fechaLocal); return d.getMonth() === mes && d.getFullYear() === anio; });
+      var tot = L.reduce(function(a, r){ return a + (parseFloat(r.monto) || 0); }, 0), pv = {};
+      L.forEach(function(r){ var k = r.vehiculo || '—'; pv[k] = pv[k] || {v:0, n:0}; pv[k].v += parseFloat(r.monto) || 0; pv[k].n++; });
+      var filas = Object.keys(pv).map(function(k){ return {n:k, v:pv[k].v, c:pv[k].n}; }).sort(function(a, b){ return b.v - a.v; });
+      var mx = filas.length ? filas[0].v : 1, lps = function(x){ return 'L. ' + Number(x).toLocaleString('es-HN', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+      el.innerHTML = '<div class="tb-tit"><b>⛽ Combustible vehicular</b><span>' + nomMes + '</span></div>'
+        + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px"><div><div class="tb-kpi-eti">Total del mes</div><div class="tb-gas-num">' + lps(tot) + '</div></div>'
+        + '<div><div class="tb-kpi-eti">Suministros</div><div class="tb-gas-num">' + L.length + '</div></div></div>'
+        + (filas.length ? filas.map(function(f){ return '<div class="tb-fila" title="' + f.c + ' suministro(s)"><div class="tb-fila-n">' + _x(f.n) + '</div><div class="tb-pista"><div class="tb-barra" style="width:' + Math.max(2, Math.round(f.v / mx * 100)) + '%"></div></div><div class="tb-fila-v" style="min-width:96px">' + lps(f.v) + '<small>' + f.c + ' sum.</small></div></div>'; }).join('')
+          : '<div class="tb-vacio">Sin suministros registrados en este mes</div>')
+        + '<div class="tb-nota">Registros cerrados en Técnicos y Logística (fecha del registro).</div>';
+    }).catch(function(){ el.innerHTML = '<div class="tb-tit"><b>⛽ Combustible vehicular</b></div><div class="tb-vacio">No se pudo cargar</div>'; });
+  }, 0);
+  return '<div class="tb-card tb-ancha" id="tb-comb" style="--tb-barra:#b45309"><div class="tb-tit"><b>⛽ Combustible vehicular</b><span>' + nomMes + '</span></div><div class="tb-vacio">Cargando…</div></div>';
 }
 
 // Horas trabajadas del mes: el MISMO cálculo para Productividad y para el Dashboard

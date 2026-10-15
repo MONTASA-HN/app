@@ -540,3 +540,9 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-10-15 — Base: nombres de clientes estandarizados con la lista oficial según la revisión de Miguel (Excel): 168 campos
   (`cliente`, `clienteNombre`, `clienteOrden`) en 148 registros de equipos y órdenes de MT y MONHACO; vendidos no. Respaldo previo en
   montasa-respaldos. Lo que no tenía SÍ quedó igual.
+- 2026-10-15 — Módulo «⛽ Combustible» (control de suministro de combustible vehicular, pedido de Miguel): pestaña nueva en Técnicos
+  MT/MH y Logística MT (barra de abajo) y tercera vista en Logística MONHACO (`lgVista('comb')`). Formulario: empleado (plantilla de
+  Personal de la empresa), fecha automática (hora del servidor), vehículo (vehículos de MT Rental + MONHACO, sin repetir código), km
+  (pasa a la ficha del vehículo en su empresa; si baja o salta de más, pregunta), lempiras, foto de la bomba y de la factura. «✅ Cerrar
+  registro» guarda y ya no se edita. Datos: `<raíz>/combustible/<id>` (separado por empresa de la app) y fotos en `<raíz>/combustibleFotos/<id>`.
+  Cada teléfono ve sus registros (uid). Gerencia: recuadro «⛽ Combustible vehicular» del mes en el Dashboard (`_tbCombHTML`).
