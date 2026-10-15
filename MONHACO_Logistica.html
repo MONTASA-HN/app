@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7c803a83b687';
+  var APP_VERSION='3f5d7cf295c3';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -250,9 +250,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <div class="seg">
     <button id="seg-hor" class="on" onclick="lgVista('hor')">📟 Horómetros</button>
     <button id="seg-rc" onclick="lgVista('rc')">💰 Cobros</button>
+    <button id="seg-comb" onclick="lgVista('comb')">⛽ Combustible</button>
   </div>
   <div id="hor-cont"></div>
   <div id="rc-cont" style="display:none"></div>
+  <div id="comb-cont" style="display:none"></div>
   <div id="lg-cargando" style="text-align:center;color:var(--text3);font-size:13px;padding:20px 0">Conectando con la base de datos…</div>
 </div>
 
@@ -2469,6 +2471,206 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
     }).catch(function(){ original.call(lector, blob); });
   };
   FileReader.prototype._nexoFotoLiviana = true;
+})();
+</script>
+<script>
+// ══ SUMINISTRO DE COMBUSTIBLE VEHICULAR (2026-10-15, pedido de Miguel) ══════════════════════════════════════
+// Formulario: empleado (Personal de esta empresa), fecha automática (hora del servidor, no se edita), vehículo (todos los
+// de MT Rental y MONHACO), kilometraje, lempiras, foto de la bomba y foto de la factura. «Cerrar registro» lo guarda y ya
+// no se edita. Datos en <raíz>/combustible/<id> (liviano, lo lee el Dashboard) y fotos aparte en <raíz>/combustibleFotos/<id>.
+// El kilometraje pasa a la ficha del vehículo (misma regla que las órdenes: si baja o salta de más, pregunta).
+// Cada quien ve aquí los registros hechos desde su teléfono (uid de la sesión), sin poder editarlos.
+(function(){
+  var RAIZ = 'monhaco', OTRA = RAIZ === 'montasa' ? 'monhaco' : 'montasa';
+  var st = { veh: null, per: null, fotos: { bomba: '', factura: '' }, guardando: false, reloj: null };
+  function db(){ return window._fbDB; }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function aviso(m, err){ try{ if(typeof toast === 'function'){ toast(m, err); return; } }catch(e){} alert(m); }
+  function num(v){ var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+  function lps(n){ return 'L. ' + Number(n || 0).toLocaleString('es-HN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function fechaTxt(ms){ var d = new Date(ms); var p = function(x){ return ('0' + x).slice(-2); }; return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function miId(){
+    try{ var u = firebase.auth().currentUser; if(u && u.uid) return u.uid; }catch(e){}
+    var k = 'nx_dev_id', d = null; try{ d = localStorage.getItem(k); }catch(e){}
+    if(!d){ d = 'dev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); try{ localStorage.setItem(k, d); }catch(e){} }
+    return d;
+  }
+  function lista(v){ return Array.isArray(v) ? v.map(function(x, i){ return [String(i), x]; }) : Object.keys(v || {}).map(function(k){ return [k, v[k]]; }); }
+  function cargarVeh(){
+    if(!db()) return Promise.resolve([]);
+    return Promise.all([RAIZ, OTRA].map(function(r){
+      return db().ref(r + '/equipos').once('value').then(function(s){
+        return lista(s.val()).filter(function(x){ return x[1] && x[1].esVehiculo && x[1].codigo; }).map(function(x){ var e = x[1];
+          return { raiz: r, key: x[0], id: e.id, codigo: e.codigo, placa: e.placa || '', desc: e.subtipo || e.desc || '', km: num(e.kilometraje || e.horometro) }; });
+      }).catch(function(){ return []; });
+    })).then(function(r){
+      var m = {}; r[0].concat(r[1]).forEach(function(v){ if(!m[v.codigo]) m[v.codigo] = v; });   // el de esta empresa primero
+      st.veh = Object.keys(m).map(function(k){ return m[k]; }).sort(function(a, b){ return a.codigo.localeCompare(b.codigo); });
+      return st.veh;
+    });
+  }
+  function cargarPer(){
+    var de = function(v){ return Object.keys(v || {}).map(function(k){ return v[k]; }).filter(function(p){ return p && p.n; }).map(function(p){ return p.n; })
+      .filter(function(n, i, a){ return a.indexOf(n) === i; }).sort(function(a, b){ return a.localeCompare(b, 'es'); }); };
+    var cache = null; try{ cache = JSON.parse(localStorage.getItem('nx_plantilla_' + RAIZ) || 'null'); }catch(e){}
+    if(!db()){ st.per = de(cache); return Promise.resolve(st.per); }
+    return db().ref(RAIZ + '/rrhh/plantilla').once('value').then(function(s){ st.per = de(s.val() || cache); return st.per; })
+      .catch(function(){ st.per = de(cache); return st.per; });
+  }
+  function comprimir(file){
+    return new Promise(function(ok, mal){
+      var fr = new FileReader();
+      fr.onload = function(){ var img = new Image();
+        img.onload = function(){ var M = 1280, w = img.width, h = img.height, k = Math.min(1, M / Math.max(w, h));
+          var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.72)); };
+        img.onerror = function(){ mal(new Error('imagen')); }; img.src = fr.result; };
+      fr.onerror = function(){ mal(new Error('lectura')); }; fr.readAsDataURL(file);
+    });
+  }
+  var B = 'width:100%;padding:12px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;';
+  function cajaFoto(cual, eti){
+    var f = st.fotos[cual];
+    return '<div class="form-group"><label>' + eti + ' <span style="color:#c00">*</span></label>'
+      + (f ? '<div style="position:relative;margin-bottom:6px"><img src="' + f + '" style="width:100%;max-height:240px;object-fit:contain;background:#f3f5f8;border-radius:8px;display:block">'
+        + '<button type="button" onclick="_combFotoQuitar(\'' + cual + '\')" style="position:absolute;top:6px;right:6px;background:#c00;color:#fff;border:none;border-radius:14px;padding:4px 10px;font-weight:700;cursor:pointer">✕ Quitar</button></div>' : '')
+      + '<label style="display:block;text-align:center;padding:12px;border:1.5px dashed #9db4d0;border-radius:10px;background:#eef4fb;color:#1f3864;font-weight:700;cursor:pointer">📷 ' + (f ? 'Cambiar foto' : 'Tomar / elegir foto')
+      + '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="_combFoto(\'' + cual + '\',this)"></label></div>';
+  }
+  function formHTML(){
+    var per = st.per || [], veh = st.veh || [];
+    var empleado = per.length
+      ? '<select id="comb-emp"><option value="">-- Seleccionar empleado --</option>' + per.map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('') + '</select>'
+      : '<input id="comb-emp" placeholder="Nombre del empleado">';
+    return '<div class="card" style="padding:16px">'
+      + '<div style="font-size:17px;font-weight:800;color:#1f3864;margin-bottom:12px">⛽ Nuevo suministro de combustible</div>'
+      + '<div class="form-group"><label>👷 Empleado <span style="color:#c00">*</span></label>' + empleado + '</div>'
+      + '<div class="form-group"><label>📅 Fecha y hora</label><div id="comb-fecha" style="padding:10px 12px;background:#f3f5f8;border-radius:8px;font-weight:700;color:#1c2330">' + fechaTxt(Date.now()) + '</div>'
+      + '<div style="font-size:11px;color:#888;margin-top:3px">Automática: se guarda la hora en que se cierra el registro.</div></div>'
+      + '<div class="form-group"><label>🚗 Vehículo <span style="color:#c00">*</span></label><select id="comb-veh" onchange="_combVehCambio()"><option value="">' + (veh.length ? '-- Seleccionar vehículo --' : 'Cargando vehículos…') + '</option>'
+      + veh.map(function(v){ return '<option value="' + esc(v.codigo) + '">' + esc(v.codigo + (v.placa ? ' · ' + v.placa : '') + (v.desc ? ' · ' + v.desc : '')) + '</option>'; }).join('') + '</select></div>'
+      + '<div class="form-group"><label>🛣 Kilometraje del vehículo <span style="color:#c00">*</span></label><input id="comb-km" type="number" inputmode="decimal" min="0" step="1" placeholder="Ej: 125430">'
+      + '<div id="comb-km-ayuda" style="font-size:11px;color:#888;margin-top:3px"></div></div>'
+      + '<div class="form-group"><label>💵 Cantidad suministrada (lempiras) <span style="color:#c00">*</span></label><input id="comb-monto" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 1500.00"></div>'
+      + cajaFoto('bomba', '⛽ Foto de la bomba (que se vea la cantidad)')
+      + cajaFoto('factura', '🧾 Foto de la factura')
+      + '<button type="button" id="comb-cerrar" onclick="_combCerrar()" style="' + B + 'background:#18A303;color:#fff;margin-top:6px">✅ Cerrar registro</button>'
+      + '</div>';
+  }
+  function leer(){ var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+    return { emp: g('comb-emp').trim(), veh: g('comb-veh'), km: g('comb-km'), monto: g('comb-monto') }; }
+  function poner(v){ var p = function(id, x){ var e = document.getElementById(id); if(e && x != null) e.value = x; };
+    p('comb-emp', v.emp); p('comb-veh', v.veh); p('comb-km', v.km); p('comb-monto', v.monto); }
+  window._combVehCambio = function(){
+    var c = (document.getElementById('comb-veh') || {}).value, v = (st.veh || []).find(function(x){ return x.codigo === c; });
+    var a = document.getElementById('comb-km-ayuda'); if(a) a.textContent = v && v.km ? 'Último kilometraje en la ficha: ' + v.km.toLocaleString('es-HN') + ' km' : '';
+  };
+  window._combFoto = function(cual, input){
+    var f = input.files && input.files[0]; if(!f) return;
+    var v = leer();
+    comprimir(f).then(function(d){ st.fotos[cual] = d; pintar(v); }).catch(function(){ aviso('No se pudo leer la foto', true); });
+  };
+  window._combFotoQuitar = function(cual){ var v = leer(); st.fotos[cual] = ''; pintar(v); };
+  function pintar(v){
+    var el = document.getElementById('comb-form'); if(!el) return;
+    el.innerHTML = formHTML(); if(v) poner(v); window._combVehCambio();
+  }
+  function kmAFicha(v, km){
+    if(!v || !km) return Promise.resolve();
+    var raro = '';
+    if(v.km && km < v.km) raro = 'es MENOR que la que tiene la ficha';
+    else if(v.km && km > v.km * 2 && (km - v.km) > 5000) raro = 'es mucho MAYOR que la que tiene la ficha';
+    if(raro && !confirm('⚠️ El kilometraje ' + km + ' de ' + v.codigo + ' ' + raro + ' (' + v.km + ' km).\n\nAceptar = es correcto, guardarlo también en la ficha.\nCancelar = dejar la ficha como está (el registro conserva su número).')) return Promise.resolve();
+    var txt = String(km);
+    if(v.raiz === RAIZ){ try{ var eq = (DB.equipos || []).find(function(e){ return e && e.id === v.id; }); if(eq){ eq.horometro = txt; eq.kilometraje = txt; } }catch(e){} }
+    v.km = km;
+    return db().ref(v.raiz + '/equipos/' + v.key).update({ horometro: txt, kilometraje: txt }).catch(function(){});
+  }
+  window._combCerrar = function(){
+    if(st.guardando) return;
+    var v = leer(), falta = [];
+    if(!v.emp) falta.push('👷 Empleado');
+    if(!v.veh) falta.push('🚗 Vehículo');
+    var km = num(v.km), monto = num(v.monto);
+    if(!(km > 0)) falta.push('🛣 Kilometraje');
+    if(!(monto > 0)) falta.push('💵 Cantidad en lempiras');
+    if(!st.fotos.bomba) falta.push('⛽ Foto de la bomba');
+    if(!st.fotos.factura) falta.push('🧾 Foto de la factura');
+    if(falta.length){ alert('No se puede cerrar el registro.\nFalta:\n\n• ' + falta.join('\n• ')); return; }
+    if(!db() || !navigator.onLine){ alert('⚠️ Sin conexión a internet.\n\nEl registro no se guardó. Intenta de nuevo con señal.'); return; }
+    var veh = (st.veh || []).find(function(x){ return x.codigo === v.veh; }) || { codigo: v.veh, raiz: RAIZ };
+    if(!confirm('¿Cerrar este registro?\n\n' + v.emp + '\n' + veh.codigo + (veh.placa ? ' · ' + veh.placa : '') + '\n' + km + ' km · ' + lps(monto) + '\n\nYa no se podrá editar.')) return;
+    st.guardando = true;
+    var btn = document.getElementById('comb-cerrar'); if(btn){ btn.disabled = true; btn.textContent = 'Guardando…'; }
+    var ref = db().ref(RAIZ + '/combustible').push(), id = ref.key;
+    var rec = { id: id, empleado: v.emp, vehiculo: veh.codigo, placa: veh.placa || '', vehiculoEmpresa: veh.raiz, km: km, monto: monto,
+      fecha: firebase.database.ServerValue.TIMESTAMP, fechaLocal: Date.now(), uid: miId(), app: (location.pathname.split('/').pop() || ''), cerrado: true };
+    db().ref(RAIZ + '/combustibleFotos/' + id).set({ bomba: st.fotos.bomba, factura: st.fotos.factura })
+      .then(function(){ return ref.set(rec); })
+      .then(function(){ return kmAFicha(veh, km); })
+      .then(function(){
+        st.guardando = false; st.fotos = { bomba: '', factura: '' };
+        aviso('⛽ Suministro registrado ✓'); pintar(null); misRegistros();
+      })
+      .catch(function(e){
+        st.guardando = false; if(btn){ btn.disabled = false; btn.textContent = '✅ Cerrar registro'; }
+        alert('⚠️ No se pudo guardar el registro.\n\n' + (e && e.message ? e.message : '') + '\n\nIntenta de nuevo.');
+      });
+  };
+  function misRegistros(){
+    var el = document.getElementById('comb-mios'); if(!el || !db()) return;
+    el.innerHTML = '<div style="font-size:13px;color:#888;padding:8px 0">Cargando tus registros…</div>';
+    db().ref(RAIZ + '/combustible').orderByChild('uid').equalTo(miId()).limitToLast(40).once('value').then(function(s){
+      var L = lista(s.val()).map(function(x){ return x[1]; }).filter(Boolean).sort(function(a, b){ return (b.fecha || 0) - (a.fecha || 0); });
+      el.innerHTML = '<div style="font-size:15px;font-weight:800;color:#1f3864;margin:18px 0 8px">🧾 Mis registros (' + L.length + ')</div>'
+        + (L.length ? L.map(function(r){
+          return '<div class="card" style="padding:12px 14px;margin-bottom:8px">'
+            + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="color:#1f3864">⛽ ' + esc(r.vehiculo) + (r.placa ? ' · ' + esc(r.placa) : '') + '</b><b>' + lps(r.monto) + '</b></div>'
+            + '<div style="font-size:13px;color:#555;margin-top:4px">📅 ' + fechaTxt(r.fecha || r.fechaLocal) + ' · 👷 ' + esc(r.empleado) + ' · 🛣 ' + Number(r.km || 0).toLocaleString('es-HN') + ' km</div>'
+            + '<button type="button" onclick="_combVerFotos(\'' + esc(r.id) + '\')" style="margin-top:8px;padding:7px 12px;background:#eef4fb;color:#1f3864;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">📷 Ver fotos</button></div>';
+        }).join('') : '<div style="font-size:13px;color:#888">Todavía no has registrado suministros desde este teléfono.</div>');
+    }).catch(function(){ el.innerHTML = '<div style="font-size:13px;color:#888">No se pudieron cargar tus registros.</div>'; });
+  }
+  window._combVerFotos = function(id){
+    db().ref(RAIZ + '/combustibleFotos/' + id).once('value').then(function(s){
+      var f = s.val() || {}, ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;align-items:center';
+      ov.onclick = function(){ ov.remove(); };
+      ov.innerHTML = '<div style="color:#fff;font-weight:700">Toca para cerrar</div>'
+        + ['bomba', 'factura'].map(function(k){ return f[k] ? '<div style="color:#fff;font-size:13px;width:100%;max-width:600px">' + (k === 'bomba' ? '⛽ Bomba' : '🧾 Factura') + '<img src="' + f[k] + '" style="width:100%;border-radius:8px;margin-top:4px;display:block"></div>' : ''; }).join('');
+      document.body.appendChild(ov);
+    });
+  };
+  window._combRender = function(){
+    var cont = document.getElementById('comb-cont'); if(!cont) return;
+    if(!document.getElementById('comb-form')) cont.innerHTML = '<div id="comb-form"></div><div id="comb-mios"></div>';
+    var v = document.getElementById('comb-emp') ? leer() : null;
+    pintar(v);
+    Promise.all([st.veh ? st.veh : cargarVeh(), st.per ? st.per : cargarPer()]).then(function(){ pintar(document.getElementById('comb-emp') ? leer() : v); });
+    misRegistros();
+    clearInterval(st.reloj); st.reloj = setInterval(function(){ var f = document.getElementById('comb-fecha'); if(f) f.textContent = fechaTxt(Date.now()); else clearInterval(st.reloj); }, 30000);
+  };
+  if(typeof showTab === 'function'){
+    var _st = showTab;
+    showTab = function(id){ var r = _st.apply(this, arguments); if(id === 'combustible') window._combRender(); return r; };
+  }
+})();
+</script>
+<script>
+// (2026-10-15) vista «⛽ Combustible» en Logística MONHACO
+(function(){
+  var _lv = lgVista;
+  lgVista = function(v){
+    var sc = document.getElementById('seg-comb'), cc = document.getElementById('comb-cont');
+    if(v === 'comb'){
+      ['seg-hor', 'seg-rc'].forEach(function(i){ var b = document.getElementById(i); if(b) b.classList.remove('on'); });
+      ['hor-cont', 'rc-cont'].forEach(function(i){ var c = document.getElementById(i); if(c) c.style.display = 'none'; });
+      if(sc) sc.classList.add('on'); if(cc) cc.style.display = 'block';
+      window._combRender(); window.scrollTo(0, 0); return;
+    }
+    if(sc) sc.classList.remove('on'); if(cc) cc.style.display = 'none';
+    return _lv.apply(this, arguments);
+  };
 })();
 </script>
 </body>
