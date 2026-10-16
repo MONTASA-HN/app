@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='aea421747650';
+  var APP_VERSION='f37a3eca4d9a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1553,6 +1553,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
           <div class="sol-cli-lista" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid #cfd6df;border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
         </div>
         <div class="sol-cli-ok" style="font-size:12px;margin-top:4px"></div>
+        <div class="sol-cli-nuevo-wrap" style="display:none;margin-top:8px"><label>✍️ Nombre del cliente nuevo <span style="color:#c00">*</span></label><input class="sol-cli-nuevo" type="text" placeholder="Nombre del cliente o prospecto"></div>
       </div>
       <div class="form-group" id="sol-prioridad-group">
         <label>Prioridad</label>
@@ -11345,6 +11346,7 @@ function _estBuscarMant(){
 <script>
 // ══ CLIENTE EN LAS SOLICITUDES (2026-10-15, pedido de Miguel) ══ Lista oficial en <raíz>/clientesLista ({sap, nombre}).
 var _SOL_CLI = null;
+var _SOL_CLI_NUEVO = 'CLIENTE NUEVO (PROSPECTO)';   // (2026-10-16) cliente que aún no está en la lista: se escribe a mano
 var _SOL_CLI_INTERNO = { montasa: 'MONTASA HANDLING CO. (USO INTERNO)', monhaco: 'MONHACO (USO INTERNO)' };
 function _solCliNorm(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
 function _solCliEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -11359,11 +11361,12 @@ function _solCliCargar(){
     return _SOL_CLI || [];
   }).catch(function(){ return _SOL_CLI || []; });
 }
-function _solCliTodos(){ return [{ sap: '', nombre: _SOL_CLI_INTERNO[_SP_RAIZ] || 'USO INTERNO' }].concat(_SOL_CLI || []); }
+function _solCliTodos(){ return [{ sap: '', nombre: _SOL_CLI_INTERNO[_SP_RAIZ] || 'USO INTERNO' }, { sap: '', nombre: _SOL_CLI_NUEVO }].concat(_SOL_CLI || []); }
 function _solCliExacto(t){ var q = _solCliNorm(t); if(!q) return ''; var e = _solCliTodos().find(function(c){ return _solCliNorm(c.nombre) === q; }); return e ? e.nombre : ''; }
 function _solCliMarca(inp){
   var ok = inp.closest('.sol-cli-group').querySelector('.sol-cli-ok'); if(!ok) return;
   var e = _solCliExacto(inp.value);
+  var w = inp.closest('.sol-cli-group').querySelector('.sol-cli-nuevo-wrap'); if(w) w.style.display = e === _SOL_CLI_NUEVO ? 'block' : 'none';
   ok.style.color = e ? '#15803d' : '#b45309';
   ok.textContent = e ? '✓ Cliente de la lista' : (inp.value.trim() ? 'Elige un cliente de la lista' : '');
 }
@@ -11396,16 +11399,23 @@ function _solClienteValidar(){
   var inp = ins.find(function(i){ return i.offsetParent; }) || ins[0];
   var v = inp ? inp.value.trim() : '';
   var e = _solCliExacto(v);
+  window._solCliEsNuevo = false;
+  if(e === _SOL_CLI_NUEVO){
+    var nn = inp.closest('.sol-cli-group').querySelector('.sol-cli-nuevo'), t = nn ? nn.value.trim() : '';
+    if(!t){ alert('No se puede crear la orden.\nFalta:\n\n• ✍️ Nombre del cliente nuevo'); window._solCliActual = ''; return ''; }
+    window._solCliActual = t; window._solCliEsNuevo = true; return t;
+  }
   if(!e && v && !(_SOL_CLI && _SOL_CLI.length)) e = v;
   if(!e){ alert('No se puede crear la orden.\nFalta:\n\n• 🏢 Cliente (escribe y elige uno de la lista)'); window._solCliActual = ''; return ''; }
   window._solCliActual = e; return e;
 }
-function _solCliPush(arr, o){ if(o && window._solCliActual) o.clienteOrden = window._solCliActual; return arr.push(o); }
+function _solCliPush(arr, o){ if(o && window._solCliActual){ o.clienteOrden = window._solCliActual; if(window._solCliEsNuevo) o.clienteNuevo = true; } return arr.push(o); }
 (function(){
   if(typeof clearSolicitudForm !== 'function') return;
   var orig = clearSolicitudForm;
   clearSolicitudForm = function(){
     var r = orig.apply(this, arguments);
+    document.querySelectorAll('.sol-cli-nuevo').forEach(function(i){ i.value = ''; });
     document.querySelectorAll('.sol-cli-input').forEach(function(i){ i.value = ''; _solCliMarca(i); });
     return r;
   };
