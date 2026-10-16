@@ -567,3 +567,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   «Otras» para tipos viejos como entrega_retiro) con totales Pendientes / En proceso / Cerradas (/ Canceladas). Dentro de la carpeta:
   activas (`renderOrdenesLog`) y luego cerradas (`renderHistorialLog`), filtradas por `_logCarpeta`, con un solo buscador (también por
   equipo y cliente). `renderDashboardLog` y `tab-dashboard`/`tab-historial` siguen en el código, ocultos.
+- 2026-10-16 — Técnicos MT y MONHACO (pedido de Miguel): los botones por tipo de orden (preventivo, correctivo, revisión, evaluación,
+  soldadura; en MONHACO también cortinas) están ESCONDIDOS en la barra (`style="display:none" data-oculto`, no borrados: el código actualiza
+  sus contadores). Se entra por las carpetas del Inicio (`typeCard(..., 'tab')` → `showTab(tab)`) y cada pestaña tiene «← Volver a
+  carpetas». Frase del día fija arriba (`#tec-frase`), fuera del Inicio. El menú ☰ no muestra botones escondidos.
