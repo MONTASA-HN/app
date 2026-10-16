@@ -551,3 +551,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   12) con el historial y «✏️ Editar (PIN)» (`solicitarPINAccion`): guarda `editado`, `editadoFecha` y en `ediciones` lo que había antes.
 - 2026-10-16 — Solicitudes: opción «CLIENTE NUEVO (PROSPECTO)» en el cliente; abre «✍️ Nombre del cliente nuevo» (obligatorio). La orden
   guarda ese nombre en `clienteOrden` y `clienteNuevo: true`.
+- 2026-10-16 — Operadores y motoristas seleccionables en las órdenes de mantenimiento (pedido de Miguel): el filtro `tec` del bloque
+  PERSONAL DESDE NEXO ahora incluye roles op y mot (tarjetas, formularios, solicitudes, revisiones, evaluaciones, viáticos). Nuevo filtro
+  `tecPuro` (tec + jefe) para la Agenda (`AGENDA_TECNICOS`) y Productividad (`TECNICOS_LIST` en `_horasDelMes`): las horas de un operador
+  en mantenimiento siguen sumando a su productividad de logística.
