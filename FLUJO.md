@@ -546,3 +546,8 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   (pasa a la ficha del vehículo en su empresa; si baja o salta de más, pregunta), lempiras, foto de la bomba y de la factura. «✅ Cerrar
   registro» guarda y ya no se edita. Datos: `<raíz>/combustible/<id>` (separado por empresa de la app) y fotos en `<raíz>/combustibleFotos/<id>`.
   Cada teléfono ve sus registros (uid). Gerencia: recuadro «⛽ Combustible vehicular» del mes en el Dashboard (`_tbCombHTML`).
+- 2026-10-16 — Combustible v2 (pedido de Miguel): sin fotos; botón «⛽ Nuevo suministro» abre el formulario; abajo el historial de
+  TODOS los suministros de la empresa por mes (no solo los del teléfono). Gerencia MT/MH: pestaña «⛽ Combustible» (barra y menú ☰ MT, botón
+  12) con el historial y «✏️ Editar (PIN)» (`solicitarPINAccion`): guarda `editado`, `editadoFecha` y en `ediciones` lo que había antes.
+- 2026-10-16 — Solicitudes: opción «CLIENTE NUEVO (PROSPECTO)» en el cliente; abre «✍️ Nombre del cliente nuevo» (obligatorio). La orden
+  guarda ese nombre en `clienteOrden` y `clienteNuevo: true`.

@@ -685,5 +685,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   no cambiando el valor por programa.
 - **Cliente de la solicitud**: toda orden nueva creada desde la solicitud debe usar `_solCliPush(DB.x, obj)` (no `DB.x.push`) o no
   guarda el cliente. La lista de clientes vive en la base (`<raíz>/clientesLista`); para actualizarla se reemplaza ese nodo.
-- **Combustible**: las fotos van en `combustibleFotos` aparte a propósito; nunca ponerlas dentro de `combustible` (el Dashboard lee
-  todo ese nodo cada vez). El módulo escribe directo en la base (no pasa por `_Sync`); no agregar `combustible` a COLS.
+- **Combustible**: desde 2026-10-16 ya no lleva fotos; si vuelven, que vayan en un nodo aparte (`combustibleFotos`), nunca dentro de
+  `combustible` (el Dashboard y el historial leen todo ese nodo cada vez). El módulo escribe directo en la base (no pasa por `_Sync`); no agregar `combustible` a COLS.
