@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7ae118ff5373';
+  var APP_VERSION='ce63b77bc1e6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6474,6 +6474,10 @@ function renderTableroGer(){
     const e = Object.entries(obj).sort((a, b) => b[1] - a[1]);
     return e.length ? '<div class="tb-estados">' + e.map(([k, v]) => `<div class="tb-est"><b>${fmt(v)}</b><span>${_x(k)}</span></div>`).join('') + '</div>' : '<div class="tb-vacio">Ninguna</div>';
   };
+  // (2026-10-16, pedido de Miguel) Productividad en el Dashboard: % sobre la meta de 189 h (como la pestaña que se quitó)
+  const META_PROD = 189 * 60;
+  const prod = lista => lista.length ? lista.map(([n, s]) => { const p = Math.round(s.minutos / META_PROD * 100);
+    return `<div class="tb-fila" title="${_x(n)}: ${hhmm(s.minutos)} en ${s.ordenes} órdenes"><div class="tb-fila-n">${_x(n)}</div><div class="tb-pista"><div class="tb-barra" style="width:${Math.max(2, Math.min(100, p))}%"></div></div><div class="tb-fila-v" style="min-width:96px">${p}%<small>${hhmm(s.minutos)} · ${s.ordenes} órd.</small></div></div>`; }).join('') : '<div class="tb-vacio">Sin datos en este mes</div>';
   const horas = lista => barras(lista.map(([n, s]) => ({ n: n, v: s.minutos, txt: hhmm(s.minutos), peq: s.ordenes + ' órd.', det: hhmm(s.minutos) + ' en ' + s.ordenes + ' órdenes' })), '');
   const totMin = l => l.reduce((a, [, s]) => a + s.minutos, 0);
 
@@ -6489,8 +6493,8 @@ function renderTableroGer(){
     +   _tbCombHTML(mes, anio, nomMes)   // (2026-10-15) combustible vehicular
     +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'), '#eda100')   // (2026-10-13) mismo estilo de barras que los demás recuadros
     +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'), '#1baf7a')
-    +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec), '#2a78d6')
-    +   tarjeta('Horas trabajadas · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', horas(hm.sortedLog) + '<div class="tb-nota">Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
+    +   tarjeta('Productividad · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', prod(hm.sortedTec) + '<div class="tb-nota">Meta: 189 h al mes = 100% (barra llena).</div>', '#2a78d6')
+    +   tarjeta('Productividad · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', prod(hm.sortedLog) + '<div class="tb-nota">Meta: 189 h al mes = 100%. Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
     +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''), '#e34948')
     +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'), '#008300')
     + '</div></div>';
@@ -11402,7 +11406,7 @@ _iniciarConexionFirebase(false);
 
 // ── SWIPE NAVIGATION ─────────────────────────────────────────────────────
 (function(){
-  const TABS = ['flota','logistica','historial','solicitudes','personal','notificaciones'];
+  const TABS = ['flota','logistica','historial','solicitudes','notificaciones'];
   let touchStartX = 0, touchStartY = 0, swipeLocked = false;
 
   document.addEventListener('touchstart', function(e){
@@ -11428,7 +11432,7 @@ _iniciarConexionFirebase(false);
     const next = dx < 0 ? idx + 1 : idx - 1;
     if(next < 0 || next >= TABS.length) return;
     swipeLocked = true;
-    const btn = document.querySelector('.nav-btn:nth-child(' + (next+1) + ')');
+    const btn = document.querySelector('.bottom-nav .nav-btn[onclick*="showTab(\'' + TABS[next] + '\'"]');
     showTab(TABS[next], btn);
     setTimeout(() => { swipeLocked = false; }, 400);
   }, {passive: true});
@@ -11436,7 +11440,7 @@ _iniciarConexionFirebase(false);
 
 // ── KEYBOARD NAVIGATION (arrow keys between tabs) ────────────────────────
 (function(){
-  const TABS = ['flota','logistica','historial','solicitudes','personal','notificaciones'];
+  const TABS = ['flota','logistica','historial','solicitudes','notificaciones'];
   document.addEventListener('keydown', function(e){
     if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
@@ -11449,7 +11453,7 @@ _iniciarConexionFirebase(false);
     if(idx === -1) return;
     const next = e.key === 'ArrowRight' ? idx + 1 : idx - 1;
     if(next < 0 || next >= TABS.length) return;
-    const btn = document.querySelector('.nav-btn:nth-child(' + (next+1) + ')');
+    const btn = document.querySelector('.bottom-nav .nav-btn[onclick*="showTab(\'' + TABS[next] + '\'"]');
     showTab(TABS[next], btn);
   });
 })();
@@ -13548,9 +13552,6 @@ function _verFotoGrande(src){
   <button class="nav-btn" onclick="showTab('agenda',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Agenda
   </button>
-  <button class="nav-btn" onclick="showTab('personal',this)">
-    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/></svg>Productividad
-  </button>
   <button class="nav-btn" onclick="showTab('tablero',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard
   </button>
@@ -13583,13 +13584,12 @@ function _verFotoGrande(src){
   <button class="ger-menu-item" onclick="_gerMenuGo(3,'historial')"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Mantenimiento</button>
   <button class="ger-menu-item" onclick="_gerMenuGo(4,'solicitudes')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Solicitudes</button>
   <button class="ger-menu-item" onclick="_gerMenuGo(5,'agenda')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Agenda</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(6,'personal')"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/></svg>Productividad</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(7,'tablero')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(8,'notificaciones')"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Notificaciones<span class="mi-badge" id="mi-badge-notif"></span></button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(9,'repuestos')"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><circle cx="19" cy="19" r="3.2"/></svg>Repuestos</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(10,'mapa')"><svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Mapa</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(11,'horometros')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></svg>Horómetros</button>
-  <button class="ger-menu-item" onclick="_gerMenuGo(12,'combustible')"><svg viewBox="0 0 24 24"><path d="M3 22V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v17"/><path d="M2 22h13"/><path d="M14 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/><rect x="6" y="7" width="5" height="4"/></svg>Combustible</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(6,'tablero')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(7,'notificaciones')"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Notificaciones<span class="mi-badge" id="mi-badge-notif"></span></button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(8,'repuestos')"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><circle cx="19" cy="19" r="3.2"/></svg>Repuestos</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(9,'mapa')"><svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>Mapa</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(10,'horometros')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></svg>Horómetros</button>
+  <button class="ger-menu-item" onclick="_gerMenuGo(11,'combustible')"><svg viewBox="0 0 24 24"><path d="M3 22V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v17"/><path d="M2 22h13"/><path d="M14 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/><rect x="6" y="7" width="5" height="4"/></svg>Combustible</button>
 </div>
 <script>
 function _gerMenuToggle(force){

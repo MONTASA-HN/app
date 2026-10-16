@@ -555,3 +555,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   PERSONAL DESDE NEXO ahora incluye roles op y mot (tarjetas, formularios, solicitudes, revisiones, evaluaciones, viáticos). Nuevo filtro
   `tecPuro` (tec + jefe) para la Agenda (`AGENDA_TECNICOS`) y Productividad (`TECNICOS_LIST` en `_horasDelMes`): las horas de un operador
   en mantenimiento siguen sumando a su productividad de logística.
+- 2026-10-16 — Productividad pasa al Dashboard de Gerencia (MTG/MHG, pedido de Miguel): «Horas trabajadas» → «Productividad · Técnicos /
+  Operadores» con % sobre 189 h (barra llena = meta), horas y órdenes por persona (`prod` en `renderTableroGer`). Se quitó la pestaña
+  Productividad de Gerencia (barra; menú ☰ MT renumerado). `renderPersonal` sigue en el código y Supervisión conserva su pestaña.
+  Deslizar entre pestañas (`TABS`) ya no incluye «personal» y marca el botón por nombre, no por posición.
