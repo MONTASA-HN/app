@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c0c19a0dae50';
+  var APP_VERSION='c056b3415ed8';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6371,6 +6371,10 @@ function renderTableroGer(){
     const e = Object.entries(obj).sort((a, b) => b[1] - a[1]);
     return e.length ? '<div class="tb-estados">' + e.map(([k, v]) => `<div class="tb-est"><b>${fmt(v)}</b><span>${_x(k)}</span></div>`).join('') + '</div>' : '<div class="tb-vacio">Ninguna</div>';
   };
+  // (2026-10-16, pedido de Miguel) Productividad en el Dashboard: % sobre la meta de 189 h (como la pestaña que se quitó)
+  const META_PROD = 189 * 60;
+  const prod = lista => lista.length ? lista.map(([n, s]) => { const p = Math.round(s.minutos / META_PROD * 100);
+    return `<div class="tb-fila" title="${_x(n)}: ${hhmm(s.minutos)} en ${s.ordenes} órdenes"><div class="tb-fila-n">${_x(n)}</div><div class="tb-pista"><div class="tb-barra" style="width:${Math.max(2, Math.min(100, p))}%"></div></div><div class="tb-fila-v" style="min-width:96px">${p}%<small>${hhmm(s.minutos)} · ${s.ordenes} órd.</small></div></div>`; }).join('') : '<div class="tb-vacio">Sin datos en este mes</div>';
   const horas = lista => barras(lista.map(([n, s]) => ({ n: n, v: s.minutos, txt: hhmm(s.minutos), peq: s.ordenes + ' órd.', det: hhmm(s.minutos) + ' en ' + s.ordenes + ' órdenes' })), '');
   const totMin = l => l.reduce((a, [, s]) => a + s.minutos, 0);
 
@@ -6386,8 +6390,8 @@ function renderTableroGer(){
     +   _tbCombHTML(mes, anio, nomMes)   // (2026-10-15) combustible vehicular
     +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'), '#eda100')   // (2026-10-13) mismo estilo de barras que los demás recuadros
     +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'), '#1baf7a')
-    +   tarjeta('Horas trabajadas · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', horas(hm.sortedTec), '#2a78d6')
-    +   tarjeta('Horas trabajadas · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', horas(hm.sortedLog) + '<div class="tb-nota">Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
+    +   tarjeta('Productividad · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', prod(hm.sortedTec) + '<div class="tb-nota">Meta: 189 h al mes = 100% (barra llena).</div>', '#2a78d6')
+    +   tarjeta('Productividad · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', prod(hm.sortedLog) + '<div class="tb-nota">Meta: 189 h al mes = 100%. Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
     +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''), '#e34948')
     +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'), '#008300')
     + '</div></div>';
@@ -10743,7 +10747,7 @@ _iniciarConexionFirebase(false);
 
 // ── SWIPE NAVIGATION ─────────────────────────────────────────────────────
 (function(){
-  const TABS = ['flota','logistica','historial','solicitudes','personal','notificaciones'];
+  const TABS = ['flota','logistica','historial','solicitudes','notificaciones'];
   let touchStartX = 0, touchStartY = 0, swipeLocked = false;
 
   document.addEventListener('touchstart', function(e){
@@ -10769,7 +10773,7 @@ _iniciarConexionFirebase(false);
     const next = dx < 0 ? idx + 1 : idx - 1;
     if(next < 0 || next >= TABS.length) return;
     swipeLocked = true;
-    const btn = document.querySelector('.nav-btn:nth-child(' + (next+1) + ')');
+    const btn = document.querySelector('.bottom-nav .nav-btn[onclick*="showTab(\'' + TABS[next] + '\'"]');
     showTab(TABS[next], btn);
     setTimeout(() => { swipeLocked = false; }, 400);
   }, {passive: true});
@@ -10777,7 +10781,7 @@ _iniciarConexionFirebase(false);
 
 // ── KEYBOARD NAVIGATION (arrow keys between tabs) ────────────────────────
 (function(){
-  const TABS = ['flota','logistica','historial','solicitudes','personal','notificaciones'];
+  const TABS = ['flota','logistica','historial','solicitudes','notificaciones'];
   document.addEventListener('keydown', function(e){
     if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
@@ -10790,7 +10794,7 @@ _iniciarConexionFirebase(false);
     if(idx === -1) return;
     const next = e.key === 'ArrowRight' ? idx + 1 : idx - 1;
     if(next < 0 || next >= TABS.length) return;
-    const btn = document.querySelector('.nav-btn:nth-child(' + (next+1) + ')');
+    const btn = document.querySelector('.bottom-nav .nav-btn[onclick*="showTab(\'' + TABS[next] + '\'"]');
     showTab(TABS[next], btn);
   });
 })();
@@ -12706,9 +12710,6 @@ function _verFotoGrande(src){
   </button>
   <button class="nav-btn" onclick="showTab('reportes',this)">
     <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes
-  </button>
-  <button class="nav-btn" onclick="showTab('personal',this)">
-    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/></svg>Productividad
   </button>
   <button class="nav-btn" onclick="showTab('tablero',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard
