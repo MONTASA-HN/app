@@ -559,3 +559,6 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   Operadores» con % sobre 189 h (barra llena = meta), horas y órdenes por persona (`prod` en `renderTableroGer`). Se quitó la pestaña
   Productividad de Gerencia (barra; menú ☰ MT renumerado). `renderPersonal` sigue en el código y Supervisión conserva su pestaña.
   Deslizar entre pestañas (`TABS`) ya no incluye «personal» y marca el botón por nombre, no por posición.
+- 2026-10-16 — Menú ☰ en teléfonos (≤768 px) para Técnicos MT/MH, Logística MT y Supervisión MT/MH (pedido de Miguel): se oculta la
+  barra de abajo y aparece el botón ☰ arrastrable (`#nx-menu-fab`, posición en `nx_fab_pos`). El menú se arma SOLO copiando los botones
+  de la barra (ícono, nombre, contador) y al tocar uno hace `click()` en ese botón: no hay números de posición que mantener.

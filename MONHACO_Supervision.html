@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7ade75fccd7c';
+  var APP_VERSION='3b46cf8805ca';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12188,6 +12188,85 @@ function _solCliPush(arr, o){ if(o && window._solCliActual){ o.clienteOrden = wi
   };
 })();
 setTimeout(function(){ try{ _solCliCargar(); }catch(e){} }, 8000);
+</script>
+<style>
+/* ══ MENÚ ☰ EN TELÉFONOS (2026-10-16, pedido de Miguel) ══ */
+#nx-menu-fab{position:fixed;left:14px;bottom:calc(14px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;background:var(--accent,#1f3864);border:none;box-shadow:0 4px 16px rgba(0,0,0,0.35);z-index:120;display:none;align-items:center;justify-content:center;cursor:pointer;padding:0}
+#nx-menu-fab svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round}
+#nx-menu-fab .fab-dot{position:absolute;top:5px;right:5px;width:13px;height:13px;border-radius:50%;background:#e53935;display:none;border:2px solid #fff}
+#nx-menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:119;display:none}
+#nx-menu-panel{position:fixed;left:10px;bottom:calc(82px + env(safe-area-inset-bottom));background:var(--surface,#fff);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.4);z-index:121;display:none;min-width:236px;padding:8px;max-height:70vh;overflow:auto}
+.nx-menu-item{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;border:none;background:none;border-radius:10px;font-size:15px;font-weight:600;color:var(--text,#1c2330);cursor:pointer;font-family:inherit;text-align:left}
+.nx-menu-item svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.nx-menu-item.active{background:#e8f0fe;color:var(--accent,#1f3864)}
+.nx-menu-item .mi-badge{margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:2px 7px}
+@media (max-width:768px){ .bottom-nav{display:none!important} #nx-menu-fab{display:flex} }
+</style>
+<button id="nx-menu-fab" type="button" aria-label="Menú"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg><span class="fab-dot"></span></button>
+<div id="nx-menu-overlay"></div>
+<div id="nx-menu-panel"></div>
+<script>
+// Menú ☰ para teléfonos: copia los botones de la barra de abajo (ícono, nombre y contador rojo) y al tocar uno hace lo mismo
+// que ese botón. El botón ☰ se arrastra a donde no estorbe y recuerda la posición (como en Gerencia).
+(function(){
+  var fab = document.getElementById('nx-menu-fab'), ov = document.getElementById('nx-menu-overlay'), panel = document.getElementById('nx-menu-panel');
+  if(!fab || !panel) return;
+  function botones(){ return Array.prototype.slice.call(document.querySelectorAll('.bottom-nav .nav-btn')); }
+  function nombre(b){
+    var t = Array.prototype.filter.call(b.childNodes, function(n){ return n.nodeType === 3; }).map(function(n){ return n.textContent; }).join(' ').replace(/\s+/g, ' ').trim();
+    return t || b.textContent.replace(/\s+/g, ' ').trim();
+  }
+  function contador(b){ var c = b.querySelector('.nav-badge, [id^="badge"]'); if(!c) return ''; var v = String(c.textContent || '').trim(); return (v && v !== '0' && getComputedStyle(c).display !== 'none') ? v : ''; }
+  function armar(){
+    panel.innerHTML = '';
+    botones().forEach(function(b){
+      var it = document.createElement('button'); it.type = 'button'; it.className = 'nx-menu-item' + (b.classList.contains('active') ? ' active' : '');
+      var s = b.querySelector('svg'); if(s) it.appendChild(s.cloneNode(true));
+      it.appendChild(document.createTextNode(nombre(b)));
+      var c = contador(b); if(c){ var bd = document.createElement('span'); bd.className = 'mi-badge'; bd.textContent = c; it.appendChild(bd); }
+      it.addEventListener('click', function(){ abrir(false); b.click(); window.scrollTo(0, 0); });
+      panel.appendChild(it);
+    });
+  }
+  function colocar(){
+    var fr = fab.getBoundingClientRect(), pw = panel.offsetWidth, ph = panel.offsetHeight;
+    var x = fr.left, y = fr.top - ph - 10;
+    if(y < 8) y = Math.min(fr.bottom + 10, window.innerHeight - ph - 8);
+    if(x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
+    if(x < 8) x = 8; if(y < 8) y = 8;
+    panel.style.left = x + 'px'; panel.style.top = y + 'px'; panel.style.bottom = 'auto';
+  }
+  function abrir(force){
+    var ver = (force !== undefined && force !== null) ? force : panel.style.display !== 'block';
+    if(ver){ armar(); panel.style.visibility = 'hidden'; panel.style.display = 'block'; colocar(); panel.style.visibility = 'visible'; ov.style.display = 'block'; }
+    else { panel.style.display = 'none'; ov.style.display = 'none'; }
+  }
+  window._nxMenuAbrir = abrir;
+  ov.addEventListener('click', function(){ abrir(false); });
+  fab.addEventListener('click', function(){ abrir(); });
+  function punto(){ var d = fab.querySelector('.fab-dot'); if(d) d.style.display = botones().some(function(b){ return !!contador(b); }) ? 'block' : 'none'; }
+  setInterval(punto, 3000); setTimeout(punto, 1500);
+  // Arrastrar el botón y recordar la posición
+  var KEY = 'nx_fab_pos';
+  function aplicar(x, y){ var m = 6, w = fab.offsetWidth || 58, h = fab.offsetHeight || 58;
+    x = Math.max(m, Math.min(x, window.innerWidth - w - m)); y = Math.max(m, Math.min(y, window.innerHeight - h - m));
+    fab.style.left = x + 'px'; fab.style.top = y + 'px'; fab.style.bottom = 'auto'; fab.style.right = 'auto'; }
+  try{ var g = JSON.parse(localStorage.getItem(KEY) || 'null'); if(g && typeof g.x === 'number' && typeof g.y === 'number') aplicar(g.x, g.y); }catch(e){}
+  var sx = 0, sy = 0, ox = 0, oy = 0, activo = false, movido = false;
+  fab.style.touchAction = 'none';
+  fab.addEventListener('pointerdown', function(ev){ activo = true; movido = false; var r = fab.getBoundingClientRect(); sx = ev.clientX; sy = ev.clientY; ox = r.left; oy = r.top; try{ fab.setPointerCapture(ev.pointerId); }catch(e){} });
+  fab.addEventListener('pointermove', function(ev){ if(!activo) return; var dx = ev.clientX - sx, dy = ev.clientY - sy; if(!movido && Math.abs(dx) < 8 && Math.abs(dy) < 8) return; movido = true; aplicar(ox + dx, oy + dy); });
+  fab.addEventListener('pointerup', function(){
+    if(!activo) return; activo = false; if(!movido) return;
+    var r = fab.getBoundingClientRect(), izq = (r.left + r.width / 2) < window.innerWidth / 2;
+    aplicar(izq ? 14 : window.innerWidth - r.width - 14, r.top);
+    var r2 = fab.getBoundingClientRect(); try{ localStorage.setItem(KEY, JSON.stringify({x: r2.left, y: r2.top})); }catch(e){}
+    var blk = function(e2){ e2.stopPropagation(); e2.preventDefault(); fab.removeEventListener('click', blk, true); };
+    fab.addEventListener('click', blk, true); setTimeout(function(){ fab.removeEventListener('click', blk, true); }, 300);
+  });
+  fab.addEventListener('pointercancel', function(){ activo = false; });
+  window.addEventListener('resize', function(){ if(!fab.style.top) return; var r = fab.getBoundingClientRect(); aplicar(r.left, r.top); });
+})();
 </script>
 </body>
 </html>
