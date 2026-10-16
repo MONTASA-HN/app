@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='36be3c32f253';
+  var APP_VERSION='1f7285240dd5';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -11288,10 +11288,14 @@ function _cliEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/
 // el valor (usa this.value), p. ej. "actualizarCampoOrden('prev','ID','clienteOrden',this.value.trim())"
 function _cliCampoHTML(o, onchangeJS){
   if(!o) return '';
+  // (2026-10-16, pedido de Miguel) El cliente viene de la solicitud: si la orden ya lo tiene, SOLO LECTURA (que nadie lo cambie
+  // por error). Si está vacío (órdenes viejas) se puede escribir, porque es obligatorio para cerrar.
+  var v = _cliOrdenValor(o), id = 'cli-orden-' + o.id, ro = !!v;
   return '<div class="form-group" style="margin-bottom:10px"><label>🏢 Cliente</label>'
-    + '<input id="cli-orden-'+o.id+'" type="text" value="'+_cliEsc(_cliOrdenValor(o))+'" placeholder="Nombre del cliente" '
-    + 'onclick="event.stopPropagation()" onchange="event.stopPropagation();'+_cliEsc(onchangeJS)+'">'
-    + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">Obligatorio para cerrar la orden. Sale en el PDF.</div></div>';
+    + '<input id="' + id + '" type="text" value="' + _cliEsc(v) + '" placeholder="Nombre del cliente" '
+    + (ro ? 'readonly style="background:#f3f5f8;color:#1c2330;font-weight:600;cursor:default" ' : '')
+    + 'onclick="event.stopPropagation()" onchange="event.stopPropagation();' + _cliEsc(onchangeJS) + '">'
+    + '<div style="font-size:11px;color:var(--text3,#888);margin-top:3px">' + (ro ? 'Viene de la solicitud: solo lectura. Sale en el PDF.' : 'Esta orden no tiene cliente: escríbelo, es obligatorio para cerrarla. Sale en el PDF.') + '</div></div>';
 }
 // Al cerrar: toma lo que esté escrito en pantalla (aunque no se haya disparado
 // el onchange) y lo deja en la orden. Devuelve el cliente final ('' si falta).
