@@ -691,3 +691,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   usar `_nxLista('tecPuro')`, nunca `tec`.
 - **Menú ☰ de Gerencia MT** (`_gerMenuGo(n, tab)`) va por POSICIÓN del botón en la barra: al quitar o agregar un botón, renumerar
   todos los que siguen (se hizo el 2026-10-16 al quitar Productividad).
+- **Logística MT**: `renderHistorialLog` no dibuja nada si no hay carpeta abierta (`_logCarpeta`), y `renderOrdenesLog` está envuelto
+  para dibujar también las carpetas y las cerradas. Un tipo de orden nuevo debe sumarse a `_LOG_CARPETAS` o cae en «Otras».

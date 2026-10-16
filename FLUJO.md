@@ -562,3 +562,8 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
 - 2026-10-16 — Menú ☰ en teléfonos (≤768 px) para Técnicos MT/MH, Logística MT y Supervisión MT/MH (pedido de Miguel): se oculta la
   barra de abajo y aparece el botón ☰ arrastrable (`#nx-menu-fab`, posición en `nx_fab_pos`). El menú se arma SOLO copiando los botones
   de la barra (ícono, nombre, contador) y al tocar uno hace `click()` en ese botón: no hay números de posición que mantener.
+- 2026-10-16 — Rediseño de Logística MT (pedido de Miguel): sin Inicio ni Historial en la barra (la app abre en Órdenes); frase del
+  día fija arriba en todas las pestañas (`#log-frase`, la llena `renderDashboardLog`); Órdenes con carpetas por tipo (`_LOG_CARPETAS`,
+  «Otras» para tipos viejos como entrega_retiro) con totales Pendientes / En proceso / Cerradas (/ Canceladas). Dentro de la carpeta:
+  activas (`renderOrdenesLog`) y luego cerradas (`renderHistorialLog`), filtradas por `_logCarpeta`, con un solo buscador (también por
+  equipo y cliente). `renderDashboardLog` y `tab-dashboard`/`tab-historial` siguen en el código, ocultos.
