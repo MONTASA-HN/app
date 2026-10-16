@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7e9517ad464b';
+  var APP_VERSION='364a4ae86692';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2505,7 +2505,7 @@ function _srNuevaExtra(tipo, oid){
 function _srBuscarOrdenPorCorr(txt){
   const t=String(txt||'').trim().toUpperCase();
   if(!t) return null;
-  const bus=[['prev',DB.preventivos||[]],['corr',DB.correctivos||[]]];
+  const bus=[['prev',DB.preventivos||[]],['corr',DB.correctivos||[]],['ev',DB.evaluaciones||[]]];
   for(let i=0;i<bus.length;i++){
     const o=bus[i][1].find(x=>x && String(x.correlativo||'').toUpperCase()===t);
     if(o) return {tipo:bus[i][0], o:o};
@@ -2513,6 +2513,10 @@ function _srBuscarOrdenPorCorr(txt){
   return null;
 }
 function _srDatosOrden(o){
+  if(o && /^EV-/.test(String(o.correlativo||'')) && !o.equipoId){   // (2026-10-16) evaluación de equipo
+    return { esCliente:true, equipoTxt:(o.clienteOrden||o.cliente||'Equipo de cliente')+(o.tipoEquipo?' · '+o.tipoEquipo:''), marca:o.marca||'', modelo:o.modelo||'', serie:o.serie||'',
+      tecnico:String((o.tecnicos&&o.tecnicos[0])||o.tecnico||'').trim() };
+  }
   const eq=(DB.equipos||[]).find(e=>e.id===o.equipoId);
   const esCli = o.equipoId==='__cliente__' || !!(eq&&eq.esEquipoCliente);
   return {
@@ -2616,6 +2620,12 @@ function _srOrdenesActivas(){
     });
   };
   add(DB.preventivos,'prev'); add(DB.correctivos,'corr');
+  // (2026-10-16) evaluaciones: abiertas y completadas de los últimos 60 días (para cotizar al cliente lo diagnosticado)
+  (DB.evaluaciones||[]).forEach(function(o){
+    if(!o || o.estado==='Cancelado') return;
+    if(o.completado || o.estado==='Completado'){ var f=new Date(o.fechaCierre||o.fecha||0); if(isNaN(f) || Date.now()-f > 60*86400000) return; }
+    out.push({tipo:'ev', o:o});
+  });
   return out.sort(function(a,b){ return String(b.o.correlativo||'').localeCompare(String(a.o.correlativo||'')); });
 }
 function _srBuscar(){
@@ -2641,7 +2651,7 @@ function _srBuscar(){
     const d=_srDatosOrden(r.o);
     const ya=_srDeOrden(r.o.id);
     return '<div onclick="_srElegir(\''+r.tipo+'\',\''+_idS(r.o.id)+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
-      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':'Correctivo')+'</span></div>'
+      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':r.tipo==='ev'?'Evaluación':'Correctivo')+'</span></div>'
       +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div>'
       +(ya.length?'<div style="font-size:11px;color:#8a6d00;font-weight:700">🔩 Ya tiene: '+ya.map(function(x){return esc(x.correlativo);}).join(', ')+'</div>':'')
       +'</div>'
@@ -2650,7 +2660,7 @@ function _srBuscar(){
   }).join('');
 }
 function _srElegir(tipo, oid){
-  const arr = tipo==='prev' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = tipo==='prev' ? (DB.preventivos||[]) : tipo==='ev' ? (DB.evaluaciones||[]) : (DB.correctivos||[]);
   const o = arr.find(function(x){ return x && x.id===oid; });
   if(!o) return;
   const esc0=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
@@ -2687,7 +2697,7 @@ function _srElegir(tipo, oid){
   const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
   const info=document.getElementById('sr-info');
   info.style.display='block';
-  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(o.correlativo)+' — '+(tipo==='prev'?'Preventivo':'Correctivo')+'</div>'
+  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(o.correlativo)+' — '+(tipo==='prev'?'Preventivo':tipo==='ev'?'Evaluación':'Correctivo')+'</div>'
     +'<div><b>'+(d.esCliente?'Cliente':'Equipo')+':</b> '+esc(d.equipoTxt)+'</div>'
     +(d.marca?'<div><b>Marca:</b> '+esc(d.marca)+'</div>':'')
     +(d.modelo?'<div><b>Modelo:</b> '+esc(d.modelo)+'</div>':'')
@@ -2749,7 +2759,8 @@ function _srGuardar(){
       if(!o.solRepuestos) o.solRepuestos=[];
       if(o.solRepuestos.indexOf(sr.correlativo)<0) o.solRepuestos.push(sr.correlativo);
       saveDB();
-      if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(_srOrdenSel.tipo==='prev'?'prev':'corr', o);
+      if(_srOrdenSel.tipo==='ev'){ try{ if(window._fbDB && window._fbReady && typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){} }   // (2026-10-16) evaluación
+      else if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(_srOrdenSel.tipo==='prev'?'prev':'corr', o);
     }catch(e){}
     _srExtraOK = null;   // el PIN vale para UNA solicitud: la siguiente lo vuelve a pedir
     const ovv=document.getElementById('sr-overlay'); if(ovv) ovv.remove();
@@ -6100,6 +6111,7 @@ function renderEvaluaciones(){
     if(isOpen){
       card += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)" id="cb-eval-${v.id}" onclick="event.stopPropagation()">`;
       card += _ubLinkHTML(v) + _contactoHTML(v);
+      card += _srChipsHTML(v.id) + '<button onclick="event.stopPropagation();abrirSolRepuesto();setTimeout(function(){_srElegir(\'ev\',\''+_idS(v.id)+'\')},80)" style="width:100%;margin:6px 0;padding:10px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔩 Solicitar repuestos (cotización)</button>';   // (2026-10-16) repuestos para cotizar
       if(_fotosPendientes(v)){ card += _fotosCargandoHTML(); _hidratarFotos(v); }
       if(v.completado){
         card += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
