@@ -571,3 +571,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   soldadura; en MONHACO también cortinas) están ESCONDIDOS en la barra (`style="display:none" data-oculto`, no borrados: el código actualiza
   sus contadores). Se entra por las carpetas del Inicio (`typeCard(..., 'tab')` → `showTab(tab)`) y cada pestaña tiene «← Volver a
   carpetas». Frase del día fija arriba (`#tec-frase`), fuera del Inicio. El menú ☰ no muestra botones escondidos.
+- 2026-10-16 — «🏢 Cliente» de la orden en SOLO LECTURA cuando ya tiene cliente (viene de la solicitud), en las 7 apps con
+  `_cliCampoHTML` (Técnicos MT/MH, Logística MT, Supervisión MT/MH, Gerencia MT/MH; pedido de Miguel). Si está vacío (órdenes viejas)
+  se puede escribir para poder cerrar. Gerencia: «✏️ Corregir (PIN)» (`_cliCorregir`). Al crearse la regla había 7 abiertas sin cliente
+  en MT (MH-0152, MH-0134, MH-0163, MH-0176, MH-0177, MH-0178, MH-0179).
