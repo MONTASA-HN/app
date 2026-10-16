@@ -575,3 +575,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   `_cliCampoHTML` (Técnicos MT/MH, Logística MT, Supervisión MT/MH, Gerencia MT/MH; pedido de Miguel). Si está vacío (órdenes viejas)
   se puede escribir para poder cerrar. Gerencia: «✏️ Corregir (PIN)» (`_cliCorregir`). Al crearse la regla había 7 abiertas sin cliente
   en MT (MH-0152, MH-0134, MH-0163, MH-0176, MH-0177, MH-0178, MH-0179).
+- 2026-10-16 — Solicitud de repuestos (SR) para Evaluaciones de equipo (MTT, MTG, MTS; pedido de Miguel, para cotizar al cliente lo
+  diagnosticado): `_srOrdenesActivas` suma evaluaciones abiertas y completadas de los últimos 60 días (tipo `ev`); `_srDatosOrden` toma
+  cliente/marca/modelo/serie de la evaluación; al guardar, la evaluación anota `solRepuestos` y se sincroniza con `_Sync.guardar()`.
+  Botón «🔩 Solicitar repuestos (cotización)» y chips de SR en la tarjeta de la evaluación (Técnicos) y en `_buildDetalleEV` (Gerencia/Sup).
