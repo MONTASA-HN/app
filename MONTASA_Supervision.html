@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8e159773bc2e';
+  var APP_VERSION='3171d33d5d50';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6244,7 +6244,7 @@ async function enviarSolicitudWA(){
     const _ubicRE = document.getElementById('sol-ubicacion')?.value||'plantel'; // para la duración en agenda
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
-      const n = DB.revisiones.length + 1;
+      const n = _sigNumero('RV', DB.revisiones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacion:(_ubicRE==='plantel'?'plantel':'campo'), ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -6263,7 +6263,7 @@ async function enviarSolicitudWA(){
       // El nombre del cliente NO se exige al crear la solicitud de evaluación:
       // esos datos los completa el técnico al cerrar la evaluación en su app.
       if(!DB.evaluaciones) DB.evaluaciones = [];
-      const n = DB.evaluaciones.length + 1;
+      const n = _sigNumero('EV', DB.evaluaciones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente, ubicacion:(_ubicRE==='plantel'?'plantel':'campo'), ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -6443,7 +6443,7 @@ async function copiarMensajeWA(){
     const _ubicRE = document.getElementById('sol-ubicacion')?.value||'plantel'; // para la duración en agenda
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
-      const n = DB.revisiones.length + 1;
+      const n = _sigNumero('RV', DB.revisiones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacion:(_ubicRE==='plantel'?'plantel':'campo'), ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -6462,7 +6462,7 @@ async function copiarMensajeWA(){
       // El nombre del cliente NO se exige al crear la solicitud de evaluación:
       // esos datos los completa el técnico al cerrar la evaluación en su app.
       if(!DB.evaluaciones) DB.evaluaciones = [];
-      const n = DB.evaluaciones.length + 1;
+      const n = _sigNumero('EV', DB.evaluaciones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, tipoEquipo:evTipoEq, marca:evMarca, modelo:evModelo, serie:evSerie, cliente:evCliente, ubicacion:(_ubicRE==='plantel'?'plantel':'campo'), ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -11517,6 +11517,17 @@ setTimeout(function(){ try{ _solCliCargar(); }catch(e){} }, 8000);
   fab.addEventListener('pointercancel', function(){ activo = false; });
   window.addEventListener('resize', function(){ if(!fab.style.top) return; var r = fab.getBoundingClientRect(); aplicar(r.left, r.top); });
 })();
+</script>
+<script>
+// ══ SIGUIENTE NÚMERO DE REVISIONES / EVALUACIONES (2026-10-16) ══ Antes se usaba «cantidad + 1»: al eliminar una orden, el
+// siguiente número se repetía (pasó con EV-0019 tres veces). Ahora: el número más alto (incluidas las de la papelera) + 1.
+function _sigNumero(pref, lista){
+  var mx = 0, re = new RegExp('^' + pref + '-([0-9]+)');
+  var ver = function(o){ var m = o && String(o.correlativo || '').match(re); if(m) mx = Math.max(mx, parseInt(m[1], 10)); };
+  (lista || []).forEach(ver);
+  try{ if(typeof _papeleraLista === 'function') _papeleraLista().forEach(ver); }catch(e){}
+  return mx + 1;
+}
 </script>
 </body>
 </html>

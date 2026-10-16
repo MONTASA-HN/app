@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e0de4e970cbc';
+  var APP_VERSION='0e8f044455c3';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -9877,7 +9877,7 @@ async function enviarSolicitudWA(){
     const _ctc = _leerContactoForm();
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
-      const n = DB.revisiones.length + 1;
+      const n = _sigNumero('RV', DB.revisiones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -9888,7 +9888,7 @@ async function enviarSolicitudWA(){
 if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(msg),'_blank');
     } else {
       if(!DB.evaluaciones) DB.evaluaciones = [];
-      const n = DB.evaluaciones.length + 1;
+      const n = _sigNumero('EV', DB.evaluaciones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -10069,7 +10069,7 @@ async function copiarMensajeWA(){
     const _ctc = _leerContactoForm();
     if(tipo === 'revision_fisica'){
       if(!DB.revisiones) DB.revisiones = [];
-      const n = DB.revisiones.length + 1;
+      const n = _sigNumero('RV', DB.revisiones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'RV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.revisiones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -10080,7 +10080,7 @@ async function copiarMensajeWA(){
 navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('textarea'); ta.value=msg; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); });
     } else {
       if(!DB.evaluaciones) DB.evaluaciones = [];
-      const n = DB.evaluaciones.length + 1;
+      const n = _sigNumero('EV', DB.evaluaciones);   // (2026-10-16) el más alto + 1 (contar repetía números al eliminar)
       const corr = 'EV-'+(n<10?'000':n<100?'00':n<1000?'0':'')+n;
       _solCliPush(DB.evaluaciones, {id:uid(), correlativo:corr, estado:'Pendiente', tecnicos:tecs, notas:descRaw, fecha:fechaRevEval, completado:false, ubicacionLink:_ubL, contactoCliente:_ctc});
       saveDB();
@@ -14662,6 +14662,17 @@ setTimeout(function(){ try{ _solCliCargar(); }catch(e){} }, 8000);
     showTab = function(id){ var r = _st.apply(this, arguments); if(id === 'combustible') window._combRender(); return r; };
   }
 })();
+</script>
+<script>
+// ══ SIGUIENTE NÚMERO DE REVISIONES / EVALUACIONES (2026-10-16) ══ Antes se usaba «cantidad + 1»: al eliminar una orden, el
+// siguiente número se repetía (pasó con EV-0019 tres veces). Ahora: el número más alto (incluidas las de la papelera) + 1.
+function _sigNumero(pref, lista){
+  var mx = 0, re = new RegExp('^' + pref + '-([0-9]+)');
+  var ver = function(o){ var m = o && String(o.correlativo || '').match(re); if(m) mx = Math.max(mx, parseInt(m[1], 10)); };
+  (lista || []).forEach(ver);
+  try{ if(typeof _papeleraLista === 'function') _papeleraLista().forEach(ver); }catch(e){}
+  return mx + 1;
+}
 </script>
 </body>
 </html>
