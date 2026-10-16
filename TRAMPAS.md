@@ -695,3 +695,5 @@ de los dos vendidos de B16091J00110 (MT-67 o MT-80) es el correcto en MONHACO.
   para dibujar también las carpetas y las cerradas. Un tipo de orden nuevo debe sumarse a `_LOG_CARPETAS` o cae en «Otras».
 - **Técnicos**: no borrar los botones escondidos de la barra (preventivo, correctivo…): llevan los contadores `badge-*` que el código
   actualiza sin revisar si existen. Para quitar una pestaña de la vista, esconder el botón con `display:none`.
+- **Nunca numerar con `lista.length + 1`**: al eliminar una orden se repite el número. Usar el más alto + 1 (`_sigNumero`), contando
+  también la papelera.

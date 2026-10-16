@@ -579,3 +579,7 @@ Anotar aquí cada cambio que afecte este flujo y en qué apps se aplicó.
   diagnosticado): `_srOrdenesActivas` suma evaluaciones abiertas y completadas de los últimos 60 días (tipo `ev`); `_srDatosOrden` toma
   cliente/marca/modelo/serie de la evaluación; al guardar, la evaluación anota `solRepuestos` y se sincroniza con `_Sync.guardar()`.
   Botón «🔩 Solicitar repuestos (cotización)» y chips de SR en la tarjeta de la evaluación (Técnicos) y en `_buildDetalleEV` (Gerencia/Sup).
+- 2026-10-16 — Números repetidos de evaluaciones/revisiones: se numeraban con «cantidad + 1» y al eliminar una se repetía (EV-0019
+  tres veces). Ahora `_sigNumero('EV'|'RV', lista)` = el más alto (incluida la papelera) + 1, en MTG, MTS, MHG, MHS (enviarSolicitudWA y
+  copiarMensajeWA). Base: la EV-0019 del 15/10 (Revisión general de frenos, uso interno) pasó a EV-0021 junto con su cita de agenda;
+  respaldo previo en montasa-respaldos.
