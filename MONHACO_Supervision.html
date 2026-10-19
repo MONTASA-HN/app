@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0d3c96af42ab';
+  var APP_VERSION='9890d9fccb16';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12282,6 +12282,86 @@ function _sigNumero(pref, lista){
   try{ if(typeof _papeleraLista === 'function') _papeleraLista().forEach(ver); }catch(e){}
   return mx + 1;
 }
+</script>
+<script>
+// ══ EQUIPOS DE LA SOLICITUD SEGÚN EL CLIENTE (2026-10-19, pedido de Miguel) ══ Solo preventivo y correctivo.
+// Las listas las siguen llenando initSolicitudes / solTipoChange / solOrigenChange; aquí se FILTRAN después según el cliente.
+(function(){
+  var RENTA = ['EN RENTA', 'DEMO/PRESTAMO'];
+  function tipoSol(){ var b = document.getElementById('sol-tipo-B'), a = document.getElementById('sol-tipo');
+    return (b && b.offsetParent !== null && b.value) ? b.value : (a ? a.value : ''); }
+  function clienteSol(){
+    var ins = Array.prototype.slice.call(document.querySelectorAll('.sol-cli-input')), inp = ins.find(function(i){ return i.offsetParent; }) || ins[0];
+    if(!inp) return { nombre: '', tipo: '' };
+    var e = (typeof _solCliExacto === 'function') ? _solCliExacto(inp.value) : '';
+    if(!e) return { nombre: '', tipo: '' };
+    if(typeof _SOL_CLI_NUEVO !== 'undefined' && e === _SOL_CLI_NUEVO) return { nombre: e, tipo: 'nuevo' };
+    if(typeof _SOL_CLI_INTERNO !== 'undefined' && e === (_SOL_CLI_INTERNO[_SP_RAIZ] || '')) return { nombre: e, tipo: 'interno' };
+    return { nombre: e, tipo: 'lista' };
+  }
+  function norm(t){ return (typeof _solCliNorm === 'function') ? _solCliNorm(t) : String(t || '').toUpperCase().trim(); }
+  function eqPorValor(v){ return (DB.equipos || []).find(function(e){ return e && (e.codigo === v || e.id === v); }); }
+  function aviso(sel, txt){
+    var id = sel.id + '-nx-aviso', a = document.getElementById(id);
+    if(!txt){ if(a) a.remove(); return; }
+    if(!a){ a = document.createElement('div'); a.id = id; a.style.cssText = 'font-size:12px;font-weight:700;color:#b45309;margin-top:5px'; sel.parentNode.insertBefore(a, sel.nextSibling); }
+    a.textContent = txt;
+  }
+  // Restaura la lista completa si se volvió a llenar desde que se filtró
+  function base(sel){ if(sel.innerHTML !== sel._nxFiltrada) sel._nxCompleta = sel.innerHTML; else sel.innerHTML = sel._nxCompleta; }
+  function filtrar(sel, mantener){
+    var cur = sel.value;
+    Array.prototype.slice.call(sel.options).forEach(function(o){ if(!mantener(o)) o.remove(); });
+    if(Array.prototype.some.call(sel.options, function(o){ return o.value === cur; })) sel.value = cur; else sel.value = '';
+    sel._nxFiltrada = sel.innerHTML;
+  }
+  window._solFiltrarEquipos = function(){
+    var t = tipoSol(), cli = clienteSol(), aplica = (t === 'preventivo' || t === 'correctivo') && cli.nombre;
+    ['sol-equipo', 'sol-equipo-B'].forEach(function(id){
+      var sel = document.getElementById(id); if(!sel) return;
+      base(sel);
+      if(!aplica){ aviso(sel, ''); sel._nxFiltrada = null; return; }
+      var n = 0;
+      filtrar(sel, function(o){
+        if(o.value === '' || o.value === '__otro__') return true;
+        if(o.disabled) return false;   // separadores
+        var e = eqPorValor(o.value); if(!e) return false;
+        var rentado = RENTA.indexOf(e.estado || 'DISPONIBLE') >= 0;
+        var ok = cli.tipo === 'interno' ? !rentado : (cli.tipo === 'lista' && rentado && norm(e.cliente) === norm(cli.nombre));
+        if(ok) n++; return ok;
+      });
+      aviso(sel, n ? '' : (cli.tipo === 'interno' ? 'No hay equipos propios disponibles.' : 'Este cliente no tiene equipos MONTASA rentados. Elige «Otro / No está en lista» y escribe el número.'));
+    });
+    ['sol-equipo-cliente-sel', 'sol-equipo-cliente-sel-B'].forEach(function(id){
+      var sel = document.getElementById(id); if(!sel) return;
+      base(sel);
+      if(!aplica){ aviso(sel, ''); sel._nxFiltrada = null; return; }
+      var n = 0;
+      filtrar(sel, function(o){
+        if(o.value === '' || o.value === '__nuevo__') return true;
+        var e = eqPorValor(o.value); var ok = !!(e && cli.tipo === 'lista' && norm(e.clienteNombre || e.cliente) === norm(cli.nombre));
+        if(ok) n++; return ok;
+      });
+      if(!n){
+        Array.prototype.slice.call(sel.options).forEach(function(o){ if(o.value === '') o.remove(); });   // solo «No está en la lista»
+        sel._nxFiltrada = sel.innerHTML;
+        if(sel.value !== '__nuevo__'){ sel.value = '__nuevo__'; try{ solEquipoClienteChange(); }catch(e){} }
+        var sfx = id.slice(-2) === '-B' ? '-B' : '', nom = document.getElementById('sol-cliente-nombre' + sfx);
+        if(nom && !nom.value && cli.tipo === 'lista') nom.value = cli.nombre;
+      }
+      aviso(sel, n ? '' : 'Este cliente no tiene equipos creados en Nexo: se registra como equipo nuevo.');
+    });
+  };
+  var envolver = function(nombre){
+    try{ var f = window[nombre] || eval(nombre); if(typeof f !== 'function') return;
+      var nf = function(){ var r = f.apply(this, arguments); try{ window._solFiltrarEquipos(); }catch(e){} return r; };
+      eval(nombre + ' = nf');
+    }catch(e){}
+  };
+  ['initSolicitudes', 'solTipoChange', 'solOrigenChange'].forEach(envolver);
+  // al elegir / cambiar el cliente
+  if(typeof _solCliMarca === 'function'){ var _m = _solCliMarca; _solCliMarca = function(inp){ var r = _m.apply(this, arguments); try{ window._solFiltrarEquipos(); }catch(e){} return r; }; }
+})();
 </script>
 </body>
 </html>
