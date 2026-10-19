@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0650798911bf';
+  var APP_VERSION='a1dd42ef1219';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -427,7 +427,7 @@ var _Sync = (function(){
   // Dos teléfonos (o uno sin señal) pueden calcular el mismo MH/LG. Al llegar el servidor se revisa: entre las órdenes
   // con el mismo número se queda la de id menor; las demás que se crearon EN ESTE teléfono reciben un número nuevo del
   // contador <raíz>/lastCorrelativo_<MH|LG> (transacción). Todos los teléfonos deciden igual, así cambia una sola.
-  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] }, { p: 'SP', cols: ['soldaduras'] } ];
+  var GRUPOS = [ { p: 'MH', cols: ['preventivos', 'correctivos'] }, { p: 'LG', cols: ['logistica'] }, { p: 'SP', cols: ['soldaduras'] }, { p: 'RV', cols: ['revisiones'] }, { p: 'EV', cols: ['evaluaciones'] } ];   // RV/EV: 2026-10-19
   var ultimoSrv = {}, renumerando = {};
   function _creadosAqui(){ try{ return JSON.parse(localStorage.getItem('_sync_creados_' + raiz) || '{}') || {}; }catch(e){ return {}; } }
   function _marcarCreado(id){
@@ -4756,7 +4756,7 @@ function guardarRevision(){
   }
   if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
   if(!DB.revisiones) DB.revisiones = [];
-  const nRev = (DB.revisiones.length||0)+1;
+  const nRev = (function(){ var mx = 0, re = /^RV-([0-9]+)/; (DB.revisiones||[]).concat(Array.isArray(DB.papelera)?DB.papelera:Object.values(DB.papelera||{})).forEach(function(o){ var m = o && String(o.correlativo||'').match(re); if(m) mx = Math.max(mx, parseInt(m[1],10)); }); return mx + 1; })();   // (2026-10-19) el más alto + 1, no la cantidad
   const correlativo = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
   const entry = {
     id: uid(), correlativo, estado, ubicacion,
@@ -4986,7 +4986,7 @@ function guardarEvaluacion(){
   }
   if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
   if(!DB.evaluaciones) DB.evaluaciones = [];
-  const nEval = (DB.evaluaciones.length||0)+1;
+  const nEval = (function(){ var mx = 0, re = /^EV-([0-9]+)/; (DB.evaluaciones||[]).concat(Array.isArray(DB.papelera)?DB.papelera:Object.values(DB.papelera||{})).forEach(function(o){ var m = o && String(o.correlativo||'').match(re); if(m) mx = Math.max(mx, parseInt(m[1],10)); }); return mx + 1; })();   // (2026-10-19) el más alto + 1, no la cantidad
   const correlativo = 'EV-'+(nEval<10?'000':nEval<100?'00':nEval<1000?'0':'')+nEval;
   const entry = {
     id: uid(), correlativo, estado, ubicacion,
