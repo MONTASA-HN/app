@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='63ed0f7ae5d8';
+  var APP_VERSION='252f125f0e52';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2121,7 +2121,7 @@ function renderDashboardLog(){
     return f.getMonth()===mes && f.getFullYear()===anio;
   }).length;
 
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
   const porTipo = {};
   abiertas.forEach(o=>{ const k=tipoLabels[o.tipoLogistica]||'Otro'; porTipo[k]=(porTipo[k]||0)+1; });
 
@@ -2280,7 +2280,7 @@ function renderOrdenesLog(){
   const el = document.getElementById('ordenes-log-list');
   if(!el) return;
   const buscar = (document.getElementById('log-buscar')?.value||'').toLowerCase();
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   let list = (DB.logistica||[])
     .filter(o=>o && !o.cerrado && o.estado!=='Completado')
@@ -2323,19 +2323,19 @@ function renderOrdenesLog(){
             <span style="font-size:11px;background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:10px;font-weight:600">${o.estado||'Pendiente'}</span>
           </div>
           <div style="font-weight:600;font-size:16px">${tipoLbl}</div>
-          ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
+          ${(o.tipoLogistica!=='apoyo_mantenimiento'&&o.tipoLogistica!=='atencion_compras'&&o.tipoLogistica!=='renta_operador')?`<div style="font-size:13px;color:var(--text2)">${eqLabel}</div>`:''}
           ${o.descripcion?`<div style="font-size:12px;color:var(--text3)">${_x(o.descripcion.slice(0,60))}</div>`:''}
           ${_ubLinkHTML(o)}${_contactoHTML(o)}
           ${o.equipoId2 ? getEq2LabelLog(o.equipoId2) : '' }
           ${_rentaConGrua(o) ? _gruaLabelLog(o) : ''}
           ${o.motorista&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='atencion_compras')?`<div style="font-size:12px;color:var(--text3)">🚗 ${_x(o.motorista)}</div>`:''}
-          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')}</div>`:''}
+          ${o.operador&&(o.tipoLogistica==='renta'||o.tipoLogistica==='renta_operador'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?`<div style="font-size:12px;color:var(--text3)">🧑‍💼 ${[o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')}</div>`:''}
         </div>
         <span id="ct-log-${o.id}" style="font-size:18px;color:var(--text3);transition:transform 0.2s;${isOpen?'transform:rotate(180deg)':''}">▼</span>
       </div>
       ${o.fechaInicio&&o.fechaFin?`<div style="font-size:11px;color:var(--text3);margin-top:2px">⏱ Duración: <strong>${calcDuracionLog(o.fechaInicio,o.fechaFin)}</strong></div>`:o.fechaInicio?`<div style="font-size:11px;color:var(--text3);margin-top:2px">🕐 Inicio: ${o.fechaInicio.slice(11,16)}</div>`:''}
       ${_costoViaticosHtml(o)}
-      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Renta: <strong>${o.diasRenta} días</strong>${_rentaIniTexto(o)?` · desde el <strong>${_rentaIniTexto(o)}</strong>`:''}${_rentaFinTexto(o)?` · finaliza el <strong>${_rentaFinTexto(o)}</strong>`:''}</div>`:''}
+      ${(o.tipoLogistica==='renta'||o.tipoLogistica==='renta_operador'||o.tipoLogistica==='entrega')&&o.diasRenta?`<div style="font-size:11px;color:#8a4800;margin-top:2px">⏱ Renta: <strong>${o.diasRenta} días</strong>${_rentaIniTexto(o)?` · desde el <strong>${_rentaIniTexto(o)}</strong>`:''}${_rentaFinTexto(o)?` · finaliza el <strong>${_rentaFinTexto(o)}</strong>`:''}</div>`:''}
       ${(o.kmSalida&&o.kmRetorno&&parseFloat(o.kmRetorno)>parseFloat(o.kmSalida))?`<div style="font-size:11px;color:#1a5c1a;margin-top:2px">🛣 ${(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)} km recorridos</div>`:''}
       <div id="${cbId}" style="display:${isOpen?'block':'none'}">
         ${o.estado==='Cancelado'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:(o.estado||'Pendiente')==='Pendiente'?`<style>#${cbId} input:not([type=file]),#${cbId} textarea,#${cbId} canvas,#${cbId} .tec-btn{pointer-events:none;opacity:0.5}#${cbId} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:''}
@@ -2390,7 +2390,7 @@ function renderOrdenesLog(){
         ${renderCamposTipo(o)}
         ${_gpsBloqueLog(o)}
                 <!-- Operador: renta + entrega + retiro + apoyo fuera -->
-        ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
+        ${((o.tipoLogistica==='renta'&&!_esVehiculoOrdenLog(o))||o.tipoLogistica==='renta_operador'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro')?`
         <div class="form-group"><label>Operador asignado</label>
           <select onchange="event.stopPropagation();actualizarLog('${_idS(o.id)}','operador',this.value)">
             <option value="">— Seleccionar operador —</option>
@@ -2412,6 +2412,13 @@ function renderOrdenesLog(){
             ${_viatPersonal().map(op=>`<option value="${op}" ${o.operador===op?'selected':''}>${op}</option>`).join('')}
           </select>
         </div>`:``}
+        <!-- Renta de operador (2026-10-19): de 1 a 3 operadores -->
+        ${(o.tipoLogistica==='renta_operador')?['operador2','operador3'].map((k,i)=>`
+        <div class="form-group"><label>Operador adicional ${i+1} (opcional)</label>
+          <select onchange="event.stopPropagation();_logOperadorExtra(this,'${_idS(o.id)}','${k}')">
+            <option value="">— Sin operador adicional —</option>
+            ${Array.from(new Set(OPERADORES_LOGISTICA.concat(o[k]?[o[k]]:[]))).map(op=>`<option value="${_x(op)}" ${o[k]===op?'selected':''}>${_x(op)}</option>`).join('')}
+          </select></div>`).join(''):``}
         <!-- Renta (de equipo o de grúa/vehículo): hasta 3 operadores adicionales en simultáneo (2026-10-13, pedido de Miguel) -->
         ${(o.tipoLogistica==='renta')?['operador2','operador3','operador4'].map((k,i)=>`
         <div class="form-group"><label>Operador adicional ${i+1} (opcional)</label>
@@ -2444,9 +2451,9 @@ function renderOrdenesLog(){
           ${(o.fotos||[]).length < 10 ? `<div style="display:flex;gap:8px"><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${_idS(o.id)}',this)">📷 Cámara${(o.fotos||[]).length>0?' ('+((o.fotos||[]).length)+'/10)':''}</label><label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="event.stopPropagation();agregarFotosLog('${_idS(o.id)}',this)">🖼️ Galería</label></div>` : `<div style="font-size:12px;color:var(--text3);padding:6px 0">Límite de 10 fotos alcanzado</div>`}
         </div>
         <!-- Cliente de la orden (renta, entrega, retiro, apoyo_mantenimiento) -->
-        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?_cliCampoHTML(o,"actualizarLog('"+o.id+"','clienteOrden',this.value.trim())"):''}
+        ${(o.tipoLogistica==='renta'||o.tipoLogistica==='renta_operador'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento')?_cliCampoHTML(o,"actualizarLog('"+o.id+"','clienteOrden',this.value.trim())"):''}
         <!-- Firma — entrega, retiro y renta -->
-        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta')?`
+        ${(o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='renta'||o.tipoLogistica==='renta_operador')?`
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:8px">✍️ ${_firmaTituloTxt(o)}</div>
           <canvas id="firma-log-${o.id}" class="firma-canvas" width="600" height="160"
@@ -2744,7 +2751,7 @@ function imprimirValeLG(ordenId){
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
   _valeMigrarPersonas(orden);
-  const tipoLabels = {renta:'atencion de renta',entrega:'entrega de equipo',retiro:'retiro de equipo',apoyo_mantenimiento:'apoyo a mantenimiento',atencion_compras:'atencion de compras'};
+  const tipoLabels = {renta:'atencion de renta',renta_operador:'renta de operador',entrega:'entrega de equipo',retiro:'retiro de equipo',apoyo_mantenimiento:'apoyo a mantenimiento',atencion_compras:'atencion de compras'};
   _valeComprobanteImprimir(orden, tipoLabels[orden.tipoLogistica]||orden.tipoLogistica||'logistica');
 }
 
@@ -2759,7 +2766,7 @@ function toggleCardLog(id){
     if(o && (o.cerrado || o.estado==='Cancelado')){
       const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
       const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
-      const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+      const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
       const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
       el.innerHTML = _renderDetalleCerradoLog(o, eqLabel, tipoLbl);
     }
@@ -2913,7 +2920,7 @@ function _rentaFinTexto(o){
   return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
 }
 function _rentaFinHTML(o){
-  if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
+  if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='renta_operador')) return '';
   const n = parseInt(o.diasRenta)||0;
   if(!n && o.rentaIndefinida){
     const _iT = _rentaIniTexto(o);
@@ -2956,7 +2963,7 @@ function renderCamposTipo(o){
   var eq2Label = eq2 ? (eq2.codigo||'Equipo 2') : '';
   var id = o.id;
   var html = '';
-  if(isRenta || isEntrega) html += _rentaFinHTML(o);
+  if(isRenta || isEntrega || tipo==='renta_operador') html += _rentaFinHTML(o);
 
   // Badge de ubicación para entrega/retiro
   if(isMovimiento){
@@ -3046,7 +3053,7 @@ function renderCamposTipo(o){
       html += '<input type="number" id="log-kmret-'+id+'" value="'+(o.kmRetorno||'')+'" placeholder="0" ';
       html += 'onchange="event.stopPropagation();actualizarLogKmRetorno(this.dataset.id,this.value,this)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
     }
-  } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras'){
+  } else if(tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras' && tipo!=='renta_operador'){   // renta de operador: sin equipo, sin horómetro
     html += '<div class="form-group"><label>Horómetro (hrs)</label>';
     html += '<input type="number" value="'+(o.horometro||'')+'" placeholder="0" ';
     html += 'onchange="event.stopPropagation();actualizarLog(this.dataset.id,\'horometro\',this.value)" data-id="'+id+'" oninput="event.stopPropagation()"></div>';
@@ -3136,6 +3143,7 @@ function cerrarOrdenLog(id){
     if(!o.fechaInicio)  faltantes.push('Fecha y hora de inicio');
     if(!o.fechaFin)     faltantes.push('Fecha y hora de finalización');
     if(!o.descripcion)  faltantes.push('Descripción / Trabajo realizado');
+    if(o.tipoLogistica==='renta_operador' && !o.operador) faltantes.push('Operador asignado');   // 2026-10-19
   }
   if(!esCancelado){
     if(o.tipoLogistica==='renta' && _esVehiculoOrdenLog(o)){
@@ -3174,9 +3182,9 @@ function cerrarOrdenLog(id){
   const firmaCanvas = getFirmaData('firma-log-'+id);
   const firma = firmaCanvas || o.firma || '';
   // Firma solo requerida en entrega, retiro y renta (no en apoyo_mantenimiento ni atencion_compras)
-  const requiereFirma = o.tipoLogistica==='entrega' || o.tipoLogistica==='retiro' || o.tipoLogistica==='renta';
+  const requiereFirma = o.tipoLogistica==='entrega' || o.tipoLogistica==='retiro' || o.tipoLogistica==='renta' || o.tipoLogistica==='renta_operador';
   if(!esCancelado && requiereFirma && !firma) faltantes.push('Firma (recibido conforme)');
-  const _aplicaCli = o.tipoLogistica==='renta'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento';
+  const _aplicaCli = o.tipoLogistica==='renta'||o.tipoLogistica==='renta_operador'||o.tipoLogistica==='entrega'||o.tipoLogistica==='retiro'||o.tipoLogistica==='apoyo_mantenimiento';
   if(!esCancelado && _aplicaCli && _cliOrdenAlCerrar(o)==='') faltantes.push('🏢 Cliente');
   if(faltantes.length){ alert('No se puede cerrar.\nFaltan:\n\n• '+faltantes.join('\n• ')); return; }
   if(!esCancelado){
@@ -3263,7 +3271,7 @@ function renderHistorialLog(){
   const el = document.getElementById('historial-log-list');
   if(!el) return;
   const buscar = (document.getElementById('log-buscar')?.value||'').toLowerCase();   // (2026-10-16) un solo buscador en la carpeta
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   let list = (DB.logistica||[])
     .filter(o=>o && (o.cerrado||o.estado==='Completado'||o.estado==='Cancelado'))
@@ -5536,6 +5544,7 @@ function _cliOrdenAlCerrar(o){
 var _logCarpeta = null;
 var _LOG_CARPETAS = [
   {t:'renta', icon:'🚛', label:'Renta', color:'#2E83C3'},
+  {t:'renta_operador', icon:'👷', label:'Renta de Operador', color:'#0F766E'},
   {t:'entrega', icon:'📦', label:'Entrega de Equipo', color:'#18A303'},
   {t:'retiro', icon:'🔙', label:'Retiro de Equipo', color:'#E8811A'},
   {t:'apoyo_mantenimiento', icon:'🔩', label:'Apoyo Mantenimiento', color:'#9B59B6'},

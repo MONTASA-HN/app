@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f29bd55592b4';
+  var APP_VERSION='cec6d822a2eb';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2359,7 +2359,7 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['🔜 Mantenimiento sugerido', o.mantSugerido||'—']);
   } else {
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
-    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
+    const tipoLbl = {renta:'Renta',renta_operador:'Renta de Operador',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
     campos.push(['Tipo de orden', tipoLbl]);
     campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3].filter(Boolean).join(', ')||'—']);
     if(o.motorista) campos.push(['Motorista', o.motorista]);
@@ -2410,7 +2410,7 @@ async function _copiarImagenOrdenIMG(tipo, id){
     const tipoTitulo = {
       preventivo:'Orden de Preventivo', correctivo:'Orden de Correctivo',
       revision:'Revisión Físico-Técnica', evaluacion:'Evaluación de Equipo',
-      renta:'Orden de Renta', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
+      renta:'Orden de Renta', renta_operador:'Renta de Operador', entrega:'Entrega de Equipo', retiro:'Retiro de Equipo',
       apoyo_mantenimiento:'Apoyo a Mantenimiento', atencion_compras:'Atención de Compras'
     }[tipo] || (o.tipoLogistica ? 'Orden de Logística' : 'Orden');
 
@@ -2923,6 +2923,7 @@ function _detalleOrdenCom(x, tipo, est){
     evaluacion:['Orden de trabajo · Mantenimiento','Evaluación de Equipo'],
     cortinas:['Orden de trabajo · Cortinas y niveladoras','Cortinas / Niveladoras'],
     renta:['Orden de trabajo · Logística','Renta de Equipo'],
+    renta_operador:['Orden de trabajo · Logística','Renta de Operador'],
     entrega:['Orden de trabajo · Logística','Entrega de Equipo'],
     retiro:['Orden de trabajo · Logística','Retiro y Recepción de Equipo'],
     apoyo_mantenimiento:['Orden de trabajo · Logística','Apoyo a Mantenimiento']
@@ -2972,17 +2973,18 @@ function _detalleOrdenCom(x, tipo, est){
       filasEq.push(['Horómetro salida', mono(num(o.horometroSalida,' hrs'))]); filasEq.push(['Horómetro retorno', mono(num(o.horometroRetorno,' hrs'))]);
       filasEq.push(['Horómetro', mono(num(o.horometro,' hrs'))]);
       filasEq.push(['Cliente', esc(clienteDe(o, eq))]);
-      S('Datos del equipo', kv(filasEq));
+      if(tipo==='renta_operador') S('Datos del servicio', kv([['Cliente', esc(clienteDe(o, eq))], ['Tipo de servicio', 'Renta de operador (sin equipo)']]));   // 2026-10-19
+      else S('Datos del equipo', kv(filasEq));
       var ops = [o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ');
       S('Detalle de la orden', kv([['Operador(es)', esc(ops)], ['Motorista', esc(o.motorista||'')], ['Vehículo de traslado', esc(o.equipoCompra||o.vehiculo||'')],
                                   ['Contacto del cliente', esc(o.contactoCliente||'')], ['Horas de uso', isNaN(horas)||horas<0 ? '' : mono(horas.toFixed(1)+' hrs')],
                                   ['Km recorridos', isNaN(km)||km<0 ? '' : mono(km.toLocaleString('en-US',{maximumFractionDigits:1})+' km')]])
                                 + txt('Descripción', o.descripcion) + txt('Observaciones', o.notas||o.observaciones));
-      if((tipo==='renta'||tipo==='entrega') && o.rentaIndefinida && !(parseInt(o.diasRenta)>0)){
+      if((tipo==='renta'||tipo==='entrega'||tipo==='renta_operador') && o.rentaIndefinida && !(parseInt(o.diasRenta)>0)){
         var iRi = aFecha(o.inicioRenta);
         S('Condiciones de la renta', kv([['Tipo de renta', 'Indefinida — sin fecha de fin'], ['Inicio de la renta', iRi?fF(iRi):'']]));
       }
-      if((tipo==='renta'||tipo==='entrega') && parseInt(o.diasRenta)>0){
+      if((tipo==='renta'||tipo==='entrega'||tipo==='renta_operador') && parseInt(o.diasRenta)>0){
         var iR = aFecha(o.inicioRenta) || aFecha(o.fechaInicio), finR = null;
         if(iR){ finR = new Date(iR); finR.setDate(finR.getDate()+parseInt(o.diasRenta)); }
         S('Condiciones de la renta', kv([['Inicio de la renta', iR?fF(iR):''], ['Días de renta', parseInt(o.diasRenta)+' días calendario'], ['Finalización', finR?fF(finR):'']]));
@@ -3266,7 +3268,7 @@ function _detalleOrdenCom(x, tipo, est){
 (function(){
   if(typeof abrirModal !== 'function' || window._ordEqListo) return;
   window._ordEqListo = true;
-  var TIPOS_LOG = { renta:'🚛 Renta', entrega:'📦 Entrega', retiro:'🔙 Retiro', apoyo_mantenimiento:'🔩 Apoyo mant.', atencion_compras:'🛒 Compras' };
+  var TIPOS_LOG = { renta:'🚛 Renta', renta_operador:'👷 Renta de Operador', entrega:'📦 Entrega', retiro:'🔙 Retiro', apoyo_mantenimiento:'🔩 Apoyo mant.', atencion_compras:'🛒 Compras' };
   function esc(t){ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function lista(x){ return Array.isArray(x) ? x.filter(Boolean) : (x && typeof x === 'object' ? Object.keys(x).map(function(k){ return x[k]; }).filter(function(o){ return o && typeof o === 'object'; }) : []); }
   function dia(o){ return String(o.fechaFin || o.fechaCierre || o.fechaCompletado || o.fechaInicio || o.fecha || '').slice(0, 10); }
