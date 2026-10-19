@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='af100b9acb42';
+  var APP_VERSION='5e3b7e6cb1dd';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -9011,13 +9011,14 @@ const _PAPELERA_LBL = {prev:'Preventivo', corr:'Correctivo', log:'Logística', r
 function _papeleraLimpiar(){
   const lim = Date.now() - _PAPELERA_MESES*30*24*60*60*1000;
   const p = DB.papelera || {};
-  let cambio = false;
+  const vencidas = {};
   Object.keys(p).forEach(function(k){
-    if(!p[k] || !p[k]._delTs || p[k]._delTs < lim){ delete p[k]; cambio = true; }
+    if(!p[k] || !p[k]._delTs || p[k]._delTs < lim){ delete p[k]; vencidas[k] = null; }
   });
-  if(cambio){
+  if(Object.keys(vencidas).length){
     DB.papelera = p;
-    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera').set(p); }catch(e){}
+    // (2026-10-19, auditoría) borrar SOLO las vencidas; antes se reescribía la papelera entera con la copia del teléfono
+    try{ if(window._fbDB && window._fbReady) window._fbDB.ref(_RAIZ_APP+'/papelera').update(vencidas); }catch(e){}
   }
   return p;
 }

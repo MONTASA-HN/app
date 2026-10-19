@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='45badf446d06';
+  var APP_VERSION='67ad7b7372b4';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -3921,7 +3921,15 @@ function _mergeLogViaticos(remotos){
       if(id==='ordenes' && !_escribiendo)   renderOrdenesLog();
       if(id==='historial' && !_escribiendo) renderHistorialLog();
     });
-  }).catch(e=>{ console.warn('Firebase once error:', e); loadDB(); window._fbReady = true; renderDashboardLog(); });
+  }).catch(e=>{
+    // (2026-10-19, auditoría) Antes: con la primera lectura fallida se habilitaba GUARDAR con la copia vieja del teléfono (mismo
+    // mecanismo del 14-oct) y además no quedaba escuchando cambios. Ahora: se muestran los datos del teléfono SIN habilitar el
+    // guardado, y se reintenta; al volver la conexión la app se recarga con los datos reales.
+    console.warn('Firebase once error:', e); loadDB();
+    try{ renderDashboardLog(); renderOrdenesLog(); }catch(_e){}
+    try{ toast('⚠️ Sin conexión con la base: estás viendo los datos del teléfono. Los cambios no se guardan hasta reconectar.', true); }catch(_e){}
+    var _reint = setInterval(function(){ FB_REF.once('value').then(function(){ clearInterval(_reint); location.reload(); }).catch(function(){}); }, 20000);
+  });
 })();
 
 }catch(e){ console.error('Error en bloque Firebase:', e); window._fbReady = true; }
