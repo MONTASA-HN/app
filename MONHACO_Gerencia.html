@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6b9b471d1db3';
+  var APP_VERSION='4d632f031b85';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -11014,7 +11014,10 @@ function cerrarViaticos(){
 function renderModalViaticos(orden){
   const ov = document.getElementById('viaticos-overlay');
   if(!ov) return;
-  const v = (_viaticosMode==='liquidacion') ? (orden.viaticos||{}) : (_viatSolActiva(orden) || _viaticosData || {});
+  // (2026-10-19) Al agregar/quitar persona se redibuja con el BORRADOR de pantalla (_viaticosData), no con lo guardado:
+  // antes la persona nueva no aparecía y se perdía lo editado (p. ej. el gestor).
+  const _usarBorrador = _viatBorrador && _viaticosData; _viatBorrador = false;
+  const v = (_viaticosMode==='liquidacion') ? (orden.viaticos||{}) : (_usarBorrador ? _viaticosData : (_viatSolActiva(orden) || _viaticosData || {}));
   const esFutura = !v.gestor_nombre; // No hay solicitud previa
 
   // Calcular automáticamente alimentación según horarios
@@ -11106,7 +11109,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   // si ya no está en Personal, se agrega como opción elegida.
   const _gSel = v.gestor_nombre ? _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre)) : null;
   const gestorOpts = ((v.gestor_nombre && !_gSel) ? `<option value="${_x(v.gestor_nombre)}" selected>${_x(v.gestor_nombre)} (no está en Personal)</option>` : '') + _gestores().map(g=>
-    `<option value="${_x(g.nombre)}" ${g===_gSel?'selected':''}>${_x(g.nombre)}</option>`
+    `<option value="${_x(g.nombre)}" ${(_gSel && _nzGestor(g.nombre)===_nzGestor(_gSel.nombre))?'selected':''}>${_x(g.nombre)}</option>`
   ).join('');
   const destOpts = DESTINOS_VIATICOS.map(d=>
     `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
@@ -11530,6 +11533,7 @@ function _calcTotalSol(v){
   return tAlim+tTr+tPeaj+(v.combustible||0)+(v.otros_gastos||0)+tHosp;
 }
 
+let _viatBorrador = false;   // (2026-10-19) el siguiente redibujo usa lo que está en pantalla
 function agregarPersonaViaticos(){
   const orden=_getViaticosOrden();
   if(!orden) return;
@@ -11538,6 +11542,7 @@ function agregarPersonaViaticos(){
   const personas=v.personas||[];
   personas.push({nombre:'',fecha:'',hora_ini:'',hora_fin:'',desayuno:0,almuerzo:0,cena:0,media_noche:0,transporte:0,hospedaje:0,total:0});
   _viaticosData={...v,personas};
+  _viatBorrador = true;
   renderModalViaticos(orden);
 }
 
@@ -11548,6 +11553,7 @@ function quitarPersonaViaticos(i){
   const v={...(_viaticosData||{}), ..._leerFormSolicitud()};
   const personas=(v.personas||[]).filter((_,idx)=>idx!==i);
   _viaticosData={...v,personas};
+  _viatBorrador = true;
   renderModalViaticos(orden);
 }
 
