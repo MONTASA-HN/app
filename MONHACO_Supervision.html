@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d009528a6d7c';
+  var APP_VERSION='74b507b0bc00';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -742,7 +742,21 @@ var _Sync = (function(){
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
   }
-  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  // (2026-10-19) ¿este registro tiene cambios del teléfono que el servidor todavía no tiene? (en camino, distinto a la última
+  // huella del servidor, o creado aquí y aún no visto en el servidor)
+  function pendienteReg(col, id){
+    if(!id) return false;
+    if(enVuelo[col + '/' + id]) return true;
+    var l = _lista(col), o = l && l.find(function(x){ return x && x.id === id; });
+    if(!o) return false;
+    var hb = base[col] && base[col][id];
+    if(!hb) return !listo[col] || !(ultimoSrv[col] && ultimoSrv[col][id]);
+    var h = _huellas(o), k;
+    for(k in h){ if(h[k] !== _hb(hb, k)) return true; }
+    for(k in hb){ if(!OMITIR[k] && !(k in h) && hb[k] !== VACIO) return true; }
+    return false;
+  }
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, pendienteReg: pendienteReg, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -10032,16 +10046,26 @@ function imprimirVale(){
 
 // Helper: merge logistica preservando vales locales
 function _mergeLogistica(incoming){
-  if(!Array.isArray(incoming)) return incoming||[];
-  return incoming.map(remote => {
-    if(!remote) return remote;
-    const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
-    if(!local) return remote;
+  // (2026-10-19, auditoría) La copia del TELÉFONO solo gana si ese registro tiene cambios pendientes de subir (_Sync.pendienteReg).
+  // Antes ganaba siempre: revertía reaperturas hechas en otro teléfono, revivía órdenes borradas y vales/facturas quitados.
+  if(!incoming) return DB.logistica||[];
+  const pend = function(id){ try{ return (typeof _Sync !== 'undefined' && _Sync.pendienteReg) ? _Sync.pendienteReg('logistica', id) : true; }catch(e){ return true; } };
+  const remoteArr = (Array.isArray(incoming) ? incoming : Object.values(incoming)).filter(Boolean);
+  const localArr  = (DB.logistica||[]).filter(Boolean);
+  const merged = remoteArr.map(remote => {
+    if(!remote) return null;
+    const local = localArr.find(l=>l&&l.id===remote.id);
+    if(!local || !pend(local.id)) return remote;
+    // Cambio local pendiente: no revertir un cierre hecho aquí que aún no sube
+    if((local.cerrado||local.estado==='Completado'||local.estado==='Cancelado') &&
+       !remote.cerrado && remote.estado!=='Completado' && remote.estado!=='Cancelado') return local;
     return Object.assign({}, remote, {
-      vales: remote.vales !== undefined ? remote.vales : local.vales,
-            viaticos: (function(rv,lv){ if(rv===undefined) return lv; if(lv&&lv.facturas&&lv.facturas.filter(Boolean).length&&(!rv.facturas||!rv.facturas.filter(Boolean).length)) return Object.assign({},rv,{facturas:lv.facturas}); return rv; })(remote.viaticos, local.viaticos)
+      vales: (remote.vales !== undefined && remote.vales !== null) ? remote.vales : local.vales
     });
-  });
+  }).filter(Boolean);
+  // Órdenes de aquí que el servidor aún no tiene (creadas sin señal): solo si están pendientes, no las borradas en otro lado
+  localArr.forEach(l=>{ if(l&&!merged.find(x=>x&&x.id===l.id)&&pend(l.id)) merged.push(l); });
+  return merged;
 }
 
 // Helper: limpiar undefined de logistica antes de escribir a Firebase
@@ -11126,7 +11150,8 @@ function _iniciarConexionFirebase(esReintento){
       const logData = snapLog.val();
       if(Array.isArray(logData)){
         // Merge preservando campos locales que Firebase no almacena (vales, etc.)
-        DB.logistica = logData.map(remote => {
+        // (2026-10-19) con el motor activo para logística, él ya combinó servidor + teléfono campo por campo: no reemplazar
+        if(!(typeof _Sync !== 'undefined' && _Sync._estado && _Sync._estado().listo.logistica)) DB.logistica = logData.map(remote => {
           if(!remote) return remote;
           const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
           return local ? Object.assign({}, remote, {

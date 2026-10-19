@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='5e3b7e6cb1dd';
+  var APP_VERSION='c0f2380013ea';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -753,7 +753,21 @@ var _Sync = (function(){
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
     });
   }
-  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  // (2026-10-19) ¿este registro tiene cambios del teléfono que el servidor todavía no tiene? (en camino, distinto a la última
+  // huella del servidor, o creado aquí y aún no visto en el servidor)
+  function pendienteReg(col, id){
+    if(!id) return false;
+    if(enVuelo[col + '/' + id]) return true;
+    var l = _lista(col), o = l && l.find(function(x){ return x && x.id === id; });
+    if(!o) return false;
+    var hb = base[col] && base[col][id];
+    if(!hb) return !listo[col] || !(ultimoSrv[col] && ultimoSrv[col][id]);
+    var h = _huellas(o), k;
+    for(k in h){ if(h[k] !== _hb(hb, k)) return true; }
+    for(k in hb){ if(!OMITIR[k] && !(k in h) && hb[k] !== VACIO) return true; }
+    return false;
+  }
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, pendienteReg: pendienteReg, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -10660,7 +10674,8 @@ function _iniciarConexionFirebase(esReintento){
       const logData = snapLog.val();
       if(Array.isArray(logData)){
         // Merge preservando campos locales que Firebase no almacena (vales, etc.)
-        DB.logistica = logData.map(remote => {
+        // (2026-10-19) con el motor activo para logística, él ya combinó servidor + teléfono campo por campo: no reemplazar
+        if(!(typeof _Sync !== 'undefined' && _Sync._estado && _Sync._estado().listo.logistica)) DB.logistica = logData.map(remote => {
           if(!remote) return remote;
           const local = (DB.logistica||[]).find(l=>l&&l.id===remote.id);
           return local ? Object.assign({}, remote, {
@@ -12309,22 +12324,25 @@ function imprimirVale(){
 
 // Helper: merge logistica preservando vales locales
 function _mergeLogistica(incoming){
+  // (2026-10-19, auditoría) La copia del TELÉFONO solo gana si ese registro tiene cambios pendientes de subir (_Sync.pendienteReg).
+  // Antes ganaba siempre: revertía reaperturas hechas en otro teléfono, revivía órdenes borradas y vales/facturas quitados.
   if(!incoming) return DB.logistica||[];
+  const pend = function(id){ try{ return (typeof _Sync !== 'undefined' && _Sync.pendienteReg) ? _Sync.pendienteReg('logistica', id) : true; }catch(e){ return true; } };
   const remoteArr = (Array.isArray(incoming) ? incoming : Object.values(incoming)).filter(Boolean);
   const localArr  = (DB.logistica||[]).filter(Boolean);
   const merged = remoteArr.map(remote => {
     if(!remote) return null;
     const local = localArr.find(l=>l&&l.id===remote.id);
-    if(!local) return remote;
-    // Nunca revertir un cierre local
+    if(!local || !pend(local.id)) return remote;
+    // Cambio local pendiente: no revertir un cierre hecho aquí que aún no sube
     if((local.cerrado||local.estado==='Completado'||local.estado==='Cancelado') &&
        !remote.cerrado && remote.estado!=='Completado' && remote.estado!=='Cancelado') return local;
     return Object.assign({}, remote, {
       vales: (remote.vales !== undefined && remote.vales !== null) ? remote.vales : local.vales
     });
   }).filter(Boolean);
-  // Preservar órdenes locales que no llegaron en el remoto
-  localArr.forEach(l=>{ if(l&&!merged.find(x=>x&&x.id===l.id)) merged.push(l); });
+  // Órdenes de aquí que el servidor aún no tiene (creadas sin señal): solo si están pendientes, no las borradas en otro lado
+  localArr.forEach(l=>{ if(l&&!merged.find(x=>x&&x.id===l.id)&&pend(l.id)) merged.push(l); });
   return merged;
 }
 
