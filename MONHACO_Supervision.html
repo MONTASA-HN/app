@@ -3,6 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
+// entre leer y escribir, escribir en «la posición 37» caía en OTRO registro. Aquí la escritura se hace en una transacción que
+// confirma que en esa posición está el registro con ese id; si no, lo busca por id y, si no está, no escribe nada.
+function _nxPoner(obj, ruta, valor){
+  var p = String(ruta || '').split('/').filter(Boolean); if(!p.length) return valor;
+  var o = obj; for(var i = 0; i < p.length - 1; i++){ if(!o[p[i]] || typeof o[p[i]] !== 'object') o[p[i]] = {}; o = o[p[i]]; }
+  if(valor === null || valor === undefined) delete o[p[p.length - 1]]; else o[p[p.length - 1]] = valor;
+  return obj;
+}
+// fn(registroDelServidor) → registro modificado. Devuelve Promise<true|false>.
+function _nxTx(base, key, id, fn){
+  var db = window._fbDB; if(!db || !id) return Promise.resolve(false);
+  var una = function(k){
+    return db.ref(base + '/' + k).transaction(function(cur){
+      if(cur === null) return null;                 // aún sin dato: Firebase la repite con el valor real del servidor
+      if(!cur || cur.id !== id) return;             // en esa posición hay OTRO registro: no escribir
+      return fn(cur);
+    }).then(function(r){ var v = r && r.snapshot && r.snapshot.val(); return !!(r && r.committed && v && v.id === id); });
+  };
+  return una(key).then(function(ok){
+    if(ok) return true;
+    return db.ref(base).orderByChild('id').equalTo(id).once('value').then(function(q){
+      var k = null; q.forEach(function(ch){ var v = ch.val(); if(k === null && v && v.id === id) k = ch.key; });
+      return (k !== null && String(k) !== String(key)) ? una(k) : false;
+    });
+  }).catch(function(e){ try{ console.warn('Escritura segura falló', base, id, e && e.message); }catch(_){} return false; });
+}
+function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, function(cur){ return _nxPoner(cur, campo, valor); }); }
+</script>
+<script>
 // ══ ACTUALIZACIÓN AUTOMÁTICA DE LA APP ════════════════════════════════════════
 // El iPhone guarda su propia copia de la app instalada y a veces sigue mostrando la
 // versión vieja aunque ya se publicó una nueva. Al abrir la app y al volver a ella,
@@ -14,7 +44,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3de17879fc58';
+  var APP_VERSION='85c48b395aa6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -117,14 +147,14 @@ function _fbRefPorId(ruta){
   return {
     set: function(valor){
       return ubicar().then(function(k){
-        if(k !== null) return db.ref(base + '/' + k + resto).set(valor);
+        if(k !== null) return _nxTx(base, k, id, function(cur){ return resto ? _nxPoner(cur, resto, valor) : valor; }).then(function(ok){ if(!ok) return avisar(); });   // (2026-10-19) confirma el id
         if(!resto && id && valor && valor.id === id) return agregar(valor);
         return avisar();
       });
     },
     update: function(cambios){
       return ubicar().then(function(k){
-        if(k !== null) return db.ref(base + '/' + k + resto).update(cambios);
+        if(k !== null) return _nxTx(base, k, id, function(cur){ var t = cur; String(resto).split('/').filter(Boolean).forEach(function(p){ if(!t[p] || typeof t[p] !== 'object') t[p] = {}; t = t[p]; }); Object.keys(cambios).forEach(function(c){ _nxPoner(t, c, cambios[c]); }); return cur; }).then(function(ok){ if(!ok) return avisar(); });   // (2026-10-19)
         return avisar();
       });
     }
@@ -3179,9 +3209,10 @@ function _horFichasActualizar(conLectura, lecturas){
         let idx = -1;
         if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===e.id; }); }
         else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===e.id){ idx=ks[i]; break; } } }
-        if(idx!==-1 && idx!==undefined) updates[idx+'/horometro'] = String(lecturas[e.id].lectura);
+        if(idx!==-1 && idx!==undefined) updates[e.id] = _nxSetSeguro('monhaco/equipos', idx, e.id, 'horometro', String(lecturas[e.id].lectura));   // (2026-10-19) confirma el id
       });
-      if(Object.keys(updates).length) return window._fbDB.ref('monhaco/equipos').update(updates).then(function(){ return flota.length; });
+      var ps = Object.keys(updates).map(function(k){ return updates[k]; });
+      if(ps.length) return Promise.all(ps).then(function(r){ if(r.some(function(x){ return !x; })) throw new Error('No se pudo actualizar alguna ficha'); return flota.length; });
       return 0;
     });
   }catch(e){ return Promise.resolve(0); }
@@ -10560,7 +10591,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   if(!orden) return;
   if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
     const _iMig = arr.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) window._fbDB.ref('monhaco/'+(tipo==='preventivo'?'preventivos':'correctivos')+'/'+_iMig+'/vales').set(orden.vales).catch(function(){});
+    if(_iMig>=0) _nxSetSeguro('monhaco/'+(tipo==='preventivo'?'preventivos':'correctivos'), _iMig, orden.id, 'vales', orden.vales);   // (2026-10-19) confirma el id
   }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
@@ -10643,7 +10674,7 @@ function _ejecutarGuardarValeMant(){
     const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
     const idx = arr.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
-      window._fbDB.ref('monhaco/'+fbArr+'/'+idx+'/vales').set(orden.vales)
+      _fbRefPorId('monhaco/'+fbArr+'/'+idx+'/vales').set(orden.vales)
         .then(()=>console.log('Vale mant guardado:', fbArr, idx))
         .catch(err=>console.error('Error guardando vale mant:', err));
     }

@@ -3,6 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
+// entre leer y escribir, escribir en «la posición 37» caía en OTRO registro. Aquí la escritura se hace en una transacción que
+// confirma que en esa posición está el registro con ese id; si no, lo busca por id y, si no está, no escribe nada.
+function _nxPoner(obj, ruta, valor){
+  var p = String(ruta || '').split('/').filter(Boolean); if(!p.length) return valor;
+  var o = obj; for(var i = 0; i < p.length - 1; i++){ if(!o[p[i]] || typeof o[p[i]] !== 'object') o[p[i]] = {}; o = o[p[i]]; }
+  if(valor === null || valor === undefined) delete o[p[p.length - 1]]; else o[p[p.length - 1]] = valor;
+  return obj;
+}
+// fn(registroDelServidor) → registro modificado. Devuelve Promise<true|false>.
+function _nxTx(base, key, id, fn){
+  var db = window._fbDB; if(!db || !id) return Promise.resolve(false);
+  var una = function(k){
+    return db.ref(base + '/' + k).transaction(function(cur){
+      if(cur === null) return null;                 // aún sin dato: Firebase la repite con el valor real del servidor
+      if(!cur || cur.id !== id) return;             // en esa posición hay OTRO registro: no escribir
+      return fn(cur);
+    }).then(function(r){ var v = r && r.snapshot && r.snapshot.val(); return !!(r && r.committed && v && v.id === id); });
+  };
+  return una(key).then(function(ok){
+    if(ok) return true;
+    return db.ref(base).orderByChild('id').equalTo(id).once('value').then(function(q){
+      var k = null; q.forEach(function(ch){ var v = ch.val(); if(k === null && v && v.id === id) k = ch.key; });
+      return (k !== null && String(k) !== String(key)) ? una(k) : false;
+    });
+  }).catch(function(e){ try{ console.warn('Escritura segura falló', base, id, e && e.message); }catch(_){} return false; });
+}
+function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, function(cur){ return _nxPoner(cur, campo, valor); }); }
+</script>
+<script>
 // ══ ACTUALIZACIÓN AUTOMÁTICA DE LA APP ════════════════════════════════════════
 // El iPhone guarda su propia copia de la app instalada y a veces sigue mostrando la
 // versión vieja aunque ya se publicó una nueva. Al abrir la app y al volver a ella,
@@ -14,7 +44,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6b06ad7a3954';
+  var APP_VERSION='9357baa92611';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -117,14 +147,14 @@ function _fbRefPorId(ruta){
   return {
     set: function(valor){
       return ubicar().then(function(k){
-        if(k !== null) return db.ref(base + '/' + k + resto).set(valor);
+        if(k !== null) return _nxTx(base, k, id, function(cur){ return resto ? _nxPoner(cur, resto, valor) : valor; }).then(function(ok){ if(!ok) return avisar(); });   // (2026-10-19) confirma el id
         if(!resto && id && valor && valor.id === id) return agregar(valor);
         return avisar();
       });
     },
     update: function(cambios){
       return ubicar().then(function(k){
-        if(k !== null) return db.ref(base + '/' + k + resto).update(cambios);
+        if(k !== null) return _nxTx(base, k, id, function(cur){ var t = cur; String(resto).split('/').filter(Boolean).forEach(function(p){ if(!t[p] || typeof t[p] !== 'object') t[p] = {}; t = t[p]; }); Object.keys(cambios).forEach(function(c){ _nxPoner(t, c, cambios[c]); }); return cur; }).then(function(ok){ if(!ok) return avisar(); });   // (2026-10-19)
         return avisar();
       });
     }
@@ -2191,7 +2221,7 @@ function _gpsFichaBorrar(equipoId){
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      window._fbDB.ref('montasa/equipos/'+idx+'/ubicacionLink').set('');
+      _nxSetSeguro('montasa/equipos', idx, equipoId, 'ubicacionLink', '');   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -2262,7 +2292,7 @@ function _gpsFichaLink(equipoId, link){
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      window._fbDB.ref('montasa/equipos/'+idx+'/ubicacionLink').set(link);
+      _nxSetSeguro('montasa/equipos', idx, equipoId, 'ubicacionLink', link);   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -5047,7 +5077,7 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      window._fbDB.ref('montasa/equipos/'+idx+'/estado').set(nuevoEstado);
+      _nxSetSeguro('montasa/equipos', idx, equipoId, 'estado', nuevoEstado);   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -5368,7 +5398,7 @@ function _cliOrdenAlCerrar(o){
     var txt = String(km);
     if(v.raiz === RAIZ){ try{ var eq = (DB.equipos || []).find(function(e){ return e && e.id === v.id; }); if(eq){ eq.horometro = txt; eq.kilometraje = txt; } }catch(e){} }
     v.km = km;
-    return db().ref(v.raiz + '/equipos/' + v.key).update({ horometro: txt, kilometraje: txt }).catch(function(){});
+    return _nxSetSeguro(v.raiz + '/equipos', v.key, v.id, 'horometro', txt).then(function(){ return _nxSetSeguro(v.raiz + '/equipos', v.key, v.id, 'kilometraje', txt); });   // (2026-10-19) confirma el id
   }
   window._combCerrar = function(){
     if(st.guardando) return;
