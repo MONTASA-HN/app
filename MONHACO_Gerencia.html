@@ -44,7 +44,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c0f2380013ea';
+  var APP_VERSION='df9cb767cd97';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -767,7 +767,14 @@ var _Sync = (function(){
     for(k in hb){ if(!OMITIR[k] && !(k in h) && hb[k] !== VACIO) return true; }
     return false;
   }
-  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, pendienteReg: pendienteReg, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
+  // (2026-10-19) ¿hay algún registro con cambios sin subir en las listas que vigila esta app?
+  function hayPendientes(){
+    if(Object.keys(enVuelo).length) return true;
+    for(var i = 0; i < activas.length; i++){ var l = _lista(activas[i]); if(!l || !listo[activas[i]]) continue;
+      for(var j = 0; j < l.length; j++){ if(l[j] && l[j].id && pendienteReg(activas[i], l[j].id)) return true; } }
+    return false;
+  }
+  return { iniciar: iniciar, guardar: guardar, mezclar: mezclar, pendienteReg: pendienteReg, hayPendientes: hayPendientes, _estado: function(){ return { base: base, claves: claves, listo: listo }; } };
 })();
 </script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -14808,6 +14815,27 @@ function _sigNumero(pref, lista){
   ['initSolicitudes', 'solTipoChange', 'solOrigenChange'].forEach(envolver);
   // al elegir / cambiar el cliente
   if(typeof _solCliMarca === 'function'){ var _m = _solCliMarca; _solCliMarca = function(inp){ var r = _m.apply(this, arguments); try{ window._solFiltrarEquipos(); }catch(e){} return r; }; }
+})();
+</script>
+<script>
+// ══ AVISO DE CAMBIOS SIN SUBIR (2026-10-19, auditoría) ══ Sin señal, lo guardado queda solo en el teléfono; si se cierra la app
+// antes de que suba, se pierde. Aquí se avisa arriba y, al intentar cerrar la pestaña, el navegador pide confirmar.
+(function(){
+  var conectado = true, hay = false, el = null;
+  function pintar(){
+    if(!el){ el = document.createElement('div'); el.id = 'nx-pendientes';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#b45309;color:#fff;font-size:13px;font-weight:700;text-align:center;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none';
+      el.textContent = '⏳ Hay cambios sin subir (sin señal). No cierres la app hasta que vuelva la conexión.';
+      document.body.appendChild(el); }
+    el.style.display = (hay && !conectado) ? 'block' : 'none';
+  }
+  function revisar(){ try{ hay = (typeof _Sync !== 'undefined' && _Sync.hayPendientes) ? _Sync.hayPendientes() : false; }catch(e){ hay = false; } pintar(); }
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1500); return; }
+    try{ db.ref('.info/connected').on('value', function(s){ conectado = !!s.val(); revisar(); if(conectado){ try{ _Sync.guardar(); }catch(e){} } }); }catch(e){}
+  }
+  setInterval(revisar, 10000); setTimeout(escuchar, 1500);
+  window.addEventListener('beforeunload', function(ev){ revisar(); if(hay && !conectado){ ev.preventDefault(); ev.returnValue = 'Hay cambios sin subir'; return ev.returnValue; } });
 })();
 </script>
 </body>
