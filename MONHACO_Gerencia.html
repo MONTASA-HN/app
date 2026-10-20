@@ -25,6 +25,24 @@
 })();
 </script>
 <script>
+// (2026-10-20, auditoría 15) ¿Este equipo de la lista base ya se vendió o se borró a propósito? Vendido: primero por SERIE; por código
+// solo si a ninguno de los dos le aparece serie (los códigos se repiten entre empresas y se reusan). Borrado: lápida en _borradas.
+window._nxLapida = function(id){ return !!(id && ((window._nxLapidas || {})[id] || (window._borradasCache || {})[id])); };
+window._nxSpecFuera = function(spec){
+  if(!spec) return false;
+  if(window._nxLapida(spec.id)) return true;
+  var s = String(spec.serie || '').trim().toUpperCase(), c = String(spec.codigo || '').trim().toUpperCase();
+  return ((typeof DB !== 'undefined' && DB && DB.vendidos) || []).some(function(v){
+    if(!v) return false;
+    if(v.id && spec.id && v.id === spec.id) return true;
+    var vs = String(v.serie || '').trim().toUpperCase();
+    if(s && vs) return s === vs;
+    if(!s && !vs) return c && String(v.codigo || '').trim().toUpperCase() === c;
+    return false;
+  });
+};
+</script>
+<script>
 // ══ PRECIO POR COMIDA (2026-10-20, auditoría punto 21, decisión de Miguel) ══ Un solo precio para vales y comidas de viáticos.
 // Vive en <raíz>/rrhh/ajustes/precioComida {valor, cambiadoEn, cambiadoPor}; lo cambia Gerencia desde la ventana del vale.
 // El teléfono lo recuerda (nx_precio_comida_<raíz>) para cuando no hay señal. Sin dato: L 150. Los vales ya hechos guardan su monto.
@@ -91,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0e16fcbcd781';
+  var APP_VERSION='e91ced06c472';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -522,7 +540,10 @@ var _Sync = (function(){
     return r;
   }
   function _borradoAposta(id){ if(lapidas[id]) return true; try{ return !!(window._borradasCache && window._borradasCache[id]); }catch(e){ return false; } }
-  function _clave(){ return '_sync_base_' + raiz; }
+  // (2026-10-20, auditoría 16) Una por app: si dos apps del mismo teléfono la compartían, la que llevaba días cerrada creía tener
+  // cambios pendientes y subía datos viejos. La primera vez se parte de la compartida de antes (no se pierde lo pendiente).
+  var _APPK = String((typeof location !== 'undefined' && location.pathname.split('/').pop()) || 'app').replace(/\.html$/i, '');
+  function _clave(){ return '_sync_base_' + raiz + '_' + _APPK; }
   function _guardarBase(){ try{ localStorage.setItem(_clave(), JSON.stringify(base)); }catch(e){} }
   function _avisar(m){ try{ console.warn('[Sync] ' + m); }catch(e){} }
   function _nombre(o){ return (o && (o.correlativo || o.codigo)) || 'un registro'; }
@@ -699,20 +720,25 @@ var _Sync = (function(){
 
   // ── Borrado: la lista del servidor sin ese registro (transacción) ──────────
   function _borrar(col, ids){
+    // (2026-10-20, auditoría 14) Primero la lápida, después el borrado: si se corta en medio, el registro queda marcado y nadie
+    // lo vuelve a subir. Si la lápida se rechaza (sin cargo), no se intenta borrar.
+    var u = {}; ids.forEach(function(id){ u['_borradas/' + id] = Date.now(); lapidas[id] = 1; });
+    return db.ref(raiz).update(u).then(function(){
     return db.ref(raiz + '/' + col).transaction(function(cur){
       if(cur === null) return cur;
       var quedan = _entradas(cur).map(function(e){ return e[1]; }).filter(function(x){ return !(x && x.id && ids.indexOf(x.id) >= 0); });
       return quedan;
     }).then(function(r){
       if(r && r.committed){
-        var u = {}; ids.forEach(function(id){ delete base[col][id]; u['_borradas/' + id] = Date.now(); lapidas[id] = 1; });
+        ids.forEach(function(id){ delete base[col][id]; });
         _guardarBase();
-        return db.ref(raiz).update(u);
       }
+    });
     });
   }
 
   // ── Guardar: subir lo que cambió aquí ───────────────────────────────────────
+  var frenoAvisado = {};
   function _guardarCol(col){
     var loc = _lista(col), b = base[col];
     if(!loc || !b || !listo[col]) return [];
@@ -743,7 +769,8 @@ var _Sync = (function(){
     });
     var fuera = Object.keys(b).filter(function(id){ return !vistos[id] && v[id] && claves[col][id] !== undefined; });
     if(fuera.length && fuera.length <= MAX_BORRADOS) prom.push(_borrar(col, fuera).catch(function(){}));
-    else if(fuera.length) _avisar(col + ': ' + fuera.length + ' registros faltan en este teléfono; NO se borran (freno)');
+    else if(fuera.length){ _avisar(col + ': ' + fuera.length + ' registros faltan en este teléfono; NO se borran (freno)');
+      if(!frenoAvisado[col]){ frenoAvisado[col] = 1; try{ if(typeof toast === 'function') toast('⚠️ No se borraron ' + fuera.length + ' registros a la vez (protección). Bórralos de uno en uno.', true); }catch(e){} } }
     return prom;
   }
   function guardar(){
@@ -794,8 +821,8 @@ var _Sync = (function(){
     if(raiz) return;
     raiz = r; db = fbdb;
     if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
-    try{ base = JSON.parse(localStorage.getItem(_clave()) || '{}') || {}; }catch(e){ base = {}; }
-    db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; });
+    try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
+    db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; });
     activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
@@ -1290,6 +1317,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   }
   function estado(r){
     window._nxAcceso.registro = r;
+    // (2026-10-20, auditoría 18) Teléfono sin acceso: borrar lo que quedó guardado en él (órdenes, equipos, plantilla…). Se conserva
+    // la sesión de Firebase (firebase:…) para que siga siendo el mismo teléfono si Gerencia lo vuelve a aprobar.
+    if(r && r.estado === 'rechazado'){ try{ var _ks = []; for(var _i = 0; _i < localStorage.length; _i++){ var _k = localStorage.key(_i); if(_k && _k.indexOf('firebase:') !== 0) _ks.push(_k); }
+      _ks.forEach(function(k){ localStorage.removeItem(k); });
+      if(_ks.length && !sessionStorage.getItem('nx_datos_borrados')){ sessionStorage.setItem('nx_datos_borrados', '1'); setTimeout(function(){ location.reload(); }, 300); } }catch(e){} }
     try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
     if(!CERRADA || (r && r.estado === 'aprobado')){
       if(sondeo){ clearInterval(sondeo); sondeo = null; try{ toast('✓ Teléfono aprobado'); }catch(e){} }
@@ -10664,7 +10696,7 @@ function _iniciarConexionFirebase(esReintento){
         // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
         // Skip if already sold (in DB.vendidos)
         EQUIPOS_INICIALES.forEach(spec => {
-          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id||(spec.serie&&v.serie&&String(v.serie).trim().toUpperCase()===String(spec.serie).trim().toUpperCase()));
+          const isSold = _nxSpecFuera(spec);   // (2026-10-20, auditoría 15)
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
@@ -10795,7 +10827,7 @@ function _iniciarConexionFirebase(esReintento){
         // Safety: ensure no equipo from EQUIPOS_INICIALES is lost
         // Skip if already sold (in DB.vendidos)
         EQUIPOS_INICIALES.forEach(spec => {
-          const isSold = (DB.vendidos||[]).find(v=>v.codigo===spec.codigo||v.id===spec.id||(spec.serie&&v.serie&&String(v.serie).trim().toUpperCase()===String(spec.serie).trim().toUpperCase()));
+          const isSold = _nxSpecFuera(spec);   // (2026-10-20, auditoría 15)
           if(!isSold && !DB.equipos.find(e=>e.codigo===spec.codigo||e.id===spec.id))
             DB.equipos.push(JSON.parse(JSON.stringify(spec)));
         });
@@ -10844,7 +10876,8 @@ function _iniciarConexionFirebase(esReintento){
       renderDashboard();
     }
     // Reintentar la conexión en segundo plano hasta que se recupere el internet
-    setTimeout(()=>_iniciarConexionFirebase(true), 5000);
+    window._fbEspera = Math.min((window._fbEspera || 2500) * 2, 60000);   // (2026-10-20, auditoría 24)
+    setTimeout(()=>_iniciarConexionFirebase(true), window._fbEspera);
   });
 }
 _iniciarConexionFirebase(false);
@@ -12788,7 +12821,7 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
   saveDB();
   if(window._fbDB && window._fbReady){
     const idx = DB.equipos.findIndex(e=>e.id===equipoId);
-    if(idx>=0) window._fbDB.ref('monhaco/estados/'+equipoId).set(nuevoEstado);
+    // (2026-10-20, auditoría 24) ya no se escribe <raíz>/estados/<id>: ninguna app lo lee
   }
 }
 
@@ -15040,6 +15073,22 @@ function _sigNumero(pref, lista){
       setTimeout(function(){ barra(function(){ var ov = document.getElementById('vale-overlay') || document.getElementById('vale-mant-overlay'); if(ov){ ov.innerHTML = ''; ov.classList.remove('open'); } window[nom].apply(self, args); }); }, 0);
       return r; };
   });
+})();
+</script>
+<script>
+// ══ LIMPIEZA DE LÁPIDAS (2026-10-20, auditoría 14) ══ <raíz>/_borradas crecía sin límite. Una vez por sesión, desde un teléfono con cargo
+// Gerencia, se quitan las de más de 6 meses (ningún teléfono pasa tanto tiempo sin conectarse con una copia vieja).
+(function(){
+  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa';
+  setTimeout(function revisar(){
+    try{
+      if(typeof window._nxRol === 'function' && window._nxRol() !== 'gerencia') return;
+      var L = window._nxLapidas; if(!L || !window._fbDB){ setTimeout(revisar, 30000); return; }
+      var lim = Date.now() - 183 * 86400000, u = {}, n = 0;
+      Object.keys(L).forEach(function(id){ var t = +L[id]; if(t && t < lim && n < 400){ u['_borradas/' + id] = null; n++; } });
+      if(n) window._fbDB.ref(RAIZ).update(u).then(function(){ console.log('[lápidas] quitadas ' + n + ' de más de 6 meses'); }).catch(function(){});
+    }catch(e){}
+  }, 60000);
 })();
 </script>
 </body>

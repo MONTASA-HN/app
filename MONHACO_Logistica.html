@@ -25,6 +25,24 @@
 })();
 </script>
 <script>
+// (2026-10-20, auditoría 15) ¿Este equipo de la lista base ya se vendió o se borró a propósito? Vendido: primero por SERIE; por código
+// solo si a ninguno de los dos le aparece serie (los códigos se repiten entre empresas y se reusan). Borrado: lápida en _borradas.
+window._nxLapida = function(id){ return !!(id && ((window._nxLapidas || {})[id] || (window._borradasCache || {})[id])); };
+window._nxSpecFuera = function(spec){
+  if(!spec) return false;
+  if(window._nxLapida(spec.id)) return true;
+  var s = String(spec.serie || '').trim().toUpperCase(), c = String(spec.codigo || '').trim().toUpperCase();
+  return ((typeof DB !== 'undefined' && DB && DB.vendidos) || []).some(function(v){
+    if(!v) return false;
+    if(v.id && spec.id && v.id === spec.id) return true;
+    var vs = String(v.serie || '').trim().toUpperCase();
+    if(s && vs) return s === vs;
+    if(!s && !vs) return c && String(v.codigo || '').trim().toUpperCase() === c;
+    return false;
+  });
+};
+</script>
+<script>
 // ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
 // entre leer y escribir, escribir en «la posición 37» caía en OTRO registro. Aquí la escritura se hace en una transacción que
 // confirma que en esa posición está el registro con ese id; si no, lo busca por id y, si no está, no escribe nada.
@@ -66,7 +84,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0fabca227f34';
+  var APP_VERSION='0f18043d140b';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -252,6 +270,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   }
   function estado(r){
     window._nxAcceso.registro = r;
+    // (2026-10-20, auditoría 18) Teléfono sin acceso: borrar lo que quedó guardado en él (órdenes, equipos, plantilla…). Se conserva
+    // la sesión de Firebase (firebase:…) para que siga siendo el mismo teléfono si Gerencia lo vuelve a aprobar.
+    if(r && r.estado === 'rechazado'){ try{ var _ks = []; for(var _i = 0; _i < localStorage.length; _i++){ var _k = localStorage.key(_i); if(_k && _k.indexOf('firebase:') !== 0) _ks.push(_k); }
+      _ks.forEach(function(k){ localStorage.removeItem(k); });
+      if(_ks.length && !sessionStorage.getItem('nx_datos_borrados')){ sessionStorage.setItem('nx_datos_borrados', '1'); setTimeout(function(){ location.reload(); }, 300); } }catch(e){} }
     try{ document.dispatchEvent(new CustomEvent('nx-acceso')); }catch(e){}
     if(!CERRADA || (r && r.estado === 'aprobado')){
       if(sondeo){ clearInterval(sondeo); sondeo = null; try{ toast('✓ Teléfono aprobado'); }catch(e){} }
