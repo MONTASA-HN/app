@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// (2026-10-20) Esperar la sesión antes de la PRIMERA lectura: desde el cierre de la base (19-oct) leer sin sesión se rechaza, y
+// al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
+window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
+  try{ var a = (window.firebase && firebase.auth) ? firebase.auth() : null; if(!a){ fin(); return; } if(a.currentUser){ fin(); return; }
+    var q = a.onAuthStateChanged(function(u){ if(u){ try{ q && q(); }catch(e){} fin(); } }); setTimeout(fin, 8000); }catch(e){ fin(); } }); };
+</script>
+<script>
 // ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
 // entre leer y escribir, escribir en «la posición 37» caía en OTRO registro. Aquí la escritura se hace en una transacción que
 // confirma que en esa posición está el registro con ese id; si no, lo busca por id y, si no está, no escribe nada.
@@ -44,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='85492174abe9';
+  var APP_VERSION='235b6d909496';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -11076,7 +11083,7 @@ _iniciarConexionFirebase(false);
 function _iniciarConexionFirebase(esReintento){
   const FB_REF = window._FB_REF;
   if(!FB_REF){ console.warn('FB_REF no disponible'); return; }
-  FB_REF.once('value').then(snap => {
+  _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(snap=>{
    // Procesamiento del snapshot: un error AQUI es bug de datos/render, NO de conexion.
    // NO habilitar escritura (_fbReady) aquí: se activa más abajo, sólo tras cargar el
    // snapshot real. Evita escribir la versión recortada (sin fotos/firmas) o la base.
