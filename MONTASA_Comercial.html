@@ -14,7 +14,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b7517f0a7840';
+  var APP_VERSION='32ab84b8874f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -806,7 +806,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   }
   function revisar(uid){
     rest('accesos/' + uid).then(function(r){
-      if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){}); estado(r); }   // una vez por sesión
+      if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
+        // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
+        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
+        estado(r); }   // una vez por sesión
       else { if(CERRADA) cerrar(); pedirNombre(uid); }
     }).catch(function(){
       // Sin señal: la app sigue con lo guardado en el teléfono; se vuelve a intentar

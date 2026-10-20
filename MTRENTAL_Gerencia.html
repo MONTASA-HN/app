@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7ce86de760e4';
+  var APP_VERSION='85be8300a9e0';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1270,7 +1270,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   }
   function revisar(uid){
     rest('accesos/' + uid).then(function(r){
-      if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){}); estado(r); }   // una vez por sesión
+      if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
+        // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
+        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
+        estado(r); }   // una vez por sesión
       else { if(CERRADA) cerrar(); pedirNombre(uid); }
     }).catch(function(){
       // Sin señal: la app sigue con lo guardado en el teléfono; se vuelve a intentar
@@ -14591,7 +14594,7 @@ function _cliOrdenAlCerrar(o){
     var ov = document.createElement('div'); ov.id = 'vac-ov';
     ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
-      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button></div><div class="vc" id="vac-c"></div>';
+      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button><button data-v="ent">🕒 Historial de entradas</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
     ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
     window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
@@ -14622,6 +14625,7 @@ function _cliOrdenAlCerrar(o){
       pintarLista();
     } else if(vista === 'emp') pintarEmpleados(c);
     else if(vista === 'tel') pintarAccesos(c);
+    else if(vista === 'ent') pintarEntradas(c);
     else pintarAcciones(c);
   }
   function pintarLista(){
@@ -14979,8 +14983,8 @@ function _cliOrdenAlCerrar(o){
     if(escuchandoAcc || !window._fbDB) return;
     if(!miUid()){ setTimeout(escucharAccesos, 1500); return; }
     escuchandoAcc = true;
-    window._fbDB.ref('accesos').on('value', function(s){ accesos = s.val() || {}; avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); }, sinPermiso);
-    ['montasa', 'monhaco'].forEach(function(r){ window._fbDB.ref(r + '/rrhh/plantilla').on('value', function(s){ plantillas[r] = s.val() || {}; if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); }); });
+    window._fbDB.ref('accesos').on('value', function(s){ accesos = s.val() || {}; avisoAccesos(); if((vista === 'tel' || vista === 'ent') && document.getElementById('vac-ov')) pintar(); }, sinPermiso);
+    ['montasa', 'monhaco'].forEach(function(r){ window._fbDB.ref(r + '/rrhh/plantilla').on('value', function(s){ plantillas[r] = s.val() || {}; if((vista === 'tel' || vista === 'ent') && document.getElementById('vac-ov')) pintar(); }); });
   }
   // Aviso en Notificaciones y número en el botón de Personal
   function avisoAccesos(){
@@ -14994,6 +14998,46 @@ function _cliOrdenAlCerrar(o){
       m.textContent = n; m.style.display = n ? 'inline-block' : 'none'; });
   }
   window._abrirAccesos = function(){ vista = 'tel'; abrir(); pintar(); };
+  // ══ HISTORIAL DE ENTRADAS (2026-10-20, pedido de Miguel) ══ accesos/<uid>/entradas: cada apertura de una app por un teléfono aprobado.
+  var entF = { quien: '', app: '', dias: '30' }, entPodado = false;
+  var ENT_APPS = { 'MTRENTAL_Gerencia.html':'Gerencia MT', 'MONTASA_Supervision.html':'Supervisión MT', 'MONTASA_Tecnicos.html':'Técnicos MT', 'MONTASA_Logistica.html':'Logística MT',
+    'MONTASA_Comercial.html':'Comercial MT', 'MONHACO_Gerencia.html':'Gerencia MONHACO', 'MONHACO_Supervision.html':'Supervisión MONHACO', 'MONHACO_Tecnicos.html':'Técnicos MONHACO', 'MONHACO_Logistica.html':'Logística MONHACO' };
+  function entAppTxt(a){ return ENT_APPS[a] || String(a || '—').replace('.html', '').replace(/_/g, ' '); }
+  window._entFiltro = function(k, v){ entF[k] = v; pintar(); };
+  function pintarEntradas(c){
+    var lim6 = Date.now() - 183 * 86400000, filas = [], quienes = {}, apps = {};
+    Object.keys(accesos || {}).forEach(function(uid){
+      var a = accesos[uid]; if(!a || typeof a !== 'object') return;
+      var nom = ((a.nombre || '') + ' ' + (a.apellido || '')).trim() || 'Sin nombre', ent = a.entradas || {};
+      Object.keys(ent).forEach(function(k){
+        var e = ent[k]; if(!e || !e.ts) return;
+        if(e.ts < lim6){ if(!entPodado) try{ window._fbDB.ref('accesos/' + uid + '/entradas/' + k).remove(); }catch(_){} return; }   // más de 6 meses
+        quienes[uid] = nom; apps[e.app] = 1;
+        filas.push({ uid: uid, nom: nom, app: e.app, disp: e.disp || a.dispositivo || '', ts: e.ts, rol: a.rol || '' });
+      });
+    });
+    entPodado = true;
+    var desde = entF.dias === 'todo' ? 0 : Date.now() - parseInt(entF.dias, 10) * 86400000;
+    var L = filas.filter(function(f){ return f.ts >= desde && (!entF.quien || f.uid === entF.quien) && (!entF.app || f.app === entF.app); }).sort(function(a, b){ return b.ts - a.ts; });
+    var sel = function(k, ops, todos){ return '<select onchange="_entFiltro(\'' + k + '\',this.value)" style="flex:1;min-width:140px">' + '<option value="">' + todos + '</option>' + ops.map(function(o){ return '<option value="' + esc(o[0]) + '"' + (entF[k] === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; };
+    var h = '<div class="card" style="margin-bottom:10px"><div class="nm">🕒 Historial de entradas</div><div class="sub">Cada vez que un teléfono aprobado abre una app de Nexo. Se guardan 6 meses.</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
+      + sel('quien', Object.keys(quienes).map(function(u){ return [u, quienes[u]]; }).sort(function(a, b){ return a[1].localeCompare(b[1], 'es'); }), 'Todas las personas')
+      + sel('app', Object.keys(apps).map(function(a){ return [a, entAppTxt(a)]; }).sort(function(a, b){ return a[1].localeCompare(b[1], 'es'); }), 'Todas las apps')
+      + '<select onchange="_entFiltro(\'dias\',this.value)" style="flex:none">' + [['1','Hoy'],['7','7 días'],['30','30 días'],['183','6 meses']].map(function(o){ return '<option value="' + o[0] + '"' + (entF.dias === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'
+      + '</div><div class="sub" style="margin-top:8px"><b>' + L.length + '</b> entrada' + (L.length === 1 ? '' : 's') + (L.length > 400 ? ' · se muestran las 400 más recientes' : '') + '</div></div>';
+    if(!L.length) h += '<div class="card"><div class="sub">Sin entradas en este período. Se empiezan a anotar desde el 20/10/2026.</div></div>';
+    var dia = '';
+    L.slice(0, 400).forEach(function(f){
+      var d = new Date(f.ts), dk = d.toDateString();
+      if(dk !== dia){ dia = dk; var t = d.toLocaleDateString('es-HN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); h += '<div style="font-size:12px;font-weight:800;color:#1f3864;text-transform:capitalize;margin:12px 2px 6px">' + esc(t) + '</div>'; }
+      h += '<div class="card" style="padding:9px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center">'
+        + '<div style="font-family:DM Mono,monospace;font-weight:700;color:#1f3864;min-width:46px">' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + '</div>'
+        + '<div style="min-width:0"><div style="font-weight:700">' + esc(f.nom) + ' <span style="font-weight:600;color:#475467">· ' + esc(entAppTxt(f.app)) + '</span></div>'
+        + '<div class="sub">📱 ' + esc(f.disp || '—') + (f.rol ? ' · ' + esc(f.rol) : '') + '</div></div></div>';
+    });
+    c.innerHTML = h;
+  }
   function pintarAccesos(c){
     var todos = listaAccesos(), yo = (window._nxAcceso || {}).uid;
     var pend = todos.filter(function(a){ return a.estado === 'pendiente'; }).sort(function(a, b){ return (b.creado || 0) - (a.creado || 0); });
@@ -15282,7 +15326,7 @@ function _cliOrdenAlCerrar(o){
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(ponerEntrada, 50); }); else setTimeout(ponerEntrada, 50);
   // Gerencia escucha Personal desde que abre, para mantener al día la lista de quién se elige en las órdenes
   (function esperar(){ if(window._fbDB){ escuchar(); escucharAccesos(); } else setTimeout(esperar, 1500); })();
-  document.addEventListener('nx-acceso', function(){ avisoAccesos(); if(vista === 'tel' && document.getElementById('vac-ov')) pintar(); });
+  document.addEventListener('nx-acceso', function(){ avisoAccesos(); if((vista === 'tel' || vista === 'ent') && document.getElementById('vac-ov')) pintar(); });
   // Para pruebas
   window._vacPrueba = { tabla: tabla, ultimoAniversario: ultimoAniversario, saldoDe: saldoDe, gozadosDe: gozadosDe, diasHabiles: diasHabiles, textoAuto: textoAuto, documento: documento, proporcionalDe: proporcionalDe, datos: function(){ return datos; } };
 })();
