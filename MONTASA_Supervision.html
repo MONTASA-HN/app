@@ -73,7 +73,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e16971c370d0';
+  var APP_VERSION='6071c090e709';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -11818,6 +11818,37 @@ function _nxReservarNum(raiz, pref, localMax){
       }, '🗑 Eliminar orden');
     };
   }
+})();
+</script>
+<script>
+// ══ MONTOS DE VIÁTICOS VÁLIDOS (2026-10-20, auditoría punto 20, decisión de Miguel) ══ Antes de guardar (Guardar o Descargar PDF):
+// ningún monto negativo ni con letras; una factura de L 10,000 o más pregunta «¿Seguro?» (deja guardar si se confirma).
+(function(){
+  var SEL = '#v-npeaj,#v-cpunit,#v-comb,#v-hosp-noche,#v-hosp,#v-otros,[id^="vp-des-"],[id^="vp-alm-"],[id^="vp-cen-"],[id^="vp-mn-"],[id^="vlf-monto-"]';
+  var ALTO = 10000;
+  function nombre(el){
+    var id = el.id || '';
+    if(/^vlf-monto-/.test(id)) return 'la factura #' + (parseInt(id.replace('vlf-monto-', ''), 10) + 1);
+    var l = el.closest('.form-group,div'); var t = l && l.querySelector('label,div'); return (t && t.textContent.trim()) || id;
+  }
+  window._viatMontosOK = function(){
+    var malos = [], altos = [];
+    Array.prototype.forEach.call(document.querySelectorAll(SEL), function(el){
+      if(!el.offsetParent && el.type !== 'hidden') return;          // campos que no están en pantalla
+      var v = String(el.value || '').trim();
+      if((el.validity && el.validity.badInput) || (v && !isFinite(Number(v)))){ malos.push(nombre(el) + ': no es un número'); return; }
+      var n = Number(v || 0);
+      if(n < 0){ malos.push(nombre(el) + ': monto negativo (' + n + ')'); return; }
+      if(/^vlf-monto-/.test(el.id) && n >= ALTO) altos.push(nombre(el) + ': L ' + n.toLocaleString('es-HN'));
+    });
+    if(malos.length){ alert('⚠️ Revisa los montos antes de guardar:\n\n• ' + malos.join('\n• ')); return false; }
+    if(altos.length && !confirm('Montos altos:\n\n• ' + altos.join('\n• ') + '\n\n¿Seguro que son correctos?')) return false;
+    return true;
+  };
+  ['guardarViaticos', 'guardarLiquidacion', 'generarPDFViaticos'].forEach(function(nom){
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(){ if(!window._viatMontosOK()) return; return f.apply(this, arguments); };
+  });
 })();
 </script>
 </body>
