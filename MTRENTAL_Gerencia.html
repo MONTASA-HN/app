@@ -25,6 +25,24 @@
 })();
 </script>
 <script>
+// ══ PRECIO POR COMIDA (2026-10-20, auditoría punto 21, decisión de Miguel) ══ Un solo precio para vales y comidas de viáticos.
+// Vive en <raíz>/rrhh/ajustes/precioComida {valor, cambiadoEn, cambiadoPor}; lo cambia Gerencia desde la ventana del vale.
+// El teléfono lo recuerda (nx_precio_comida_<raíz>) para cuando no hay señal. Sin dato: L 150. Los vales ya hechos guardan su monto.
+(function(){
+  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa', K = 'nx_precio_comida_' + RAIZ, val = 150;
+  try{ var g = parseFloat(localStorage.getItem(K)); if(g > 0) val = g; }catch(e){}
+  window._pv = function(){ return val; };
+  window._pvRaiz = RAIZ;
+  window._pvFijar = function(v){ v = parseFloat(v); if(!(v > 0)) return; val = v; try{ localStorage.setItem(K, String(v)); }catch(e){} };
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1500); return; }
+    var ir = function(){ try{ db.ref(RAIZ + '/rrhh/ajustes/precioComida').on('value', function(s){ var x = s.val(); if(x && x.valor > 0) window._pvFijar(x.valor); }, function(){}); }catch(e){} };
+    if(typeof window._nxEsperarSesion === 'function') window._nxEsperarSesion().then(ir, ir); else ir();
+  }
+  setTimeout(escuchar, 1000);
+})();
+</script>
+<script>
 // (2026-10-20) Esperar la sesión antes de la PRIMERA lectura: desde el cierre de la base (19-oct) leer sin sesión se rechaza, y
 // al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
 window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
@@ -73,7 +91,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='97093cdc9715';
+  var APP_VERSION='7aba968bd21d';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -11669,7 +11687,7 @@ function _viatDias(f1, f2){
   return (isNaN(d)||d<1)?1:Math.min(d,60);
 }
 function _viatCalcAlimPeriodo(hIni, hFin, f1, f2, findes){
-  const T=150;
+  const T=_pv();
   findes = findes||{};
   let des=0,alm=0,cen=0,mn=0;
   const mm=function(h){ if(!h) return null; const p=h.split(':'); return parseInt(p[0],10)*60+parseInt(p[1],10); };
@@ -12769,8 +12787,8 @@ function _buildSolicitudHTML(v, orden){
   <table>
     <tr>
       <th>NOMBRE</th><th>FECHA</th><th>H.INICIO</th><th>H.FIN</th>
-      <th class="mid">DESAY.<br>L.150</th><th class="mid">ALMUER.<br>L.150</th>
-      <th class="mid">CENA<br>L.150</th><th class="mid">M.NOCHE<br>L.150</th>
+      <th class="mid">DESAY.<br>L.${_pv()}</th><th class="mid">ALMUER.<br>L.${_pv()}</th>
+      <th class="mid">CENA<br>L.${_pv()}</th><th class="mid">M.NOCHE<br>L.${_pv()}</th>
       <th class="mid">TRANSP.</th><th class="mid">HOSPEDAJE</th><th class="mid">TOTAL</th>
     </tr>
     ${personaRows}
@@ -12907,7 +12925,7 @@ function _valeMigrarPersonas(orden){
     orden.vales.forEach(function(v){
       if(!v) return;
       const prev = parseInt(v.personas)||1;
-      const base = (parseFloat(v.monto)||150) / prev;
+      const base = (parseFloat(v.monto)||_pv()) / prev;
       const nuevo = base * n;
       if(parseInt(v.personas) !== n || v.monto !== nuevo){ v.monto = nuevo; v.personas = n; cambio = true; }
     });
@@ -12946,13 +12964,13 @@ function calcularVales(fechaInicio, fechaFin, personas){
   const hIni = ini.getHours() + ini.getMinutes()/60;
   const hFin = fin.getHours() + fin.getMinutes()/60;
   const vales = [];
-  if(hIni < 7) vales.push({tipo:'desayuno', monto:150});
-  if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:150});
-  if(hFin > 19) vales.push({tipo:'cena', monto:150});
+  if(hIni < 7) vales.push({tipo:'desayuno', monto:_pv()});
+  if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:_pv()});
+  if(hFin > 19) vales.push({tipo:'cena', monto:_pv()});
   const mismodia = ini.toDateString() === fin.toDateString();
-  if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:150});
+  if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:_pv()});
   let acum = 0;
-  const _lista = vales.filter(v=>{ acum+=v.monto; return acum<=1500; });
+  const _lista = vales.filter(v=>{ acum+=v.monto; return acum<=_pv()*10; });
   const _np = Math.max(1, parseInt(personas)||1);
   _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
   return _lista;
@@ -13014,7 +13032,7 @@ function _mostrarOverlayVale(ordenId){
   if(!orden) return;
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.'+_pv()+')', almuerzo:'Almuerzo (L.'+_pv()+')', cena:'Cena (L.'+_pv()+')', media_noche:'Media noche (L.'+_pv()+')'};
   const emojis = {desayuno:'🌅', almuerzo:'🍽', cena:'🌙', media_noche:'🌃'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const ov = document.getElementById('vale-overlay');
@@ -13068,7 +13086,7 @@ function _mostrarOverlayVale(ordenId){
 }
 
 function recalcVales(){
-  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
   const _np = _valePersonasDe((DB.logistica||[]).find(o=>o.id===_valeOrdenId));
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
@@ -13089,7 +13107,7 @@ function guardarValeGerencia(){
 function _ejecutarGuardarVale(){
   const orden = (DB.logistica||[]).find(o=>o.id===_valeOrdenId);
   if(!orden) return;
-  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
   const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
@@ -13426,7 +13444,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.'+_pv()+')', almuerzo:'Almuerzo (L.'+_pv()+')', cena:'Cena (L.'+_pv()+')', media_noche:'Media noche (L.'+_pv()+')'};
   const emojis = {desayuno:'\uD83C\uDF05', almuerzo:'\uD83C\uDF7D', cena:'\uD83C\uDF19', media_noche:'\uD83C\uDF03'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
@@ -13473,7 +13491,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
 }
 
 function recalcValesMant(){
-  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
   const _arrV = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const _np = _valePersonasDe(_arrV.find(o=>o.id===_valeMantOrdenId));
   let total = 0;
@@ -13495,7 +13513,7 @@ function _ejecutarGuardarValeMant(){
   const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  const montos = {desayuno:150,almuerzo:150,cena:150,media_noche:150};
+  const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
   const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
@@ -16019,6 +16037,38 @@ function _nxReservarNum(raiz, pref, localMax){
   ['guardarViaticos', 'guardarLiquidacion', 'generarPDFViaticos'].forEach(function(nom){
     var f = window[nom]; if(typeof f !== 'function') return;
     window[nom] = function(){ if(!window._viatMontosOK()) return; return f.apply(this, arguments); };
+  });
+})();
+</script>
+<script>
+// ══ CAMBIAR EL PRECIO POR COMIDA (Gerencia, ventana del vale) ══ Renglón arriba de las comidas: «💲 Precio por comida: L 150 ✏️».
+(function(){
+  function barra(reabrir){
+    var ov = document.getElementById('vale-overlay') || document.getElementById('vale-mant-overlay'); if(!ov) return;
+    var cb = ov.querySelector('input[id^="vc-"],input[id^="vcm-"]'); if(!cb || ov.querySelector('#pv-barra')) return;
+    var fila = cb.closest('label') || cb.parentElement; var lista = fila.parentElement;
+    var b = document.createElement('div'); b.id = 'pv-barra';
+    b.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f3f6fb;border:1px solid #d0d9ea;border-radius:8px;padding:8px 10px;margin:0 0 8px;font-size:13px';
+    b.innerHTML = '<span>💲 Precio por comida: <b>L ' + _pv().toLocaleString('es-HN') + '</b> <span style="color:#667085">(vales y viáticos)</span></span>'
+      + '<button type="button" style="padding:4px 10px;border-radius:6px;border:1px solid #1f3864;background:#fff;color:#1f3864;font-weight:700;cursor:pointer">✏️ Cambiar</button>';
+    b.querySelector('button').onclick = function(){
+      solicitarPINAccion(function(){
+        var t = prompt('Nuevo precio por comida (lempiras).\nAplica a los vales y viáticos que se hagan desde ahora; los ya hechos no cambian.', String(_pv()));
+        if(t === null) return; var v = parseFloat(String(t).replace(/,/g, ''));
+        if(!(v >= 1 && v <= 5000)){ alert('⚠️ Escribe un precio entre 1 y 5,000.'); return; }
+        if(!confirm('¿Cambiar el precio por comida de L ' + _pv() + ' a L ' + v + '?')) return;
+        window._fbDB.ref(_pvRaiz + '/rrhh/ajustes/precioComida').set({ valor: v, cambiadoEn: Date.now(), cambiadoPor: (window._nxAcceso || {}).uid || '' })
+          .then(function(){ window._pvFijar(v); try{ toast('Precio por comida: L ' + v + ' ✓'); }catch(e){} reabrir(); })
+          .catch(function(e){ alert('No se guardó: ' + (e && e.message)); });
+      }, '💲 Cambiar precio por comida');
+    };
+    lista.insertBefore(b, fila);
+  }
+  ['_mostrarOverlayVale', '_mostrarOverlayValeMant'].forEach(function(nom){
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(){ var self = this, args = arguments, r = f.apply(self, args);
+      setTimeout(function(){ barra(function(){ var ov = document.getElementById('vale-overlay') || document.getElementById('vale-mant-overlay'); if(ov){ ov.innerHTML = ''; ov.classList.remove('open'); } window[nom].apply(self, args); }); }, 0);
+      return r; };
   });
 })();
 </script>

@@ -25,6 +25,24 @@
 })();
 </script>
 <script>
+// ══ PRECIO POR COMIDA (2026-10-20, auditoría punto 21, decisión de Miguel) ══ Un solo precio para vales y comidas de viáticos.
+// Vive en <raíz>/rrhh/ajustes/precioComida {valor, cambiadoEn, cambiadoPor}; lo cambia Gerencia desde la ventana del vale.
+// El teléfono lo recuerda (nx_precio_comida_<raíz>) para cuando no hay señal. Sin dato: L 150. Los vales ya hechos guardan su monto.
+(function(){
+  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa', K = 'nx_precio_comida_' + RAIZ, val = 150;
+  try{ var g = parseFloat(localStorage.getItem(K)); if(g > 0) val = g; }catch(e){}
+  window._pv = function(){ return val; };
+  window._pvRaiz = RAIZ;
+  window._pvFijar = function(v){ v = parseFloat(v); if(!(v > 0)) return; val = v; try{ localStorage.setItem(K, String(v)); }catch(e){} };
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1500); return; }
+    var ir = function(){ try{ db.ref(RAIZ + '/rrhh/ajustes/precioComida').on('value', function(s){ var x = s.val(); if(x && x.valor > 0) window._pvFijar(x.valor); }, function(){}); }catch(e){} };
+    if(typeof window._nxEsperarSesion === 'function') window._nxEsperarSesion().then(ir, ir); else ir();
+  }
+  setTimeout(escuchar, 1000);
+})();
+</script>
+<script>
 // (2026-10-20) Esperar la sesión antes de la PRIMERA lectura: desde el cierre de la base (19-oct) leer sin sesión se rechaza, y
 // al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
 window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
@@ -73,7 +91,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a016ce8f68f5';
+  var APP_VERSION='e60fbb435336';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -790,7 +808,7 @@ function _valeMigrarPersonas(orden){
     orden.vales.forEach(function(v){
       if(!v) return;
       const prev = parseInt(v.personas)||1;
-      const base = (parseFloat(v.monto)||150) / prev;
+      const base = (parseFloat(v.monto)||_pv()) / prev;
       const nuevo = base * n;
       if(parseInt(v.personas) !== n || v.monto !== nuevo){ v.monto = nuevo; v.personas = n; cambio = true; }
     });
@@ -832,7 +850,7 @@ function calcularVales(fechaInicio, fechaFin, personas){
   // MONHACO: a los técnicos solo les aplica automáticamente el vale de CENA.
   // Desayuno, almuerzo y media noche solo pueden asignarse manualmente desde Gerencia.
   var mismodia = ini.toDateString() === fin.toDateString();
-  if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:150});
+  if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:_pv()});
   const _lista = vales;
   const _np = Math.max(1, parseInt(personas)||1);
   _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
@@ -1001,7 +1019,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
   }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
-  const labels = {desayuno:'Desayuno (L.150)', almuerzo:'Almuerzo (L.150)', cena:'Cena (L.150)', media_noche:'Media noche (L.150)'};
+  const labels = {desayuno:'Desayuno (L.'+_pv()+')', almuerzo:'Almuerzo (L.'+_pv()+')', cena:'Cena (L.'+_pv()+')', media_noche:'Media noche (L.'+_pv()+')'};
   const emojis = {desayuno:'\uD83C\uDF05', almuerzo:'\uD83C\uDF7D', cena:'\uD83C\uDF19', media_noche:'\uD83C\uDF03'};
   const tipos = ['desayuno','almuerzo','cena','media_noche'];
   const checksHTML = tipos.map(function(t){
