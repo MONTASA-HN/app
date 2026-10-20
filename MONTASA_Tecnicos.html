@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='68cab771b3ac';
+  var APP_VERSION='53b215e55419';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7164,6 +7164,42 @@ function _cliNomSync(o){
   }catch(e){}
   return '';
 }
+</script>
+<script>
+// ══ CONTADOR CON RESERVA (2026-10-20, auditoría) ══ Antes de dar un número nuevo se reserva en <raíz>/lastCorrelativo_<pref>
+// (transacción): dos teléfonos al mismo tiempo nunca toman el mismo. Sin señal (o si tarda más de 5 s) se usa el más alto de aquí + 1.
+function _nxReservarNum(raiz, pref, localMax){
+  return new Promise(function(ok){
+    var listo = false, fin = function(n){ if(!listo){ listo = true; ok(n); } };
+    if(!window._fbDB || !navigator.onLine){ fin(localMax + 1); return; }
+    setTimeout(function(){ fin(localMax + 1); }, 5000);
+    try{
+      window._fbDB.ref(raiz + '/lastCorrelativo_' + pref).transaction(function(c){ c = parseInt(c, 10) || 0; return Math.max(c, localMax) + 1; })
+        .then(function(r){ fin(r && r.committed ? (parseInt(r.snapshot.val(), 10) || localMax + 1) : localMax + 1); }, function(){ fin(localMax + 1); });
+    }catch(e){ fin(localMax + 1); }
+  });
+}
+// SR: solo la PRIMERA solicitud de una orden toma número nuevo (las adicionales cuelgan de ella: SR-0057-2).
+(function(){
+  if(typeof _srGuardar !== 'function' || typeof _srSigCorrelativo !== 'function') return;
+  var orig = _srSigCorrelativo, guardar = _srGuardar, reservado = null, ocupado = false;
+  _srSigCorrelativo = function(){ if(reservado){ var r = reservado; reservado = null; return r; } return orig(); };
+  _srGuardar = function(){
+    if(ocupado) return;
+    var nueva = false;
+    try{
+      nueva = !_srEditando && _srOrdenSel && _srOrdenSel.o && !_srDeOrden(_srOrdenSel.o.id).length && window._fbDB && window._fbReady && navigator.onLine
+        && Array.prototype.some.call(document.querySelectorAll('#sr-filas .sr-desc'), function(i){ return i.value.trim(); });
+    }catch(e){}
+    if(!nueva) return guardar.apply(this, arguments);
+    var self = this, args = arguments, mx = (parseInt(String(orig()).replace(/[^0-9]/g, ''), 10) || 1) - 1;
+    ocupado = true;
+    _nxReservarNum('montasa', 'SR', mx).then(function(n){
+      ocupado = false; reservado = 'SR-' + String(n).padStart(4, '0');
+      try{ guardar.apply(self, args); }finally{ reservado = null; }
+    });
+  };
+})();
 </script>
 </body>
 </html>
