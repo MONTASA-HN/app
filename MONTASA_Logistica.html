@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8b83ddf6f882';
+  var APP_VERSION='6de9726a3302';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -5679,6 +5679,60 @@ function _logCerrarCarpeta(){ _logCarpeta = null; var b = document.getElementByI
   }
   setInterval(revisar, 10000); setTimeout(escuchar, 1500);
   window.addEventListener('beforeunload', function(ev){ revisar(); if(hay && !conectado){ ev.preventDefault(); ev.returnValue = 'Hay cambios sin subir'; return ev.returnValue; } });
+})();
+</script>
+<script>
+// ══ PERMISO POR CARGO (2026-10-20, auditoría paso 4, decisión de Miguel) ══ Las acciones que pedían PIN ahora dependen del cargo
+// del teléfono aprobado (accesos/<uid>/rol): en las apps de Gerencia solo «gerencia»; en las demás «gerencia» o «supervision».
+// Con el cargo no se pide PIN (solo «¿continuar?»); sin él, aunque se sepa el PIN, no se puede. El cargo se recuerda en el teléfono
+// (nx_rol) para cuando no hay señal. MONHACO: un teléfono SIN registro aprobado sigue con el PIN de antes (transición).
+(function(){
+  var GER = /Gerencia\.html$/i.test(location.pathname), MH = /MONHACO_/i.test(location.pathname);
+  window._nxRol = function(){
+    var r = (window._nxAcceso || {}).registro;
+    if(r && r.estado === 'aprobado' && r.rol){ try{ localStorage.setItem('nx_rol', r.rol); }catch(e){} return r.rol; }
+    if(r && r.estado && r.estado !== 'aprobado'){ try{ localStorage.removeItem('nx_rol'); }catch(e){} return ''; }
+    try{ return localStorage.getItem('nx_rol') || ''; }catch(e){ return ''; }
+  };
+  document.addEventListener('nx-acceso', function(){ try{ window._nxRol(); }catch(e){} });
+  function permitido(){ var r = window._nxRol(); return GER ? r === 'gerencia' : (r === 'gerencia' || r === 'supervision'); }
+  function transicion(){ return MH && !window._nxRol(); }
+  function negar(){
+    alert('🔒 Esta acción solo la puede hacer ' + (GER ? 'Gerencia' : 'Gerencia o Supervisión') + ' desde su propio teléfono.\n\n'
+      + 'Si te corresponde, pide en Gerencia que le den ese permiso a este teléfono (Personal → Accesos).');
+  }
+  function preguntar(titulo){
+    var t = String(titulo || 'Acción protegida').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ¿]+/, '').trim();
+    return confirm(t + '\n\n¿Continuar?');
+  }
+  // Versión que responde sí/no al momento (para las funciones que pedían el PIN con prompt)
+  window._nxPermisoSync = function(titulo){
+    if(transicion()){
+      var p = prompt('Ingresa el PIN:'); if(p === null) return false;
+      if(String(p).trim() !== (typeof PIN_CORRECTO !== 'undefined' ? PIN_CORRECTO : '')){ alert('⚠️ PIN incorrecto.'); return false; }
+      return true;
+    }
+    if(!permitido()){ negar(); return false; }
+    return preguntar(titulo);
+  };
+  var orig = window.solicitarPINAccion;
+  window.solicitarPINAccion = function(cb, titulo, sub){
+    if(transicion() && typeof orig === 'function') return orig.apply(this, arguments);
+    if(!permitido()){ negar(); return; }
+    if(!preguntar(titulo)) return;
+    if(typeof cb === 'function') cb();
+  };
+  // Botón ✕ viejo de Gerencia (borrar preventivo/correctivo): mismo permiso
+  if(typeof window.solicitarPIN === 'function'){
+    var origViejo = window.solicitarPIN;
+    window.solicitarPIN = function(tipo, id){
+      if(transicion()) return origViejo.apply(this, arguments);
+      window.solicitarPINAccion(function(){
+        if(tipo === 'prev' && typeof eliminarPreventivo === 'function') eliminarPreventivo(id);
+        else if(tipo === 'corr' && typeof eliminarCorrectivo === 'function') eliminarCorrectivo(id);
+      }, '🗑 Eliminar orden');
+    };
+  }
 })();
 </script>
 </body>

@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2788658234e1';
+  var APP_VERSION='d06c28ea00df';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12379,12 +12379,7 @@ function recalcViaticos(){
 }
 
 function editarLiquidacionConPin(){
-  const pin = prompt('Ingresa el PIN de acceso para editar la liquidación:');
-  if(pin === null) return;
-  if(pin !== '1624'){
-    alert('⚠️ PIN incorrecto.');
-    return;
-  }
+  if(!window._nxPermisoSync('✏️ Editar liquidación')) return;   // (2026-10-20) permiso por cargo
   // Re-render liquidacion in edit mode
   const orden = _getViaticosOrden();
   if(!orden || !orden.viaticos) return;
@@ -15064,7 +15059,7 @@ function _cliOrdenAlCerrar(o){
   }
   function tarjetaAcceso(a, yo, tipo){
     var emp = a.empleadoId ? nombreEmpleado(a.empleadoId) : '';
-    return '<div class="card"' + (tipo === 'rech' ? ' style="margin-top:8px"' : '') + '><div class="nm">' + esc((a.nombre || '') + ' ' + (a.apellido || '')) + (a.uid === yo ? ' <span class="tag" style="margin:0 0 0 6px;background:#e8eefc;color:#1f3864">este equipo</span>' : '') + (a.rol === 'gerencia' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px">Gerencia</span>' : '') + (a.rol === 'consulta' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px;background:#eef4ff;color:#1f3864">👁 Consulta</span>' : '') + '</div>'
+    return '<div class="card"' + (tipo === 'rech' ? ' style="margin-top:8px"' : '') + '><div class="nm">' + esc((a.nombre || '') + ' ' + (a.apellido || '')) + (a.uid === yo ? ' <span class="tag" style="margin:0 0 0 6px;background:#e8eefc;color:#1f3864">este equipo</span>' : '') + (a.rol === 'gerencia' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px">Gerencia</span>' : '') + (a.rol === 'consulta' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px;background:#eef4ff;color:#1f3864">👁 Consulta</span>' : '') + (a.rol === 'supervision' && tipo === 'apro' ? ' <span class="tag" style="margin:0 0 0 6px;background:#fff4e5;color:#8a4b00">🛠 Supervisión</span>' : '') + '</div>'
       + (emp ? '<div class="sub">🪪 Empleado: <b>' + esc(emp) + '</b></div>' : '') + (a.area ? '<div class="sub">🏢 ' + esc(a.area) + '</div>' : '')
       + '<div class="sub">📱 ' + esc(a.dispositivo || '—') + ' · ' + esc(String(a.app || '').replace('.html', '').replace(/_/g, ' ')) + '</div>'
       + '<div class="sub">Pidió: ' + fechaHora(a.creado) + ' · Última vez: ' + fechaHora(a.ultimaVez) + '</div>'
@@ -15086,7 +15081,7 @@ function _cliOrdenAlCerrar(o){
       + '<label>¿Quién es en Personal? <span style="font-weight:400;color:#667085">(cuenta el nombre de la ficha, no el que escribió)</span></label>'
       + '<select id="acc-emp"><option value="">— Elegir empleado —</option>' + gente.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === sug ? ' selected' : '') + '>' + esc(p.n) + ' — ' + esc(p.c) + ' (' + EMP_NOMBRE[p.empresa] + ')</option>'; }).join('') + '</select>'
       + '<label>Área o empresa <span style="font-weight:400;color:#667085">(opcional, para quien no es empleado)</span></label><input id="acc-area" placeholder="Ej: Ventas" value="' + esc(a.area || '') + '" autocomplete="off">'
-      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef === 'campo' ? ' selected' : '') + '>Campo (técnicos, operadores, supervisión)</option><option value="consulta"' + (rolDef === 'consulta' ? ' selected' : '') + '>Consulta (solo ver y descargar reportes, p. ej. Comercial)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
+      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef === 'campo' ? ' selected' : '') + '>Campo (técnicos, operadores)</option><option value="supervision"' + (rolDef === 'supervision' ? ' selected' : '') + '>Supervisión (reabrir, editar y borrar órdenes, SR extra, viáticos, vales y equipos)</option><option value="consulta"' + (rolDef === 'consulta' ? ' selected' : '') + '>Consulta (solo ver y descargar reportes, p. ej. Comercial)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
       function(w){
         var emp = val(w, 'acc-emp'), rol = val(w, 'acc-rol');
         if(!emp && rol !== 'consulta'){ alert('Elige a qué empleado de Personal corresponde este teléfono.\n\nSi no es empleado (por ejemplo, alguien de Comercial que solo ve reportes), elige el permiso «Consulta».'); return; }
@@ -15917,6 +15912,60 @@ function _nxReservarNum(raiz, pref, localMax){
       try{ guardar.apply(self, args); }finally{ reservado = null; }
     });
   };
+})();
+</script>
+<script>
+// ══ PERMISO POR CARGO (2026-10-20, auditoría paso 4, decisión de Miguel) ══ Las acciones que pedían PIN ahora dependen del cargo
+// del teléfono aprobado (accesos/<uid>/rol): en las apps de Gerencia solo «gerencia»; en las demás «gerencia» o «supervision».
+// Con el cargo no se pide PIN (solo «¿continuar?»); sin él, aunque se sepa el PIN, no se puede. El cargo se recuerda en el teléfono
+// (nx_rol) para cuando no hay señal. MONHACO: un teléfono SIN registro aprobado sigue con el PIN de antes (transición).
+(function(){
+  var GER = /Gerencia\.html$/i.test(location.pathname), MH = /MONHACO_/i.test(location.pathname);
+  window._nxRol = function(){
+    var r = (window._nxAcceso || {}).registro;
+    if(r && r.estado === 'aprobado' && r.rol){ try{ localStorage.setItem('nx_rol', r.rol); }catch(e){} return r.rol; }
+    if(r && r.estado && r.estado !== 'aprobado'){ try{ localStorage.removeItem('nx_rol'); }catch(e){} return ''; }
+    try{ return localStorage.getItem('nx_rol') || ''; }catch(e){ return ''; }
+  };
+  document.addEventListener('nx-acceso', function(){ try{ window._nxRol(); }catch(e){} });
+  function permitido(){ var r = window._nxRol(); return GER ? r === 'gerencia' : (r === 'gerencia' || r === 'supervision'); }
+  function transicion(){ return MH && !window._nxRol(); }
+  function negar(){
+    alert('🔒 Esta acción solo la puede hacer ' + (GER ? 'Gerencia' : 'Gerencia o Supervisión') + ' desde su propio teléfono.\n\n'
+      + 'Si te corresponde, pide en Gerencia que le den ese permiso a este teléfono (Personal → Accesos).');
+  }
+  function preguntar(titulo){
+    var t = String(titulo || 'Acción protegida').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ¿]+/, '').trim();
+    return confirm(t + '\n\n¿Continuar?');
+  }
+  // Versión que responde sí/no al momento (para las funciones que pedían el PIN con prompt)
+  window._nxPermisoSync = function(titulo){
+    if(transicion()){
+      var p = prompt('Ingresa el PIN:'); if(p === null) return false;
+      if(String(p).trim() !== (typeof PIN_CORRECTO !== 'undefined' ? PIN_CORRECTO : '')){ alert('⚠️ PIN incorrecto.'); return false; }
+      return true;
+    }
+    if(!permitido()){ negar(); return false; }
+    return preguntar(titulo);
+  };
+  var orig = window.solicitarPINAccion;
+  window.solicitarPINAccion = function(cb, titulo, sub){
+    if(transicion() && typeof orig === 'function') return orig.apply(this, arguments);
+    if(!permitido()){ negar(); return; }
+    if(!preguntar(titulo)) return;
+    if(typeof cb === 'function') cb();
+  };
+  // Botón ✕ viejo de Gerencia (borrar preventivo/correctivo): mismo permiso
+  if(typeof window.solicitarPIN === 'function'){
+    var origViejo = window.solicitarPIN;
+    window.solicitarPIN = function(tipo, id){
+      if(transicion()) return origViejo.apply(this, arguments);
+      window.solicitarPINAccion(function(){
+        if(tipo === 'prev' && typeof eliminarPreventivo === 'function') eliminarPreventivo(id);
+        else if(tipo === 'corr' && typeof eliminarCorrectivo === 'function') eliminarCorrectivo(id);
+      }, '🗑 Eliminar orden');
+    };
+  }
 })();
 </script>
 </body>
