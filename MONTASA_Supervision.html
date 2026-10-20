@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='eb188dfd77fc';
+  var APP_VERSION='c03b5969593a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -134,21 +134,22 @@ function _fbRefPorId(ruta){
     });
   }
   // Registro nuevo: se agrega al final de la lista del SERVIDOR (transacción: no pisa a nadie)
+  // (2026-10-20) Ya no reescribe la lista entera (las reglas solo se lo permiten a Gerencia/Supervisión): toma la casilla
+  // siguiente a la última del servidor, solo si está vacía (o ya es este mismo registro); si otro la ganó, prueba la siguiente.
   function agregar(valor){
-    return db.ref(base).transaction(function(cur){
-      if(cur === null || cur === undefined) return [valor];
-      if(Array.isArray(cur)){
-        var i = cur.findIndex(function(x){ return x && x.id === valor.id; });
-        if(i >= 0) cur[i] = valor; else cur.push(valor);
-        return cur;
+    return db.ref(base).orderByKey().limitToLast(1).once('value').then(function(s){
+      var max = -1; s.forEach(function(ch){ var n = parseInt(ch.key, 10); if(!isNaN(n) && n > max) max = n; });
+      function intentar(n, vueltas){
+        return db.ref(base + '/' + n).transaction(function(cur){
+          if(cur === null || cur === undefined || (cur && cur.id === valor.id)) return valor;
+          return;   // ocupada por otro registro
+        }).then(function(r){
+          if(r && r.committed) return;
+          if(vueltas < 8) return intentar(n + 1, vueltas + 1);
+          throw new Error('sin casilla libre para ' + valor.id);
+        });
       }
-      var ks = Object.keys(cur), max = -1;
-      for(var j = 0; j < ks.length; j++){
-        if(cur[ks[j]] && cur[ks[j]].id === valor.id){ cur[ks[j]] = valor; return cur; }
-        var n = parseInt(ks[j], 10); if(!isNaN(n) && n > max) max = n;
-      }
-      cur[String(max + 1)] = valor;
-      return cur;
+      return intentar(max + 1, 0);
     });
   }
   return {
