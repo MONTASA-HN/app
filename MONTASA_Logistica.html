@@ -25,6 +25,30 @@
 })();
 </script>
 <script>
+// ══ HORÓMETRO QUE NO BAJA (2026-10-20, auditoría 11, decisión de Miguel) ══ Se revisa DENTRO de la transacción (con el valor que tiene el
+// servidor en ese momento): si la lectura nueva es menor (o se borra) y el teléfono no tiene cargo Gerencia/Supervisión, se queda la del
+// servidor y se avisa. Aplica a horometro y kilometraje de los equipos (motor _Sync, _nxTx/_nxSetSeguro y cierre de horómetros del mes).
+(function(){
+  function num(x){ var n = parseFloat(String(x == null ? '' : x).replace(/,/g, '')); return isFinite(n) ? n : NaN; }
+  function sup(){ try{ var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; return r === 'gerencia' || r === 'supervision'; }catch(e){ return false; } }
+  var avisados = {};
+  window._nxBaja = function(ant, nuevo, nombre){
+    var a = num(ant); if(!(a > 0)) return false;
+    var vacio = String(nuevo == null ? '' : nuevo).trim() === '', n = num(nuevo);
+    if(!vacio && !(n < a)) return false;
+    if(sup()) return false;
+    var k = nombre + '|' + nuevo;
+    if(!avisados[k]){ avisados[k] = 1; setTimeout(function(){ try{ toast('⚠️ No se guardó la lectura de ' + nombre + ': ' + (vacio ? 'vacía' : n) + ' es menor que la actual (' + a + '). Solo Gerencia o Supervisión pueden corregirla hacia abajo.', true); }catch(e){} }, 0); }
+    return true;
+  };
+  window._nxNoBajar = function(cur, ant){
+    if(!cur || !ant) return cur;
+    ['horometro', 'kilometraje'].forEach(function(f){ if(window._nxBaja(ant[f], cur[f], cur.codigo || cur.id || 'el equipo')) cur[f] = ant[f]; });
+    return cur;
+  };
+})();
+</script>
+<script>
 // (2026-10-20, auditoría 15) ¿Este equipo de la lista base ya se vendió o se borró a propósito? Vendido: primero por SERIE; por código
 // solo si a ninguno de los dos le aparece serie (los códigos se repiten entre empresas y se reusan). Borrado: lápida en _borradas.
 window._nxLapida = function(id){ return !!(id && ((window._nxLapidas || {})[id] || (window._borradasCache || {})[id])); };
@@ -84,7 +108,8 @@ function _nxTx(base, key, id, fn){
     return db.ref(base + '/' + k).transaction(function(cur){
       if(cur === null) return null;                 // aún sin dato: Firebase la repite con el valor real del servidor
       if(!cur || cur.id !== id) return;             // en esa posición hay OTRO registro: no escribir
-      return fn(cur);
+      var _ant = /\/equipos$/.test(base) ? { horometro: cur.horometro, kilometraje: cur.kilometraje } : null;   // (2026-10-20) no bajar
+      var _r = fn(cur); if(_ant && _r && typeof window._nxNoBajar === 'function') window._nxNoBajar(_r, _ant); return _r;
     }).then(function(r){ var v = r && r.snapshot && r.snapshot.val(); return !!(r && r.committed && v && v.id === id); });
   };
   return una(key).then(function(ok){
@@ -109,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ed64efb937d6';
+  var APP_VERSION='e28acf2e331a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -463,8 +488,10 @@ var _Sync = (function(){
     return ref.transaction(function(cur){
       if(cur === null) return cur;       // aún sin dato local: Firebase reintenta con el real
       if(!cur || cur.id !== id) return;  // en esa posición hay otro registro: abortar
+      var _ant = col === 'equipos' ? { horometro: cur.horometro, kilometraje: cur.kilometraje } : null;   // (2026-10-20) no bajar
       Object.keys(cambios).forEach(function(c){ cur[c] = cambios[c]; });
       quitar.forEach(function(c){ delete cur[c]; });
+      if(_ant && typeof window._nxNoBajar === 'function') window._nxNoBajar(cur, _ant);
       return cur;
     }).then(function(r){
       delete subiendo[llaveS];
@@ -1906,7 +1933,7 @@ function _mthFichasActualizar(conLectura, lecturas){
         let idx = -1;
         if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===e.id; }); }
         else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===e.id){ idx=ks[i]; break; } } }
-        if(idx!==-1 && idx!==undefined) updates[idx+'/horometro'] = String(lecturas[e.id].lectura);
+        if(idx!==-1 && idx!==undefined && !(typeof window._nxBaja === 'function' && window._nxBaja((v[idx]||{}).horometro, lecturas[e.id].lectura, e.codigo||e.id))) updates[idx+'/horometro'] = String(lecturas[e.id].lectura);   // (2026-10-20) no bajar
       });
       if(Object.keys(updates).length) return window._fbDB.ref('montasa/equipos').update(updates).then(function(){ return conLectura.length; });
       return 0;
@@ -5837,6 +5864,56 @@ function _logCerrarCarpeta(){ _logCarpeta = null; var b = document.getElementByI
     var f = window[nom]; if(typeof f !== 'function') return;
     window[nom] = function(){ if(!window._viatMontosOK()) return; return f.apply(this, arguments); };
   });
+})();
+</script>
+<script>
+// ══ VIÁTICOS SIN PISAR (2026-10-20, auditoría 11, decisión de Miguel) ══ Al abrir los viáticos de una orden se toma la «huella» de cómo
+// están en el servidor. Al guardar (Guardar o Descargar PDF) se vuelve a mirar el servidor: si otra persona los cambió mientras tanto,
+// se avisa y NO se guarda encima. Sin señal no se puede revisar: se guarda como antes.
+(function(){
+  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa', huella = {}, propia = {};
+  function canon(x){
+    if(x === null || x === undefined) return undefined;
+    if(Array.isArray(x) || (typeof x === 'object' && Object.keys(x).length && Object.keys(x).every(function(k){ return /^[0-9]+$/.test(k); }))){
+      var ks = Array.isArray(x) ? x.map(function(_, i){ return i; }) : Object.keys(x).sort(function(a, b){ return a - b; });
+      var l = ks.map(function(k){ return canon(x[k]); }).filter(function(v){ return v !== undefined; }); return l.length ? l : undefined;
+    }
+    if(typeof x === 'object'){ var o = {}, n = 0; Object.keys(x).sort().forEach(function(k){ var v = canon(x[k]); if(v !== undefined){ o[k] = v; n++; } }); return n ? o : undefined; }
+    return x;
+  }
+  function firma(o){ return JSON.stringify(canon({ v: o && o.viaticos, x: o && o.viaticosExtra }) || null); }
+  function servidor(id){
+    var db = window._fbDB; if(!db || !window._fbReady || !navigator.onLine || !id) return Promise.resolve(null);
+    return Promise.race([
+      db.ref(RAIZ + '/logistica').orderByChild('id').equalTo(id).once('value').then(function(q){ var r = null; q.forEach(function(ch){ var v = ch.val(); if(!r && v && v.id === id) r = v; }); return r ? firma(r) : null; }),
+      new Promise(function(ok){ setTimeout(function(){ ok(null); }, 6000); })
+    ]).catch(function(){ return null; });
+  }
+  function ordenId(){ try{ var o = _getViaticosOrden(); return o && o.id; }catch(e){ return null; } }
+  var abrir = window.abrirViaticos;
+  if(typeof abrir === 'function') window.abrirViaticos = function(id){
+    var r = abrir.apply(this, arguments);
+    if(id && !huella[id]) servidor(id).then(function(h){ if(h) huella[id] = h; });
+    return r;
+  };
+  ['guardarViaticos', 'guardarLiquidacion', 'generarPDFViaticos'].forEach(function(nom){
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(){
+      var self = this, args = arguments, id = ordenId();
+      if(!id || !huella[id]) return f.apply(self, args);
+      return servidor(id).then(function(h){
+        if(h && h !== huella[id] && h !== propia[id]){
+          alert('⚠️ Otra persona cambió los viáticos de esta orden mientras los tenías abiertos.\n\nNo se guardó nada para no borrar lo suyo. Cierra los viáticos y vuelve a abrirlos para ver lo último; después repite tu cambio.');
+          return;
+        }
+        var r = f.apply(self, args);
+        try{ var o = _getViaticosOrden(); if(o && o.id === id){ propia[id] = firma(o); huella[id] = propia[id]; } }catch(e){}
+        return r;
+      });
+    };
+  });
+  var cerrar = window.cerrarViaticos;
+  if(typeof cerrar === 'function') window.cerrarViaticos = function(){ var id = ordenId(); if(id){ delete huella[id]; delete propia[id]; } return cerrar.apply(this, arguments); };
 })();
 </script>
 </body>

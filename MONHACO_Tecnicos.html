@@ -25,6 +25,30 @@
 })();
 </script>
 <script>
+// ══ HORÓMETRO QUE NO BAJA (2026-10-20, auditoría 11, decisión de Miguel) ══ Se revisa DENTRO de la transacción (con el valor que tiene el
+// servidor en ese momento): si la lectura nueva es menor (o se borra) y el teléfono no tiene cargo Gerencia/Supervisión, se queda la del
+// servidor y se avisa. Aplica a horometro y kilometraje de los equipos (motor _Sync, _nxTx/_nxSetSeguro y cierre de horómetros del mes).
+(function(){
+  function num(x){ var n = parseFloat(String(x == null ? '' : x).replace(/,/g, '')); return isFinite(n) ? n : NaN; }
+  function sup(){ try{ var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; return r === 'gerencia' || r === 'supervision'; }catch(e){ return false; } }
+  var avisados = {};
+  window._nxBaja = function(ant, nuevo, nombre){
+    var a = num(ant); if(!(a > 0)) return false;
+    var vacio = String(nuevo == null ? '' : nuevo).trim() === '', n = num(nuevo);
+    if(!vacio && !(n < a)) return false;
+    if(sup()) return false;
+    var k = nombre + '|' + nuevo;
+    if(!avisados[k]){ avisados[k] = 1; setTimeout(function(){ try{ toast('⚠️ No se guardó la lectura de ' + nombre + ': ' + (vacio ? 'vacía' : n) + ' es menor que la actual (' + a + '). Solo Gerencia o Supervisión pueden corregirla hacia abajo.', true); }catch(e){} }, 0); }
+    return true;
+  };
+  window._nxNoBajar = function(cur, ant){
+    if(!cur || !ant) return cur;
+    ['horometro', 'kilometraje'].forEach(function(f){ if(window._nxBaja(ant[f], cur[f], cur.codigo || cur.id || 'el equipo')) cur[f] = ant[f]; });
+    return cur;
+  };
+})();
+</script>
+<script>
 // (2026-10-20, auditoría 15) ¿Este equipo de la lista base ya se vendió o se borró a propósito? Vendido: primero por SERIE; por código
 // solo si a ninguno de los dos le aparece serie (los códigos se repiten entre empresas y se reusan). Borrado: lápida en _borradas.
 window._nxLapida = function(id){ return !!(id && ((window._nxLapidas || {})[id] || (window._borradasCache || {})[id])); };
@@ -84,7 +108,8 @@ function _nxTx(base, key, id, fn){
     return db.ref(base + '/' + k).transaction(function(cur){
       if(cur === null) return null;                 // aún sin dato: Firebase la repite con el valor real del servidor
       if(!cur || cur.id !== id) return;             // en esa posición hay OTRO registro: no escribir
-      return fn(cur);
+      var _ant = /\/equipos$/.test(base) ? { horometro: cur.horometro, kilometraje: cur.kilometraje } : null;   // (2026-10-20) no bajar
+      var _r = fn(cur); if(_ant && _r && typeof window._nxNoBajar === 'function') window._nxNoBajar(_r, _ant); return _r;
     }).then(function(r){ var v = r && r.snapshot && r.snapshot.val(); return !!(r && r.committed && v && v.id === id); });
   };
   return una(key).then(function(ok){
@@ -109,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='698a2614acc8';
+  var APP_VERSION='cbd519000006';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -598,8 +623,10 @@ var _Sync = (function(){
     return ref.transaction(function(cur){
       if(cur === null) return cur;       // aún sin dato local: Firebase reintenta con el real
       if(!cur || cur.id !== id) return;  // en esa posición hay otro registro: abortar
+      var _ant = col === 'equipos' ? { horometro: cur.horometro, kilometraje: cur.kilometraje } : null;   // (2026-10-20) no bajar
       Object.keys(cambios).forEach(function(c){ cur[c] = cambios[c]; });
       quitar.forEach(function(c){ delete cur[c]; });
+      if(_ant && typeof window._nxNoBajar === 'function') window._nxNoBajar(cur, _ant);
       return cur;
     }).then(function(r){
       delete subiendo[llaveS];
