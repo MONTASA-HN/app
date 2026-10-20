@@ -73,7 +73,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='97db44b91572';
+  var APP_VERSION='91271db4665c';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1321,7 +1321,7 @@ function _firmasValeHTML(orden){
   if(!nombres.length) return '';
   const filas = nombres.map(function(p){
     return '<div style="text-align:center;font-size:11px;flex:1;min-width:42%;max-width:48%"><div style="height:46px;border-bottom:1px solid #333;margin-bottom:5px"></div>'
-      + '<div style="font-weight:bold;font-size:12px">'+String(p).toUpperCase()+'</div>'
+      + '<div style="font-weight:bold;font-size:12px">'+_x(String(p).toUpperCase())+'</div>'
       + '<div style="color:#555;margin-top:2px">Recibe</div></div>';
   }).join('');
   return '<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:28px">'+filas+'</div>';
@@ -2781,12 +2781,12 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   const totalFirmas = numPersonas + 1;
   const cols = totalFirmas <= 2 ? '1fr 1fr' : totalFirmas <= 6 ? '1fr 1fr 1fr' : '1fr 1fr 1fr 1fr';   // 7 firmas = 2 filas: el vale siempre cabe en la hoja
   const firmasHTML = '<div class="firma"><div class="firma-espacio"></div><div class="firma-nombre">MIGUEL ORELLANA</div><div class="firma-rol">Autoriza</div></div>'
-    + personas.map(p=>'<div class="firma"><div class="firma-espacio"></div><div class="firma-nombre">'+String(p).toUpperCase()+'</div><div class="firma-rol">Recibe</div></div>').join('');
+    + personas.map(p=>'<div class="firma"><div class="firma-espacio"></div><div class="firma-nombre">'+_x(String(p).toUpperCase())+'</div><div class="firma-rol">Recibe</div></div>').join('');
 
   const detallePersonas = numPersonas > 1
     ? '<div class="campo"><div class="lbl">Detalle por persona ('+numPersonas+' personas):</div>'
       + personas.map(p=>'<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12pt;border-bottom:1px dashed #ddd">'
-        +'<span>'+p+'</span><span style="font-weight:bold">L. '+montoPorPersona.toFixed(2)+'</span></div>').join('')
+        +'<span>'+_x(p)+'</span><span style="font-weight:bold">L. '+montoPorPersona.toFixed(2)+'</span></div>').join('')
       +'</div>'
     : '';
 
@@ -2816,7 +2816,7 @@ function _valeComprobanteImprimir(orden, tipoDesc){
     +'<span style="font-size:8pt;background:#dce6f1;color:#1f3864;border-radius:4px;padding:2px 8px;font-family:Courier New,monospace;font-weight:bold">'+corr+'</span>'
     +'</div></div>'
     +'<div class="campo"><div class="lbl">Fecha:</div><div class="val">'+fecha+'</div></div>'
-    +'<div class="campo"><div class="lbl">Concepto:</div><div class="val" style="font-size:12pt;line-height:1.5">'+concepto+'</div></div>'
+    +'<div class="campo"><div class="lbl">Concepto:</div><div class="val" style="font-size:12pt;line-height:1.5">'+_x(concepto)+'</div></div>'
     + detallePersonas
     +'<div class="monto-box">'
     +(numPersonas>1?'<div style="font-size:9pt;opacity:0.85;margin-bottom:4px">'+numPersonas+' personas x L. '+montoPorPersona.toFixed(2)+'</div>':'')
@@ -4185,7 +4185,7 @@ function abrirViaticos(ordenId){
       ${personas.length ? `
       <div style="margin-top:14px;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Personal viajando</div>
       ${personas.map(p=>`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:13px">
-        <span>${p.nombre||'—'}</span>
+        <span>${_x(p.nombre||'—')}</span>
         <span style="color:var(--text2)">L. ${p.alim.toFixed(0)}</span>
       </div>`).join('')}` : ''}
     </div>
@@ -4502,7 +4502,7 @@ function _vliqFilasHTML(facturas, readOnly, hoy, desde, hasta){
             <input type="date" id="vlf-fecha-${i}" value="${f.fecha||hoy}">
           </div>
           <div class="form-group"><label>N° Documento</label>
-            <input type="text" id="vlf-ndoc-${i}" value="${f.ndocumento||''}" placeholder="001-001-0001">
+            <input type="text" id="vlf-ndoc-${i}" value="${_x(f.ndocumento||'')}" placeholder="001-001-0001">
           </div>
           <div class="form-group"><label>Monto (L.)</label>
             <input type="number" id="vlf-monto-${i}" value="${f.monto||''}" placeholder="0" oninput="recalcFacturas()">
@@ -4908,7 +4908,7 @@ function _buildSolicitudHTML(v, orden){
 
   const personaRows=personas.map(p=>`
     <tr>
-      <td>${p.nombre||''}</td><td>${p.fecha||''}</td>
+      <td>${_x(p.nombre||'')}</td><td>${p.fecha||''}</td>
       <td>${p.hora_ini||''}</td><td>${p.hora_fin||''}</td>
       <td class="num">${p.desayuno?'L.'+p.desayuno:''}</td>
       <td class="num">${p.almuerzo?'L.'+p.almuerzo:''}</td>
@@ -5028,7 +5028,7 @@ function _buildLiquidacionHTML(v, orden){
 
   const factRows=Array.from({length:_vliqContar(facturas)},(_,i)=>{
     const f=facturas[i];
-    if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${_viatEsc(_viatDescTexto(f))}</td><td>${f.fecha||''}</td><td>${f.ndocumento||''}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
+    if(f&&f.descripcion) return `<tr><td class="num">${i+1}</td><td>${_viatEsc(_viatDescTexto(f))}</td><td>${_x(f.fecha||'')}</td><td>${_x(f.ndocumento||'')}</td><td class="num">L. ${(f.monto||0).toFixed(2)}</td></tr>`;
     return `<tr><td class="num">${i+1}</td><td></td><td></td><td></td><td></td></tr>`;
   }).join('');
 
