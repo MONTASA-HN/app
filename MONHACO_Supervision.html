@@ -3,6 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
+// distinto al esperado, el navegador no lo ejecuta. Cubre también las que se cargan sobre la marcha (appendChild/insertBefore).
+(function(){
+  var H = {
+   "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js": "sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
+   "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js": "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk",
+   "https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js": "sha384-f6/UpzjTjIXASlp20cArQsaRh1EvHVJd5kegy/gYR9W2D0a32TnEqUEiW4Zm/5O0",
+   "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js": "sha384-xD1t9dGSVKobUztxDkv6xUI0H4AnFz0NxwlgDJJ7FDlblG9xxr1Z9iauCZuJYj6p",
+   "https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js": "sha384-ajMUFBUFMCyjh8uxJg6bkGcKe9RTolyjwbxB3yES0QQMenP3Oztj/W9vA2SJPcIh",
+   "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js": "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw",
+   "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js": "sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
+   "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js": "sha384-TKzdYxq/t9UpLrJcIQu2hpfQg+oSoJVDkhWcS4zuzQmzQTBx5gSMhINXD2uGv0jw",
+   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js": "sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO",
+   "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js": "sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz"
+  };
+  function fijar(n){ try{ if(n && n.tagName === 'SCRIPT' && n.src && H[n.src] && !n.integrity){ n.integrity = H[n.src]; n.crossOrigin = 'anonymous'; } }catch(e){} }
+  var a = Node.prototype.appendChild, i = Node.prototype.insertBefore;
+  Node.prototype.appendChild = function(n){ fijar(n); return a.apply(this, arguments); };
+  Node.prototype.insertBefore = function(n, r){ fijar(n); return i.apply(this, arguments); };
+})();
+</script>
+<script>
 // (2026-10-20) Esperar la sesión antes de la PRIMERA lectura: desde el cierre de la base (19-oct) leer sin sesión se rechaza, y
 // al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
 window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
@@ -51,7 +73,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0a686d563839';
+  var APP_VERSION='7933d3d54f96';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -786,7 +808,7 @@ var _Sync = (function(){
 <link rel="icon" type="image/png" href="/app/icons/nexo-32.png"
 <link rel="shortcut icon" type="image/png" href="/app/icons/nexo-32.png">
 <link rel="icon" sizes="32x32" type="image/png" href="/app/icons/nexo-32.png"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;--border2:#cccac0;
@@ -1128,7 +1150,7 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
 <meta name="apple-mobile-web-app-title" content="MONTASA Mant.">
 <title>MONTASA — Gestión de Mantenimiento</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;--border2:#cccac0;
@@ -1890,9 +1912,9 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" integrity="sha384-ajMUFBUFMCyjh8uxJg6bkGcKe9RTolyjwbxB3yES0QQMenP3Oztj/W9vA2SJPcIh" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js" integrity="sha384-f6/UpzjTjIXASlp20cArQsaRh1EvHVJd5kegy/gYR9W2D0a32TnEqUEiW4Zm/5O0" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" integrity="sha384-xD1t9dGSVKobUztxDkv6xUI0H4AnFz0NxwlgDJJ7FDlblG9xxr1Z9iauCZuJYj6p" crossorigin="anonymous"></script>
 <script>
 // ══ SUPERVISIÓN MONTASA — PIN:2026 — Comparte Firebase montasa/ ══
 
