@@ -51,7 +51,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='28df18e51556';
+  var APP_VERSION='68cab771b3ac';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -3989,7 +3989,7 @@ function renderPreventivos(){
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${_x(p.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteNombre',this.value)"></div>
+          ${_cliNomSync(p)}<div class="form-group" style="margin:0"><label>Nombre del cliente</label>${p.clienteOrden ? `<input type="text" value="${_x(p.clienteOrden)}" readonly title="Viene de la solicitud" style="background:#f3f5f8;font-weight:600;cursor:default"><div style="font-size:10px;color:var(--text3);margin-top:2px">Viene de la solicitud</div>` : `<input type="text" value="${_x(p.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteNombre',this.value)">`}</div>
           <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${_x(p.clienteMarca||'')}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteMarca',this.value)"></div>
           <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${_x(p.clienteModelo||'')}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteModelo',this.value)"></div>
           <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${_x(p.clienteSerie||'')}" placeholder="Número de serie" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteSerie',this.value)"></div>
@@ -4613,7 +4613,7 @@ function renderCorrectivos(){
       <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Datos del equipo de cliente</div>
         <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-          <div class="form-group" style="margin:0"><label>Nombre del cliente</label><input type="text" value="${_x(c.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteNombre',this.value)"></div>
+          ${_cliNomSync(c)}<div class="form-group" style="margin:0"><label>Nombre del cliente</label>${c.clienteOrden ? `<input type="text" value="${_x(c.clienteOrden)}" readonly title="Viene de la solicitud" style="background:#f3f5f8;font-weight:600;cursor:default"><div style="font-size:10px;color:var(--text3);margin-top:2px">Viene de la solicitud</div>` : `<input type="text" value="${_x(c.clienteNombre||'')}" placeholder="Ej: ELCATEX" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteNombre',this.value)">`}</div>
           <div class="form-group" style="margin:0"><label>Marca del equipo</label><input type="text" value="${_x(c.clienteMarca||'')}" placeholder="Ej: TOYOTA" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteMarca',this.value)"></div>
           <div class="form-group" style="margin:0"><label>Modelo</label><input type="text" value="${_x(c.clienteModelo||'')}" placeholder="Ej: FG25S" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteModelo',this.value)"></div>
           <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${_x(c.clienteSerie||'')}" placeholder="Número de serie" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','clienteSerie',this.value)"></div>
@@ -7152,6 +7152,18 @@ function _eqQuedoOpts(v){ v = _eqQuedoNorm(v); return '<option value="">-- Selec
   setInterval(revisar, 10000); setTimeout(escuchar, 1500);
   window.addEventListener('beforeunload', function(ev){ revisar(); if(hay && !conectado){ ev.preventDefault(); ev.returnValue = 'Hay cambios sin subir'; return ev.returnValue; } });
 })();
+</script>
+<script>
+// (2026-10-20, pedido de Miguel) «Nombre del cliente» del equipo de cliente = el cliente de la orden (viene de la solicitud, ya
+// estandarizado). Si la orden lo tiene y el nombre del equipo es distinto, se copia y se guarda (así la ficha se crea con ese nombre).
+var _cliNomPend = null;
+function _cliNomSync(o){
+  try{
+    var c = o && String(o.clienteOrden || '').trim();
+    if(c && o.clienteNombre !== c){ o.clienteNombre = c; clearTimeout(_cliNomPend); _cliNomPend = setTimeout(function(){ try{ saveDB(); }catch(e){} }, 800); }
+  }catch(e){}
+  return '';
+}
 </script>
 </body>
 </html>
