@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='11d9d1a92b4c';
+  var APP_VERSION='d3527628e34a';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -13162,7 +13162,7 @@ function _cliOrdenAlCerrar(o){
                                          ['Cliente', esc(clienteDe(o, eq))], ['Técnico(s)', esc(tecnicosDe(o))]]));
       S('Resultado de la evaluación', txt('Diagnóstico', o.diagnostico) + txt('Mantenimiento sugerido', o.mantSugerido) + txt('Notas', o.notas));
     } else if(tipo==='soldadura'){   // 2026-10-14
-      S('Datos del servicio', kv([['Equipo', esc(o.equipoTxt||'Sin equipo')], ['Lugar', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'], ['Asignados', esc(tecnicosDe(o))]]));
+      S('Datos del servicio', kv((o.ordenPadre ? [['Ligada a', esc(o.ordenPadre)]] : []).concat([['Equipo', esc(o.equipoTxt||'Sin equipo')], ['Lugar', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'], ['Asignados', esc(tecnicosDe(o))]])));
       S('Detalle del trabajo', txt('Trabajo a realizar', o.descripcion) + txt('Trabajo realizado', o.trabajoRealizado));
       S('Tiempos de la orden', tiempos([['Inicio del trabajo', o.fechaInicio||''], ['Fin del trabajo', o.fechaFin||'', 'Trabajo']]));
       d.meta[2] = ['Lugar del servicio', (o.ubicacion==='plantel')?'En plantel':'Fuera del plantel'];
@@ -14518,13 +14518,14 @@ function _spCrearDesdeSolicitud(copiar){
   var corr = _spSiguiente(), id = uid();
   var orden = { id: id, correlativo: corr, estado: 'Pendiente', descripcion: desc, equipoId: eqId, equipoTxt: eq ? _spEquipoTxt(eq) : '',
     tecnicos: tecs, tecnico: tecs.join(', '), ubicacion: ubic, ubicacionLink: link, contactoCliente: ctc, fecha: fecha, completado: false, creado: Date.now() };
+  if(window._spPadre && window._spPadre.id){ orden.ordenPadreId = window._spPadre.id; orden.ordenPadre = window._spPadre.correlativo || ''; orden.ordenPadreTipo = window._spPadre.tipo || ''; }   // (2026-10-23) ligada
   _solCliPush(_spLista(), orden);
   if(!DB.solicitudes) DB.solicitudes = [];
   DB.solicitudes.unshift({ id: id, correlativo: corr, equipoTxt: orden.equipoTxt || 'Sin equipo', equipoId: eqId, desc: desc, fecha: fecha, tecnicoNombre: orden.tecnico, prioridad: 'Normal', tipo: 'soldadura', estado: 'Enviada' });
   saveDB();
   try{ if(window._fbDB && window._fbReady) _Sync.guardar(); }catch(e){}
   try{ _agendarDesdeOrden(corr, tecs, fecha, 'Soldadura / Pintura — ' + desc.slice(0, 60), 240); }catch(e){}
-  var msg = '🔥 *SOLDADURA / PINTURA - ' + _SP_EMPRESA + '*\n📲 *Revisa la app NEXO para el seguimiento de esta orden.*\n\n🔢 *Orden:* ' + corr + '\n👷 *Asignados:* ' + orden.tecnico
+  var msg = '🔥 *SOLDADURA / PINTURA - ' + _SP_EMPRESA + '*\n📲 *Revisa la app NEXO para el seguimiento de esta orden.*\n\n🔢 *Orden:* ' + corr +(orden.ordenPadre ? '\n🔗 *Ligada a:* ' + orden.ordenPadre : '') + '\n👷 *Asignados:* ' + orden.tecnico
     + '\n📝 *Trabajo a realizar:* ' + desc + (orden.equipoTxt ? '\n🔧 *Equipo:* ' + orden.equipoTxt : '') + '\n📍 *Lugar:* ' + (ubic === 'plantel' ? 'En plantel' : 'Fuera del plantel')
     + (link ? '\n🗺 *Ubicación:* ' + link : '') + (ctc ? '\n📞 *Contacto:* ' + ctc : '') + '\n📅 *Fecha:* ' + fecha;
   try{ clearSolicitudForm(); }catch(e){}
@@ -14551,6 +14552,7 @@ function _buildCardSP(x, eq, eqLabel, ESTADOS_COLOR){
   c += '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;background:#f3e8ff;color:#6b21a8;padding:2px 7px;border-radius:10px">' + _x(x.correlativo || '—') + '</span>'
     + '<span style="font-size:11px;font-weight:700;background:' + cfg.bg + ';color:' + cfg.txt + ';padding:2px 8px;border-radius:10px;border:1px solid ' + cfg.border + '">' + est + '</span></div>';
   c += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">' + _x(String(x.descripcion || 'Soldadura / Pintura').slice(0, 80)) + '</div>';
+  if(x.ordenPadre) c += '<div style="font-size:11px;font-weight:700;color:#6b21a8;margin-bottom:2px">🔗 Ligada a ' + _x(x.ordenPadre) + '</div>';   // (2026-10-23)
   c += '<div style="font-size:11px;color:var(--text3)">🔥 Soldadura / Pintura · 📅 ' + _x(x.fecha || '—') + ' · 👷 ' + _x(tecs) + '</div>';
   if(x.equipoTxt) c += '<div style="font-size:11px;color:var(--text3)">🔧 ' + _x(x.equipoTxt) + '</div>';
   if(x.viaticos && typeof _viatTotalAsignado === 'function'){ c += '<div style="font-size:11px;color:#1f3864">📋 Costo del viaje: L. ' + _viatTotalAsignado(x).toFixed(2) + '</div>'; }
@@ -15200,6 +15202,84 @@ function _sigNumero(pref, lista){
   });
   var cerrar = window.cerrarViaticos;
   if(typeof cerrar === 'function') window.cerrarViaticos = function(){ var id = ordenId(); if(id){ delete huella[id]; delete propia[id]; } return cerrar.apply(this, arguments); };
+})();
+</script>
+<script>
+// ══ SOLDADURA/PINTURA LIGADA A UNA ORDEN (2026-10-23, pedido de Miguel) ══ Desde el detalle de un preventivo/correctivo abierto:
+// «🔥 Crear soldadura/pintura ligada» abre la solicitud de Soldadura/Pintura con el equipo y cliente de la orden. La SP guarda
+// ordenPadreId / ordenPadre / ordenPadreTipo y se ve «🔗 Ligada a MH-xxxx»; la orden principal muestra sus SP ligadas.
+// ¿Qué soldaduras/pinturas están ligadas a esta orden? (abiertas = sin completar ni cancelar)
+function _spLigadasDe(id){ var l = (typeof _spLista === 'function') ? _spLista() : ((typeof DB !== 'undefined' && DB.soldaduras) || []); return (l || []).filter(function(s){ return s && id && s.ordenPadreId === id; }); }
+function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !s.completado && s.estado !== 'Completado' && s.estado !== 'Cancelado'; }); }
+// Cerrar la orden principal con soldadura/pintura ligada sin terminar: avisa y deja continuar
+(function(){
+  function avisar(id){ var ab = _spAbiertasDe(id); if(!ab.length) return true;
+    return confirm('⚠️ Esta orden tiene soldadura/pintura ligada sin terminar: ' + ab.map(function(s){ return s.correlativo; }).join(', ') + '.\n\n¿Cerrarla de todos modos?'); }
+  ['completarPreventivo', 'cerrarCorrectivo'].forEach(function(nom){
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(id){ if(!avisar(id)) return; return f.apply(this, arguments); };
+  });
+  ['finalizarOrdenPreventivo', 'finalizarOrdenCorrectivo'].forEach(function(nom){   // edición de una orden existente (Gerencia)
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(){ var ed = window._editandoOrden, id = ed && ed.orig && ed.orig.id; if(id && !avisar(id)) return; return f.apply(this, arguments); };
+  });
+})();
+
+function _spLigarDesde(id, tipo){
+  var o = ((tipo === 'prev' ? DB.preventivos : DB.correctivos) || []).find(function(x){ return x && x.id === id; });
+  if(!o){ toast('No se encontró la orden', true); return; }
+  window._spPadre = null;
+  try{
+    if(typeof supShowTab === 'function') supShowTab('solicitudes', document.querySelector('[onclick*="supShowTab(\'solicitudes\'"]'));
+    else showTab('solicitudes', document.querySelector('[onclick*="showTab(\'solicitudes\'"]'));
+  }catch(e){}
+  setTimeout(function(){ _spLigarLlenar(o, tipo); }, 450);   // la pestaña reinicia el formulario al abrirse: llenar después
+}
+function _spLigarLlenar(o, tipo){
+  var dp = document.getElementById('sol-depto'); if(dp && dp.value !== 'mantenimiento'){ dp.value = 'mantenimiento'; try{ solDeptoChange(); }catch(e){} }
+  ['sol-tipo', 'sol-tipo-B'].forEach(function(i){ var s = document.getElementById(i); if(s) s.value = 'soldadura'; });
+  try{ solTipoChange(); }catch(e){}
+  var se = document.getElementById('sol-sp-equipo');
+  if(se && o.equipoId && Array.prototype.some.call(se.options, function(op){ return op.value === o.equipoId; })) se.value = o.equipoId;
+  var cli = o.clienteOrden || o.clienteNombre || '';
+  var inp = Array.prototype.find.call(document.querySelectorAll('.sol-cli-input'), function(i){ return i.offsetParent; }) || document.querySelector('.sol-cli-input');
+  if(inp && cli){ inp.value = cli; try{ _solCliMarca(inp); }catch(e){} }
+  window._spPadre = { id: o.id, correlativo: o.correlativo || '', tipo: tipo };
+  _spPadreBanner();
+  var w = document.getElementById('sol-sp-wrap'); if(w && w.scrollIntoView) try{ w.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){}
+  toast('🔗 Nueva soldadura/pintura ligada a ' + (o.correlativo || 'la orden'));
+}
+function _spPadreBanner(){
+  var b = document.getElementById('sp-padre-banner'); if(b) b.remove();
+  var p = window._spPadre, w = document.getElementById('sol-sp-wrap'); if(!p || !w) return;
+  b = document.createElement('div'); b.id = 'sp-padre-banner';
+  b.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f3e8ff;border:1px solid #d8b4fe;color:#6b21a8;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px;font-weight:700';
+  b.innerHTML = '<span>🔗 Ligada a ' + _x(p.correlativo) + ' (' + (p.tipo === 'prev' ? 'preventivo' : 'correctivo') + ')</span>'
+    + '<button type="button" style="border:1px solid #6b21a8;background:#fff;color:#6b21a8;border-radius:6px;padding:3px 8px;font-weight:700;cursor:pointer">✕ No ligar</button>';
+  b.querySelector('button').onclick = function(){ window._spPadre = null; b.remove(); };
+  w.insertBefore(b, w.firstChild);
+}
+(function(){
+  var lim = window.clearSolicitudForm;
+  if(typeof lim === 'function') window.clearSolicitudForm = function(){ window._spPadre = null; var b = document.getElementById('sp-padre-banner'); if(b) b.remove(); return lim.apply(this, arguments); };
+  var tc = window.solTipoChange;
+  if(typeof tc === 'function') window.solTipoChange = function(){
+    var r = tc.apply(this, arguments), t = (document.getElementById('sol-tipo') || {}).value;
+    if(t !== 'soldadura' && window._spPadre){ window._spPadre = null; var b = document.getElementById('sp-padre-banner'); if(b) b.remove(); }
+    return r;
+  };
+  var det = window._buildDetallePC;
+  if(typeof det === 'function') window._buildDetallePC = function(x, eq, eqLabel, estRaw, tecnicos, horas, tiempos, ESTADOS_COLOR, tipoPC){
+    var d = det.apply(this, arguments), h = '', lig = _spLigadasDe(x && x.id);
+    if(lig.length) h += '<div style="margin-top:10px;padding:8px 10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;font-size:12px">'
+      + '<div style="font-weight:700;color:#6b21a8;margin-bottom:4px">🔗 Soldadura/pintura ligada</div>'
+      + lig.map(function(s){ var e = s.completado ? 'Completado' : (s.estado || 'Pendiente');
+          return '<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span><b>' + _x(s.correlativo) + '</b> · ' + _x(String(s.descripcion || '').slice(0, 50)) + '</span><span style="font-weight:700;color:' + (e === 'Completado' ? '#1a5c1a' : '#8a4800') + '">' + _x(e) + '</span></div>'; }).join('')
+      + '</div>';
+    if(x && estRaw !== 'Completado' && !x.completado && x.estado !== 'Cancelado')
+      h += '<button onclick="_spLigarDesde(\'' + _idS(x.id) + '\',\'' + (tipoPC === 'P' ? 'prev' : 'corr') + '\')" style="width:100%;margin-top:8px;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔥 Crear soldadura/pintura ligada</button>';
+    return d + h;
+  };
 })();
 </script>
 </body>

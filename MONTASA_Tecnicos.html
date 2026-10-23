@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1e61e3c7df8c';
+  var APP_VERSION='6a991bfaf70f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6891,6 +6891,7 @@ function renderSoldaduras(){
     c += '<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none"><div style="flex:1;min-width:0">';
     c += '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:11px;font-weight:700;font-family:monospace;background:#f3e8ff;color:#6b21a8;padding:2px 7px;border-radius:10px">' + _x(o.correlativo || '—') + '</span>'
       + '<span style="font-size:11px;font-weight:700;background:' + cc[0] + ';color:' + cc[1] + ';border:1px solid ' + cc[2] + ';padding:2px 8px;border-radius:10px">' + est + '</span></div>';
+    if(o.ordenPadre) c += '<div style="font-size:11px;font-weight:700;color:#6b21a8;margin-bottom:2px">🔗 Ligada a ' + _x(o.ordenPadre) + '</div>';   // (2026-10-23)
     c += '<div style="font-size:13px;font-weight:600;margin-bottom:2px">' + _x(String(o.descripcion || 'Soldadura / Pintura').slice(0, 70)) + '</div>';
     c += '<div style="font-size:12px;color:var(--text2)">👷 ' + _x(tecs) + (o.equipoTxt ? ' · 🔧 ' + _x(o.equipoTxt) : '') + '</div>';
     c += '</div><span style="font-size:18px;color:var(--text3);flex-shrink:0">' + (abierta ? '⌃' : '⌄') + '</span></div>';
@@ -7372,6 +7373,25 @@ function _nxReservarNum(raiz, pref, localMax){
       }, '🗑 Eliminar orden');
     };
   }
+})();
+</script>
+<script>
+// ══ SOLDADURA/PINTURA LIGADA (2026-10-23, pedido de Miguel) ══ Técnicos: aviso al cerrar la orden principal con SP ligadas abiertas.
+// ¿Qué soldaduras/pinturas están ligadas a esta orden? (abiertas = sin completar ni cancelar)
+function _spLigadasDe(id){ var l = (typeof _spLista === 'function') ? _spLista() : ((typeof DB !== 'undefined' && DB.soldaduras) || []); return (l || []).filter(function(s){ return s && id && s.ordenPadreId === id; }); }
+function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !s.completado && s.estado !== 'Completado' && s.estado !== 'Cancelado'; }); }
+// Cerrar la orden principal con soldadura/pintura ligada sin terminar: avisa y deja continuar
+(function(){
+  function avisar(id){ var ab = _spAbiertasDe(id); if(!ab.length) return true;
+    return confirm('⚠️ Esta orden tiene soldadura/pintura ligada sin terminar: ' + ab.map(function(s){ return s.correlativo; }).join(', ') + '.\n\n¿Cerrarla de todos modos?'); }
+  ['completarPreventivo', 'cerrarCorrectivo'].forEach(function(nom){
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(id){ if(!avisar(id)) return; return f.apply(this, arguments); };
+  });
+  ['finalizarOrdenPreventivo', 'finalizarOrdenCorrectivo'].forEach(function(nom){   // edición de una orden existente (Gerencia)
+    var f = window[nom]; if(typeof f !== 'function') return;
+    window[nom] = function(){ var ed = window._editandoOrden, id = ed && ed.orig && ed.orig.id; if(id && !avisar(id)) return; return f.apply(this, arguments); };
+  });
 })();
 </script>
 </body>
