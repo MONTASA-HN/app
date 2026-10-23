@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7f8d9a6656ea';
+  var APP_VERSION='32424ee7da96';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -8166,6 +8166,7 @@ function _rentaVencimientosHTML(){
       +'<button data-rid="'+r.o.id+'" onclick="_rentaProgramarRetiro(this.dataset.rid)" style="'+bt+';background:#2d6a2d;color:#fff;border:none">🚚 Programar retiro</button>'
       +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="'+bt+';background:#1f3864;color:#fff;border:none">✏️ Ajustar días (PIN)</button>'
       +'<button data-rid="'+r.o.id+'" onclick="_rentaRetiroCancelar(this.dataset.rid)" style="'+bt+';background:#fff;color:#a32d2d;border:1px solid #a32d2d">🚫 Cancelar retiro (PIN)</button>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaCompartirAviso(this.dataset.rid)" style="'+bt+';background:#fff;color:#1f3864;border:1px solid #1f3864">📤 Compartir notificación</button>'
       +'</div>'
       +'</div>';
   }).join('');
@@ -16231,6 +16232,45 @@ function _nxReservarNum(raiz, pref, localMax){
   var cerrar = window.cerrarViaticos;
   if(typeof cerrar === 'function') window.cerrarViaticos = function(){ var id = ordenId(); if(id){ delete huella[id]; delete propia[id]; } return cerrar.apply(this, arguments); };
 })();
+</script>
+<script>
+// ══ COMPARTIR AVISO DE RETIRO (2026-10-23, pedido de Miguel) ══ Tarjeta-imagen con cliente, equipo, inicio y fin de la renta.
+// Se entrega con _entregarImagen: hoja de compartir del teléfono (WhatsApp…) → portapapeles → vista de la imagen.
+async function _rentaCompartirAviso(id){
+  try{
+    const r = _rentaVencimientos().find(function(x){ return x.o && x.o.id === id; });
+    if(!r){ toast('El aviso ya no está vigente', true); return; }
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const o = r.o, ini = _rentaInicioDe(o);
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId; });
+    const cliente = o.clienteOrden || o.clienteNombre || o.cliente || '—';
+    const equipo = (r.codigo || '—') + (eq && (eq.desc || eq.marca) ? ' — ' + (eq.desc || ((eq.marca||'') + (eq.modelo ? ' ' + eq.modelo : ''))) : '');
+    const estado = r.vencida ? (r.dias === 0 ? 'La renta vence HOY' : 'Renta vencida hace ' + r.dias + ' día' + (r.dias === 1 ? '' : 's')) : 'La renta vence en ' + r.dias + ' día' + (r.dias === 1 ? '' : 's') + ' hábil' + (r.dias === 1 ? '' : 'es');
+    const campos = [['🏢 Cliente', cliente], ['🚜 Equipo', equipo], ['📅 Inicio de la renta', ini ? _fmtNR(ini) : '—'], ['🏁 Fin de la renta', _fmtNR(r.vence)]];
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
+    cont.innerHTML =
+      '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      + '<div style="min-width:0"><div style="font-size:19px;font-weight:700">🚚 Aviso de retiro de equipo</div>'
+      + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">' + _x(r.codigo || '') + ' · orden ' + _x(o.correlativo || '—') + '</div></div>'
+      + '<div style="flex-shrink:0"><img src="' + _LOGO_MONTASA_B64 + '" style="height:44px;display:block"></div></div>'
+      + '<div style="margin:16px 22px 0;padding:9px 12px;border-radius:8px;font-weight:700;font-size:13px;text-align:center;' + (r.vencida ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800') + '">' + estado + '</div>'
+      + '<div style="padding:14px 22px 6px">' + campos.map(function(c){ return _campoRow(c[0], _x(c[1])); }).join('') + '</div>'
+      + '<div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde NEXO — ' + new Date().toLocaleDateString('es-HN') + '</div>';
+    document.body.appendChild(cont);
+    await Promise.all(Array.from(cont.querySelectorAll('img')).map(function(img){
+      if(img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise(function(ok){ img.onload = ok; img.onerror = ok; setTimeout(ok, 3000); });
+    }));
+    const canvas = await html2canvas(cont, { scale: 2, backgroundColor: '#ffffff' });
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, 'Retiro_' + String(r.codigo || 'equipo').replace(/[^\w\-]+/g, '_'));
+    }, 'image/png');
+  }catch(err){ toast('Error al generar la imagen: ' + err.message, true); }
+}
 </script>
 </body>
 </html>
