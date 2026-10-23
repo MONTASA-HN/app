@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f0253ac71d9e';
+  var APP_VERSION='c9b13c68a1db';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -755,6 +755,24 @@ var _Sync = (function(){
 
   // ── Guardar: subir lo que cambió aquí ───────────────────────────────────────
   var frenoAvisado = {};
+  // (2026-10-23) Marcar «vistos» lo que está en las listas del teléfono (antes solo en una pasada de guardado: si lo primero al abrir
+  // era eliminar, el borrado no llegaba a la base y el registro volvía al recargar — LG-0280).
+  function _marcarVistos(){
+    activas.forEach(function(c){ if(!listo[c]) return; var l = _lista(c); if(!l) return; var v = visto[c] || (visto[c] = {}); l.forEach(function(o){ if(o && o.id) v[o.id] = 1; }); });
+  }
+  // (2026-10-23) Solicitud de una orden ya borrada (misma id, con lápida): se quita también. Solo cargo Gerencia/Supervisión
+  // (las reglas no dejan borrar a otros) y de 2 en 2 (el freno no deja más por pasada).
+  function _limpiarSolicitudes(){
+    try{
+      var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; if(r !== 'gerencia' && r !== 'supervision') return;
+      if(activas.indexOf('solicitudes') < 0 || !listo.solicitudes) return;
+      var l = _lista('solicitudes'); if(!l || !l.length) return;
+      var vivas = {}; ['logistica', 'preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras'].forEach(function(c){ (_lista(c) || []).forEach(function(o){ if(o && o.id) vivas[o.id] = 1; }); });
+      var n = 0;
+      for(var i = l.length - 1; i >= 0 && n < 2; i--){ var o = l[i]; if(o && o.id && lapidas[o.id] && !vivas[o.id] && (visto.solicitudes || {})[o.id]){ l.splice(i, 1); n++; } }
+      if(n){ _avisar('solicitudes de órdenes borradas: se quitan ' + n); setTimeout(function(){ guardar(); try{ if(typeof renderSolicitudes === 'function') renderSolicitudes(); }catch(e){} }, 300); }
+    }catch(e){}
+  }
   function _guardarCol(col){
     var loc = _lista(col), b = base[col];
     if(!loc || !b || !listo[col]) return [];
@@ -839,6 +857,7 @@ var _Sync = (function(){
     if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; });
+    if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
     activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
@@ -6362,6 +6381,7 @@ function nextCorrelativo(prefijo='MH'){
 // ── RENDER FUNCTIONS ─────────────────────────────────────────────────────────
 // ── NOTIFICACIONES DE PRÓXIMO MANTENIMIENTO ─────────────────────────────
 function calcularNotificacionesMant(){
+  // (2026-10-23) Igual que Gerencia: vehículos por km (cada 7,000; avisa desde 500 antes). Antes Supervisión no los avisaba.
   function parseFechaLocalNotif(val){
     if(!val) return new Date(NaN);
     if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)){
@@ -6373,16 +6393,59 @@ function calcularNotificacionesMant(){
   const hoy = new Date();
   hoy.setHours(0,0,0,0);
   const notifs = [];
-  DB.equipos.forEach(eq=>{
+  DB.equipos.filter(eq=>!eq.esGenerico).forEach(eq=>{
     // Último preventivo COMPLETADO de este equipo
     const prevsCompletados = DB.preventivos.filter(p=>p.equipoId===eq.id && p.completado && (p.fechaFin||p.fechaCompletado));
-    if(!prevsCompletados.length) return; // sin historial, no se puede proyectar
+    if(!prevsCompletados.length) return;
     prevsCompletados.sort((a,b)=>{
       const fa = parseFechaLocalNotif(a.fechaFin||a.fechaCompletado);
       const fb = parseFechaLocalNotif(b.fechaFin||b.fechaCompletado);
       return fb-fa;
     });
     const ultimo = prevsCompletados[0];
+
+    // ── VEHÍCULOS: lógica por kilometraje ────────────────────────────────
+    if(eq.esVehiculo){
+      const kmUltimoPrev = parseFloat(ultimo.horometro||0);
+      if(!kmUltimoPrev) return; // sin km registrado en el preventivo, no se puede proyectar
+      const KM_INTERVALO = 7000;
+      const kmProximo = kmUltimoPrev + KM_INTERVALO;
+      // km actual: usar ficha del equipo; si está vacío, buscar el kmRetorno más alto en órdenes de logística
+      let kmActual = parseFloat(eq.horometro||0);
+      if(!kmActual){
+        (DB.logistica||[]).forEach(o=>{
+          if(o.kmRetorno && (o.equipoId===eq.id || (o.equipoCompra||'').toUpperCase()===eq.codigo || (o.vehiculo||'').toUpperCase()===eq.codigo)){
+            const km = parseFloat(o.kmRetorno);
+            if(!isNaN(km) && km > kmActual) kmActual = km;
+          }
+        });
+        // Si encontramos km en logística, actualizar la ficha automáticamente
+        if(kmActual > 0){
+          eq.horometro = kmActual.toString();
+        }
+      }
+      const kmRestantes = kmProximo - kmActual;
+      // Alertar cuando faltan 500 km o menos (o ya pasó)
+      if(kmRestantes <= 500){
+        const notifKey = eq.id + '_' + (ultimo.correlativo||'sin-orden');
+        notifs.push({
+          equipoId: eq.id,
+          codigo: eq.codigo,
+          esVehiculo: true,
+          kmRestantes: Math.round(kmRestantes),
+          kmProximo,
+          kmActual,
+          ultimoServicio: ultimo.servicio||'—',
+          ultimoCorrelativo: ultimo.correlativo||'—',
+          ultimoKm: kmUltimoPrev,
+          notifKey,
+          completada: !!(DB.notifCompletadas && DB.notifCompletadas[notifKey])
+        });
+      }
+      return;
+    }
+
+    // ── EQUIPOS NORMALES: lógica por fecha ───────────────────────────────
     const fechaUltimo = parseFechaLocalNotif(ultimo.fechaFin||ultimo.fechaCompletado);
     if(isNaN(fechaUltimo)) return;
     const meses = eq.intervaloMantMeses || 3;
@@ -6402,7 +6465,12 @@ function calcularNotificacionesMant(){
       });
     }
   });
-  notifs.sort((a,b)=>a.diasRestantes-b.diasRestantes);
+  notifs.sort((a,b)=>{
+    // Vehículos primero si están más urgentes
+    const urgA = a.esVehiculo ? (a.kmRestantes <= 0 ? -9999 : a.kmRestantes) : (a.diasRestantes * 100);
+    const urgB = b.esVehiculo ? (b.kmRestantes <= 0 ? -9999 : b.kmRestantes) : (b.diasRestantes * 100);
+    return urgA - urgB;
+  });
   return notifs;
 }
 
@@ -6425,6 +6493,23 @@ function renderNotificacionesTab(){
   if(!el) return;
   const notifs = calcularNotificacionesMant();
   el.innerHTML = notifs.length ? notifs.map(n=>{
+    if(n.esVehiculo){
+      const urgente = n.kmRestantes <= 0;
+      const kmTexto = urgente
+        ? `Vencido hace ${Math.abs(n.kmRestantes).toLocaleString()} km`
+        : `Faltan ${n.kmRestantes.toLocaleString()} km`;
+      const badgeStyle = n.completada ? 'background:#c8edcc;color:#1a5c1a' : (urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800');
+      const claseItem = n.completada ? 'notif-completada' : (urgente ? 'notif-urgent' : '');
+      return `<div class="notif-item ${claseItem}">
+        <div class="notif-item-top">
+          <span class="notif-codigo">🚗 ${_x(n.codigo)}</span>
+          <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${n.completada ? '✅ Completado' : kmTexto}</span>
+        </div>
+        <div class="notif-line">Próximo PM a los <b>${n.kmProximo.toLocaleString()} km</b> — Km actual: <b>${n.kmActual.toLocaleString()} km</b></div>
+        <div class="notif-line">Último PM: orden <b>${_x(n.ultimoCorrelativo)}</b> a los <b>${n.ultimoKm.toLocaleString()} km</b></div>
+        ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
+      </div>`;
+    }
     const urgente = n.diasRestantes <= 0;
     const diasTexto = urgente
       ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))

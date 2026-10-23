@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0f3d0e829670';
+  var APP_VERSION='77641b088ffa';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -447,6 +447,24 @@ var _Sync = (function(){
 
   // ── Guardar: subir lo que cambió aquí ───────────────────────────────────────
   var frenoAvisado = {};
+  // (2026-10-23) Marcar «vistos» lo que está en las listas del teléfono (antes solo en una pasada de guardado: si lo primero al abrir
+  // era eliminar, el borrado no llegaba a la base y el registro volvía al recargar — LG-0280).
+  function _marcarVistos(){
+    activas.forEach(function(c){ if(!listo[c]) return; var l = _lista(c); if(!l) return; var v = visto[c] || (visto[c] = {}); l.forEach(function(o){ if(o && o.id) v[o.id] = 1; }); });
+  }
+  // (2026-10-23) Solicitud de una orden ya borrada (misma id, con lápida): se quita también. Solo cargo Gerencia/Supervisión
+  // (las reglas no dejan borrar a otros) y de 2 en 2 (el freno no deja más por pasada).
+  function _limpiarSolicitudes(){
+    try{
+      var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; if(r !== 'gerencia' && r !== 'supervision') return;
+      if(activas.indexOf('solicitudes') < 0 || !listo.solicitudes) return;
+      var l = _lista('solicitudes'); if(!l || !l.length) return;
+      var vivas = {}; ['logistica', 'preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras'].forEach(function(c){ (_lista(c) || []).forEach(function(o){ if(o && o.id) vivas[o.id] = 1; }); });
+      var n = 0;
+      for(var i = l.length - 1; i >= 0 && n < 2; i--){ var o = l[i]; if(o && o.id && lapidas[o.id] && !vivas[o.id] && (visto.solicitudes || {})[o.id]){ l.splice(i, 1); n++; } }
+      if(n){ _avisar('solicitudes de órdenes borradas: se quitan ' + n); setTimeout(function(){ guardar(); try{ if(typeof renderSolicitudes === 'function') renderSolicitudes(); }catch(e){} }, 300); }
+    }catch(e){}
+  }
   function _guardarCol(col){
     var loc = _lista(col), b = base[col];
     if(!loc || !b || !listo[col]) return [];
@@ -531,6 +549,7 @@ var _Sync = (function(){
     if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; });
+    if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
     activas.forEach(function(col){
       claves[col] = claves[col] || {};
       db.ref(raiz + '/' + col).on('value', function(s){ try{ _recibir(col, s.val()); }catch(e){ _avisar('recibir ' + col + ': ' + e.message); } });
