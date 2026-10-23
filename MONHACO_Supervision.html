@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2f1d7dec3282';
+  var APP_VERSION='0cb2fe7b47b5';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12911,6 +12911,83 @@ function _spPadreBanner(){
       h += '<button onclick="_spLigarDesde(\'' + _idS(x.id) + '\',\'' + (tipoPC === 'P' ? 'prev' : 'corr') + '\')" style="width:100%;margin-top:8px;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔥 Crear soldadura/pintura ligada</button>';
     return d + h;
   };
+})();
+</script>
+<script>
+// ══ BOTONES DE ÓRDENES ESTÁNDAR (2026-10-23, pedido de Miguel) ══ Los botones de acción de las tarjetas de órdenes (viáticos, vale,
+// editar, compartir, eliminar, ligar, repuestos…) toman el estilo de las tarjetas de logística: píldoras pequeñas en una fila.
+// Se reconocen por la función de su onclick; los botones seguidos se juntan en una fila. No toca «FINALIZAR ORDEN» ni formularios.
+(function(){
+  var C = {
+    azul:   'background:#dce6f1;color:#1f3864;border:none',
+    vale:   'background:#fff3cd;color:#856404;border:1px solid #ffc107',
+    editar: 'background:#1f3864;color:#fff;border:none',
+    verde:  'background:#c8edcc;color:#1a5c1a;border:none',
+    rojo:   'background:#fdeaea;color:#c00;border:none',
+    morado: 'background:#f3e8ff;color:#6b21a8;border:none',
+    gris:   'background:#eef1f5;color:#344054;border:none'
+  };
+  var M = {
+    abrirViaticos: 'azul', verViaticosResumen: 'azul', verChecklistPDFGer: 'azul', _srVerModal: 'azul',
+    abrirValeMant: 'vale', abrirValeGerencia: 'vale', abrirValeLG: 'vale',
+    _reabrirOrdenMant: 'editar', _reabrirOrdenLogGer: 'editar', editarOrdenHistorial: 'editar', editarOrden: 'editar', editarOrdenCerradaLog: 'editar', _cliCorregir: 'editar',
+    copiarImagenOrden: 'verde', compartirPDFOrden: 'verde', compartirSolRepuesto: 'verde', _gpsCompartirLink: 'verde',
+    eliminarDelHistorial: 'rojo', _elimLG: 'rojo', _elimRV: 'rojo', _elimEV: 'rojo', _elimSP: 'rojo', eliminarPreventivo: 'rojo', eliminarCorrectivo: 'rojo', _eliminarOrdenLog: 'rojo',
+    _spLigarDesde: 'morado',
+    abrirSolRepuesto: 'gris'
+  };
+  var BASE = 'font-size:11px;padding:4px 12px;border-radius:10px;cursor:pointer;width:auto;margin:0;font-weight:500;line-height:1.5;display:inline-flex;align-items:center;gap:4px;';
+  function funcion(b){
+    var oc = b.getAttribute('onclick') || ''; if(!oc) return '';
+    oc = oc.replace(/event\.stopPropagation\(\);?\s*/g, '').replace(/^\s*solicitarPINAccion\(\s*function\s*\(\)\s*\{\s*/, '');
+    var m = oc.match(/^\s*([A-Za-z_$][\w$]*)\s*\(/); return m ? m[1] : '';
+  }
+  function pintar(b){
+    var cat = M[funcion(b)]; if(!cat) return false;
+    var oculto = b.style.display === 'none';
+    b.style.cssText = BASE + C[cat] + (oculto ? ';display:none' : '');
+    b.setAttribute('data-nxp', cat); return true;
+  }
+  function juntar(padre){
+    if(!padre || padre.getAttribute('data-nxf')) return;
+    var hijos = Array.prototype.slice.call(padre.children), run = [];
+    var cerrar = function(){
+      if(run.length){
+        if(run.length === hijos.length && padre.tagName === 'DIV'){ padre.style.display = 'flex'; padre.style.flexDirection = 'row'; padre.style.flexWrap = 'wrap'; padre.style.gap = '6px'; padre.style.alignItems = 'center'; }
+        else { var f = document.createElement('div'); f.setAttribute('data-nxf', '1'); f.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0'; padre.insertBefore(f, run[0]); run.forEach(function(x){ f.appendChild(x); }); }
+      }
+      run = [];
+    };
+    hijos.forEach(function(h){ if(h.tagName === 'BUTTON' && h.getAttribute('data-nxp')) run.push(h); else cerrar(); });
+    cerrar();
+  }
+  function revisar(raiz){
+    var bs = (raiz || document).querySelectorAll ? (raiz || document).querySelectorAll('button[onclick]:not([data-nxp])') : [];
+    var padres = [];
+    Array.prototype.forEach.call(bs, function(b){ if(pintar(b) && padres.indexOf(b.parentElement) < 0) padres.push(b.parentElement); });
+    padres.forEach(juntar);
+    // una sola fila por tarjeta (al final), en orden fijo: viáticos, vale, editar, compartir, ligar, repuestos, eliminar
+    var tarjetas = [];
+    padres.forEach(function(p){ var t = p && p.closest && p.closest('.card'); if(t && tarjetas.indexOf(t) < 0) tarjetas.push(t); });
+    tarjetas.forEach(unaFila);
+  }
+  var ORDEN = { azul: 1, vale: 2, editar: 3, verde: 4, morado: 5, gris: 6, rojo: 9 };
+  function esFila(e){ return e && e.children.length && Array.prototype.every.call(e.children, function(c){ return c.tagName === 'BUTTON' && c.getAttribute('data-nxp'); }); }
+  function unaFila(t){
+    var filas = []; Array.prototype.forEach.call(t.querySelectorAll('button[data-nxp]'), function(b){ var p = b.parentElement; if(esFila(p) && filas.indexOf(p) < 0 && p.closest('.card') === t) filas.push(p); });
+    if(filas.length < 2) { if(filas[0]) ordenar(filas[0]); return; }
+    var dest = filas[filas.length - 1];
+    filas.slice(0, -1).forEach(function(f){ Array.prototype.slice.call(f.children).forEach(function(b){ dest.appendChild(b); }); if(!f.children.length) f.remove(); });
+    ordenar(dest);
+  }
+  function ordenar(f){ Array.prototype.slice.call(f.children).sort(function(x, y){ return (ORDEN[x.getAttribute('data-nxp')] || 5) - (ORDEN[y.getAttribute('data-nxp')] || 5); }).forEach(function(b){ f.appendChild(b); }); f.style.display = 'flex'; f.style.flexDirection = 'row'; f.style.flexWrap = 'wrap'; f.style.gap = '6px'; f.style.alignItems = 'center'; }
+  var pend = false;
+  function programar(){ if(pend) return; pend = true; (window.requestAnimationFrame || setTimeout)(function(){ pend = false; try{ revisar(document); }catch(e){} }); }
+  function iniciar(){
+    try{ new MutationObserver(programar).observe(document.body, { childList: true, subtree: true }); }catch(e){}
+    programar();
+  }
+  if(document.body) iniciar(); else document.addEventListener('DOMContentLoaded', iniciar);
 })();
 </script>
 </body>
