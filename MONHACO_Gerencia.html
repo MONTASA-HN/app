@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='96be4933aa22';
+  var APP_VERSION='b2c641ce3172';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6143,22 +6143,25 @@ function calcDuracion(ini, fin){
   return h>0 ? h+'h '+(m>0?m+'min':'') : m+'min';
 }
 
-// Calcula minutos de trabajo con jornada de 8h/día cuando el trabajo abarca múltiples días.
+// Calcula minutos de trabajo con jornada por día cuando el trabajo abarca múltiples días.
+// Jornada: lunes a viernes 8h, sábado 4h, domingo 0h (no se cuenta).
 // Regla: si inicio y fin son el mismo día → diferencia real en minutos.
-//        si son días distintos → días completos × 480 min + horas del último día.
+//        si son días distintos → jornada de cada día desde el inicio hasta el día anterior al fin
+//        + horas del último día (topadas a la jornada de ese día).
 function _calcMinsJornada(iniDate, finDate){
   if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
   if(finDate <= iniDate) return 0;
-  const JORNADA = 480;
+  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
   const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
   const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
-  const diasDiff = Math.round((dFin - dIni) / 86400000);
-  if(diasDiff === 0) return Math.floor((finDate - iniDate) / 60000);
-  // Días completos × 8h + fracción del último día relativa a la hora de inicio
+  if(dIni.getTime() === dFin.getTime()) return Math.floor((finDate - iniDate) / 60000);
+  let total = 0;
+  for(const d = new Date(dIni); d < dFin; d.setDate(d.getDate() + 1)) total += jornadaDia(d);
+  // Fracción del último día relativa a la hora de inicio
   const minsIniJornada = iniDate.getHours() * 60 + iniDate.getMinutes();
   const minsFinJornada = finDate.getHours() * 60 + finDate.getMinutes();
-  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), JORNADA);
-  return (diasDiff * JORNADA) + fraccion;
+  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), jornadaDia(dFin));
+  return total + fraccion;
 }
 function calcHoras(inicio, fin){
   if(!inicio || !fin) return '—';
