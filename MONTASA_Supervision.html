@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='118d110cb4f0';
+  var APP_VERSION='0a52577c7ecb';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -714,6 +714,11 @@ var _Sync = (function(){
     return p;
   }
   function _agregar(col, o, intento){
+    // (2026-10-24) Antes de agregar algo nuevo, preguntar a la BASE si ese id fue borrado (la copia local de lápidas puede ir atrasada)
+    if(intento === undefined) return db.ref(raiz + '/_borradas/' + o.id).once('value').then(function(s){
+      if(s && s.val()){ lapidas[o.id] = s.val(); _quitarLocal(col, o.id); return; }
+      return _agregar(col, o, 0);
+    });
     var k = String(_proxima(col)), valor = _limpio(o), llaveA = col + '/' + o.id;
     subiendo[llaveA] = _huellas(valor);
     return db.ref(raiz + '/' + col + '/' + k).transaction(function(cur){
@@ -755,6 +760,9 @@ var _Sync = (function(){
 
   // ── Guardar: subir lo que cambió aquí ───────────────────────────────────────
   var frenoAvisado = {};
+  var lapidasListas = false, quitando = {};   // (2026-10-24) hasta recibir _borradas no se agrega nada nuevo
+  // (2026-10-24) Quitar de la lista del teléfono un registro borrado a propósito (para que no siga en pantalla como pendiente)
+  function _quitarLocal(col, id){ var l = _lista(col); if(!l) return 0; var n = 0; for(var i = l.length - 1; i >= 0; i--){ if(l[i] && l[i].id === id){ l.splice(i, 1); n++; } } if(n) _avisar(col + '/' + id + ' tenía lápida: se quita de este teléfono'); return n; }
   // (2026-10-23) Marcar «vistos» lo que está en las listas del teléfono (antes solo en una pasada de guardado: si lo primero al abrir
   // era eliminar, el borrado no llegaba a la base y el registro volvía al recargar — LG-0280).
   function _marcarVistos(){
@@ -780,14 +788,16 @@ var _Sync = (function(){
     // solo después de haber leído los equipos de Firebase (una copia vieja no resucita vendidos).
     if(!window._fbReady) return [];
     if((col === 'equipos' || col === 'vendidos') && window._equiposFBok === false) return [];
-    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {});
+    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [];
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
       if(!o || !o.id || enVuelo[col + '/' + o.id]) { if(o && o.id) vistos[o.id] = 1; return; }
       vistos[o.id] = 1;
       var hb = b[o.id], p = null;
       if(!hb){
-        if(claves[col][o.id] !== undefined || _borradoAposta(o.id)) return;
+        if(claves[col][o.id] !== undefined) return;
+        if(_borradoAposta(o.id)){ quitarLoc.push(o.id); return; }   // (2026-10-24) borrado a propósito: no subirlo y quitarlo de pantalla
+        if(!lapidasListas) return;                                  // (2026-10-24) aún no se sabe qué está borrado: esperar
         if(col === 'equipos'){ var motivo = _equipoRepetidoOVendido(o); if(motivo){ _avisar('No se agrega el equipo ' + (o.codigo || o.id) + ': ' + motivo); return; } }
         p = _agregar(col, o);
       } else {
@@ -801,6 +811,8 @@ var _Sync = (function(){
       prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
         .then(function(){ delete enVuelo[llave]; }));
     });
+    quitarLoc.forEach(function(id){ if(quitando[col + '/' + id]) return; quitando[col + '/' + id] = 1;   // se confirma con la base (una recién restaurada ya no tiene lápida)
+      db.ref(raiz + '/_borradas/' + id).once('value').then(function(s){ if(s && s.val() && claves[col][id] === undefined) _quitarLocal(col, id); }, function(){}).then(function(){ delete quitando[col + '/' + id]; }); });
     var fuera = Object.keys(b).filter(function(id){ return !vistos[id] && v[id] && claves[col][id] !== undefined; });
     if(fuera.length && fuera.length <= MAX_BORRADOS) prom.push(_borrar(col, fuera).catch(function(){}));
     else if(fuera.length){ _avisar(col + ': ' + fuera.length + ' registros faltan en este teléfono; NO se borran (freno)');
@@ -856,7 +868,7 @@ var _Sync = (function(){
     raiz = r; db = fbdb;
     if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
-    db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; });
+    db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; lapidasListas = true; });
     if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
     activas.forEach(function(col){
       claves[col] = claves[col] || {};

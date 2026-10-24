@@ -203,6 +203,13 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   await esperar(); await A.sync.guardar(); await esperar();
   ok('15. MT-67 nuevo con otra serie que la del MT-67 vendido → se agrega', srv('equipos').some(e => e.id === 'n67'), srv('equipos').map(e => e.codigo + '/' + e.serie).join(', '));
 
+  await sinDuplicados('antes del caso 16');
+  // 16 ─ (2026-10-24, LG-0280) Teléfono con copia vieja de una orden ya borrada (lápida, no está en el servidor) → no se sube y se quita de la pantalla
+  reset({ montasa: { logistica: [lg('lg1')], _borradas: { lg280: 123 } } });
+  A = cliente('A', { logistica: [lg('lg1'), lg('lg280', { descripcion: 'LG-0280 borrada' })] }); await esperar();
+  await A.sync.guardar(); await esperar(); await esperar();
+  ok('16. Copia vieja con una orden borrada → NO vuelve al servidor y desaparece del teléfono', !srv('logistica').some(o => o.id === 'lg280') && !A.DB().logistica.some(o => o.id === 'lg280'), 'teléfono: ' + A.DB().logistica.map(o => o.id).join(','));
+
   await sinDuplicados('final');
   console.log(fallas ? '\n✗ ' + fallas + ' falla(s)' : '\nTodo bien');
   process.exitCode = fallas ? 1 : 0;
