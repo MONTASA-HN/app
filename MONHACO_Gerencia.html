@@ -25,6 +25,42 @@
 })();
 </script>
 <script>
+// ══ HORAS POR MES (2026-10-24, pedido de Miguel) ══ Reparte la jornada de una orden de varios días entre los meses en que se trabajó.
+// Misma regla que _calcMinsJornada: días completos = jornada del día (8 h lun-vie, 4 h sáb, 0 dom); último día = horas hasta la hora
+// de inicio (topadas a su jornada); mismo día = tiempo real. La suma de todos los meses = el total de la orden.
+function _nxIniFin(o){
+  var ini = (o && o.fecha && o.horaIni) ? o.fecha + 'T' + o.horaIni : ((o && o.fechaInicio) || '');
+  var fin = (o && o.fecha && o.horaFin) ? o.fecha + 'T' + o.horaFin : ((o && o.fechaFin) || '');
+  if(o && o.fechaInicio && o.fechaFin && !(o.fecha && o.horaIni && o.horaFin)){ ini = o.fechaInicio; fin = o.fechaFin; }
+  return [new Date(ini), new Date(fin)];
+}
+function _nxRepartoDias(ini, fin){
+  if(!ini || !fin || isNaN(ini) || isNaN(fin) || fin <= ini) return [];
+  var jd = function(d){ var w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  var dIni = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), dFin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  if(dIni.getTime() === dFin.getTime()) return [[dIni.getFullYear(), dIni.getMonth(), Math.floor((fin - ini) / 60000)]];
+  var out = [];
+  for(var d = new Date(dIni); d < dFin; d.setDate(d.getDate() + 1)) out.push([d.getFullYear(), d.getMonth(), jd(d)]);
+  var fr = Math.min(Math.max(0, (fin.getHours() * 60 + fin.getMinutes()) - (ini.getHours() * 60 + ini.getMinutes())), jd(dFin));
+  out.push([dFin.getFullYear(), dFin.getMonth(), fr]);
+  return out;
+}
+// Fracción (0 a 1) de la jornada de la orden que cae en ese mes. Fechas inválidas: 1 (como antes, todo al mes del cierre).
+function _nxParteMesF(ini, fin, mes, anio){
+  var r = _nxRepartoDias(ini, fin); if(!r.length) return 1;
+  var tot = 0, m = 0; r.forEach(function(x){ tot += x[2]; if(x[0] === anio && x[1] === mes) m += x[2]; });
+  if(!tot){ var f = fin; return (f.getFullYear() === anio && f.getMonth() === mes) ? 1 : 0; }
+  return m / tot;
+}
+function _nxMulMes(ini, fin, mes, anio, mins){ return Math.round((mins || 0) * _nxParteMesF(ini, fin, mes, anio)); }
+function _nxParteMes(o, mes, anio){ var x = _nxIniFin(o); return _nxParteMesF(x[0], x[1], mes, anio); }
+// ¿La orden tiene días trabajados en ese mes? (para incluirla aunque se haya cerrado en otro mes)
+function _nxTocaMes(o, mes, anio){
+  var x = _nxIniFin(o); if(isNaN(x[0]) || isNaN(x[1]) || x[1] <= x[0]) return false;
+  return _nxRepartoDias(x[0], x[1]).some(function(d){ return d[0] === anio && d[1] === mes && d[2] > 0; });
+}
+</script>
+<script>
 // ══ HORÓMETRO QUE NO BAJA (2026-10-20, auditoría 11, decisión de Miguel) ══ Se revisa DENTRO de la transacción (con el valor que tiene el
 // servidor en ese momento): si la lectura nueva es menor (o se borra) y el teléfono no tiene cargo Gerencia/Supervisión, se queda la del
 // servidor y se avisa. Aplica a horometro y kilometraje de los equipos (motor _Sync, _nxTx/_nxSetSeguro y cierre de horómetros del mes).
@@ -134,7 +170,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2d371e587cb3';
+  var APP_VERSION='4dc8f09117b9';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -6690,17 +6726,17 @@ function _horasDelMes(mes, anio){
     ...DB.preventivos.filter(p => {
       if(!p.completado) return false;
       const f = parseFechaLocal(p.fechaCompletado||p.fechaFin||p.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+      return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(p, mes, anio);   // (2026-10-24) o con días en este mes
     }),
     ...DB.correctivos.filter(c => {
       if(c.estado!=='Completado') return false;
       const f = parseFechaLocal(c.fechaCierre||c.fechaFin||c.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+      return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(c, mes, anio);   // (2026-10-24) o con días en este mes
     }),
     ...(DB.cortinas||[]).filter(o => {
       if(!o.completado && o.estado!=='Completado') return false;
       const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
-      return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+      return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(o, mes, anio);   // (2026-10-24) o con días en este mes
     })
   ];
   ordenesDelMes.forEach(o => {
@@ -6709,7 +6745,7 @@ function _horasDelMes(mes, anio){
       : (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
     // Usar tiempo total (incluye traslado si aplica) para las horas del personal
     const t = calcTiemposOrden(o);
-    const mins = t.minsTotal || 0;
+    const mins = Math.round((t.minsTotal || 0) * _nxParteMes(o, mes, anio));   // (2026-10-24) solo la parte de este mes
     tecs.forEach(t => {
       if(PERSONAL_LOG.includes(t) && !TECNICOS_LIST.includes(t)){   // un técnico siempre suma a su productividad de técnico
         if(!statsLog[t]) statsLog[t] = {ordenes:0, minutos:0};
@@ -6729,13 +6765,13 @@ function _horasDelMes(mes, anio){
   const logCerradasMes = (DB.logistica||[]).filter(o => {
     if(!o.cerrado || o.estado==='Cancelado') return false;
     const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
-    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(o, mes, anio);   // (2026-10-24) o con días en este mes
   });
   logCerradasMes.forEach(o => {
     const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
+    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
     asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
       // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
       const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
@@ -6752,7 +6788,7 @@ function _horasDelMes(mes, anio){
   const revisionesDelMes = (DB.revisiones||[]).filter(r => {
     if(!r.completado) return false;
     const f = parseFechaLocal(r.fechaCierre||r.fecha);
-    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes
   });
   revisionesDelMes.forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean);
@@ -6760,7 +6796,7 @@ function _horasDelMes(mes, anio){
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
     const ini = new Date(iniStr), fin = new Date(finStr);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
+    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => {
       if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
         if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
@@ -6778,7 +6814,7 @@ function _horasDelMes(mes, anio){
   const evaluacionesDelMes = (DB.evaluaciones||[]).filter(r => {
     if(!r.completado) return false;
     const f = parseFechaLocal(r.fechaCierre||r.fecha);
-    return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio;
+    return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes
   });
   evaluacionesDelMes.forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean);
@@ -6786,7 +6822,7 @@ function _horasDelMes(mes, anio){
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
     const ini = new Date(iniStr), fin = new Date(finStr);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
+    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => {
       if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
         if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
@@ -6801,9 +6837,9 @@ function _horasDelMes(mes, anio){
   });
 
   // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
-  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio; }).forEach(r => {
+  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes }).forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
-    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
+    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
   });
   const sortedTec = Object.entries(statsTec)
