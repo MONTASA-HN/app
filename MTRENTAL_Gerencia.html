@@ -170,7 +170,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e1cbe0f4ff84';
+  var APP_VERSION='bf20e7bf773f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -16546,6 +16546,31 @@ function _nxBadgesBarra(){
 }
 setInterval(_nxBadgesBarra, 3000); setTimeout(_nxBadgesBarra, 1200);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) _nxBadgesBarra(); });
+</script>
+<script>
+// ══ CONCILIAR RENTAS (2026-10-24, caso E-33 con LG-0291) ══ Al crear una entrega o renta el equipo pasa a EN RENTA. Si por cualquier
+// causa (otro teléfono, borrar y crear casi al mismo tiempo…) queda DISPONIBLE con una entrega/renta ABIERTA, aquí se corrige. Solo
+// cargo Gerencia/Supervisión; nunca toca equipos EN MANTENIMIENTO / MAL ESTADO ni equipos de cliente.
+function _nxConciliarRentas(){
+  try{
+    var rol = typeof window._nxRol === 'function' ? window._nxRol() : ''; if(rol !== 'gerencia' && rol !== 'supervision') return;
+    if(!window._fbDB || !window._fbReady || window._equiposFBok === false) return;
+    var hechos = [];
+    (DB.logistica || []).forEach(function(o){
+      if(!o || o.cerrado || o.estado === 'Cancelado' || o.estado === 'Completado') return;
+      if(o.tipoLogistica !== 'renta' && o.tipoLogistica !== 'entrega') return;
+      [o.equipoId, o.equipoId2, o.vehiculoRentaId].forEach(function(eid){
+        if(!eid || eid === '__cliente__') return;
+        var eq = (DB.equipos || []).find(function(e){ return e && e.id === eid; });
+        if(!eq || eq.esEquipoCliente || eq.esGenerico) return;
+        if((eq.estado || 'DISPONIBLE') !== 'DISPONIBLE') return;
+        _cambiarEstadoEquipoAuto(eid, 'EN RENTA'); hechos.push((eq.codigo || eid) + ' (' + (o.correlativo || '') + ')');
+      });
+    });
+    if(hechos.length) try{ console.warn('[rentas] pasan a EN RENTA por tener entrega/renta abierta: ' + hechos.join(', ')); }catch(e){}
+  }catch(e){}
+}
+setTimeout(_nxConciliarRentas, 12000); setInterval(_nxConciliarRentas, 60000);
 </script>
 </body>
 </html>
