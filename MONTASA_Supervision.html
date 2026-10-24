@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0a52577c7ecb';
+  var APP_VERSION='613e1780dd66';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -3828,7 +3828,7 @@ function renderPersonal(){
     const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
     asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
       // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
       const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
@@ -3853,7 +3853,7 @@ function renderPersonal(){
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
     const ini = new Date(iniStr), fin = new Date(finStr);
-    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
     tecs.forEach(nombre => {
       if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
         if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
@@ -3870,7 +3870,7 @@ function renderPersonal(){
   // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
   (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return !isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio; }).forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
-    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? Math.floor((fin-ini)/60000) : 0;
+    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0;
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
   });
   const sortedTec = Object.entries(statsTec)
@@ -4354,7 +4354,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     }catch(e){ return s; }
   };
   var hEq = o.horometroSalida&&o.horometroRetorno?(parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1)+' hrs':'';
-  var hOp = o.fechaInicio&&o.fechaFin?((new Date(o.fechaFin)-new Date(o.fechaInicio))/3600000).toFixed(1)+' hrs':'\u2014';
+  var hOp = o.fechaInicio&&o.fechaFin?(_calcMinsJornada(new Date(o.fechaInicio), new Date(o.fechaFin))/60).toFixed(1)+' hrs':'\u2014';
   var h = '';
   h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px">';
   if(o.operador) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Operador</div><div style="font-size:13px;font-weight:600">'+_x(o.operador)+'</div></div>';

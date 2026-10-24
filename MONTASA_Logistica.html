@@ -134,7 +134,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='596db3e25532';
+  var APP_VERSION='fa44c9669aff';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2666,7 +2666,7 @@ function renderOrdenesLog(){
           </div>
           <div style="text-align:center">
             <div style="font-size:11px;color:#1f3864;font-weight:600">👷 HORAS OPERADOR</div>
-            <div style="font-size:18px;font-weight:800;color:#1f3864">${o.fechaInicio&&o.fechaFin ? ((new Date(o.fechaFin)-new Date(o.fechaInicio))/3600000).toFixed(1)+' hrs' : '—'}</div>
+            <div style="font-size:18px;font-weight:800;color:#1f3864">${o.fechaInicio&&o.fechaFin ? (_calcMinsJornada(new Date(o.fechaInicio), new Date(o.fechaFin))/60).toFixed(1)+' hrs' : '—'}</div>
           </div>
         </div>` : ''}
         <!-- P9: Motorista asignado (entrega/retiro/compras) -->
@@ -2713,7 +2713,7 @@ function _renderDetalleCerradoLog(o, eqLabel, tipoLbl){
     }catch(e){ return s; }
   };
   const hEq = o.horometroSalida&&o.horometroRetorno?(parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1)+' hrs':'';
-  const hOp = o.fechaInicio&&o.fechaFin?((new Date(o.fechaFin)-new Date(o.fechaInicio))/3600000).toFixed(1)+' hrs':'—';
+  const hOp = o.fechaInicio&&o.fechaFin?(_calcMinsJornada(new Date(o.fechaInicio), new Date(o.fechaFin))/60).toFixed(1)+' hrs':'—';
   let h = '<div style="border-top:1px solid var(--border);margin:10px 0 8px"></div>';
   // Grid de campos clave — espaciado correcto
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;margin-bottom:14px;font-size:13px">';
@@ -6023,6 +6023,24 @@ function _logCerrarCarpeta(){ _logCarpeta = null; var b = document.getElementByI
   }
   if(document.body) iniciar(); else document.addEventListener('DOMContentLoaded', iniciar);
 })();
+</script>
+<script>
+// (2026-10-24) Misma regla de jornada que las demás apps (copiada de Técnicos): 8 h lun-vie, 4 h sáb, 0 h dom; mismo día = tiempo real.
+function _calcMinsJornada(iniDate, finDate){
+  if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
+  if(finDate <= iniDate) return 0;
+  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
+  const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
+  if(dIni.getTime() === dFin.getTime()) return Math.floor((finDate - iniDate) / 60000);
+  let total = 0;
+  for(const d = new Date(dIni); d < dFin; d.setDate(d.getDate() + 1)) total += jornadaDia(d);
+  // Fracción del último día relativa a la hora de inicio
+  const minsIniJornada = iniDate.getHours() * 60 + iniDate.getMinutes();
+  const minsFinJornada = finDate.getHours() * 60 + finDate.getMinutes();
+  const fraccion = Math.min(Math.max(0, minsFinJornada - minsIniJornada), jornadaDia(dFin));
+  return total + fraccion;
+}
 </script>
 </body>
 </html>
