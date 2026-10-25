@@ -170,7 +170,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7bfe03b8f553';
+  var APP_VERSION='a6b51cbb8940';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12314,6 +12314,111 @@ function _nxConciliarRentas(){
   }catch(e){}
 }
 setTimeout(_nxConciliarRentas, 12000); setInterval(_nxConciliarRentas, 60000);
+</script>
+<script>
+// ══ CUMPLEAÑOS (2026-10-25, pedido de Miguel) ══════════════════════════════════════════════════════════════
+// El día del cumpleaños de alguien del personal, la primera vez que se abre la app en ese teléfono sale un mensaje
+// grande con animación (una sola vez por día en cada teléfono). Los datos salen de <raíz>/rrhh/plantilla, que publica
+// Gerencia (módulo Personal): cum = MM-DD (sin año) y t = 'o' (compañero) / 'a' (compañera) / vacío (mensaje neutro).
+(function(){
+  if(window._nxCumpleListo) return; window._nxCumpleListo = true;
+  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa';
+  var plantilla = null, mostrado = false;
+  try{ var g = localStorage.getItem('nx_plantilla_' + RAIZ); if(g) plantilla = JSON.parse(g); }catch(e){}
+  function esc(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function dd(n){ return String(n).padStart(2, '0'); }
+  function nombreBonito(t){
+    var chicas = { de: 1, del: 1, la: 1, las: 1, los: 1, y: 1 };
+    return String(t || '').trim().replace(/\s+/g, ' ').toLowerCase().split(' ').map(function(p, i){
+      return i > 0 && chicas[p] ? p : p.charAt(0).toUpperCase() + p.slice(1); }).join(' ');
+  }
+  function unir(l){ return l.length < 2 ? (l[0] || '') : l.slice(0, -1).join(', ') + ' y ' + l[l.length - 1]; }
+  function cumpleaneros(){
+    if(!plantilla) return [];
+    var h = new Date(), hoy = dd(h.getMonth() + 1) + '-' + dd(h.getDate());
+    var bisiesto = new Date(h.getFullYear(), 1, 29).getMonth() === 1;
+    return Object.keys(plantilla).map(function(k){ var p = plantilla[k]; return p && typeof p === 'object' ? Object.assign({ id: k }, p) : null; })
+      .filter(function(p){ return p && (p.nc || p.n) && (p.cum === hoy || (!bisiesto && p.cum === '02-29' && hoy === '02-28')); })
+      .sort(function(a, b){ return String(a.nc || a.n).localeCompare(String(b.nc || b.n)); });
+  }
+  function texto(gente){
+    var nombres = '<b>' + unir(gente.map(function(p){ return esc(nombreBonito(p.nc || p.n)); })) + '</b>';
+    var ts = gente.map(function(p){ return p.t; }), uno = gente.length === 1;
+    var sinDato = ts.some(function(t){ return t !== 'o' && t !== 'a'; });
+    if(sinDato) return 'Hoy felicitamos a ' + nombres + ', de nuestro equipo, ' + (uno ? 'quien está' : 'quienes están')
+      + ' de cumpleaños, y deseamos que Dios ' + (uno ? 'le' : 'les') + ' bendiga mucho y que ' + (uno ? 'la pase' : 'la pasen') + ' muy bien en este día especial.';
+    var todasA = ts.every(function(t){ return t === 'a'; });
+    var quien = uno ? (todasA ? 'nuestra compañera' : 'nuestro compañero') : (todasA ? 'nuestras compañeras' : 'nuestros compañeros');
+    var pron = uno ? (todasA ? 'la' : 'lo') : (todasA ? 'las' : 'los');
+    return 'Hoy felicitamos a ' + quien + ' ' + nombres + ' ' + (uno ? 'quien está' : 'quienes están')
+      + ' de cumpleaños y deseamos que Dios ' + pron + ' bendiga mucho y que ' + (uno ? 'la pase' : 'la pasen') + ' muy bien en este día especial.';
+  }
+  function mostrar(gente){
+    var css = document.createElement('style');
+    css.textContent = '#nx-cumple{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;'
+      + 'background:radial-gradient(circle at 50% 30%,#ffe9f3 0%,#fbd3e9 35%,#c9b6ff 100%);overflow:hidden;font-family:inherit;animation:nxcFade .5s ease}'
+      + '#nx-cumple canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}'
+      + '#nx-cumple .nxc-globo{position:absolute;bottom:-140px;font-size:56px;animation:nxcSube linear infinite;pointer-events:none;filter:drop-shadow(0 6px 6px rgba(0,0,0,.15))}'
+      + '#nx-cumple .nxc-caja{position:relative;max-width:560px;width:100%;background:rgba(255,255,255,.92);border-radius:24px;padding:28px 22px 22px;text-align:center;'
+      + 'box-shadow:0 20px 60px rgba(90,40,140,.35);animation:nxcPop .7s cubic-bezier(.2,1.6,.4,1)}'
+      + '#nx-cumple .nxc-pastel{font-size:84px;line-height:1;display:inline-block;animation:nxcSalta 1.2s ease-in-out infinite}'
+      + '#nx-cumple h1{margin:10px 0 6px;font-size:32px;line-height:1.15;color:#c2185b;font-weight:800;letter-spacing:.5px}'
+      + '#nx-cumple p{margin:0 0 20px;font-size:20px;line-height:1.5;color:#3b2a4d}'
+      + '#nx-cumple p b{color:#7b1fa2;font-size:23px}'
+      + '#nx-cumple button{border:0;border-radius:999px;padding:14px 28px;font-size:18px;font-weight:700;color:#fff;cursor:pointer;'
+      + 'background:linear-gradient(90deg,#ec407a,#ab47bc);box-shadow:0 6px 18px rgba(171,71,188,.4)}'
+      + '@keyframes nxcFade{from{opacity:0}to{opacity:1}}'
+      + '@keyframes nxcPop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}'
+      + '@keyframes nxcSalta{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-14px) rotate(4deg)}}'
+      + '@keyframes nxcSube{0%{transform:translateY(0) translateX(0)}50%{transform:translateY(-60vh) translateX(18px)}100%{transform:translateY(-130vh) translateX(-10px)}}'
+      + '@media (prefers-reduced-motion:reduce){#nx-cumple *,#nx-cumple{animation:none!important}}';
+    document.head.appendChild(css);
+    var ov = document.createElement('div'); ov.id = 'nx-cumple'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    var globos = '', colores = ['🎈', '🎈', '🎈', '🎉', '🎈', '🎁', '🎈', '🎈'];
+    for(var i = 0; i < 9; i++) globos += '<div class="nxc-globo" style="left:' + (4 + i * 11) + '%;animation-duration:' + (7 + (i % 4) * 1.6) + 's;animation-delay:' + (-(i * 1.3)) + 's">' + colores[i % colores.length] + '</div>';
+    ov.innerHTML = '<canvas></canvas>' + globos
+      + '<div class="nxc-caja"><div class="nxc-pastel">🎂</div><h1>¡Feliz cumpleaños!</h1><p>' + texto(gente) + '</p>'
+      + '<button type="button">🎉 ¡Felicidades!</button></div>';
+    document.body.appendChild(ov);
+    var vivo = true;
+    function cerrar(){ vivo = false; ov.style.transition = 'opacity .4s'; ov.style.opacity = '0'; setTimeout(function(){ ov.remove(); css.remove(); }, 450); }
+    ov.querySelector('button').addEventListener('click', cerrar);
+    if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Confeti
+    var cv = ov.querySelector('canvas'), cx = cv.getContext('2d'), W, H, piezas = [];
+    var tonos = ['#ec407a', '#ab47bc', '#42a5f5', '#66bb6a', '#ffca28', '#ff7043', '#26c6da'];
+    function medir(){ var r = window.devicePixelRatio || 1; W = ov.clientWidth; H = ov.clientHeight; cv.width = W * r; cv.height = H * r; cx.setTransform(r, 0, 0, r, 0, 0); }
+    medir(); window.addEventListener('resize', medir);
+    for(var j = 0; j < 140; j++) piezas.push({ x: Math.random() * W, y: Math.random() * -H, w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+      vy: 1.5 + Math.random() * 2.5, vx: -1 + Math.random() * 2, a: Math.random() * 6.28, va: -.1 + Math.random() * .2, c: tonos[j % tonos.length] });
+    (function paso(){
+      if(!vivo){ window.removeEventListener('resize', medir); return; }
+      cx.clearRect(0, 0, W, H);
+      piezas.forEach(function(p){
+        p.y += p.vy; p.x += p.vx + Math.sin(p.y / 30) * .6; p.a += p.va;
+        if(p.y > H + 20){ p.y = -20; p.x = Math.random() * W; }
+        cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c; cx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); cx.restore();
+      });
+      requestAnimationFrame(paso);
+    })();
+  }
+  function revisar(){
+    if(mostrado || document.hidden || !document.body) return;
+    var gente = cumpleaneros(); if(!gente.length) return;
+    var h = new Date(), clave = 'nx_cumple_visto_' + RAIZ + '_' + h.getFullYear() + '-' + dd(h.getMonth() + 1) + '-' + dd(h.getDate()) + '_' + gente.map(function(p){ return p.id; }).join(',');
+    try{ if(localStorage.getItem(clave)) return; localStorage.setItem(clave, '1'); }catch(e){}
+    mostrado = true;
+    try{ mostrar(gente); }catch(e){ console.warn('Cumpleaños', e); }
+  }
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1000); return; }
+    db.ref(RAIZ + '/rrhh/plantilla').on('value', function(s){ var v = s.val(); if(v && Object.keys(v).length) plantilla = v; setTimeout(revisar, 1500); });
+  }
+  // Si la app se queda abierta de un día para otro, se revisa al volver a ella
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
+  function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
 </script>
 </body>
 </html>
