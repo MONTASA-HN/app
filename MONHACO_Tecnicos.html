@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='12b344821b7c';
+  var APP_VERSION='7e9256a26e4b';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -936,7 +936,7 @@ function _cliSelOptions(val){
   CLIENTES_MONHACO.forEach(function(c){ h += '<option value="'+c+'"'+(c===val?' selected':'')+'>'+c+'</option>'; });
   return h;
 }
-function _valePersonasDe(o){
+function _valePersonasTodos(o){
   if(!o) return 1;
   let n = 0;
   if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
@@ -965,7 +965,7 @@ function _valeMigrarPersonas(orden){
     return cambio;
   }catch(e){ return false; }
 }
-function _valeNombresDe(o){
+function _valeNombresTodos(o){
   // Nombres de todas las personas relacionadas en la orden (mismos campos
   // que _valePersonasDe, para que el conteo y las firmas coincidan)
   const out = [];
@@ -977,6 +977,41 @@ function _valeNombresDe(o){
     if(o.motorista) add(o.motorista);
   }
   return out;
+}
+// ── PERSONAS CON DERECHO AL VALE (2026-10-26, pedido de Miguel) ── En la ventana del vale se puede desmarcar a quien no le toca.
+// Se guarda en cada entrada del vale como `sin: [nombres]`; mientras la ventana está abierta manda la selección en pantalla.
+function _valeSinDe(o){
+  var t = window._valeSinTmp, box = document.getElementById('vale-personas-box');
+  if(o && t && t.id === o.id && box && box.closest('.open')) return t.sin;
+  var v = ((o && o.vales) || []).find(function(x){ return x && Array.isArray(x.sin); });
+  return v ? v.sin : [];
+}
+function _valeNombresDe(o){ var sin = _valeSinDe(o); return _valeNombresTodos(o).filter(function(n){ return sin.indexOf(n) < 0; }); }
+function _valePersonasDe(o){ return o ? Math.max(1, _valeNombresDe(o).length) : 1; }
+function _valePonerSin(orden){
+  var sin = _valeSinDe(orden).filter(function(n){ return _valeNombresTodos(orden).indexOf(n) >= 0; });
+  (orden.vales || []).forEach(function(v){ if(!v) return; if(sin.length) v.sin = sin.slice(); else delete v.sin; });
+}
+function _valePersonasHTML(orden){
+  var todos = _valeNombresTodos(orden), sin = _valeSinDe(orden).slice();
+  window._valeSinTmp = { id: orden.id, sin: sin };
+  if(todos.length < 2) return '<div id="vale-personas-box"></div>';
+  return '<div id="vale-personas-box" style="background:#e8f0fe;border:1px solid #b3cdf7;border-radius:6px;padding:8px 12px;margin-bottom:12px">'
+    + '<div style="font-size:12px;font-weight:700;color:#1f3864;margin-bottom:6px">👥 Personas con vale <span style="font-weight:400">(desmarca a quien no le corresponde)</span></div>'
+    + todos.map(function(n, i){ return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer">'
+      + '<input type="checkbox" class="vale-persona-cb" data-i="' + i + '" ' + (sin.indexOf(n) < 0 ? 'checked' : '') + ' onchange="_valePersonaCambio(this)" style="width:17px;height:17px">'
+      + _x(n) + '</label>'; }).join('')
+    + '</div>';
+}
+function _valePersonaCambio(cb){
+  var t = window._valeSinTmp; if(!t) return;
+  var o = null; ['logistica', 'preventivos', 'correctivos', 'soldaduras'].some(function(k){ o = (DB[k] || []).find(function(x){ return x && x.id === t.id; }); return !!o; });
+  if(!o) return;
+  var n = _valeNombresTodos(o)[+cb.dataset.i];
+  if(!cb.checked && document.querySelectorAll('.vale-persona-cb:checked').length === 0){ cb.checked = true; if(typeof toast === 'function') toast('Debe quedar al menos una persona'); return; }
+  t.sin = t.sin.filter(function(x){ return x !== n; }); if(!cb.checked) t.sin.push(n);
+  var p = cb.closest('#vale-personas-box').parentNode, r = p && p.querySelector('input[type=checkbox][onchange^="recalc"]');
+  if(r && typeof r.onchange === 'function') r.onchange();
 }
 function _firmasValeHTML(orden){
   // Sección de firmas "Recibe" para el vale impreso: una por persona

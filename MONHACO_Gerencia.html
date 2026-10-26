@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1b17bd5b3e87';
+  var APP_VERSION='28f88fbe1984';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -12262,7 +12262,7 @@ function _buildLiquidacionHTML(v, orden){
 // ══════════════════════════════════════════════════════════════════════════
 // ── SISTEMA DE VALES DE ALIMENTACIÓN ─────────────────────────────────────
 
-function _valePersonasDe(o){
+function _valePersonasTodos(o){
   if(!o) return 1;
   let n = 0;
   if(Array.isArray(o.tecnicos)) n += o.tecnicos.filter(Boolean).length;
@@ -12291,7 +12291,7 @@ function _valeMigrarPersonas(orden){
     return cambio;
   }catch(e){ return false; }
 }
-function _valeNombresDe(o){
+function _valeNombresTodos(o){
   // Nombres de todas las personas relacionadas en la orden (mismos campos
   // que _valePersonasDe, para que el conteo y las firmas coincidan)
   const out = [];
@@ -12303,6 +12303,41 @@ function _valeNombresDe(o){
     if(o.motorista) add(o.motorista);
   }
   return out;
+}
+// ── PERSONAS CON DERECHO AL VALE (2026-10-26, pedido de Miguel) ── En la ventana del vale se puede desmarcar a quien no le toca.
+// Se guarda en cada entrada del vale como `sin: [nombres]`; mientras la ventana está abierta manda la selección en pantalla.
+function _valeSinDe(o){
+  var t = window._valeSinTmp, box = document.getElementById('vale-personas-box');
+  if(o && t && t.id === o.id && box && box.closest('.open')) return t.sin;
+  var v = ((o && o.vales) || []).find(function(x){ return x && Array.isArray(x.sin); });
+  return v ? v.sin : [];
+}
+function _valeNombresDe(o){ var sin = _valeSinDe(o); return _valeNombresTodos(o).filter(function(n){ return sin.indexOf(n) < 0; }); }
+function _valePersonasDe(o){ return o ? Math.max(1, _valeNombresDe(o).length) : 1; }
+function _valePonerSin(orden){
+  var sin = _valeSinDe(orden).filter(function(n){ return _valeNombresTodos(orden).indexOf(n) >= 0; });
+  (orden.vales || []).forEach(function(v){ if(!v) return; if(sin.length) v.sin = sin.slice(); else delete v.sin; });
+}
+function _valePersonasHTML(orden){
+  var todos = _valeNombresTodos(orden), sin = _valeSinDe(orden).slice();
+  window._valeSinTmp = { id: orden.id, sin: sin };
+  if(todos.length < 2) return '<div id="vale-personas-box"></div>';
+  return '<div id="vale-personas-box" style="background:#e8f0fe;border:1px solid #b3cdf7;border-radius:6px;padding:8px 12px;margin-bottom:12px">'
+    + '<div style="font-size:12px;font-weight:700;color:#1f3864;margin-bottom:6px">👥 Personas con vale <span style="font-weight:400">(desmarca a quien no le corresponde)</span></div>'
+    + todos.map(function(n, i){ return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer">'
+      + '<input type="checkbox" class="vale-persona-cb" data-i="' + i + '" ' + (sin.indexOf(n) < 0 ? 'checked' : '') + ' onchange="_valePersonaCambio(this)" style="width:17px;height:17px">'
+      + _x(n) + '</label>'; }).join('')
+    + '</div>';
+}
+function _valePersonaCambio(cb){
+  var t = window._valeSinTmp; if(!t) return;
+  var o = null; ['logistica', 'preventivos', 'correctivos', 'soldaduras'].some(function(k){ o = (DB[k] || []).find(function(x){ return x && x.id === t.id; }); return !!o; });
+  if(!o) return;
+  var n = _valeNombresTodos(o)[+cb.dataset.i];
+  if(!cb.checked && document.querySelectorAll('.vale-persona-cb:checked').length === 0){ cb.checked = true; if(typeof toast === 'function') toast('Debe quedar al menos una persona'); return; }
+  t.sin = t.sin.filter(function(x){ return x !== n; }); if(!cb.checked) t.sin.push(n);
+  var p = cb.closest('#vale-personas-box').parentNode, r = p && p.querySelector('input[type=checkbox][onchange^="recalc"]');
+  if(r && typeof r.onchange === 'function') r.onchange();
 }
 function _firmasValeHTML(orden){
   // Sección de firmas "Recibe" para el vale impreso: una por persona
@@ -12425,7 +12460,7 @@ function _mostrarOverlayVale(ordenId){
     + '</div>'
     + '<div style="padding:16px">'
     + aviso
-    + notaPersonas
+    + _valePersonasHTML(orden)   // (2026-10-26) reemplaza la nota de personas
     + checksHTML
     + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:6px;background:#856404;color:white;margin:8px 0 14px">'
     + '<span style="font-size:14px;font-weight:700">TOTAL</span>'
@@ -12471,6 +12506,7 @@ function _ejecutarGuardarVale(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
   }).reduce(function(acc, t){ var n = _nxCant(document.getElementById('vc-'+t)); for(var i = 0; i < n; i++) acc.push({tipo:t,monto:montos[t]*_np,personas:_np}); return acc; }, []);   // (2026-10-26) × cantidad
+  _valePonerSin(orden);   // (2026-10-26) personas sin vale
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
@@ -12832,7 +12868,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
     + '<button onclick="cerrarValeMant()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer">x</button>'
     + '</div>'
     + '<div style="padding:16px">'
-    + aviso + checksHTML
+    + aviso + _valePersonasHTML(orden) + checksHTML
     + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:6px;background:#856404;color:white;margin:8px 0 14px">'
     + '<span style="font-size:14px;font-weight:700">TOTAL</span>'
     + '<span id="vale-mant-total" style="font-size:18px;font-weight:700">L. '+total.toFixed(2)+'</span></div>'
@@ -12877,6 +12913,7 @@ function _ejecutarGuardarValeMant(){
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
   }).reduce(function(acc, t){ var n = _nxCant(document.getElementById('vcm-'+t)); for(var i = 0; i < n; i++) acc.push({tipo:t,monto:montos[t]*_np,personas:_np}); return acc; }, []);   // (2026-10-26) × cantidad
+  _valePonerSin(orden);   // (2026-10-26) personas sin vale
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const fbArr = _valeMantCol(_valeMantTipo);
