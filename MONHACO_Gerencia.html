@@ -25,6 +25,11 @@
 })();
 </script>
 <script>
+// (2026-10-26) Lista y colección de la ventana de vales de mantenimiento según el tipo: preventivo, soldadura o correctivo
+function _valeMantArr(t){ return t === 'preventivo' ? (DB.preventivos || []) : t === 'soldadura' ? ((typeof _spLista === 'function') ? _spLista() : (DB.soldaduras || [])) : (DB.correctivos || []); }
+function _valeMantCol(t){ return t === 'preventivo' ? 'preventivos' : t === 'soldadura' ? 'soldaduras' : 'correctivos'; }
+</script>
+<script>
 // ══ DOMINGOS TRABAJADOS Y VALES DE FIN DE SEMANA (2026-10-26, pedido de Miguel) ══
 // · Al cerrar una orden de varios días se pregunta, domingo por domingo, si se trabajó → o.domingosTrabajados = ['AAAA-MM-DD', …].
 //   Un domingo trabajado cuenta 8 h (_calcMinsJornada / _nxRepartoDias reciben la lista); los demás siguen en 0.
@@ -230,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d95a93f6b363';
+  var APP_VERSION='1b17bd5b3e87';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -5390,7 +5395,7 @@ function _rcFiltrarBusqueda(txt){
   });
 }
 function rcElegirOrden(tipo, oid){
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const o = arr.find(function(x){ return x && x.id===oid; }); if(!o) return;
   const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
   const setV = function(id, v){ const el=document.getElementById(id); if(el && v!=null && v!=='') el.value = v; };
@@ -6899,7 +6904,7 @@ function _horasDelMes(mes, anio){
   });
 
   // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
-  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes }).forEach(r => {
+  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio); }).forEach(r => {   // (2026-10-24) o con días en este mes
     const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
     const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, r.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, r.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
@@ -12745,7 +12750,7 @@ let _valeMantTipo = null; // 'correctivo' o 'preventivo'
 function abrirValeMant(ordenId, tipo){
   _valeMantOrdenId = ordenId;
   _valeMantTipo = tipo || 'correctivo';
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   const yaGenerado = orden.vales && orden.vales.length;
@@ -12760,7 +12765,7 @@ function abrirValeMant(ordenId, tipo){
 }
 
 function _abrirValeMantInterno(ordenId, tipo){
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   // Auto-calcular si tiene horas
@@ -12776,7 +12781,7 @@ function _abrirValeMantInterno(ordenId, tipo){
 
 function eliminarValeMantConPin(){
   solicitarPINAccion(()=>{
-    const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+    const arr = _valeMantArr(_valeMantTipo);
     const orden = arr.find(o=>o.id===_valeMantOrdenId);
     if(!orden) return;
     delete orden.vales;
@@ -12788,12 +12793,12 @@ function eliminarValeMantConPin(){
 }
 
 function _mostrarOverlayValeMant(ordenId, tipo){
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
     const _iMig = arr.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) _nxSetSeguro('monhaco/'+(tipo==='preventivo'?'preventivos':'correctivos'), _iMig, orden.id, 'vales', orden.vales);   // (2026-10-19) confirma el id
+    if(_iMig>=0) _nxSetSeguro('monhaco/'+_valeMantCol(tipo), _iMig, orden.id, 'vales', orden.vales);   // (2026-10-19) confirma el id
   }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
@@ -12846,7 +12851,7 @@ function _mostrarOverlayValeMant(ordenId, tipo){
 
 function recalcValesMant(){
   const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
-  const _arrV = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const _arrV = _valeMantArr(_valeMantTipo);
   const _np = _valePersonasDe(_arrV.find(o=>o.id===_valeMantOrdenId));
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
@@ -12864,7 +12869,7 @@ function guardarValeMant(){
 }
 
 function _ejecutarGuardarValeMant(){
-  const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(_valeMantTipo);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
   const montos = {desayuno:_pv(),almuerzo:_pv(),cena:_pv(),media_noche:_pv()};
@@ -12874,7 +12879,7 @@ function _ejecutarGuardarValeMant(){
   }).reduce(function(acc, t){ var n = _nxCant(document.getElementById('vcm-'+t)); for(var i = 0; i < n; i++) acc.push({tipo:t,monto:montos[t]*_np,personas:_np}); return acc; }, []);   // (2026-10-26) × cantidad
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
-    const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
+    const fbArr = _valeMantCol(_valeMantTipo);
     const idx = arr.findIndex(o=>o.id===orden.id);
     if(idx !== -1){
       _fbRefPorId('monhaco/'+fbArr+'/'+idx+'/vales').set(orden.vales)
@@ -12886,6 +12891,7 @@ function _ejecutarGuardarValeMant(){
   cerrarValeMant();
   if(_valeMantTipo==='preventivo' && typeof renderPreventivos==='function') renderPreventivos();
   else if(typeof renderCorrectivos==='function') renderCorrectivos();
+  if(_valeMantTipo==='soldadura'){ try{ if(typeof renderHistorial==='function') renderHistorial(); }catch(e){} try{ if(typeof renderSoldaduras==='function') renderSoldaduras(); }catch(e){} }   // (2026-10-26)
 }
 
 function cerrarValeMant(){
@@ -12971,10 +12977,10 @@ function _valeComprobanteImprimir(orden, tipoDesc){
 }
 function imprimirValeMant(){
   _ejecutarGuardarValeMant();
-  const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(_valeMantTipo);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  _valeComprobanteImprimir(orden, _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo');
+  _valeComprobanteImprimir(orden, (_valeMantTipo==='soldadura' ? 'soldadura / pintura' : _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo'));
 }
 
 function _cambiarEstadoEquipo(equipoId, nuevoEstado){
@@ -14701,6 +14707,7 @@ function _buildDetalleSP(x, tecs, est){
   }
   var B = 'width:100%;margin-top:4px;padding:8px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;';
   d += '<button onclick="event.stopPropagation();abrirViaticos(\'' + _idS(x.id) + '\',\'soldadura\')" style="' + B + 'background:' + (x.viaticos ? '#1f3864' : '#2d6a9f') + ';color:white;border:none">' + (x.viaticos ? '📋 Ver / editar viáticos' : '📋 Solicitar viáticos') + '</button>';
+  if(!x.viaticos) d += '<button onclick="event.stopPropagation();abrirValeMant(\'' + _idS(x.id) + '\',\'soldadura\')" style="' + B + 'background:#fff3cd;color:#856404;border:1px solid #ffc107">' + ((x.vales && x.vales.length) ? '🍽 Vale' : '🍽 Solicitar Vale de Alimentación') + '</button>';   // (2026-10-26)
   if(est === 'Completado'){
     d += '<button onclick="event.stopPropagation();_reabrirOrdenMant(\'sp\',\'' + _idS(x.id) + '\')" style="' + B + 'background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef">🔓 Reabrir para editar</button>';
     d += '<button onclick="event.stopPropagation();compartirPDFOrden(\'soldadura\',\'' + _idS(x.id) + '\')" style="' + B + 'background:#2d6a2d;color:white;border:none">📄 Compartir PDF</button>';

@@ -25,6 +25,11 @@
 })();
 </script>
 <script>
+// (2026-10-26) Lista y colección de la ventana de vales de mantenimiento según el tipo: preventivo, soldadura o correctivo
+function _valeMantArr(t){ return t === 'preventivo' ? (DB.preventivos || []) : t === 'soldadura' ? ((typeof _spLista === 'function') ? _spLista() : (DB.soldaduras || [])) : (DB.correctivos || []); }
+function _valeMantCol(t){ return t === 'preventivo' ? 'preventivos' : t === 'soldadura' ? 'soldaduras' : 'correctivos'; }
+</script>
+<script>
 // ══ DOMINGOS TRABAJADOS Y VALES DE FIN DE SEMANA (2026-10-26, pedido de Miguel) ══
 // · Al cerrar una orden de varios días se pregunta, domingo por domingo, si se trabajó → o.domingosTrabajados = ['AAAA-MM-DD', …].
 //   Un domingo trabajado cuenta 8 h (_calcMinsJornada / _nxRepartoDias reciben la lista); los demás siguen en 0.
@@ -194,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4c081ae7cf35';
+  var APP_VERSION='12b344821b7c';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1145,7 +1150,7 @@ function cerrarViaticosResumen(){
 function abrirValeMant(ordenId, tipo){
   _valeMantOrdenId = ordenId;
   _valeMantTipo = tipo || 'correctivo';
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   if(!orden.vales || !orden.vales.length){
@@ -1156,12 +1161,12 @@ function abrirValeMant(ordenId, tipo){
 }
 
 function _mostrarOverlayValeMant(ordenId, tipo){
-  const arr = tipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(tipo);
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   if(_valeMigrarPersonas(orden) && window._fbDB && window._fbReady){
     const _iMig = arr.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) _nxSetSeguro('monhaco/'+(tipo==='preventivo'?'preventivos':'correctivos'), _iMig, orden.id, 'vales', orden.vales);   // (2026-10-19) confirma el id
+    if(_iMig>=0) _nxSetSeguro('monhaco/'+_valeMantCol(tipo), _iMig, orden.id, 'vales', orden.vales);   // (2026-10-19) confirma el id
   }
   const vales = orden.vales || [];
   const total = vales.reduce((s,v)=>s+v.monto,0);
@@ -1289,10 +1294,10 @@ function _valeComprobanteImprimir(orden, tipoDesc){
 }
 function imprimirValeMant(){
   _ejecutarGuardarValeMant();
-  const arr = _valeMantTipo==='preventivo' ? (DB.preventivos||[]) : (DB.correctivos||[]);
+  const arr = _valeMantArr(_valeMantTipo);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  _valeComprobanteImprimir(orden, _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo');
+  _valeComprobanteImprimir(orden, (_valeMantTipo==='soldadura' ? 'soldadura / pintura' : _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo'));
 }
 
 function _imprimirHTML(htmlContent){
