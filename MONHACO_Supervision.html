@@ -25,6 +25,66 @@
 })();
 </script>
 <script>
+// ══ DOMINGOS TRABAJADOS Y VALES DE FIN DE SEMANA (2026-10-26, pedido de Miguel) ══
+// · Al cerrar una orden de varios días se pregunta, domingo por domingo, si se trabajó → o.domingosTrabajados = ['AAAA-MM-DD', …].
+//   Un domingo trabajado cuenta 8 h (_calcMinsJornada / _nxRepartoDias reciben la lista); los demás siguen en 0.
+// · Vales en órdenes de varios días: además de los de siempre, almuerzo cada sábado en que se trabaja después de las 12 y desayuno +
+//   almuerzo cada domingo trabajado; sin tope de 10 comidas. En la ventana de vales cada comida tiene «× cantidad».
+function _nxYMD(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _nxDomingosEntre(ini, fin){
+  var out = []; if(!ini || !fin || isNaN(ini) || isNaN(fin) || fin <= ini) return out;
+  var d = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), f = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  if(d.getTime() === f.getTime()) return out;   // mismo día: cuenta el tiempo real, no se pregunta
+  for(; d <= f; d.setDate(d.getDate() + 1)) if(d.getDay() === 0) out.push(_nxYMD(d));
+  return out;
+}
+function _nxRangoOrden(o){
+  var ini = o.inicioTrabajo || o.fechaInicio || (o.fecha && o.horaIni ? o.fecha + 'T' + o.horaIni : '');
+  var fin = o.finTrabajo || o.fechaFin || ((o.fechaFinFecha || o.fecha) && o.horaFin ? (o.fechaFinFecha || o.fecha) + 'T' + o.horaFin : '');
+  var a = new Date(ini), b = new Date(fin);
+  var s = o.salidaPlantel ? new Date(o.salidaPlantel) : null, r = o.retornoPlantel ? new Date(o.retornoPlantel) : null;   // con traslado
+  if(s && !isNaN(s) && (isNaN(a) || s < a)) a = s; if(r && !isNaN(r) && (isNaN(b) || r > b)) b = r;
+  return [a, b];
+}
+// Pregunta por cada domingo (Aceptar = sí se trabajó). Va DESPUÉS del «¿Cerrar la orden?», antes de calcular vales.
+function _nxPreguntarDomingos(o){
+  try{
+    if(!o) return; var x = _nxRangoOrden(o), doms = _nxDomingosEntre(x[0], x[1]);
+    if(!doms.length){ if(o.domingosTrabajados) delete o.domingosTrabajados; return; }
+    var si = [];
+    doms.forEach(function(d){
+      var p = d.split('-');
+      if(confirm('🗓 ¿Se trabajó el DOMINGO ' + p[2] + '/' + p[1] + '/' + p[0] + ' en la orden ' + (o.correlativo || '') + '?\n\n'
+        + 'Aceptar = SÍ se trabajó (cuenta 8 horas y lleva vale de desayuno y almuerzo)\nCancelar = NO se trabajó')) si.push(d);
+    });
+    if(si.length) o.domingosTrabajados = si; else if(o.domingosTrabajados) delete o.domingosTrabajados;
+  }catch(e){}
+}
+// Comidas extra del fin de semana (solo órdenes de varios días). No repite las que ya da la regla del día de inicio.
+function _nxValesFinde(vales, ini, fin, doms){
+  try{
+    var D = Array.isArray(doms) ? doms : [];
+    var dIni = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), dFin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+    var ya = { desayuno: vales.some(function(v){ return v.tipo === 'desayuno'; }), almuerzo: vales.some(function(v){ return v.tipo === 'almuerzo'; }) };
+    for(var d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)){
+      var esIni = d.getTime() === dIni.getTime(), esFin = d.getTime() === dFin.getTime(), w = d.getDay();
+      var finSeg = esFin ? fin.getHours() * 60 + fin.getMinutes() : 1440;
+      if(w === 6 && finSeg > 720 && !(esIni && ya.almuerzo)) vales.push({ tipo: 'almuerzo', monto: _pv() });
+      if(w === 0 && D.indexOf(_nxYMD(d)) >= 0){
+        if(!(esIni && ya.desayuno)) vales.push({ tipo: 'desayuno', monto: _pv() });
+        if(!(esIni && ya.almuerzo)) vales.push({ tipo: 'almuerzo', monto: _pv() });
+      }
+    }
+  }catch(e){}
+  return vales;
+}
+// Cantidad de una comida en la ventana de vales (campo «×» junto a la casilla)
+// Texto de las comidas de un vale agrupando las repetidas: «Desayuno + Almuerzo ×3»
+function _nxValesTexto(vales, labels, sep){ var orden = [], n = {}; (vales || []).forEach(function(v){ var t = v && v.tipo; if(!t) return; if(!n[t]){ n[t] = 0; orden.push(t); } n[t]++; });
+  return orden.map(function(t){ return (labels[t] || t) + (n[t] > 1 ? ' ×' + n[t] : ''); }).join(sep); }
+function _nxCant(cb){ if(!cb) return 1; var q = document.getElementById('q-' + cb.id); var n = parseInt(q && q.value, 10); return n >= 1 ? Math.min(n, 30) : 1; }
+</script>
+<script>
 // ══ HORAS POR MES (2026-10-24, pedido de Miguel) ══ Reparte la jornada de una orden de varios días entre los meses en que se trabajó.
 // Misma regla que _calcMinsJornada: días completos = jornada del día (8 h lun-vie, 4 h sáb, 0 dom); último día = horas hasta la hora
 // de inicio (topadas a su jornada); mismo día = tiempo real. La suma de todos los meses = el total de la orden.
@@ -34,9 +94,9 @@ function _nxIniFin(o){
   if(o && o.fechaInicio && o.fechaFin && !(o.fecha && o.horaIni && o.horaFin)){ ini = o.fechaInicio; fin = o.fechaFin; }
   return [new Date(ini), new Date(fin)];
 }
-function _nxRepartoDias(ini, fin){
+function _nxRepartoDias(ini, fin, domsTrab){
   if(!ini || !fin || isNaN(ini) || isNaN(fin) || fin <= ini) return [];
-  var jd = function(d){ var w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  var jd = function(d){ var w = d.getDay(); return w === 0 ? ((Array.isArray(domsTrab) && domsTrab.indexOf(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) >= 0) ? 480 : 0) : (w === 6 ? 240 : 480); };
   var dIni = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), dFin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
   if(dIni.getTime() === dFin.getTime()) return [[dIni.getFullYear(), dIni.getMonth(), Math.floor((fin - ini) / 60000)]];
   var out = [];
@@ -46,18 +106,18 @@ function _nxRepartoDias(ini, fin){
   return out;
 }
 // Fracción (0 a 1) de la jornada de la orden que cae en ese mes. Fechas inválidas: 1 (como antes, todo al mes del cierre).
-function _nxParteMesF(ini, fin, mes, anio){
-  var r = _nxRepartoDias(ini, fin); if(!r.length) return 1;
+function _nxParteMesF(ini, fin, mes, anio, domsTrab){
+  var r = _nxRepartoDias(ini, fin, domsTrab); if(!r.length) return 1;
   var tot = 0, m = 0; r.forEach(function(x){ tot += x[2]; if(x[0] === anio && x[1] === mes) m += x[2]; });
   if(!tot){ var f = fin; return (f.getFullYear() === anio && f.getMonth() === mes) ? 1 : 0; }
   return m / tot;
 }
-function _nxMulMes(ini, fin, mes, anio, mins){ return Math.round((mins || 0) * _nxParteMesF(ini, fin, mes, anio)); }
-function _nxParteMes(o, mes, anio){ var x = _nxIniFin(o); return _nxParteMesF(x[0], x[1], mes, anio); }
+function _nxMulMes(ini, fin, mes, anio, mins, domsTrab){ return Math.round((mins || 0) * _nxParteMesF(ini, fin, mes, anio, domsTrab)); }
+function _nxParteMes(o, mes, anio){ var x = _nxIniFin(o); return _nxParteMesF(x[0], x[1], mes, anio, o && o.domingosTrabajados); }
 // ¿La orden tiene días trabajados en ese mes? (para incluirla aunque se haya cerrado en otro mes)
 function _nxTocaMes(o, mes, anio){
   var x = _nxIniFin(o); if(isNaN(x[0]) || isNaN(x[1]) || x[1] <= x[0]) return false;
-  return _nxRepartoDias(x[0], x[1]).some(function(d){ return d[0] === anio && d[1] === mes && d[2] > 0; });
+  return _nxRepartoDias(x[0], x[1], o && o.domingosTrabajados).some(function(d){ return d[0] === anio && d[1] === mes && d[2] > 0; });
 }
 </script>
 <script>
@@ -170,7 +230,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ad0641b9e46f';
+  var APP_VERSION='1600f8e6de52';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -5303,8 +5363,8 @@ function calcTiemposOrden(o){
   const ret  = new Date(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
-  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
-  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin, o && o.domingosTrabajados) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret, o && o.domingosTrabajados) : minsRep;
   const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmt = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {
@@ -5734,7 +5794,7 @@ function renderPersonal(){
     const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
-    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
+    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, o.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, o.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     asignados.filter((p, i, l) => l.indexOf(p) === i).forEach(p => {
       // técnico en apoyo a mantenimiento / atención de compras: sus horas van a su productividad de técnico
       const st = TECNICOS_LIST.includes(p) ? statsTec : statsLog;
@@ -5759,7 +5819,7 @@ function renderPersonal(){
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
     const ini = new Date(iniStr), fin = new Date(finStr);
-    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
+    const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, r.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, r.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => {
       if(PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)){
         if(!statsLog[nombre]) statsLog[nombre] = {ordenes:0, minutos:0};
@@ -5776,7 +5836,7 @@ function renderPersonal(){
   // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
   (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes }).forEach(r => {
     const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
-    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin) : Math.floor((fin-ini)/60000)) : 0);   // (2026-10-24) solo la parte de este mes
+    const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, r.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, r.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
   });
   const sortedTec = Object.entries(statsTec)
@@ -6259,7 +6319,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     }catch(e){ return s; }
   };
   var hEq = o.horometroSalida&&o.horometroRetorno?(parseFloat(o.horometroRetorno)-parseFloat(o.horometroSalida)).toFixed(1)+' hrs':'';
-  var hOp = o.fechaInicio&&o.fechaFin?(_calcMinsJornada(new Date(o.fechaInicio), new Date(o.fechaFin))/60).toFixed(1)+' hrs':'\u2014';
+  var hOp = o.fechaInicio&&o.fechaFin?(_calcMinsJornada(new Date(o.fechaInicio), new Date(o.fechaFin), o.domingosTrabajados)/60).toFixed(1)+' hrs':'\u2014';
   var h = '';
   h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px">';
   if(o.operador) h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase">Operador</div><div style="font-size:13px;font-weight:600">'+_x(o.operador)+'</div></div>';
@@ -7440,13 +7500,14 @@ function completarPreventivo(id){
     if(faltantesGer.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGer.join('\n• ')); return; }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  _nxPreguntarDomingos(p);   // (2026-10-26) domingos trabajados
   p.firma = p.firma || getFirmaData(id);
 
   // Auto-generar vale de alimentación al cerrar
   (function(){
     var _o = p;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o));
+      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o), _o.domingosTrabajados);
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'monhaco_sup_v1', JSON.stringify(DB)); }catch(e){}
@@ -7649,6 +7710,7 @@ function cerrarCorrectivo(id){
     if(faltantesGerC.length){ alert('⚠️ Faltan campos obligatorios para orden fuera del plantel:\n\n• '+faltantesGerC.join('\n• ')); return; }
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  _nxPreguntarDomingos(c);   // (2026-10-26) domingos trabajados
   c.firma = c.firma || getFirmaData(id);
   c.estado = 'Completado';
   c.fechaCierre = new Date().toISOString().slice(0,10);
@@ -7656,7 +7718,7 @@ function cerrarCorrectivo(id){
   (function(){
     var _o = c;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o));
+      var _v = calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o), _o.domingosTrabajados);
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'monhaco_sup_v1', JSON.stringify(DB)); }catch(e){}
@@ -10030,7 +10092,7 @@ function _firmasValeHTML(orden){
   }).join('');
   return '<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:28px">'+filas+'</div>';
 }
-function calcularVales(fechaInicio, fechaFin, personas){
+function calcularVales(fechaInicio, fechaFin, personas, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
   if(!fechaInicio || !fechaFin) return [];
   const ini = new Date(fechaInicio);
   const fin = new Date(fechaFin);
@@ -10042,6 +10104,7 @@ function calcularVales(fechaInicio, fechaFin, personas){
   // Desayuno, almuerzo y media noche solo pueden asignarse manualmente desde Gerencia.
   const mismodia = ini.toDateString() === fin.toDateString();
   if(hFin > 19 || (!mismodia && hFin >= 0 && hFin < 5)) vales.push({tipo:'cena', monto:_pv()});
+  if(!mismodia && typeof _nxValesFinde === 'function') _nxValesFinde(vales, ini, fin, domsTrab);   // (2026-10-26) fin de semana
   const _lista = vales;
   const _np = Math.max(1, parseInt(personas)||1);
   _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
@@ -10080,7 +10143,7 @@ function _abrirValeGerenciaInterno(ordenId){
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden));
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden), orden.domingosTrabajados);
       saveDB();
     }
   }
@@ -10122,7 +10185,8 @@ function _mostrarOverlayVale(ordenId){
     const checked = vales.find(function(v){ return v.tipo===t; }) ? 'checked' : '';
     return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;background:var(--surface2);margin-bottom:6px;cursor:pointer">'
       + '<input type="checkbox" id="vc-'+t+'" '+checked+' onchange="recalcVales()" style="width:18px;height:18px;cursor:pointer">'
-      + '<span style="font-size:14px">'+emojis[t]+' '+labels[t]+'</span></label>';
+      + '<span style="font-size:14px">'+emojis[t]+' '+labels[t]+'</span>'
+      + '<span style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)">×<input type="number" id="q-vc-'+t+'" min="1" max="30" value="'+Math.max(1, vales.filter(function(v){ return v.tipo===t; }).length)+'" oninput="recalcVales()" onclick="event.stopPropagation()" title="Cantidad" style="width:52px;padding:4px 6px;border:1px solid var(--border,#d0d5dd);border-radius:6px;text-align:center;font-weight:700"></span></label>';
   }).join('');
 
   const div = document.createElement('div');
@@ -10163,7 +10227,7 @@ function recalcVales(){
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vc-'+t);
-    if(cb && cb.checked) total += montos[t]*_np;
+    if(cb && cb.checked) total += montos[t]*_np*_nxCant(cb);   // (2026-10-26) × cantidad
   });
   const el = document.getElementById('vale-total-num');
   if(el) el.textContent = 'L. '+total.toFixed(2);
@@ -10183,7 +10247,7 @@ function _ejecutarGuardarVale(){
   const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vc-'+t); return cb && cb.checked;
-  }).map(t=>({tipo:t,monto:montos[t]*_np,personas:_np}));
+  }).reduce(function(acc, t){ var n = _nxCant(document.getElementById('vc-'+t)); for(var i = 0; i < n; i++) acc.push({tipo:t,monto:montos[t]*_np,personas:_np}); return acc; }, []);   // (2026-10-26) × cantidad
   try{ _cacheLocal(); }catch(e){}
   if(window._fbDB && window._fbReady){
     const idx = DB.logistica.findIndex(o=>o.id===orden.id);
@@ -10215,7 +10279,7 @@ function imprimirVale(){
   const tipoDesc = tipoLabels[orden.tipoLogistica] || orden.tipoLogistica || '';
   const eq = DB.equipos.find(e=>e.id===orden.equipoId);
   const eqDesc = eq ? eq.codigo+(eq.marca?' - '+eq.marca:'') : (orden.clienteNombre||'');
-  const conceptoBase = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
+  const conceptoBase = _nxValesTexto(vales, labels, ' + ');
 
   // Todas las personas que reciben el dinero (técnicos, operador y motorista)
   let personas = _valeNombresDe(orden);
@@ -10329,10 +10393,10 @@ function _cleanLogistica(arr){
 // Regla: si inicio y fin son el mismo día → diferencia real en minutos.
 //        si son días distintos → jornada de cada día desde el inicio hasta el día anterior al fin
 //        + horas del último día (topadas a la jornada de ese día).
-function _calcMinsJornada(iniDate, finDate){
+function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
   if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
   if(finDate <= iniDate) return 0;
-  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? ((Array.isArray(domsTrab) && domsTrab.indexOf(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) >= 0) ? 480 : 0) : (w === 6 ? 240 : 480); };
   const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
   const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
   if(dIni.getTime() === dFin.getTime()) return Math.floor((finDate - iniDate) / 60000);
@@ -10840,7 +10904,7 @@ function _abrirValeMantInterno(ordenId, tipo){
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden));
+      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden), orden.domingosTrabajados);
       saveDB();
     }
   }
@@ -10882,7 +10946,8 @@ function _mostrarOverlayValeMant(ordenId, tipo){
     const checked = vales.find(function(v){ return v.tipo===t; }) ? 'checked' : '';
     return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;background:var(--surface2);margin-bottom:6px;cursor:pointer">'
       + '<input type="checkbox" id="vcm-'+t+'" '+checked+' onchange="recalcValesMant()" style="width:18px;height:18px;cursor:pointer">'
-      + '<span style="font-size:14px">'+emojis[t]+' '+labels[t]+'</span></label>';
+      + '<span style="font-size:14px">'+emojis[t]+' '+labels[t]+'</span>'
+      + '<span style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)">×<input type="number" id="q-vcm-'+t+'" min="1" max="30" value="'+Math.max(1, vales.filter(function(v){ return v.tipo===t; }).length)+'" oninput="recalcValesMant()" onclick="event.stopPropagation()" title="Cantidad" style="width:52px;padding:4px 6px;border:1px solid var(--border,#d0d5dd);border-radius:6px;text-align:center;font-weight:700"></span></label>';
   }).join('');
   const corr = orden.correlativo || orden.id.slice(-6).toUpperCase();
   const fIni = typeof fmtDT==='function' ? fmtDT(orden.fechaInicio||'') : (orden.fechaInicio||'').slice(0,16).replace('T',' ');
@@ -10923,7 +10988,7 @@ function recalcValesMant(){
   let total = 0;
   ['desayuno','almuerzo','cena','media_noche'].forEach(t=>{
     const cb = document.getElementById('vcm-'+t);
-    if(cb && cb.checked) total += montos[t]*_np;
+    if(cb && cb.checked) total += montos[t]*_np*_nxCant(cb);   // (2026-10-26) × cantidad
   });
   const el = document.getElementById('vale-mant-total');
   if(el) el.textContent = 'L. '+total.toFixed(2);
@@ -10943,7 +11008,7 @@ function _ejecutarGuardarValeMant(){
   const _np = _valePersonasDe(orden);
   orden.vales = ['desayuno','almuerzo','cena','media_noche'].filter(t=>{
     const cb = document.getElementById('vcm-'+t); return cb && cb.checked;
-  }).map(t=>({tipo:t,monto:montos[t]*_np,personas:_np}));
+  }).reduce(function(acc, t){ var n = _nxCant(document.getElementById('vcm-'+t)); for(var i = 0; i < n; i++) acc.push({tipo:t,monto:montos[t]*_np,personas:_np}); return acc; }, []);   // (2026-10-26) × cantidad
   try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'monhaco_sup_v1', JSON.stringify(DB)); }catch(e){}
   if(window._fbDB && window._fbReady){
     const fbArr = _valeMantTipo==='preventivo' ? 'preventivos' : 'correctivos';
@@ -10974,7 +11039,7 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
   const eq = (DB.equipos||[]).find(e=>e&&e.id===orden.equipoId);
   const eqDesc = eq ? eq.codigo+(eq.marca?' - '+eq.marca:'') : (orden.clienteNombre||'');
-  const conceptoBase = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
+  const conceptoBase = _nxValesTexto(vales, labels, ' + ');
   let personas = _valeNombresDe(orden);
   if(!personas.length) personas = [orden.tecnico||orden.operador||orden.motorista||'\u2014'];
   const numPersonas = personas.length;

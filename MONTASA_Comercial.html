@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='270bcf64c521';
+  var APP_VERSION='9ceb8ff4c91e';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2597,10 +2597,10 @@ function fmtDT(s){
 // Regla: si inicio y fin son el mismo día → diferencia real en minutos.
 //        si son días distintos → jornada de cada día desde el inicio hasta el día anterior al fin
 //        + horas del último día (topadas a la jornada de ese día).
-function _calcMinsJornada(iniDate, finDate){
+function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
   if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
   if(finDate <= iniDate) return 0;
-  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? ((Array.isArray(domsTrab) && domsTrab.indexOf(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) >= 0) ? 480 : 0) : (w === 6 ? 240 : 480); };
   const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
   const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
   if(dIni.getTime() === dFin.getTime()) return Math.floor((finDate - iniDate) / 60000);
@@ -2640,8 +2640,8 @@ function calcTiemposOrden(o){
   const ret  = _parseD(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && o.salidaPlantel;
-  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
-  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin, o && o.domingosTrabajados) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret, o && o.domingosTrabajados) : minsRep;
   const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmt = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {

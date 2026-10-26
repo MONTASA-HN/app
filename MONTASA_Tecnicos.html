@@ -25,6 +25,66 @@
 })();
 </script>
 <script>
+// ══ DOMINGOS TRABAJADOS Y VALES DE FIN DE SEMANA (2026-10-26, pedido de Miguel) ══
+// · Al cerrar una orden de varios días se pregunta, domingo por domingo, si se trabajó → o.domingosTrabajados = ['AAAA-MM-DD', …].
+//   Un domingo trabajado cuenta 8 h (_calcMinsJornada / _nxRepartoDias reciben la lista); los demás siguen en 0.
+// · Vales en órdenes de varios días: además de los de siempre, almuerzo cada sábado en que se trabaja después de las 12 y desayuno +
+//   almuerzo cada domingo trabajado; sin tope de 10 comidas. En la ventana de vales cada comida tiene «× cantidad».
+function _nxYMD(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _nxDomingosEntre(ini, fin){
+  var out = []; if(!ini || !fin || isNaN(ini) || isNaN(fin) || fin <= ini) return out;
+  var d = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), f = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  if(d.getTime() === f.getTime()) return out;   // mismo día: cuenta el tiempo real, no se pregunta
+  for(; d <= f; d.setDate(d.getDate() + 1)) if(d.getDay() === 0) out.push(_nxYMD(d));
+  return out;
+}
+function _nxRangoOrden(o){
+  var ini = o.inicioTrabajo || o.fechaInicio || (o.fecha && o.horaIni ? o.fecha + 'T' + o.horaIni : '');
+  var fin = o.finTrabajo || o.fechaFin || ((o.fechaFinFecha || o.fecha) && o.horaFin ? (o.fechaFinFecha || o.fecha) + 'T' + o.horaFin : '');
+  var a = new Date(ini), b = new Date(fin);
+  var s = o.salidaPlantel ? new Date(o.salidaPlantel) : null, r = o.retornoPlantel ? new Date(o.retornoPlantel) : null;   // con traslado
+  if(s && !isNaN(s) && (isNaN(a) || s < a)) a = s; if(r && !isNaN(r) && (isNaN(b) || r > b)) b = r;
+  return [a, b];
+}
+// Pregunta por cada domingo (Aceptar = sí se trabajó). Va DESPUÉS del «¿Cerrar la orden?», antes de calcular vales.
+function _nxPreguntarDomingos(o){
+  try{
+    if(!o) return; var x = _nxRangoOrden(o), doms = _nxDomingosEntre(x[0], x[1]);
+    if(!doms.length){ if(o.domingosTrabajados) delete o.domingosTrabajados; return; }
+    var si = [];
+    doms.forEach(function(d){
+      var p = d.split('-');
+      if(confirm('🗓 ¿Se trabajó el DOMINGO ' + p[2] + '/' + p[1] + '/' + p[0] + ' en la orden ' + (o.correlativo || '') + '?\n\n'
+        + 'Aceptar = SÍ se trabajó (cuenta 8 horas y lleva vale de desayuno y almuerzo)\nCancelar = NO se trabajó')) si.push(d);
+    });
+    if(si.length) o.domingosTrabajados = si; else if(o.domingosTrabajados) delete o.domingosTrabajados;
+  }catch(e){}
+}
+// Comidas extra del fin de semana (solo órdenes de varios días). No repite las que ya da la regla del día de inicio.
+function _nxValesFinde(vales, ini, fin, doms){
+  try{
+    var D = Array.isArray(doms) ? doms : [];
+    var dIni = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()), dFin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+    var ya = { desayuno: vales.some(function(v){ return v.tipo === 'desayuno'; }), almuerzo: vales.some(function(v){ return v.tipo === 'almuerzo'; }) };
+    for(var d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)){
+      var esIni = d.getTime() === dIni.getTime(), esFin = d.getTime() === dFin.getTime(), w = d.getDay();
+      var finSeg = esFin ? fin.getHours() * 60 + fin.getMinutes() : 1440;
+      if(w === 6 && finSeg > 720 && !(esIni && ya.almuerzo)) vales.push({ tipo: 'almuerzo', monto: _pv() });
+      if(w === 0 && D.indexOf(_nxYMD(d)) >= 0){
+        if(!(esIni && ya.desayuno)) vales.push({ tipo: 'desayuno', monto: _pv() });
+        if(!(esIni && ya.almuerzo)) vales.push({ tipo: 'almuerzo', monto: _pv() });
+      }
+    }
+  }catch(e){}
+  return vales;
+}
+// Cantidad de una comida en la ventana de vales (campo «×» junto a la casilla)
+// Texto de las comidas de un vale agrupando las repetidas: «Desayuno + Almuerzo ×3»
+function _nxValesTexto(vales, labels, sep){ var orden = [], n = {}; (vales || []).forEach(function(v){ var t = v && v.tipo; if(!t) return; if(!n[t]){ n[t] = 0; orden.push(t); } n[t]++; });
+  return orden.map(function(t){ return (labels[t] || t) + (n[t] > 1 ? ' ×' + n[t] : ''); }).join(sep); }
+function _nxCant(cb){ if(!cb) return 1; var q = document.getElementById('q-' + cb.id); var n = parseInt(q && q.value, 10); return n >= 1 ? Math.min(n, 30) : 1; }
+</script>
+<script>
 // ══ HORÓMETRO QUE NO BAJA (2026-10-20, auditoría 11, decisión de Miguel) ══ Se revisa DENTRO de la transacción (con el valor que tiene el
 // servidor en ese momento): si la lectura nueva es menor (o se borra) y el teléfono no tiene cargo Gerencia/Supervisión, se queda la del
 // servidor y se avisa. Aplica a horometro y kilometraje de los equipos (motor _Sync, _nxTx/_nxSetSeguro y cierre de horómetros del mes).
@@ -134,7 +194,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8e2d2e45e779';
+  var APP_VERSION='fa8dbbc6edc5';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -971,7 +1031,7 @@ function _firmasValeHTML(orden){
   }).join('');
   return '<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-top:28px">'+filas+'</div>';
 }
-function calcularVales(fechaInicio, fechaFin, personas){
+function calcularVales(fechaInicio, fechaFin, personas, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
   if(!fechaInicio || !fechaFin) return [];
   var ini = new Date(fechaInicio);
   var fin = new Date(fechaFin);
@@ -984,8 +1044,9 @@ function calcularVales(fechaInicio, fechaFin, personas){
   if(hFin > 19) vales.push({tipo:'cena', monto:_pv()});
   var mismodia = ini.toDateString() === fin.toDateString();
   if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:_pv()});
+  if(!mismodia && typeof _nxValesFinde === 'function') _nxValesFinde(vales, ini, fin, domsTrab);   // (2026-10-26) fin de semana
   var acum = 0;
-  const _lista = vales.filter(function(v){ acum+=v.monto; return acum<=_pv()*10; });
+  const _lista = vales.filter(function(v){ acum+=v.monto; return !mismodia || acum<=_pv()*10; });   // varios días: sin tope
   const _np = Math.max(1, parseInt(personas)||1);
   _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
   return _lista;
@@ -1214,7 +1275,7 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
   const eq = (DB.equipos||[]).find(e=>e&&e.id===orden.equipoId);
   const eqDesc = eq ? eq.codigo+(eq.marca?' - '+eq.marca:'') : (orden.clienteNombre||'');
-  const conceptoBase = vales.map(v=>labels[v.tipo]||v.tipo).join(' + ');
+  const conceptoBase = _nxValesTexto(vales, labels, ' + ');
   let personas = _valeNombresDe(orden);
   if(!personas.length) personas = [orden.tecnico||orden.operador||orden.motorista||'\u2014'];
   const numPersonas = personas.length;
@@ -3325,10 +3386,10 @@ function calcHoras(inicio, fin){
 // Regla: si inicio y fin son el mismo día → diferencia real en minutos.
 //        si son días distintos → jornada de cada día desde el inicio hasta el día anterior al fin
 //        + horas del último día (topadas a la jornada de ese día).
-function _calcMinsJornada(iniDate, finDate){
+function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
   if(!iniDate || !finDate || isNaN(iniDate) || isNaN(finDate)) return 0;
   if(finDate <= iniDate) return 0;
-  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? 0 : (w === 6 ? 240 : 480); };
+  const jornadaDia = d => { const w = d.getDay(); return w === 0 ? ((Array.isArray(domsTrab) && domsTrab.indexOf(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')) >= 0) ? 480 : 0) : (w === 6 ? 240 : 480); };
   const dIni = new Date(iniDate.getFullYear(), iniDate.getMonth(), iniDate.getDate());
   const dFin = new Date(finDate.getFullYear(), finDate.getMonth(), finDate.getDate());
   if(dIni.getTime() === dFin.getTime()) return Math.floor((finDate - iniDate) / 60000);
@@ -3366,8 +3427,8 @@ function calcTiemposOrden(o){
   const ret  = _parseD(o.retornoPlantel || '');
   const hayRep      = !isNaN(ini) && !isNaN(fin) && fin > ini;
   const hayTraslado = !isNaN(sal) && !isNaN(ret) && ret > sal && !!o.salidaPlantel;
-  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin) : 0;
-  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret) : minsRep;
+  const minsRep   = hayRep      ? _calcMinsJornada(ini, fin, o && o.domingosTrabajados) : 0;
+  const minsTotal = hayTraslado ? _calcMinsJornada(sal, ret, o && o.domingosTrabajados) : minsRep;
   const minsTras  = hayTraslado ? Math.max(0, minsTotal - minsRep) : 0;
   const fmtM = m => { if(!m) return '—'; const h=Math.floor(m/60),mn=m%60; return h>0?(h+'h '+(mn>0?mn+'min':'')):(mn+'min'); };
   return {
@@ -4496,6 +4557,7 @@ function completarPreventivo(id){
     if(nombre === 'Miguel Orellana') continue;
   }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (p.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  _nxPreguntarDomingos(p);   // (2026-10-26) domingos trabajados
   const _nuevaFirmaP = getFirmaData(id);
   if(_nuevaFirmaP) p.firma = _nuevaFirmaP;
 
@@ -4503,7 +4565,7 @@ function completarPreventivo(id){
   (function(){
     var _o = p;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o)) : [];
+      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o), _o.domingosTrabajados) : [];
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
@@ -4956,6 +5018,7 @@ function cerrarCorrectivo(id){
   const errFechaC = validarFechasOrden(c.fechaInicio, c.fechaFin, c.inicioTrabajo, c.finTrabajo);
   if(errFechaC){ alert('⚠️ ' + errFechaC); return; }
   if(!confirm('¿Estás seguro de cerrar la orden ' + (c.correlativo||'') + '?\n\nUna vez cerrada solo podrá ser editada con PIN.')) return;
+  _nxPreguntarDomingos(c);   // (2026-10-26) domingos trabajados
   const _nuevaFirmaC = getFirmaData(id);
   if(_nuevaFirmaC) c.firma = _nuevaFirmaC;
   c.estado = 'Completado';
@@ -4972,7 +5035,7 @@ function cerrarCorrectivo(id){
   (function(){
     var _o = c;
     if(_o && !_o.viaticos && _o.fechaInicio && _o.fechaFin && (!_o.vales || !_o.vales.length)){
-      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o)) : [];
+      var _v = (typeof calcularVales==='function') ? calcularVales(_o.fechaInicio, _o.fechaFin, _valePersonasDe(_o), _o.domingosTrabajados) : [];
       if(_v.length){
         _o.vales = _v;
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
@@ -6986,12 +7049,13 @@ function finalizarSoldadura(id){
   if(!firmado && !o.firma) falta.push(_firmaTituloTxt(o));
   if(falta.length){ alert('Para cerrar la orden falta:\n• ' + falta.join('\n• ')); return; }
   if(!confirm('¿Cerrar la orden ' + (o.correlativo || '') + '? Después solo Gerencia puede reabrirla.')) return;
+  _nxPreguntarDomingos(o);   // (2026-10-26) domingos trabajados
   if(firmado) o.firma = _firmaLigera(fc);
   _spFechaPartes(o);
   o.estado = 'Completado'; o.completado = true;
   var h = new Date(); o.fechaCierre = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0');
   // Vales de comida como en los correctivos (si no hay viáticos)
-  try{ if(!o.viaticos && (!o.vales || !o.vales.length) && typeof calcularVales === 'function'){ var v = calcularVales(o.fechaInicio, o.fechaFin, _valePersonasDe(o)); if(v && v.length) o.vales = v; } }catch(e){}
+  try{ if(!o.viaticos && (!o.vales || !o.vales.length) && typeof calcularVales === 'function'){ var v = calcularVales(o.fechaInicio, o.fechaFin, _valePersonasDe(o), o.domingosTrabajados); if(v && v.length) o.vales = v; } }catch(e){}
   _spGuardar();
   toast('✅ Orden ' + (o.correlativo || '') + ' cerrada');
   renderSoldaduras();
