@@ -170,7 +170,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a6cb468d8487';
+  var APP_VERSION='19e61deca8f6';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -15587,6 +15587,40 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden) _
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+</script>
+<script>
+// ══ LA OTRA GERENCIA DENTRO DE LA APP (2026-10-26, pedido de Miguel) ══ Con la app instalada, la pestaña de la otra empresa la abría
+// en vista de navegador (cada app instalada solo es dueña de su archivo; no se amplía por los Huawei/Honor, TRAMPAS T27). Ahora se
+// abre dentro de esta app, a pantalla completa; su pestaña de regreso o el botón «atrás» la cierran. En el navegador normal, igual que antes.
+(function(){
+  var OTRA = 'MTRENTAL_Gerencia.html';
+  function instalada(){ try{ return (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches)) || window.navigator.standalone === true; }catch(e){ return false; } }
+  var dentro = false; try{ dentro = window.self !== window.top && typeof window.parent._nxCerrarOtraGer === 'function'; }catch(e){}
+  var ov = null;
+  window._nxCerrarOtraGer = function(desdeAtras){
+    if(!ov) return; ov.remove(); ov = null; document.documentElement.style.overflow = ''; document.body.style.overflow = '';
+    if(!desdeAtras){ try{ if(history.state && history.state.nxOtraGer) history.back(); }catch(e){} }
+  };
+  function abrir(){
+    if(ov) return;
+    ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:#fff';
+    var f = document.createElement('iframe');
+    f.src = OTRA; f.title = 'Gerencia';
+    f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; web-share; fullscreen');
+    f.style.cssText = 'border:0;width:100%;height:100%;display:block';
+    ov.appendChild(f); document.body.appendChild(ov);
+    document.documentElement.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
+    try{ history.pushState({ nxOtraGer: 1 }, ''); }catch(e){}
+  }
+  window.addEventListener('popstate', function(){ if(ov) window._nxCerrarOtraGer(true); });
+  document.addEventListener('click', function(ev){
+    var a = ev.target && ev.target.closest && ev.target.closest('a[href="' + OTRA + '"]'); if(!a) return;
+    if(dentro){ ev.preventDefault(); try{ window.parent._nxCerrarOtraGer(); }catch(e){ location.href = OTRA; } return; }   // regresar a la de afuera
+    if(!instalada()) return;                                                                                                // navegador normal: como antes
+    ev.preventDefault(); abrir();
+  }, true);
 })();
 </script>
 </body>
