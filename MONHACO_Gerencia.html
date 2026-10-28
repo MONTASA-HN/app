@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='28f88fbe1984';
+  var APP_VERSION='b881850a8b40';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1528,10 +1528,19 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 (function(){
   var RAIZ = 'monhaco', CLAVE = 'nx_plantilla_' + RAIZ;
   var plantilla = null, originales = {}, estaticos = null;
+  // (2026-10-28) También se eligen operadores y motoristas de MT (solo en listas de logística; sus horas van a MT Rental)
+  var extraMT = null; try{ var gm = localStorage.getItem('nx_plantillaMT'); if(gm) extraMT = JSON.parse(gm); }catch(e){}
+  window._nxEsMT = function(n){ if(!extraMT || !n) return false; var propio = plantilla && Object.keys(plantilla).some(function(k){ return plantilla[k] && plantilla[k].n === n; });
+    return !propio && Object.keys(extraMT).some(function(k){ return extraMT[k] && extraMT[k].n === n; }); };
   try{ var g = localStorage.getItem(CLAVE); if(g) plantilla = JSON.parse(g); }catch(e){}
   function escH(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function escJ(t){ return String(t == null ? '' : t).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-  function personas(){ return plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null; }
+  function personas(){
+    var a = plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null;
+    if(extraMT){ var ya = (a || []).map(function(p){ return p.n; });   // (2026-10-28) personal de MT
+      a = (a || []).concat(Object.keys(extraMT).map(function(k){ return extraMT[k]; }).filter(function(p){ return p && p.n && ya.indexOf(p.n) < 0; }).map(function(p){ return { n: p.n, roles: (p.roles || []).slice(), mt: true }; })); }
+    return a;
+  }
   function es(p, r){ return (p.roles || []).indexOf(r) >= 0; }
   var FILTROS = {
     tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot'); },   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
@@ -1544,7 +1553,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   };
   function nombresDe(tipo){
     var a = personas(); if(!a) return null;
-    return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
+    return a.filter(function(p){ return !p.mt || tipo === 'op' || tipo === 'mot'; }).filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
       .filter(function(n, i, l){ return l.indexOf(n) === i; }).sort(function(x, y){ return x.localeCompare(y, 'es'); });
   }
   function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return ''; }
@@ -1678,6 +1687,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       var v = s.val() || null;
       plantilla = v && Object.keys(v).length ? v : null;
       try{ if(plantilla) localStorage.setItem(CLAVE, JSON.stringify(plantilla)); else localStorage.removeItem(CLAVE); }catch(e){}
+      aplicar();
+    });
+    db.ref('monhaco/rrhh/plantillaMT').on('value', function(s){   // (2026-10-28) operadores de MT
+      var v = s.val() || null; extraMT = v && Object.keys(v).length ? v : null;
+      try{ if(extraMT) localStorage.setItem('nx_plantillaMT', JSON.stringify(extraMT)); else localStorage.removeItem('nx_plantillaMT'); }catch(e){}
       aplicar();
     });
   }
@@ -2207,6 +2221,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
         <label>Departamento</label>
         <select id="sol-depto" onchange="solDeptoChange()">
           <option value="mantenimiento">🔧 Mantenimiento</option>
+          <option value="logistica">🚛 Logística</option>
         </select>
       </div>
 
@@ -2218,6 +2233,12 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
           <option value="preventivo" data-depto="mantenimiento">📅 Preventivo</option>
           <option value="cortinas" data-depto="mantenimiento">🚪 Cortinas / Niveladoras</option>
           <option value="soldadura" data-depto="mantenimiento">🔥 Soldadura / Pintura</option>
+          <option value="renta" data-depto="logistica" style="display:none">🚛 Renta</option>
+          <option value="renta_operador" data-depto="logistica" style="display:none">👷 Renta de Operador</option>
+          <option value="entrega" data-depto="logistica" style="display:none">📦 Entrega de Equipo</option>
+          <option value="retiro" data-depto="logistica" style="display:none">🔙 Retiro de Equipo</option>
+          <option value="apoyo_mantenimiento" data-depto="logistica" style="display:none">🔩 Apoyo Mantenimiento</option>
+          <option value="atencion_compras" data-depto="logistica" style="display:none">🛒 Atención de Compras</option>
         </select>
       </div>
 
@@ -2365,6 +2386,20 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       </div>
 
       <!-- 4f. Link de ubicación del cliente (solo fuera del plantel) -->
+      <div id="sol-grua-wrap" class="form-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sol-grua-chk" onchange="_gruaCheck('')" style="width:auto;margin:0"> 🚚 Incluye grúa / vehículo</label>
+        <select id="sol-grua-sel" style="display:none;margin-top:6px"></select>
+        <div style="font-size:11px;color:#777;margin-top:4px">Solo aparecen grúas y vehículos DISPONIBLES. Logística pedirá el km de salida y retorno de la grúa y el horómetro del equipo.</div>
+      </div>
+      <div id="sol-diasrenta-wrap" class="form-group" style="display:none">
+        <label>⏱ Renta — inicio y días (calendario) — opcional</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;font-weight:600"><input type="checkbox" id="sol-renta-indef" onchange="_rentaIndefToggle('')" style="width:auto;margin:0"> ♾️ Renta indefinida (sin fecha de fin; el cliente puede cancelar cuando quiera)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Inicio de la renta</div><input id="sol-iniciorenta" type="date"></div>
+          <div><div style="font-size:11px;color:#777;margin-bottom:3px">Días de renta</div><input id="sol-diasrenta" type="number" min="1" inputmode="numeric" placeholder="Ej: 30"></div>
+        </div>
+        <div style="font-size:11px;color:#777;margin-top:4px">Si pones días, el inicio es obligatorio. Finaliza = inicio de la renta + días (se avisa 3 días hábiles antes).</div>
+      </div>
       <div id="sol-ublink-wrap" class="form-group" style="display:none">
         <label>📍 Link de ubicación (Google Maps / Waze) — opcional</label>
         <input id="sol-ublink" type="url" inputmode="url" placeholder="Pega aquí el link de la ubicación del cliente">
@@ -3103,7 +3138,7 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Diagnóstico', o.diagnostico||'—']);
   } else {
     // Tipos de logística: renta, entrega, retiro, apoyo_mantenimiento, atencion_compras
-    const tipoLbl = {renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
+    const tipoLbl = {renta:'Renta',renta_operador:'Renta de Operador',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',apoyo_mantenimiento:'Apoyo a Mantenimiento',atencion_compras:'Atención de Compras'}[o.tipoLogistica] || o.tipoLogistica || '—';
     campos.push(['Tipo de orden', tipoLbl]);
     campos.push(['Operador(es)', [o.operador,o.operador2,o.operador3,o.operador4,o.operador5].filter(Boolean).join(', ')||'—']);
     if(o.motorista) campos.push(['Motorista', o.motorista]);
@@ -7462,6 +7497,7 @@ function renderLogistica(){
 function _renderCarpetasLog(el){
   const CARPETAS = [
     {tipo:'renta',              icon:'🚛', label:'Renta',              color:'#2E83C3'},
+    {tipo:'renta_operador',     icon:'👷', label:'Renta de\nOperador', color:'#0F766E'},
     {tipo:'entrega',            icon:'📦', label:'Entrega\nde Equipo', color:'#18A303'},
     {tipo:'retiro',             icon:'🔙', label:'Retiro\nde Equipo',  color:'#E8811A'},
     {tipo:'apoyo_mantenimiento',icon:'🔩', label:'Apoyo\nMantenimiento',color:'#9B59B6'},
@@ -7497,6 +7533,7 @@ function _cerrarCarpetaLog(){
 function _renderOrdenesLog(el, tipoFiltro){
   const INFO = {
     renta:               {icon:'🚛', label:'Renta',               color:'#2E83C3'},
+    renta_operador:      {icon:'👷', label:'Renta de Operador',  color:'#0F766E'},
     entrega:             {icon:'📦', label:'Entrega de Equipo',   color:'#18A303'},
     retiro:              {icon:'🔙', label:'Retiro / Recepción',    color:'#E8811A'},
     apoyo_mantenimiento: {icon:'🔩', label:'Apoyo Mantenimiento', color:'#9B59B6'},
@@ -7513,7 +7550,7 @@ function _renderOrdenesLog(el, tipoFiltro){
     });
 
   if(tipoFiltro==='EST') info.label += ' · ' + list.length;
-  const tipoLabels = {renta:'🚛 Renta',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro/Recepción',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
+  const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro/Recepción',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaLog()">← <span>Volver a carpetas</span></div>
   <div class="carpeta-titulo" style="border-bottom:2px solid ${info.color};padding-bottom:8px">${info.icon} ${info.label}</div>`;
@@ -7544,7 +7581,7 @@ function _renderOrdenesLog(el, tipoFiltro){
     card += '<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;line-height:1.6;pointer-events:'+(isCerrada?'none':'auto')+' ">';
     card += '<span style="color:var(--text3)">🚛 Tipo</span><span style="font-weight:600">'+tipoLbl+'</span>';
     const _eqLabelTitulo = (o.tipoLogistica==='atencion_compras'||o.tipoLogistica==='apoyo_mantenimiento') ? '🚗 Vehículo' : '🚜 Equipo';
-    card += '<span style="color:var(--text3)">'+_eqLabelTitulo+'</span><span>'+eqLabel+'</span>';
+    if(o.tipoLogistica!=='renta_operador') card += '<span style="color:var(--text3)">'+_eqLabelTitulo+'</span><span>'+eqLabel+'</span>';   // renta de operador: sin equipo
     card += (o.equipoId2?getEq2Label(o.equipoId2):'')+mot+op;
     card += (o.fechaInicio&&o.fechaFin?'<span style="color:var(--text3)">⏱ Duración</span><span style="font-weight:600">'+calcDuracion(o.fechaInicio,o.fechaFin)+'</span>':'<span style="color:var(--text3)">🕐 Inicio</span><span>'+hi+'</span>');
     card += '</div>';
@@ -7648,6 +7685,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
     h+="<div style=\"background:#e8f4e8;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px\"><span style=\"color:#1a5c1a;font-weight:600\">\ud83d\udee3 Km recorridos: "+(parseFloat(o.kmRetorno)-parseFloat(o.kmSalida)).toFixed(0)+" km</span></div>";
   var _cv=_viatTotalAsignado(o);
   if(_cv>0) h+="<div style=\"background:#dce6f1;border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:13px;font-weight:700;color:#1f3864\">\ud83d\udcb0 Costo viaje: L. "+_cv.toFixed(2)+"</div>";
+  h+=_rentaDiasHTML(o);   // (2026-10-28) días de renta
   if(o.tipoLogistica==='renta'&&o.horometroSalida&&o.horometroRetorno)
     h+="<div style=\"display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;background:#dce6f1;border-radius:6px;padding:12px\"><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS EQUIPO</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hEq+"</div></div><div style=\"text-align:center\"><div style=\"font-size:10px;color:#1f3864;font-weight:600\">HORAS OPERADOR</div><div style=\"font-size:16px;font-weight:800;color:#1f3864\">"+hOp+"</div></div></div>";
   if(o.foto) h+="<div style=\"margin-bottom:12px\"><img src=\""+o.foto+"\" style=\"width:100%;max-height:200px;object-fit:cover;border-radius:8px;cursor:zoom-in\" onclick=\"event.stopPropagation();_verFotoGer(this.src)\"></div>";
@@ -7677,6 +7715,7 @@ function _renderDetalleLGGer(o, eqLabel, tipoLbl){
 function _botonesActLG(o){
   let h = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">';
   const oid = o.id;
+  h += _rentaDiasHTML(o);   // (2026-10-28) días de renta
   if(!o.cerrado && o.estado!=='Cancelado'){
     h += '<button onclick="event.stopPropagation();abrirViaticos(\'' + oid + '\')" style="width:100%;padding:8px;background:#dce6f1;color:#1f3864;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer">'+(o.viaticos?'📋 Ver / Editar Viáticos':'📋 Solicitar Viáticos')+'</button>';
   } else if(o.viaticos){
@@ -10022,6 +10061,7 @@ function solTipoChange(){
     if(descLbl) descLbl.textContent=tipo==='revision_fisica'?'Descripción de la revisión':'Descripción de la evaluación';
     visEl(tecGrp,true); visEl(ubicWrap,true); return;
   }
+  if(tipo==='renta_operador'){ visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción del servicio'; visEl(logGrp,true); visEl(document.getElementById('sol-ublog-wrap'),false); visEl(document.getElementById('sol-ublog-wrap2'),false); try{ _ubLinkToggle(); }catch(e){} return; }   // 2026-10-19 sin equipo   // (2026-10-28)
   if(tipo==='renta'){ visEl(eqGroup,true); visEl(descWrap,true); if(descLbl) descLbl.textContent='Descripción'; visEl(logGrp,true); visEl(document.getElementById('sol-ublog-wrap'),false); visEl(document.getElementById('sol-ublog-wrap2'),false); return; }
   // MONHACO solo trabaja con equipos propios — nunca mostrar toggle Montasa/Cliente
   const toggleEl = document.getElementById('sol-origen-toggle');
@@ -10139,7 +10179,7 @@ function _ubLinkToggle(){
     var tipo = (tEl && tEl.offsetParent!==null ? tEl : document.getElementById('sol-tipo'));
     tipo = tipo ? tipo.value : '';
     var show = false;
-    if(tipo==='evaluacion'||tipo==='revision_fisica'||tipo==='soldadura') show = true;
+    if(tipo==='evaluacion'||tipo==='revision_fisica'||tipo==='soldadura'||tipo==='renta_operador') show = true;
     else if(tipo==='renta'||tipo==='entrega'||tipo==='retiro'||tipo==='apoyo_mantenimiento'){
       var u1=document.getElementById('sol-ublog'), u2=document.getElementById('sol-ublog2');
       var v=(u1&&u1.offsetParent!==null)?u1.value:((u2&&u2.offsetParent!==null)?u2.value:(u1?u1.value:'fuera'));
@@ -10148,6 +10188,11 @@ function _ubLinkToggle(){
       var a=document.getElementById('sol-ubicacion'), b=document.getElementById('sol-ubicacion2b');
       show = !!((a&&a.value!=='plantel')||(b&&b.value!=='plantel'));
     }
+    var showDR = (tipo==='renta'||tipo==='entrega'||tipo==='renta_operador');   // (2026-10-28) como en MT
+    _gruaMostrar(tipo);
+    var dr1=document.getElementById('sol-diasrenta-wrap'), dr2=document.getElementById('sol-diasrenta-wrap2');
+    if(dr1) dr1.style.display=showDR?'block':'none';
+    if(dr2) dr2.style.display=showDR?'block':'none';
     var w1=document.getElementById('sol-ublink-wrap'), w2=document.getElementById('sol-ublink-wrap2');
     if(w1) w1.style.display=show?'block':'none';
     if(w2) w2.style.display=show?'block':'none';
@@ -10225,9 +10270,10 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
   const faltSol = [];
   const _eqOk = equipoTxt || _esCli;
-  if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras' && tipo!=='cortinas') faltSol.push('Número de equipo');
+  if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras' && tipo!=='renta_operador' && tipo!=='cortinas') faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  _nxLogValidar(tipo, equipoTxt, faltSol);   // (2026-10-28) renta y grúa como en MT
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
   if(depto === 'logistica'){
     const tipo_check = document.getElementById('sol-tipo')?.value||'';
@@ -10300,15 +10346,16 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog:ubicacionLog2,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     _solCliPush(DB.logistica, entry);
+    _nxLogExtras(entry, tipo);   // (2026-10-28) renta, grúa y renta de operador como en MT
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); _setUbLinkEquipo(equipoId, ''); }
+      /* (2026-10-28) retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE (como en MT) */
     }
     if(equipoId2Val){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); _setUbLinkEquipo(equipoId2Val, ''); }
+      /* (2026-10-28) retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE (como en MT) */
     }
     saveDB();
     _guardarLogisticaResiliente(ordenId);
@@ -10324,7 +10371,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
   clearSolicitudForm();
   renderDashboard();
   toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
-  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',cortinas:'Cortinas / Niveladoras',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',cortinas:'Cortinas / Niveladoras',renta:'Renta',renta_operador:'Renta de Operador',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
@@ -10339,7 +10386,7 @@ if(tecNum) window.open('https://wa.me/'+tecNum.replace(/[^0-9]/g,'')+'?text='+en
     + '⚡ *Prioridad:* ' + prioridad + '\n'
     + '📅 *Fecha:* ' + fecha
     + (_ubL?'\n📍 *Ubicación:* '+_ubL:'')+(_ctc?'\n📞 *Contacto:* '+_ctc:'');
-  tecnicosData.forEach((t, i) => {
+  tecnicosData.filter(t => t.num && t.num.replace(/[^0-9]/g,'')).forEach((t, i) => {   // (2026-10-28) sin teléfono (p. ej. personal de MT): no abre WhatsApp vacío
     const url = 'https://wa.me/' + t.num.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(msg);
     setTimeout(() => window.open(url, '_blank'), i * 800);
   });
@@ -10418,9 +10465,10 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
   const tecnicoNombre = tecnicosData.map(t=>t.nombre).join(', ');
   const faltSol = [];
   const _eqOk = equipoTxt || _esCli;
-  if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras' && tipo!=='cortinas') faltSol.push('Número de equipo');
+  if(!_eqOk && tipo!=='revision_fisica' && tipo!=='evaluacion' && tipo!=='apoyo_mantenimiento' && tipo!=='atencion_compras' && tipo!=='renta_operador' && tipo!=='cortinas') faltSol.push('Número de equipo');
   if(tipo==='preventivo' && !mantTipo) faltSol.push('Tipo de mantenimiento preventivo');
   if(tipo==='correctivo' && !descRaw)  faltSol.push('Descripción de la falla');
+  _nxLogValidar(tipo, equipoTxt, faltSol);   // (2026-10-28) renta y grúa como en MT
   if(faltSol.length){ toast('Faltan: '+faltSol.join(', '), true); return; }
   if(depto === 'logistica'){
     const equipoSel_check = document.getElementById('sol-equipo')?.value||'';
@@ -10464,15 +10512,16 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
     const entry = {id:ordenId,correlativo,equipoId:equipoId||'',equipoId2:equipoId2Val||null,tipoLogistica:tipo,ubicacionLink:_ubL,contactoCliente:_ctc,ubicacionLog,descripcion:desc,operador,prioridad,fecha:fechaISO,fechaInicio:'',fechaFin:'',tecnico:'',horometro:'',foto:'',firma:'',estado:'Pendiente',cerrado:false,clienteNombre:eq?'':equipoTxt};
     if(!DB.logistica) DB.logistica = [];
     _solCliPush(DB.logistica, entry);
+    _nxLogExtras(entry, tipo);   // (2026-10-28) renta, grúa y renta de operador como en MT
     // Estado automático del equipo según el tipo de orden de logística:
     // renta y entrega → EN RENTA; retiro → DISPONIBLE.
     if(eq){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId, 'DISPONIBLE'); _setUbLinkEquipo(equipoId, ''); }
+      /* (2026-10-28) retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE (como en MT) */
     }
     if(equipoId2Val){
       if(tipo==='renta' || tipo==='entrega'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'EN RENTA'); if(_ubL) _setUbLinkEquipo(equipoId2Val, _ubL); }
-      else if(tipo==='retiro'){ _cambiarEstadoEquipoAuto(equipoId2Val, 'DISPONIBLE'); _setUbLinkEquipo(equipoId2Val, ''); }
+      /* (2026-10-28) retiro: el equipo sigue EN RENTA hasta que la orden se CIERRE (como en MT) */
     }
     saveDB();
     _guardarLogisticaResiliente(ordenId);
@@ -10488,7 +10537,7 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
   clearSolicitudForm();
   renderDashboard();
   toast('Orden ' + correlativo + ' creada ✓ — mensaje copiado al portapapeles');
-  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',cortinas:'Cortinas / Niveladoras',renta:'Renta',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
+  const tipoLabels = {correctivo:'Correctivo',preventivo:'Preventivo',cortinas:'Cortinas / Niveladoras',renta:'Renta',renta_operador:'Renta de Operador',entrega:'Entrega de Equipo',retiro:'Retiro/Recepción de Equipo',entrega_retiro:'Entrega/Retiro',apoyo_mantenimiento:'Apoyo Mantenimiento',atencion_compras:'Atención de Compras'};
   const tipoLabel = tipoLabels[tipo] || tipo;
   const esLogistica = depto === 'logistica';
   const emoji = prioridad==='Urgente' ? '🚨' : prioridad==='Alta' ? '🔴' : (esLogistica ? '🚛' : '🔧');
@@ -10511,6 +10560,9 @@ navigator.clipboard.writeText(msg).catch(()=>{ const ta=document.createElement('
 }
 
 function clearSolicitudForm(){
+  try{ _rentaIndefLimpiar(); }catch(e){}   // (2026-10-28) renta y grúa
+  try{ _gruaLimpiar(); }catch(e){}
+  ['sol-diasrenta','sol-diasrenta2','sol-iniciorenta','sol-iniciorenta2'].forEach(function(i){ var x=document.getElementById(i); if(x) x.value=''; });
   document.getElementById('sol-equipo').value = '';
   document.getElementById('sol-desc').value = '';
   document.getElementById('sol-prioridad').value = 'Normal';
@@ -12401,7 +12453,7 @@ function _abrirValeGerenciaInterno(ordenId){
   if(!orden.vales || !orden.vales.length){
     const tieneHora = (s) => s && s.includes('T') && s.split('T')[1] && s.split('T')[1] !== '00:00';
     if(tieneHora(orden.fechaInicio) && tieneHora(orden.fechaFin)){
-      orden.vales = calcularVales(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden), orden.domingosTrabajados);
+      orden.vales = _calcularValesMT(orden.fechaInicio, orden.fechaFin, _valePersonasDe(orden), orden.domingosTrabajados);
       saveDB();
     }
   }
@@ -12534,7 +12586,7 @@ function imprimirVale(){
   _valeMigrarPersonas(orden);
   const vales = orden.vales||[];
   const labels = {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena',media_noche:'Media Noche'};
-  const tipoLabels = {renta:'atencion de renta',entrega:'entrega de equipo',retiro:'retiro de equipo',apoyo_mantenimiento:'apoyo a mantenimiento',atencion_compras:'atencion de compras'};
+  const tipoLabels = {renta:'atencion de renta',renta_operador:'renta de operador',entrega:'entrega de equipo',retiro:'retiro de equipo',apoyo_mantenimiento:'apoyo a mantenimiento',atencion_compras:'atencion de compras'};
   const tipoDesc = tipoLabels[orden.tipoLogistica] || orden.tipoLogistica || '';
   const eq = DB.equipos.find(e=>e.id===orden.equipoId);
   const eqDesc = eq ? eq.codigo+(eq.marca?' - '+eq.marca:'') : (orden.clienteNombre||'');
@@ -13047,6 +13099,9 @@ function _verFotoGrande(src){
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="showTab('flota',this)">
     <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>Flota
+  </button>
+  <button class="nav-btn" onclick="showTab('logistica',this)">
+    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="nav-badge" id="badge-log-ger"></span></span>Logística
   </button>
   <button class="nav-btn" onclick="showTab('historial',this)">
     <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nav-badge" id="badge-mant-ger"></span></span>Mantenimiento
@@ -15809,6 +15864,463 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden) _
   });
   fab.addEventListener('pointercancel', function(){ activo = false; });
   window.addEventListener('resize', function(){ if(!fab.style.top) return; var r = fab.getBoundingClientRect(); aplicar(r.left, r.top); });
+})();
+</script>
+<script>
+// ══ LOGÍSTICA COMO EN MT (2026-10-28, pedido de Miguel) ══ Órdenes de logística de MONHACO con las mismas funciones que MT: 6 tipos
+// (incluye Renta de Operador), renta con inicio y días o indefinida, grúa/vehículo que va con el equipo, el retiro libera el equipo al
+// CERRAR la orden, conciliar rentas, y vales de logística con la regla de MT. Los operadores de MT se pueden asignar (sus horas van a
+// MT Rental). Funciones copiadas de MTRENTAL_Gerencia.html.
+function _leerInicioRentaForm(){
+  var a=document.getElementById('sol-iniciorenta'), b=document.getElementById('sol-iniciorenta2');
+  var v=(a&&a.value?a.value:'') || (b&&b.value?b.value:'');
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+}
+function _gruaLlenar(suf){
+  var s = document.getElementById('sol-grua-sel'+suf); if(!s) return;
+  var cur = s.value;
+  var vs = (DB.equipos||[]).filter(function(e){ return e && e.esVehiculo && !e.esGenerico && !e.esEquipoCliente && (e.estado||'DISPONIBLE')==='DISPONIBLE'; })
+    .sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||'')); });
+  if(!vs.length){ s.innerHTML = '<option value="">— No hay grúas / vehículos disponibles —</option>'; return; }
+  s.innerHTML = '<option value="">— Seleccionar grúa / vehículo —</option>' + vs.map(function(e){
+    return '<option value="'+e.id+'"'+(e.id===cur?' selected':'')+'>'+_gruaEtiqueta(e.id).replace(/[<>"]/g,'')+'</option>';
+  }).join('');
+}
+function _gruaCheck(suf){
+  var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
+  if(!c || !s) return;
+  if(c.checked){ _gruaLlenar(suf); s.style.display = 'block'; } else { s.value = ''; s.style.display = 'none'; }
+}
+function _gruaMostrar(tipo){
+  ['','2'].forEach(function(suf){ var w = document.getElementById('sol-grua-wrap'+suf); if(w) w.style.display = (tipo==='renta') ? 'block' : 'none'; });
+}
+function _gruaVisible(suf){ var w = document.getElementById('sol-grua-wrap'+suf); return !!(w && w.offsetParent!==null); }
+function _gruaMarcada(){ return ['','2'].some(function(suf){ var c = document.getElementById('sol-grua-chk'+suf); return _gruaVisible(suf) && !!(c && c.checked); }); }
+function _gruaElegida(){
+  var r = '';
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
+    if(!r && _gruaVisible(suf) && c && c.checked && s && s.value) r = s.value; });
+  return r;
+}
+function _gruaMarcada(){ return ['','2'].some(function(suf){ var c = document.getElementById('sol-grua-chk'+suf); return _gruaVisible(suf) && !!(c && c.checked); }); }
+function _gruaElegida(){
+  var r = '';
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
+    if(!r && _gruaVisible(suf) && c && c.checked && s && s.value) r = s.value; });
+  return r;
+}
+function _gruaElegida(){
+  var r = '';
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
+    if(!r && _gruaVisible(suf) && c && c.checked && s && s.value) r = s.value; });
+  return r;
+}
+function _gruaEtiqueta(id){
+  var e = (DB.equipos||[]).find(function(x){ return x && x.id===id; });
+  return e ? String(e.codigo||'') + ((e.subtipo||e.marca) ? ' – ' + (e.subtipo||e.marca) : '') : '';
+}
+function _gruaValidar(equipoCodigo){
+  if(!_gruaMarcada()) return '';
+  var id = _gruaElegida(); if(!id) return 'Grúa / vehículo';
+  var g = (DB.equipos||[]).find(function(x){ return x && x.id===id; });
+  if(!g) return 'Grúa / vehículo';
+  if((g.estado||'DISPONIBLE')!=='DISPONIBLE') return 'Grúa disponible ('+g.codigo+' está '+g.estado+')';
+  if(equipoCodigo && String(g.codigo||'').trim()===String(equipoCodigo).trim()) return 'Grúa distinta del equipo rentado';
+  return '';
+}
+function _gruaLimpiar(){
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-grua-chk'+suf), s = document.getElementById('sol-grua-sel'+suf);
+    if(c) c.checked = false; if(s){ s.value = ''; s.style.display = 'none'; } });
+}
+function _rentaIndefToggle(suf){
+  var c = document.getElementById('sol-renta-indef'+suf), d = document.getElementById('sol-diasrenta'+suf);
+  if(!c || !d) return;
+  if(c.checked){ d.value = ''; d.disabled = true; d.placeholder = 'Indefinida'; } else { d.disabled = false; d.placeholder = 'Ej: 30'; }
+}
+function _leerRentaIndef(){
+  return ['','2'].some(function(suf){ var w = document.getElementById('sol-diasrenta-wrap'+suf), c = document.getElementById('sol-renta-indef'+suf);
+    return !!(w && w.offsetParent!==null && c && c.checked); });
+}
+function _rentaIndefLimpiar(){
+  ['','2'].forEach(function(suf){ var c = document.getElementById('sol-renta-indef'+suf); if(c){ c.checked = false; _rentaIndefToggle(suf); } });
+}
+function _leerDiasRentaForm(){
+  var a=document.getElementById('sol-diasrenta'), b=document.getElementById('sol-diasrenta2');
+  var v=parseInt((a&&a.value?a.value:'') || (b&&b.value?b.value:''))||0;
+  return v>0 ? v : 0;
+}
+function _fechaLocalNR(x){ if(!x) return null; const m=String(x).slice(0,10).split('-'); if(m.length<3||!(+m[0])) return null; return new Date(+m[0], +m[1]-1, +m[2]); }
+function _fmtNR(d){ return d ? ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear() : ''; }
+function _escNR(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Inicio de la renta: la fecha que se puso en la solicitud (o.inicioRenta). Las
+// órdenes viejas no la tienen: para esas se usa la fecha de inicio de la orden
+// de trabajo y, si tampoco hay, la de cierre.
+function _rentaInicioDe(o){
+  if(!o) return null;
+  return _fechaLocalNR(o.inicioRenta) || _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+}
+function _fmtNR(d){ return d ? ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear() : ''; }
+function _escNR(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Inicio de la renta: la fecha que se puso en la solicitud (o.inicioRenta). Las
+// órdenes viejas no la tienen: para esas se usa la fecha de inicio de la orden
+// de trabajo y, si tampoco hay, la de cierre.
+function _rentaInicioDe(o){
+  if(!o) return null;
+  return _fechaLocalNR(o.inicioRenta) || _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+}
+function _escNR(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Inicio de la renta: la fecha que se puso en la solicitud (o.inicioRenta). Las
+// órdenes viejas no la tienen: para esas se usa la fecha de inicio de la orden
+// de trabajo y, si tampoco hay, la de cierre.
+function _rentaInicioDe(o){
+  if(!o) return null;
+  return _fechaLocalNR(o.inicioRenta) || _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+}
+function _rentaInicioDe(o){
+  if(!o) return null;
+  return _fechaLocalNR(o.inicioRenta) || _fechaLocalNR(o.fechaInicio) || _fechaLocalNR(o.fechaCierre);
+}
+function _rentaVenceDe(o){
+  const n = parseInt(o&&o.diasRenta)||0;
+  const ini = _rentaInicioDe(o);
+  if(!n || !ini) return null;
+  const v = new Date(ini); v.setDate(v.getDate()+n); return v;
+}
+function _rentaDiasHTML(o){
+  if(!o || !(o.tipoLogistica==='renta'||o.tipoLogistica==='entrega')) return '';
+  if(o.rentaIndefinida && !(parseInt(o.diasRenta)>0)){
+    const _iRi = _fechaLocalNR(o.inicioRenta);
+    return '<div style="background:#eef4fb;border:1px solid #c9d9ef;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#1f3864">♾️ <b>Renta indefinida</b> · sin fecha de fin'+(_iRi?' · desde el <b>'+_fmtNR(_iRi)+'</b>':'')+'</div>';
+  }
+  const n = parseInt(o.diasRenta)||0;
+  const iniR = _fechaLocalNR(o.inicioRenta);
+  const v = _rentaVenceDe(o);
+  const iniTxt = iniR ? ' · inicia el <b>'+_fmtNR(iniR)+'</b>' : '';
+  const venceTxt = v ? ' · finaliza el <b>'+_fmtNR(v)+'</b>' : (n?' · falta la fecha de inicio':'');
+  let h = '<div style="background:#fdf3e3;border:1px solid #f0d6ad;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#8a4800;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>⏱ Días de renta: <b>'+(n||'—')+'</b>'+iniTxt+venceTxt+'</span><button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaDiasEditar(this.dataset.rid)" style="font-size:11px;background:#1f3864;color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">✏️ Ajustar (PIN)</button></div>';
+  if(o.retiroCancelado){
+    const rc = o.retiroCancelado, f = rc.ts ? new Date(rc.ts) : null;
+    h += '<div style="background:#f1f1f1;border:1px solid #d4d4d4;border-radius:6px;padding:8px 12px;margin:6px 0;font-size:12.5px;color:#555;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<span>🚫 <b>Retiro cancelado</b>'+(f?' el '+_fmtNR(f):'')+' — '+_escNR(rc.motivo||'')+(rc.nota?': '+_escNR(rc.nota):'')+(rc.por?' <span style="opacity:.7">('+_escNR(rc.por)+')</span>':'')+'</span>'
+      + '<button data-rid="'+o.id+'" onclick="event.stopPropagation();_rentaRetiroReactivar(this.dataset.rid)" style="font-size:11px;background:#fff;color:#1f3864;border:1px solid #1f3864;border-radius:8px;padding:4px 10px;cursor:pointer;font-weight:700">↩ Reactivar aviso (PIN)</button></div>';
+  }
+  return h;
+}
+function _rentaModal(html, okTxt, onOk){
+  const prev = document.getElementById('renta-modal'); if(prev) prev.remove();
+  const ov = document.createElement('div');
+  ov.id = 'renta-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99990;display:flex;align-items:center;justify-content:center;padding:16px';
+  const inp = 'width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;margin:4px 0 10px';
+  ov.innerHTML = '<div class="modal" style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;max-height:90vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25);color:#1a1a18">'
+    + html.replace(/__INP__/g, inp)
+    + '<div class="rm-err" style="color:#c0392b;font-size:12.5px;font-weight:700;min-height:16px;margin-top:4px"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
+    + '<button type="button" class="rm-x" style="padding:10px 14px;border:1px solid #ccc;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>'
+    + '<button type="button" class="rm-ok" style="padding:10px 14px;border:none;background:#1f3864;color:#fff;border-radius:8px;font-weight:800;cursor:pointer">'+okTxt+'</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  const cerrar = function(){ ov.remove(); };
+  ov.addEventListener('click', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.rm-x').onclick = cerrar;
+  ov.querySelector('.rm-ok').onclick = function(){
+    const err = onOk(ov);
+    if(err){ ov.querySelector('.rm-err').textContent = err; return; }
+    cerrar();
+  };
+  return ov;
+}
+function _rentaGuardar(o, msg){
+  saveDB();
+  if(typeof _sincronizarLogisticaConReintento==='function') _sincronizarLogisticaConReintento(o.id);
+  toast(msg);
+  try{ renderLogistica(); }catch(e){}
+  try{ renderNotificacionesTab(); }catch(e){}
+  try{ actualizarBadgeNotifMant(); }catch(e){}
+}
+function _rentaDiasEditar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    // Órdenes viejas sin inicio de renta: se propone la fecha de inicio de la orden
+    const iniVal = o.inicioRenta || (o.fechaInicio ? String(o.fechaInicio).slice(0,10) : '');
+    _rentaModal(
+      '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:2px">⏱ Renta · '+_escNR(o.correlativo||'')+'</div>'
+      + '<div style="font-size:12px;color:#777;margin-bottom:12px">La finalización se calcula desde el inicio de la renta.</div>'
+      + '<label style="font-size:12px;font-weight:700">Inicio de la renta</label><input id="rm-ini" type="date" value="'+_escNR(iniVal)+'" style="__INP__">'
+      + '<label style="font-size:12px;font-weight:700">Días de renta (calendario)</label><input id="rm-dias" type="number" min="1" inputmode="numeric" value="'+(parseInt(o.diasRenta)||'')+'" style="__INP__">'
+      + '<div style="font-size:11px;color:#888">Deja los días vacíos para quitar la renta de esta orden.</div>',
+      'Guardar',
+      function(ov){
+        const n = parseInt(ov.querySelector('#rm-dias').value)||0;
+        const ini = ov.querySelector('#rm-ini').value||'';
+        if(n>0 && !/^\d{4}-\d{2}-\d{2}$/.test(ini)) return 'Pon la fecha de inicio de la renta.';
+        if(n>0){ o.diasRenta = n; o.inicioRenta = ini; }
+        else { delete o.diasRenta; delete o.inicioRenta; }
+        _rentaGuardar(o, '⏱ Renta actualizada ✓');
+      });
+  }, '⏱ Días de renta', 'Ingresa tu PIN para ajustar el inicio y los días de renta');
+}
+function _rentaRetiroCancelar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    const radio = function(v){ return '<label style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #ddd;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:14px"><input type="radio" name="rm-mot" value="'+v+'"> '+v+'</label>'; };
+    _rentaModal(
+      '<div style="font-weight:800;color:#a32d2d;font-size:16px;margin-bottom:2px">🚫 Cancelar retiro · '+_escNR(o.correlativo||'')+'</div>'
+      + '<div style="font-size:12px;color:#777;margin-bottom:12px">El aviso de retiro desaparece y queda anotado en la orden. El estado del equipo no cambia. Se puede reactivar desde la orden (con PIN).</div>'
+      + '<div style="font-size:12px;font-weight:700;margin-bottom:6px">Motivo</div>'
+      + radio('Renta cancelada') + radio('Orden de prueba') + radio('Otro')
+      + '<label style="font-size:12px;font-weight:700;display:block;margin-top:8px">Detalle (obligatorio si es «Otro»)</label><textarea id="rm-nota" rows="2" style="__INP__"></textarea>',
+      'Cancelar retiro',
+      function(ov){
+        const m = ov.querySelector('input[name=rm-mot]:checked');
+        if(!m) return 'Elige el motivo.';
+        const nota = (ov.querySelector('#rm-nota').value||'').trim();
+        if(m.value==='Otro' && !nota) return 'Escribe el motivo en el detalle.';
+        o.retiroCancelado = { ts: Date.now(), motivo: m.value, nota: nota, por: 'Gerencia MONHACO' };
+        _rentaGuardar(o, '🚫 Retiro cancelado ✓');
+      });
+  }, '🚫 Cancelar retiro', 'Ingresa tu PIN para cancelar el aviso de retiro');
+}
+function _rentaRetiroReactivar(id){
+  solicitarPINAccion(function(){
+    const o = (DB.logistica||[]).find(function(x){ return x && x.id===id; });
+    if(!o) return;
+    delete o.retiroCancelado;
+    _rentaGuardar(o, '🔔 Aviso de retiro reactivado ✓');
+  }, '↩ Reactivar aviso', 'Ingresa tu PIN para reactivar el aviso de retiro');
+}
+function _operadoresGrua(){
+  var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
+  return ps.filter(function(p){ return /GRUA/.test(String(p.c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()); });
+}
+function _rentaProgramarRetiro(id){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden de retiro sin conexión.'); return; }
+  var o = (DB.logistica||[]).find(function(x){ return x && x.id === id; }); if(!o) return toast('Orden no encontrada', true);
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId; });
+  var codigo = eq ? eq.codigo : (o.clienteNombre || 'equipo');
+  var abierta = (DB.logistica||[]).find(function(x){ return x && x.equipoId === o.equipoId && x.tipoLogistica === 'retiro' && !x.cerrado && x.estado !== 'Cancelado'; });
+  if(abierta){ alert('⚠️ El equipo ' + codigo + ' ya tiene una orden de RETIRO abierta (' + abierta.correlativo + ').'); return; }
+  var gr = _operadoresGrua();
+  if(!gr.length){ alert('No hay ningún operador de grúa en Personal (el cargo debe decir «Grúa»). Créalo en Personal › Empleados o usa Solicitudes.'); return; }
+  var hoy = new Date(); hoy.setHours(0,0,0,0);
+  var vence = _rentaVenceDe(o), dia = (vence && vence > hoy) ? vence : hoy;
+  var fecha = dia.getFullYear() + '-' + String(dia.getMonth() + 1).padStart(2, '0') + '-' + String(dia.getDate()).padStart(2, '0');
+  var eq2 = o.equipoId2 ? (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId2; }) : null;
+  var equipoTxt = codigo + (eq2 ? ' + ' + eq2.codigo : '');
+  var desc = 'Retiro por fin de renta — orden ' + (o.correlativo || '—') + (vence ? ' (' + (vence <= hoy ? 'venció' : 'vence') + ' el ' + _fmtNR(vence) + ')' : '');
+  // El retiro no pide capturar ubicación: va la que ya tiene el equipo (si no, la de la entrega). Al cerrar el retiro,
+  // Logística le pone al equipo el punto del taller.
+  var link = (eq && eq.ubicacionLink) || o.ubicacionLink || '';
+  var esc = function(t){ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var w = document.createElement('div'); w.id = 'rr-modal';
+  w.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  w.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:18px;box-sizing:border-box;font-family:inherit">'
+    + '<div style="font-weight:800;font-size:16px;color:#1f3864;margin-bottom:8px">🚚 Programar retiro de ' + esc(equipoTxt) + '</div>'
+    + '<div style="font-size:13px;color:#475467;line-height:1.6">• Orden nueva de RETIRO (número LG nuevo)<br>• Fecha: <b>' + _fmtNR(dia) + '</b><br>'
+    + (link ? '• Ubicación: la que tiene guardada el equipo<br>' : '') + '• ' + esc(desc) + '</div>'
+    + '<label style="display:block;font-size:12px;font-weight:700;color:#475467;margin:10px 0 4px">Operador de grúa</label>'
+    + '<select id="rr-op" style="width:100%;padding:9px;border:1px solid #c9d1dc;border-radius:8px;font-size:14px">' + gr.map(function(p, i){ return '<option value="' + i + '">' + esc(p.n) + (p.tel ? '' : ' (sin teléfono)') + '</option>'; }).join('') + '</select>'
+    + '<div id="rr-pie" style="display:flex;gap:8px;margin-top:14px"><button data-x="1" style="flex:1;padding:10px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '<button data-ok="1" style="flex:2;padding:10px;border-radius:8px;border:none;background:#2d6a2d;color:#fff;font-weight:700;cursor:pointer">Crear orden y avisar por WhatsApp</button></div></div>';
+  document.body.appendChild(w);
+  w.addEventListener('click', function(ev){
+    if(ev.target === w || ev.target.closest('[data-x]')){ w.remove(); return; }
+    if(!ev.target.closest('[data-ok]')) return;
+    var op = gr[parseInt(w.querySelector('#rr-op').value, 10) || 0];
+    var tel = String(op.tel || '').replace(/[^0-9]/g, ''); if(tel.length === 8) tel = '504' + tel;
+    var correlativo = nextCorrelativo('LG'), ordenId = uid();
+    var msg = '🚛 *ASIGNACION LOGISTICA - MONHACO*\n📲 *Revisa la app NEXO para el seguimiento de esta orden.*\n\n'
+      + '🔢 *Orden:* ' + correlativo + '\n👷 *Personal:* ' + op.n + '\n📋 *Equipo:* ' + equipoTxt + '\n🚛 *Tipo:* Retiro/Recepción de Equipo\n'
+      + '📝 *Detalle:* ' + desc + '\n⚡ *Prioridad:* Normal\n📅 *Fecha:* ' + fecha
+      + (link ? '\n📍 *Ubicación:* ' + link : '') + (o.contactoCliente ? '\n📞 *Contacto:* ' + o.contactoCliente : '');
+    var url = tel ? 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg) : '';
+    // WhatsApp primero, en el mismo toque (si se abre después de guardar, el navegador lo puede bloquear)
+    var ventana = url ? window.open(url, '_blank') : null;
+    var entry = { id: ordenId, correlativo: correlativo, equipoId: o.equipoId || '', equipoId2: o.equipoId2 || null, tipoLogistica: 'retiro',
+      diasRenta: null, rentaIndefinida: null, vehiculoRentaId: null, inicioRenta: null, ubicacionLink: link, contactoCliente: o.contactoCliente || '',
+      ubicacionLog: 'fuera', descripcion: desc, operador: '', prioridad: 'Normal', fecha: new Date().toISOString().slice(0, 10), fechaInicio: '', fechaFin: '',
+      tecnico: '', horometro: '', foto: '', firma: '', estado: 'Pendiente', cerrado: false, clienteNombre: o.clienteNombre || '', clienteMarca: '', clienteModelo: '', clienteSerie: '',
+      retiroDeOrden: o.id };
+    if(!DB.logistica) DB.logistica = [];
+    DB.logistica.push(entry);
+    saveDB(); _guardarLogisticaResiliente(ordenId);
+    if(!DB.solicitudes) DB.solicitudes = [];
+    DB.solicitudes.unshift({ id: ordenId, correlativo: correlativo, equipoTxt: equipoTxt, equipoId: o.equipoId || '', desc: desc, fecha: fecha, tecnicoNombre: op.n, prioridad: 'Normal', tipo: 'retiro', estado: 'Enviada' });
+    saveDB();
+    toast('Orden de retiro ' + correlativo + ' creada ✓');
+    try{ renderNotificacionesTab(); }catch(e){} try{ renderDashboard(); }catch(e){}
+    if(ventana){ w.remove(); return; }
+    // Bloqueado o sin teléfono: dejar la ventana con el aviso para mandarlo a mano
+    w.querySelector('#rr-op').disabled = true;
+    w.querySelector('#rr-pie').innerHTML = url
+      ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" onclick="setTimeout(function(){ var m = document.getElementById(\'rr-modal\'); if(m) m.remove(); }, 300)" style="flex:1;text-align:center;padding:12px;border-radius:8px;background:#25d366;color:#fff;font-weight:800;text-decoration:none">✅ ' + esc(correlativo) + ' creada · 📲 Enviar WhatsApp a ' + esc(op.n) + '</a>'
+      : '<div style="flex:1;font-size:13px;color:#b45309">✅ ' + esc(correlativo) + ' creada. ' + esc(op.n) + ' no tiene teléfono en Personal: avísale tú.</div><button data-x="1" style="padding:10px 14px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-weight:700">Cerrar</button>';
+  });
+}
+function _rentaVencimientos(){
+  const out = [];
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  (DB.logistica||[]).forEach(function(o){
+    if(!o || !o.cerrado || o.estado==='Cancelado') return;
+    // Solo ENTREGAS de equipo: en las rentas el operador está en sitio y avisa
+    if(o.tipoLogistica!=='entrega') return;
+    // Retiro cancelado a mano (renta cancelada, orden de prueba…): sin aviso
+    if(o.retiroCancelado) return;
+    const vence = _rentaVenceDe(o);
+    if(!vence) return;
+    const ini = _rentaInicioDe(o);
+    // Basta con que EXISTA una orden de retiro del equipo (aunque esté pendiente):
+    // ya se mandó a retirar, el aviso deja de tener sentido.
+    const retirado = (DB.logistica||[]).some(function(r){
+      if(!r || r.tipoLogistica!=='retiro' || r.estado==='Cancelado' || !r.equipoId || r.equipoId!==o.equipoId) return false;
+      const fr = _fechaLocalNR(r.fechaCierre) || _fechaLocalNR(r.fechaInicio) || _fechaLocalNR(r.fecha);
+      return !fr || !ini || fr >= ini;
+    });
+    if(retirado) return;
+    // Días hábiles (sin sáb/dom) desde mañana hasta la fecha de vencimiento
+    let habiles = 0; const d = new Date(hoy);
+    while(d < vence){ d.setDate(d.getDate()+1); const w=d.getDay(); if(w!==0 && w!==6 && d<=vence) habiles++; }
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id===o.equipoId; });
+    const codigo = eq ? eq.codigo : (o.clienteNombre||'equipo');
+    if(vence <= hoy) out.push({ o:o, codigo:codigo, vence:vence, vencida:true, dias: Math.round((hoy-vence)/86400000) });
+    else if(habiles <= 3) out.push({ o:o, codigo:codigo, vence:vence, vencida:false, dias: habiles });
+  });
+  out.sort(function(a,b){ return a.vence - b.vence; });
+  return out;
+}
+function _rentaVencimientosHTML(){
+  return _rentaVencimientos().map(function(r){
+    const f = _fmtNR(r.vence);
+    const ini = _rentaInicioDe(r.o);
+    const badge = r.vencida
+      ? (r.dias===0 ? '⚠️ Vence HOY' : '⚠️ VENCIDA hace '+r.dias+' día'+(r.dias===1?'':'s'))
+      : ('En '+r.dias+' día'+(r.dias===1?'':'s')+' hábil'+(r.dias===1?'':'es'));
+    const bt = 'padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer';
+    return '<div class="notif-item '+(r.vencida?'notif-urgent':'')+'">'
+      +'<div class="notif-item-top"><span class="notif-codigo">🚚 '+r.codigo+'</span>'
+      +'<span class="notif-days-badge" style="'+(r.vencida?'background:#fbe0e0;color:#a32d2d':'background:#fdead9;color:#8a4800')+';margin-left:auto">'+badge+'</span></div>'
+      +'<div class="notif-line">La renta del equipo <b>'+r.codigo+'</b> (orden <b>'+(r.o.correlativo||'—')+'</b> · '+(parseInt(r.o.diasRenta)||0)+' días'+(ini?' desde el '+_fmtNR(ini):'')+') '+(r.vencida?'venció':'vence')+' el <b>'+f+'</b> — mandar a retirar.</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaProgramarRetiro(this.dataset.rid)" style="'+bt+';background:#2d6a2d;color:#fff;border:none">🚚 Programar retiro</button>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaDiasEditar(this.dataset.rid)" style="'+bt+';background:#1f3864;color:#fff;border:none">✏️ Ajustar días (PIN)</button>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaRetiroCancelar(this.dataset.rid)" style="'+bt+';background:#fff;color:#a32d2d;border:1px solid #a32d2d">🚫 Cancelar retiro (PIN)</button>'
+      +'<button data-rid="'+r.o.id+'" onclick="_rentaCompartirAviso(this.dataset.rid)" style="'+bt+';background:#fff;color:#1f3864;border:1px solid #1f3864">📤 Compartir notificación</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+async function _rentaCompartirAviso(id){
+  try{
+    const r = _rentaVencimientos().find(function(x){ return x.o && x.o.id === id; });
+    if(!r){ toast('El aviso ya no está vigente', true); return; }
+    toast('Generando imagen…');
+    await _cargarHtml2Canvas();
+    const o = r.o, ini = _rentaInicioDe(o);
+    const eq = (DB.equipos||[]).find(function(e){ return e && e.id === o.equipoId; });
+    const cliente = o.clienteOrden || o.clienteNombre || o.cliente || '—';
+    const equipo = (r.codigo || '—') + (eq && (eq.desc || eq.marca) ? ' — ' + (eq.desc || ((eq.marca||'') + (eq.modelo ? ' ' + eq.modelo : ''))) : '');
+    const estado = r.vencida ? (r.dias === 0 ? 'La renta vence HOY' : 'Renta vencida hace ' + r.dias + ' día' + (r.dias === 1 ? '' : 's')) : 'La renta vence en ' + r.dias + ' día' + (r.dias === 1 ? '' : 's') + ' hábil' + (r.dias === 1 ? '' : 'es');
+    const campos = [['🏢 Cliente', cliente], ['🚜 Equipo', equipo], ['📅 Inicio de la renta', ini ? _fmtNR(ini) : '—'], ['🏁 Fin de la renta', _fmtNR(r.vence)]];
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px;background:#fff;font-family:DM Sans,Arial,sans-serif;';
+    cont.innerHTML =
+      '<div style="background:linear-gradient(135deg,#173a5c,#1f5488);padding:20px 22px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:14px">'
+      + '<div style="min-width:0"><div style="font-size:19px;font-weight:700">🚚 Aviso de retiro de equipo</div>'
+      + '<div style="font-size:13px;color:#a9c8de;margin-top:2px">' + _x(r.codigo || '') + ' · orden ' + _x(o.correlativo || '—') + '</div></div>'
+      + '<div style="flex-shrink:0"><img src="' + _LOGO_MONTASA_B64 + '" style="height:44px;display:block"></div></div>'
+      + '<div style="margin:16px 22px 0;padding:9px 12px;border-radius:8px;font-weight:700;font-size:13px;text-align:center;' + (r.vencida ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800') + '">' + estado + '</div>'
+      + '<div style="padding:14px 22px 6px">' + campos.map(function(c){ return _campoRow(c[0], _x(c[1])); }).join('') + '</div>'
+      + '<div style="padding:14px 22px 20px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde NEXO — ' + new Date().toLocaleDateString('es-HN') + '</div>';
+    document.body.appendChild(cont);
+    await Promise.all(Array.from(cont.querySelectorAll('img')).map(function(img){
+      if(img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise(function(ok){ img.onload = ok; img.onerror = ok; setTimeout(ok, 3000); });
+    }));
+    const canvas = await html2canvas(cont, { scale: 2, backgroundColor: '#ffffff' });
+    document.body.removeChild(cont);
+    canvas.toBlob(function(blob){
+      if(!blob){ toast('No se pudo generar la imagen', true); return; }
+      _entregarImagen(blob, 'Retiro_' + String(r.codigo || 'equipo').replace(/[^\w\-]+/g, '_'));
+    }, 'image/png');
+  }catch(err){ toast('Error al generar la imagen: ' + err.message, true); }
+}
+function _nxConciliarRentas(){
+  try{
+    var rol = typeof window._nxRol === 'function' ? window._nxRol() : ''; if(rol !== 'gerencia' && rol !== 'supervision') return;
+    if(!window._fbDB || !window._fbReady || window._equiposFBok === false) return;
+    var hechos = [];
+    (DB.logistica || []).forEach(function(o){
+      if(!o || o.cerrado || o.estado === 'Cancelado' || o.estado === 'Completado') return;
+      if(o.tipoLogistica !== 'renta' && o.tipoLogistica !== 'entrega') return;
+      [o.equipoId, o.equipoId2, o.vehiculoRentaId].forEach(function(eid){
+        if(!eid || eid === '__cliente__') return;
+        var eq = (DB.equipos || []).find(function(e){ return e && e.id === eid; });
+        if(!eq || eq.esEquipoCliente || eq.esGenerico) return;
+        if((eq.estado || 'DISPONIBLE') !== 'DISPONIBLE') return;
+        _cambiarEstadoEquipoAuto(eid, 'EN RENTA'); hechos.push((eq.codigo || eid) + ' (' + (o.correlativo || '') + ')');
+      });
+    });
+    if(hechos.length) try{ console.warn('[rentas] pasan a EN RENTA por tener entrega/renta abierta: ' + hechos.join(', ')); }catch(e){}
+  }catch(e){}
+}
+setTimeout(_nxConciliarRentas, 12000); setInterval(_nxConciliarRentas, 60000);
+// Vale de logística con la regla de MT (en MONHACO, a los técnicos de mantenimiento solo se les da cena automática)
+function _calcularValesMT(fechaInicio, fechaFin, personas, domsTrab){   // (2026-10-26) domsTrab: domingos trabajados
+  if(!fechaInicio || !fechaFin) return [];
+  const ini = new Date(fechaInicio);
+  const fin = new Date(fechaFin);
+  if(isNaN(ini) || isNaN(fin)) return [];
+  const hIni = ini.getHours() + ini.getMinutes()/60;
+  const hFin = fin.getHours() + fin.getMinutes()/60;
+  const vales = [];
+  if(hIni < 7) vales.push({tipo:'desayuno', monto:_pv()});
+  if(hIni <= 12 && hFin >= 13) vales.push({tipo:'almuerzo', monto:_pv()});
+  if(hFin > 19) vales.push({tipo:'cena', monto:_pv()});
+  const mismodia = ini.toDateString() === fin.toDateString();
+  if(!mismodia && hFin >= 0 && hFin < 5) vales.push({tipo:'media_noche', monto:_pv()});
+  if(!mismodia && typeof _nxValesFinde === 'function') _nxValesFinde(vales, ini, fin, domsTrab);   // (2026-10-26) fin de semana
+  let acum = 0;
+  const _lista = vales.filter(v=>{ acum+=v.monto; return !mismodia || acum<=_pv()*10; });   // varios días: sin tope
+  const _np = Math.max(1, parseInt(personas)||1);
+  _lista.forEach(function(v){ v.monto = v.monto * _np; v.personas = _np; });
+  return _lista;
+}
+
+// Validación de renta y grúa al crear la orden
+function _nxLogValidar(tipo, equipoTxt, faltSol){
+  if(tipo==='renta' || tipo==='entrega' || tipo==='renta_operador'){
+    var dR = _leerDiasRentaForm(), iR = _leerInicioRentaForm();
+    if(dR && !iR) faltSol.push('Inicio de la renta');
+    if(iR && !dR && !_leerRentaIndef()) faltSol.push('Días de renta (o marca «Renta indefinida»)');
+  }
+  if(tipo==='renta'){ var gE = _gruaValidar(equipoTxt); if(gE) faltSol.push(gE); }
+}
+// Datos de renta, grúa y renta de operador en la orden recién creada (como en MT)
+function _nxLogExtras(entry, tipo){
+  var esRenta = tipo==='renta' || tipo==='entrega' || tipo==='renta_operador';
+  var dias = _leerDiasRentaForm() || null, indef = esRenta && _leerRentaIndef() && !dias;
+  if(tipo==='renta_operador') entry.equipoId = '';
+  entry.diasRenta = dias; entry.rentaIndefinida = indef || null;
+  entry.inicioRenta = ((dias || (esRenta && _leerRentaIndef())) ? _leerInicioRentaForm() : '') || null;
+  // personal elegido al crear (para que el de MT vea la orden en su app; el operador se anota al tomarla, como en MT)
+  var asig = [].slice.call(document.querySelectorAll('label.tecnico-check input[type=checkbox]:checked')).filter(function(i){ return i.offsetParent !== null; })
+    .map(function(i){ return i.getAttribute('data-nombre') || i.value; }).filter(Boolean);
+  if(asig.length) entry.asignados = asig;
+  var g = (tipo==='renta') ? _gruaElegida() : '';
+  entry.vehiculoRentaId = g || null;
+  if(g){ _cambiarEstadoEquipoAuto(g, 'EN RENTA'); if(entry.ubicacionLink) _setUbLinkEquipo(g, entry.ubicacionLink); }
+}
+// Avisos de renta por vencer en Notificaciones y en el número rojo (como en MT)
+(function(){
+  if(typeof renderNotificacionesTab === 'function'){ var r0 = renderNotificacionesTab;
+    renderNotificacionesTab = function(){ var x = r0.apply(this, arguments); try{ var el = document.getElementById('notif-mant-list'), h = _rentaVencimientosHTML(); if(el && h) el.insertAdjacentHTML('afterbegin', h); }catch(e){} return x; }; }
+  if(typeof actualizarBadgeNotifMant === 'function'){ var b0 = actualizarBadgeNotifMant;
+    actualizarBadgeNotifMant = function(){ var x = b0.apply(this, arguments);
+      try{ var n = _rentaVencimientos().length; if(!n) return x; var badge = document.getElementById('badge-notif-mant'); if(!badge) return x;
+        var t = (calcularNotificacionesMant().filter(function(k){ return !k.completada; }).length) + n; badge.textContent = t > 99 ? '99+' : t; badge.classList.add('visible'); }catch(e){}
+      return x; }; }
 })();
 </script>
 </body>
