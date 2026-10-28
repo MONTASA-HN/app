@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='555713a111d1';
+  var APP_VERSION='dfd2a48be05f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7626,9 +7626,10 @@ function _calcCostoViaticos(v){
   // Rutas SIN peaje (Tela, Copán, Tocoa, Trujillo): forzar 0 aunque el viático
   // guardado traiga un número viejo de peajes.
   var _SIN_PEAJE = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA','VILLANUEVA','POTRERILLOS','SANTA ANA, EL SALVADOR'];
-  var numPeajes = _SIN_PEAJE.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
-  var cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
-  var tPeaj = numPeajes * cpU;
+  var _pjc = _viatPeajes(v, (v.destino ? (PEAJES_MAP[v.destino]||0) : 0));
+  var numPeajes = _pjc.n;
+  var cpU = _pjc.c;
+  var tPeaj = _pjc.t;
   var comb = parseFloat(v.combustible)||0;
   var otros = parseFloat(v.otros_gastos)||0;
   var total = tAlim + tTr + tHosp + tPeaj + comb + otros;
@@ -11388,33 +11389,18 @@ function renderModalViaticos(orden){
       if(((p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0))>0){
         return {...p, total:(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)+(p.transporte||0)+(p.hospedaje||0)};
       }
-      const hIni = p.hora_ini||'';
-      const hFin = p.hora_fin||'';
-      let des=0,alm=0,cen=0,mn=0;
-      if(hIni){
-        const [h,m] = hIni.split(':').map(Number);
-        const minIni = h*60+m;
-        if(minIni < 7*60+30) des=_pv();
-      }
-      if(hFin){
-        const [h,m] = hFin.split(':').map(Number);
-        const minFin = h*60+m;
-        const [hi,mi] = (hIni||'00:00').split(':').map(Number);
-        const minI = hi*60+mi;
-        if(minI<=12*60 && minFin>=13*60) alm=_pv();
-        if(minFin>=19*60) cen=_pv();
-        if(minFin>=23*60+30 || (minFin>=0 && minFin<6*60)) mn=_pv();
-      }
-      const total = des+alm+cen+mn+(p.transporte||0)+(p.hospedaje||0);
-      return {...p, desayuno:des, almuerzo:alm, cena:cen, media_noche:mn, total};
+      const r = _viatCalcAlimPeriodo(p.hora_ini||'', p.hora_fin||'', p.fecha, p.fecha_fin, v.findes||{});
+      const total = r.des+r.alm+r.cen+r.mn+(p.transporte||0)+(p.hospedaje||0);
+      return {...p, desayuno:r.des, almuerzo:r.alm, cena:r.cen, media_noche:r.mn, total};
     });
   }
 
   const personas = calcAlim(v.personas||[{nombre:'',fecha:'',hora_ini:'',hora_fin:'',transporte:0,hospedaje:0}]);
   const destInfo = DESTINOS_VIATICOS.find(d=>d.nombre===(v.destino||''))||{km:0,peajes:0};
   const gestorInfo = (v.gestor_nombre && _gestores().find(g=>_nzGestor(g.nombre)===_nzGestor(v.gestor_nombre))) || {};   // (2026-10-13) sin importar tildes/mayúsculas
-  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj = destInfo.peajes * cpU;
+  const _pjM = _viatPeajes(v, destInfo.peajes);
+  const cpU = _pjM.c;
+  const tPeaj = _pjM.t;
   const comb = v.combustible||0;
   const otros = v.otros_gastos||0;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
@@ -11455,6 +11441,15 @@ function renderModalViaticos(orden){
   </div>`;
   ov.classList.add('open');
   document.body.style.overflow = 'hidden';
+  // Etiqueta de noches del hospedaje (solo informativa al abrir; no altera montos guardados)
+  setTimeout(function(){
+    try{
+      const l=document.getElementById('v-noches-lbl');
+      if(l){ const nn=_viatNochesForm(); l.textContent=nn+' noche'+(nn===1?'':'s'); }
+      window._findesGuardado = (v.findes||{});
+      _findesSync();
+    }catch(e){}
+  }, 30);
 }
 
 function switchTabViaticos(mode){
@@ -11474,8 +11469,9 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   const destOpts = DESTINOS_VIATICOS.map(d=>
     `<option value="${d.nombre}" ${v.destino===d.nombre?'selected':''}>${d.nombre} (${d.km} km)</option>`
   ).join('');
-  const cpU = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const numPeaj = destInfo.peajes||0;
+  const _pjF = _viatPeajes(v, destInfo.peajes);
+  const cpU = _pjF.c;
+  const numPeaj = _pjF.n;
   const tAlim = personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr   = personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp = personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -11498,6 +11494,7 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
         <option value="PICK-UP" ${v.vehiculo==='PICK-UP'?'selected':''}>PICK-UP (PATRULLA) — L.22/peaje</option>
         <option value="CAMION GRANDE" ${v.vehiculo==='CAMION GRANDE'?'selected':''}>CAMIÓN GRANDE (CM-35) — L.134/peaje</option>
         <option value="GRUA" ${v.vehiculo==='GRUA'?'selected':''}>GRÚA (GR-01) — L.134/peaje</option>
+        <option value="VEHICULO PERSONAL" ${v.vehiculo==='VEHICULO PERSONAL'?'selected':''}>🚗 VEHÍCULO PERSONAL — L.22/peaje</option>
       </select>
     </div>
   </div>
@@ -11527,13 +11524,14 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
   <button onclick="agregarPersonaViaticos()" style="width:100%;padding:8px;background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;margin-bottom:12px">
     + Agregar persona
   </button>
+  <div id="v-findes-wrap"></div>
   <!-- TRANSPORTE -->
   <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
     <div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🚛 Transporte</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
-      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600">${destInfo.km||0} km</div></div>
-      <div><div style="color:var(--text3)">Cant. peajes</div><div id="v-npeaj" style="font-weight:600">${numPeaj}</div></div>
-      <div><div style="color:var(--text3)">Costo peaje unit.</div><div id="v-cpunit" style="font-weight:600">L. ${cpU}</div></div>
+      <div><div style="color:var(--text3)">KM total</div><div id="v-km" style="font-weight:600;padding-top:8px">${destInfo.km||0} km</div></div>
+      <div><div style="color:var(--text3)">Cant. peajes ✏️</div><input type="number" min="0" id="v-npeaj" value="${numPeaj}" oninput="recalcViaticos()" style="width:100%;font-weight:700;padding:7px 6px;border:1px solid var(--border2);border-radius:6px;text-align:center"></div>
+      <div><div style="color:var(--text3)">Costo unit. (L.) ✏️</div><input type="number" min="0" id="v-cpunit" value="${cpU}" oninput="recalcViaticos()" style="width:100%;font-weight:700;padding:7px 6px;border:1px solid var(--border2);border-radius:6px;text-align:center"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-group"><label>🔴 Total peaje (auto)</label>
@@ -11543,8 +11541,13 @@ function renderSolicitudForm(v, personas, destInfo, gestorInfo, tPeaj, comb, otr
         <input type="number" id="v-comb" value="${comb||0}" placeholder="0" oninput="recalcViaticos()">
       </div>
     </div>
-    <div class="form-group"><label>🏨 Hospedaje (por persona, si aplica)</label>
-      <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label>🏨 Hospedaje por noche</label>
+        <input type="number" id="v-hosp-noche" value="${v.hospedaje_noche||0}" placeholder="0" oninput="_viatHospAuto()">
+      </div>
+      <div class="form-group"><label>🏨 Total hospedaje · <span id="v-noches-lbl">—</span></label>
+        <input type="number" id="v-hosp" value="${tHosp||0}" placeholder="0" oninput="recalcViaticos()">
+      </div>
     </div>
     <div class="form-group"><label>📎 Otros gastos</label>
       <input type="number" id="v-otros" value="${otros||0}" placeholder="0" oninput="recalcViaticos()">
@@ -11636,9 +11639,12 @@ function renderPersonaRow(p, i){
     <div class="form-group"><label>Nombre</label>
       <select id="vp-nombre-${i}">${_viatOpts(p.nombre, _viatPersonal())}</select>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <div class="form-group"><label>Fecha</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>Fecha inicio</label>
         <input type="date" id="vp-fecha-${i}" value="${p.fecha||''}" onchange="recalcPersona(${i})">
+      </div>
+      <div class="form-group"><label>Fecha final <span style="font-weight:400;color:var(--text3);font-size:10px">(si son varios días)</span></label>
+        <input type="date" id="vp-ffin-${i}" value="${p.fecha_fin||''}" onchange="recalcPersona(${i})">
       </div>
       <div class="form-group"><label>Hora salida</label>
         <input type="time" id="vp-hini-${i}" value="${p.hora_ini||''}" onchange="recalcPersona(${i})">
@@ -11647,6 +11653,7 @@ function renderPersonaRow(p, i){
         <input type="time" id="vp-hfin-${i}" value="${p.hora_fin||''}" onchange="recalcPersona(${i})">
       </div>
     </div>
+    <div id="vp-dias-${i}" style="font-size:11px;color:#1f3864;font-weight:700;margin:-2px 0 6px">${(function(){const d=_viatDias(p.fecha,p.fecha_fin);return d>1?('📆 Período de '+d+' días'):'';})()}</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
       <div style="background:${p.desayuno?'#c8edcc':'var(--surface2)'};border-radius:4px;padding:5px;text-align:center">
         <div>🍳 Desayuno</div><input type="number" min="0" id="vp-des-${i}" value="${p.desayuno||0}" onchange="_alimManual(${i})" style="width:100%;text-align:center;font-weight:700;border:1px solid var(--border2);border-radius:4px;padding:3px;background:#fff;font-size:12px"></div>
@@ -11772,7 +11779,7 @@ function actualizarDestino(){
   if(!sel) return;
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===sel.value)||{km:0,peajes:0};
   document.getElementById('v-km') && (document.getElementById('v-km').textContent = d.km+' km');
-  document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').textContent = d.peajes);
+  document.getElementById('v-npeaj') && (document.getElementById('v-npeaj').value = d.peajes);
   _viatAvisoIntl(sel.value);
   recalcViaticos();
 }
@@ -11780,7 +11787,7 @@ function actualizarDestino(){
 function actualizarVehiculo(){
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
   const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
-  document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').textContent = 'L. '+cpU);
+  document.getElementById('v-cpunit') && (document.getElementById('v-cpunit').value = cpU);
   recalcViaticos();
 }
 
@@ -11795,31 +11802,27 @@ function _alimManual(i){
 function recalcPersona(i){
   const hIni = document.getElementById('vp-hini-'+i)?.value||'';
   const hFin = document.getElementById('vp-hfin-'+i)?.value||'';
-  let des=0,alm=0,cen=0,mn=0;
-  if(hIni){
-    const [h,m]=hIni.split(':').map(Number); if(h*60+m<7*60+30) des=_pv();
-  }
-  if(hFin){
-    const [h,m]=hFin.split(':').map(Number);
-    const [hi,mi]=(hIni||'00:00').split(':').map(Number);
-    const minFin=h*60+m, minI=hi*60+mi;
-    if(minI<=12*60 && minFin>=13*60) alm=_pv();
-    if(minFin>=19*60) cen=_pv();
-    if(minFin>=23*60+30||(minFin>=0&&minFin<6*60)) mn=_pv();
-  }
+  const f1 = document.getElementById('vp-fecha-'+i)?.value||'';
+  const f2 = document.getElementById('vp-ffin-'+i)?.value||'';
+  _findesSync();
+  const dias = _viatDias(f1, f2);
+  const r = _viatCalcAlimPeriodo(hIni, hFin, f1, f2, _findesLeer());
   const _setV=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
-  _setV('vp-des-'+i,des); _setV('vp-alm-'+i,alm); _setV('vp-cen-'+i,cen); _setV('vp-mn-'+i,mn);
-  const talim=des+alm+cen+mn;
-  document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim);
-  recalcViaticos();
+  _setV('vp-des-'+i,r.des); _setV('vp-alm-'+i,r.alm); _setV('vp-cen-'+i,r.cen); _setV('vp-mn-'+i,r.mn);
+  const talim=r.des+r.alm+r.cen+r.mn;
+  document.getElementById('vp-talim-'+i)&&(document.getElementById('vp-talim-'+i).textContent='L.'+talim+(dias>1?' · '+dias+' días':''));
+  const dEl=document.getElementById('vp-dias-'+i);
+  if(dEl) dEl.textContent = dias>1?('📆 Período de '+dias+' días'):'';
+  _viatHospAuto();
 }
 
 function recalcViaticos(){
   const destNombre = document.getElementById('v-destino')?.value||'';
   const veh = document.getElementById('v-vehiculo')?.value||'PICK-UP';
   const d = DESTINOS_VIATICOS.find(x=>x.nombre===destNombre)||{km:0,peajes:0};
-  const cpU = (veh==='CAMION GRANDE'||veh==='GRUA')?134:22;
-  const tPeaj = d.peajes * cpU;
+  const cpU = parseFloat(document.getElementById('v-cpunit')?.value||0)||0;
+  const _nPj = parseFloat(document.getElementById('v-npeaj')?.value||0)||0;
+  const tPeaj = _nPj * cpU;
   document.getElementById('v-tpeaj') && (document.getElementById('v-tpeaj').value=tPeaj);
   // Alimentación de todas las personas
   let tAlim=0, tTr=0, tHosp=parseFloat(document.getElementById('v-hosp')?.value||0)||0;
@@ -11880,8 +11883,9 @@ function recalcFacturas(){
 function _calcTotalSol(v){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -11925,10 +11929,11 @@ function _leerFormSolicitud(){
     personas.push({
       nombre:document.getElementById('vp-nombre-'+i)?.value||'',
       fecha:document.getElementById('vp-fecha-'+i)?.value||'',
+      fecha_fin:document.getElementById('vp-ffin-'+i)?.value||'',
       hora_ini:hIni, hora_fin:hFin,
       desayuno:des, almuerzo:alm, cena:cen, media_noche:mn,
-      transporte:0, hospedaje:hosp,
-      total:des+alm+cen+mn+hosp
+      transporte:0, hospedaje:(i===0?hosp:0),
+      total:des+alm+cen+mn+(i===0?hosp:0)
     });
   }
   const destNombre=document.getElementById('v-destino')?.value||'';
@@ -11946,9 +11951,12 @@ function _leerFormSolicitud(){
     gestor_depto:  g.depto||'',
     vehiculo:  document.getElementById('v-vehiculo')?.value||'PICK-UP',
     km_total:  d.km,
-    num_peajes:d.peajes,
+    num_peajes: parseFloat(document.getElementById('v-npeaj')?.value||0)||0,
+    costo_peaje: parseFloat(document.getElementById('v-cpunit')?.value||0)||0,
     combustible:   parseFloat(document.getElementById('v-comb')?.value||0)||0,
     hospedaje:     parseFloat(document.getElementById('v-hosp')?.value||0)||0,
+    hospedaje_noche: parseFloat(document.getElementById('v-hosp-noche')?.value||0)||0,
+    findes: _findesLeer(),
     otros_gastos:  parseFloat(document.getElementById('v-otros')?.value||0)||0,
     observaciones: document.getElementById('v-obs')?.value||'',
     personas,
@@ -12136,18 +12144,19 @@ if(_viaticosTipo==='logistica' && typeof _sincronizarLogisticaConReintento==='fu
 function _buildSolicitudHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{km:0,peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const comb=v.combustible||0; const otros=v.otros_gastos||0;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
   const tGen=tAlim+tTr+tPeaj+comb+tHosp+otros;
-  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':(v.vehiculo==='GRUA'?'GR-01':'PATRULLA');
+  const vehCod=v.vehiculo==='CAMION GRANDE'?'CM-35':(v.vehiculo==='GRUA'?'GR-01':(v.vehiculo==='VEHICULO PERSONAL'?'PERSONAL':'PATRULLA'));
 
   const personaRows=personas.map(p=>`
     <tr>
-      <td>${_x(p.nombre||'')}</td><td>${p.fecha||''}</td>
+      <td>${_x(p.nombre||'')}</td><td>${p.fecha||''}${p.fecha_fin&&p.fecha_fin!==p.fecha?('<br>al '+p.fecha_fin):''}</td>
       <td>${p.hora_ini||''}</td><td>${p.hora_fin||''}</td>
       <td class="num">${p.desayuno?'L.'+p.desayuno:''}</td>
       <td class="num">${p.almuerzo?'L.'+p.almuerzo:''}</td>
@@ -12227,7 +12236,7 @@ function _buildSolicitudHTML(v, orden){
     </tr>
     <tr>
       <td>${_x(v.vehiculo||'')}</td><td>${vehCod}</td><td class="num">${d.km} km</td>
-      <td class="num">${d.peajes}</td><td class="num">L.${cpU}</td>
+      <td class="num">${_pj.n}</td><td class="num">L.${cpU}</td>
       <td class="num">L.${tPeaj}</td><td class="num">L.${comb}</td>
       <td class="num">L.${otros}</td><td class="num tot"><strong>L.${tPeaj+comb+otros}</strong></td>
     </tr>
@@ -12254,8 +12263,9 @@ function _buildSolicitudHTML(v, orden){
 function _buildLiquidacionHTML(v, orden){
   const personas=v.personas||[];
   const d=DESTINOS_VIATICOS.find(x=>x.nombre===v.destino)||{peajes:0};
-  const cpU=(v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA')?134:22;
-  const tPeaj=d.peajes*cpU;
+  const _pj=_viatPeajes(v, d.peajes);
+  const cpU=_pj.c;
+  const tPeaj=_pj.t;
   const tAlim=personas.reduce((s,p)=>(s+(p.desayuno||0)+(p.almuerzo||0)+(p.cena||0)+(p.media_noche||0)),0);
   const tTr=personas.reduce((s,p)=>s+(p.transporte||0),0);
   const tHosp=personas.reduce((s,p)=>s+(p.hospedaje||0),0);
@@ -16326,6 +16336,165 @@ function _nxLogExtras(entry, tipo){
         var t = (calcularNotificacionesMant().filter(function(k){ return !k.completada; }).length) + n; badge.textContent = t > 99 ? '99+' : t; badge.classList.add('visible'); }catch(e){}
       return x; }; }
 })();
+</script>
+<script>
+// ══ VIÁTICOS COMO EN MT (2026-10-28, pedido de Miguel) ══ Cálculo de comida por período y fines de semana, peajes editables, hospedaje
+// por noche y fecha final por persona. Las funciones de pantalla se reemplazaron por las de MTRENTAL_Gerencia.html; estas son las que les faltaban.
+function _viatDias(f1, f2){
+  if(!f1 || !f2 || f2<=f1) return 1;
+  const a=new Date(f1+'T12:00:00'), b=new Date(f2+'T12:00:00');
+  const d=Math.round((b-a)/86400000)+1;
+  return (isNaN(d)||d<1)?1:Math.min(d,60);
+}
+function _viatCalcAlimPeriodo(hIni, hFin, f1, f2, findes){
+  const T=_pv();
+  findes = findes||{};
+  let des=0,alm=0,cen=0,mn=0;
+  const mm=function(h){ if(!h) return null; const p=h.split(':'); return parseInt(p[0],10)*60+parseInt(p[1],10); };
+  const minI=mm(hIni), minF=mm(hFin);
+  const dias=_viatDias(f1, f2);
+  if(dias<=1){
+    // Un solo día: las mismas reglas de siempre
+    if(minI!=null && minI<7*60+30) des=T;
+    if(minF!=null){
+      const mi=(minI!=null?minI:0);
+      if(mi<=12*60 && minF>=13*60) alm=T;
+      if(minF>=19*60) cen=T;
+      if(minF>=23*60+30||(minF>=0&&minF<6*60)) mn=T;
+    }
+  } else {
+    // Día 1 — según la hora de salida (la noche se pasa fuera)
+    if(minI!=null){
+      if(minI<7*60+30) des+=T;
+      if(minI<=12*60) alm+=T;
+      if(minI<19*60) cen+=T;
+    } else { des+=T; alm+=T; cen+=T; }
+    // Días intermedios — por fecha real: entre semana completos (des+alm+cena);
+    // sábados/domingos según lo configurado en "Fines de semana del período".
+    const a=new Date(f1+'T12:00:00'), b=new Date(f2+'T12:00:00');
+    for(let d=new Date(a.getTime()+86400000); d<b; d=new Date(d.getTime()+86400000)){
+      const dow=d.getDay();
+      if(dow===0||dow===6){
+        const iso=d.toISOString().slice(0,10);
+        const st=findes[iso]||{trabaja:(dow===6), hini:'07:30', hfin:'11:30'};
+        if(!st.trabaja) continue; // no se trabaja ese día: sin alimentación
+        const wi=mm(st.hini||'07:30'), wf=mm(st.hfin||'11:30');
+        if(wi!=null && wi<=7*60+30) des+=T;                       // entra a las 7:30 o antes
+        if(wi!=null && wf!=null && wi<=12*60 && wf>=13*60) alm+=T; // trabaja pasadas las 13:00
+        if(wf!=null && wf>=19*60) cen+=T;
+        if(wf!=null && wf>=23*60+30) mn+=T;
+      } else {
+        des+=T; alm+=T; cen+=T;
+      }
+    }
+    // Último día — amanece fuera; almuerzo/cena/m.noche según hora de regreso
+    des+=T;
+    if(minF!=null){
+      if(minF>=13*60) alm+=T;
+      if(minF>=19*60) cen+=T;
+      if(minF>=23*60+30) mn+=T;
+    } else { alm+=T; }
+  }
+  return {des:des, alm:alm, cen:cen, mn:mn};
+}
+function _viatNochesForm(){
+  let noches=0;
+  const n=document.querySelectorAll('[id^="vp-row-"]').length;
+  for(let i=0;i<n;i++){
+    const f1=document.getElementById('vp-fecha-'+i)?.value||'';
+    const f2=document.getElementById('vp-ffin-'+i)?.value||'';
+    noches=Math.max(noches, _viatDias(f1,f2)-1);
+  }
+  return noches;
+}
+function _viatHospAuto(){
+  const noches=_viatNochesForm();
+  const lbl=document.getElementById('v-noches-lbl');
+  if(lbl) lbl.textContent = noches+' noche'+(noches===1?'':'s');
+  const pn=parseFloat(document.getElementById('v-hosp-noche')?.value||0)||0;
+  if(pn>0){
+    const t=document.getElementById('v-hosp');
+    if(t) t.value=pn*noches;
+  }
+  recalcViaticos();
+}
+function _viatPeajes(v, destPeajes){
+  v = v || {};
+  const cpAuto = (v.vehiculo==='CAMION GRANDE'||v.vehiculo==='GRUA') ? 134 : 22;
+  const tieneManual = (v.costo_peaje!=null && v.costo_peaje!=='');
+  const c = tieneManual ? (parseFloat(v.costo_peaje)||0) : cpAuto;
+  let n;
+  if(tieneManual){
+    // Solicitud con control manual: se respeta la cantidad guardada tal cual
+    n = (v.num_peajes!=null && v.num_peajes!=='') ? (parseFloat(v.num_peajes)||0) : (destPeajes||0);
+  } else {
+    // Solicitudes viejas: regla anterior (rutas sin peaje forzadas a 0)
+    const SIN = ['TRUJILLO','TOCOA','COPAN','TELA','LA CEIBA','CEIBA','VILLANUEVA','POTRERILLOS','SANTA ANA, EL SALVADOR'];
+    n = SIN.indexOf(String(v.destino||'').trim().toUpperCase())>=0 ? 0 : (v.num_peajes || (destPeajes||0));
+  }
+  return { n:n, c:c, t:n*c };
+}
+function _viatFechasFinde(){
+  const out={};
+  const n=document.querySelectorAll('[id^="vp-row-"]').length;
+  for(let i=0;i<n;i++){
+    const f1=document.getElementById('vp-fecha-'+i)?.value||'';
+    const f2=document.getElementById('vp-ffin-'+i)?.value||'';
+    if(!f1||!f2||f2<=f1) continue;
+    const a=new Date(f1+'T12:00:00'), b=new Date(f2+'T12:00:00');
+    for(let d=new Date(a.getTime()+86400000); d<b; d=new Date(d.getTime()+86400000)){
+      const dow=d.getDay();
+      if(dow===0||dow===6) out[d.toISOString().slice(0,10)]=dow;
+    }
+  }
+  return out;
+}
+function _findesCambio(){
+  document.querySelectorAll('[data-finde]').forEach(function(row){
+    const tr=!!row.querySelector('.fd-tr')?.checked;
+    const hi=row.querySelector('.fd-hi'), hf=row.querySelector('.fd-hf');
+    if(hi) hi.disabled=!tr;
+    if(hf) hf.disabled=!tr;
+  });
+  const n=document.querySelectorAll('[id^="vp-row-"]').length;
+  for(let i=0;i<n;i++) recalcPersona(i);
+}
+function _findesLeer(){
+  const out={};
+  document.querySelectorAll('[data-finde]').forEach(function(row){
+    out[row.getAttribute('data-finde')]={
+      trabaja: !!row.querySelector('.fd-tr')?.checked,
+      hini: row.querySelector('.fd-hi')?.value||'07:30',
+      hfin: row.querySelector('.fd-hf')?.value||'11:30'
+    };
+  });
+  return out;
+}
+function _findesSync(){
+  const wrap=document.getElementById('v-findes-wrap');
+  if(!wrap) return;
+  const prev=Object.assign({}, window._findesGuardado||{}, _findesLeer());
+  const fechas=_viatFechasFinde();
+  const keys=Object.keys(fechas).sort();
+  if(!keys.length){ wrap.innerHTML=''; return; }
+  const DN=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  let h='<div style="background:#fff8e6;border:1px solid #eedc9a;border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">';
+  h+='<div style="font-weight:700;font-size:13px;color:#8a6d00;margin-bottom:8px">📆 Fines de semana en el período</div>';
+  keys.forEach(function(f){
+    const dow=fechas[f];
+    const st=prev[f]||{trabaja:(dow===6), hini:'07:30', hfin:'11:30'};
+    const pf=f.split('-');
+    h+='<div data-finde="'+f+'" style="display:grid;grid-template-columns:1.3fr auto 1fr 1fr;gap:8px;align-items:center;margin-bottom:6px;font-size:12px">'
+      +'<div style="font-weight:700;color:'+(dow===0?'#c0392b':'#1f3864')+'">'+DN[dow]+' '+pf[2]+'/'+pf[1]+'</div>'
+      +'<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" class="fd-tr" '+(st.trabaja?'checked':'')+' onchange="_findesCambio()"> Se trabaja</label>'
+      +'<input type="time" class="fd-hi" value="'+(st.hini||'07:30')+'" '+(st.trabaja?'':'disabled')+' onchange="_findesCambio()" style="padding:6px;border:1px solid var(--border2);border-radius:6px">'
+      +'<input type="time" class="fd-hf" value="'+(st.hfin||'11:30')+'" '+(st.trabaja?'':'disabled')+' onchange="_findesCambio()" style="padding:6px;border:1px solid var(--border2);border-radius:6px">'
+      +'</div>';
+  });
+  h+='<div style="font-size:11px;color:#8a6d00">Domingo normalmente no se trabaja (desmarcado = sin alimentación ese día). Sábado con horario normal 7:30–11:30 → solo desayuno. Se calcula con el horario que ingreses (entrada / salida).</div>';
+  h+='</div>';
+  wrap.innerHTML=h;
+}
 </script>
 </body>
 </html>
