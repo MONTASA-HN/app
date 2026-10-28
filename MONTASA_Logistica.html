@@ -3,6 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <script>
+// ══ LOGÍSTICA PARA LAS DOS EMPRESAS (2026-10-28, pedido de Miguel) ══ Esta misma app trabaja las órdenes de MONHACO cuando se abre
+// con ?empresa=monhaco (pestaña «Órdenes» de Logística MONHACO). Con &solo=mt muestra solo las órdenes de MONHACO donde va personal
+// de MT (botón «🏢 MONHACO» de Logística MT). Dentro de otra app no pide registro: el acceso lo maneja la app de afuera.
+(function(){
+  var q = location.search || '';
+  window._NX_EMP = (/[?&]empresa=monhaco\b/i.test(q) || /MONHACO_/i.test(location.pathname)) ? 'monhaco' : 'montasa';
+  window._NX_DENTRO = (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
+  window._NX_SOLO_MT = window._NX_EMP === 'monhaco' && /[?&]solo=mt\b/i.test(q);
+})();
+</script>
+<script>
 // (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
 // distinto al esperado, el navegador no lo ejecuta. Cubre también las que se cargan sobre la marcha (appendChild/insertBefore).
 (function(){
@@ -131,7 +142,7 @@ window._nxSpecFuera = function(spec){
 // Vive en <raíz>/rrhh/ajustes/precioComida {valor, cambiadoEn, cambiadoPor}; lo cambia Gerencia desde la ventana del vale.
 // El teléfono lo recuerda (nx_precio_comida_<raíz>) para cuando no hay señal. Sin dato: L 150. Los vales ya hechos guardan su monto.
 (function(){
-  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa', K = 'nx_precio_comida_' + RAIZ, val = 150;
+  var RAIZ = (window._NX_EMP || (/MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa')), K = 'nx_precio_comida_' + RAIZ, val = 150;
   try{ var g = parseFloat(localStorage.getItem(K)); if(g > 0) val = g; }catch(e){}
   window._pv = function(){ return val; };
   window._pvRaiz = RAIZ;
@@ -194,7 +205,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4f8b24014f5d';
+  var APP_VERSION='993bf17c5f44';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -780,9 +791,9 @@ var _Sync = (function(){
 </script>
   <link rel="manifest" href="/app/manifest_logistica.json">
   <link rel="apple-touch-icon" href="/app/icons/nexo-180.png">
-<link rel="icon" type="image/png" href="/app/icons/nexo-32.png"
+<link rel="icon" type="image/png" href="/app/icons/nexo-32.png">
 <link rel="shortcut icon" type="image/png" href="/app/icons/nexo-32.png">
-<link rel="icon" sizes="32x32" type="image/png" href="/app/icons/nexo-32.png">>
+<link rel="icon" sizes="32x32" type="image/png" href="/app/icons/nexo-32.png">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" integrity="sha384-ajMUFBUFMCyjh8uxJg6bkGcKe9RTolyjwbxB3yES0QQMenP3Oztj/W9vA2SJPcIh" crossorigin="anonymous"></script>
 <script>
 function _imprimirHTML(htmlContent){
@@ -1031,7 +1042,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 // La consulta del propio acceso va por REST con la sesión (no depende de la conexión de la app, que está cerrada).
 // Sin señal la app sigue con lo guardado en el teléfono. MONHACO aún no se cierra (su personal se registra esta semana).
 (function(){
-  var APP = 'MONTASA_Logistica.html', EMPRESA = 'montasa';
+  var APP = 'MONTASA_Logistica.html', EMPRESA = window._NX_EMP || 'montasa';   // (2026-10-28) dos empresas
   var CERRADA = EMPRESA === 'montasa';
   var URL_BD = 'https://montasa-app-default-rtdb.firebaseio.com/', CLAVE_OK = 'nx_acc_ok_' + EMPRESA;
   window._nxAcceso = window._nxAcceso || { uid: null, registro: null };
@@ -1132,9 +1143,9 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     rest('accesos/' + uid).then(function(r){
       if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
         // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
-        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
+        if(r.estado === 'aprobado' && !window._NX_DENTRO) rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
         estado(r); }   // una vez por sesión
-      else { if(CERRADA) cerrar(); pedirNombre(uid); }
+      else { if(CERRADA) cerrar(); if(!window._NX_DENTRO) pedirNombre(uid); }
     }).catch(function(){
       // Sin señal: la app sigue con lo guardado en el teléfono; se vuelve a intentar
       if(!CERRADA) return; setTimeout(function(){ revisar(uid); }, 15000);
@@ -1164,12 +1175,21 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 // (tec, jefe, op, mot, aviso) y tel. Si todavía no hay plantilla (primera vez sin conexión) se usan las listas de
 // siempre. Los nombres que ya están puestos en una orden siguen visibles en esa orden aunque la persona ya no esté.
 (function(){
-  var RAIZ = 'montasa', CLAVE = 'nx_plantilla_' + RAIZ;
+  var RAIZ = window._NX_EMP || 'montasa', CLAVE = 'nx_plantilla_' + RAIZ;
   var plantilla = null, originales = {}, estaticos = null;
+  // (2026-10-28) En MONHACO también se eligen operadores y motoristas de MT (solo en listas de logística; sus horas van a MT Rental)
+  var extraMT = null; try{ var gm = localStorage.getItem('nx_plantillaMT'); if(gm && RAIZ === 'monhaco') extraMT = JSON.parse(gm); }catch(e){}
+  window._nxEsMT = function(n){ if(!extraMT || !n) return false; var propio = plantilla && Object.keys(plantilla).some(function(k){ return plantilla[k] && plantilla[k].n === n; });
+    return !propio && Object.keys(extraMT).some(function(k){ return extraMT[k] && extraMT[k].n === n; }); };
   try{ var g = localStorage.getItem(CLAVE); if(g) plantilla = JSON.parse(g); }catch(e){}
   function escH(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function escJ(t){ return String(t == null ? '' : t).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-  function personas(){ return plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null; }
+  function personas(){
+    var a = plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null;
+    if(RAIZ === 'monhaco' && extraMT){ var ya = (a || []).map(function(p){ return p.n; });   // (2026-10-28) personal de MT
+      a = (a || []).concat(Object.keys(extraMT).map(function(k){ return extraMT[k]; }).filter(function(p){ return p && p.n && ya.indexOf(p.n) < 0; }).map(function(p){ return { n: p.n, roles: (p.roles || []).slice(), mt: true }; })); }
+    return a;
+  }
   function es(p, r){ return (p.roles || []).indexOf(r) >= 0; }
   var FILTROS = {
     tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot'); },   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
@@ -1182,7 +1202,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   };
   function nombresDe(tipo){
     var a = personas(); if(!a) return null;
-    return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
+    return a.filter(function(p){ return !p.mt || tipo === 'op' || tipo === 'mot'; }).filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
       .filter(function(n, i, l){ return l.indexOf(n) === i; }).sort(function(x, y){ return x.localeCompare(y, 'es'); });
   }
   function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return ''; }
@@ -1318,6 +1338,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       try{ if(plantilla) localStorage.setItem(CLAVE, JSON.stringify(plantilla)); else localStorage.removeItem(CLAVE); }catch(e){}
       aplicar();
     });
+    if(RAIZ === 'monhaco') db.ref('monhaco/rrhh/plantillaMT').on('value', function(s){   // (2026-10-28) operadores de MT
+      var v = s.val() || null; extraMT = v && Object.keys(v).length ? v : null;
+      try{ if(extraMT) localStorage.setItem('nx_plantillaMT', JSON.stringify(extraMT)); else localStorage.removeItem('nx_plantillaMT'); }catch(e){}
+      aplicar(); try{ if(typeof renderOrdenesLog === 'function') renderOrdenesLog(); }catch(e){}
+    });
   }
   function iniciar(){ try{ aplicar(); }catch(e){ console.warn('Personal Nexo', e); } escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 0); }); else setTimeout(iniciar, 0);
@@ -1374,6 +1399,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <div id="comb-cont"></div>
 </div>
 <div id="tab-ordenes" class="section active">
+  <div id="nx-mh-btn" style="display:none"></div>
   <div id="log-carpetas"></div>
   <div id="log-carpeta-vista" style="display:none">
   <div class="carpeta-back" onclick="_logCerrarCarpeta()">← <span>Volver a carpetas</span></div>
@@ -1428,7 +1454,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <div id="mthor-cont"></div>
 </div>
 
-<nav class="bottom-nav">
+<nav class="bottom-nav" id="nx-nav-log">
   <button class="nav-btn active" onclick="showTab('ordenes',this)">
     <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Órdenes
   </button>
@@ -1583,7 +1609,8 @@ function _calcCostoViaticos(v){
 }
 
 
-const LS_KEY = 'montasa_log_v1';
+const _NXR = window._NX_EMP || 'montasa';   // (2026-10-28) empresa de las órdenes
+const LS_KEY = _NXR + '_log_v1';
 const MOTORISTAS_LOGISTICA = ['Francisco Narvaez', 'Miguel Lopez', 'Jorge Martinez'];
 const OPERADORES_LOGISTICA = [
   'Francisco Narvaez',
@@ -1606,6 +1633,14 @@ const EQUIPOS_INICIALES = [{"id":"e400n9nx","codigo":"E-01","desc":"GENIE Z-60/3
 
 // Firebase devuelve listas con huecos como OBJETO ({0:..,2:..}); normalizar SIEMPRE a arreglo
 function _toArr(x){ if(Array.isArray(x)) return x.filter(function(o){return o!=null;}); if(x&&typeof x==='object') return Object.keys(x).sort(function(a,b){return (parseInt(a,10)||0)-(parseInt(b,10)||0);}).map(function(k){return x[k];}).filter(function(o){return o!=null;}); return []; }
+// (2026-10-28) Órdenes que se muestran: todas, o (MONHACO desde Logística MT) solo las que llevan personal de MT
+function _nxPersonasOrden(o){ return [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista, o.tecnico].concat(Array.isArray(o.tecnicos) ? o.tecnicos : [])
+  .join(',').split(',').map(function(x){ return x.trim(); }).filter(Boolean); }
+function _logVisibles(){
+  var L = DB.logistica || [];
+  if(!window._NX_SOLO_MT || typeof window._nxEsMT !== 'function') return L;
+  return L.filter(function(o){ return o && _nxPersonasOrden(o).some(window._nxEsMT); });
+}
 function loadDB(){
   try{
     const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
@@ -1613,8 +1648,8 @@ function loadDB(){
     if(d.preventivos) DB.preventivos = _toArr(d.preventivos);
     if(d.correctivos) DB.correctivos = _toArr(d.correctivos);
     if(d.equipos && d.equipos.length) DB.equipos = d.equipos;
-    else DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
-  }catch(e){ DB.equipos = JSON.parse(JSON.stringify(EQUIPOS_INICIALES)); }
+    else DB.equipos = (_NXR === 'montasa' ? JSON.parse(JSON.stringify(EQUIPOS_INICIALES)) : []);
+  }catch(e){ DB.equipos = (_NXR === 'montasa' ? JSON.parse(JSON.stringify(EQUIPOS_INICIALES)) : []); }
 }
 
 // ══ FOTOS BAJO DEMANDA ═══════════════════════════════════════════════════
@@ -1636,7 +1671,7 @@ function _hidratarFotos(o, cb){
   if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
   if(!window._fbDB || window._fotosHidratando[o.id]) return;
   window._fotosHidratando[o.id] = true;
-  window._fbDB.ref('fotosOrden_montasa/'+o.id).once('value').then(function(s){
+  window._fbDB.ref('fotosOrden_'+_NXR+'/'+o.id).once('value').then(function(s){
     delete window._fotosHidratando[o.id];
     const v = s.val();
     const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
@@ -1650,7 +1685,7 @@ function _persistirFotosOrden(o, opc){
   if(!o || !o.id || !window._fbDB) return;
   var id = o.id, quitar = opc && opc.quitar, local = (o.fotos||[]).filter(Boolean);
   if(!quitar) window._fotosOrdenCache[id] = local.slice();
-  window._fbDB.ref('fotosOrden_montasa/'+id).transaction(function(cur){
+  window._fbDB.ref('fotosOrden_'+_NXR+'/'+id).transaction(function(cur){
     var srv = (cur && Array.isArray(cur.fotos)) ? cur.fotos.filter(Boolean) : (Array.isArray(cur) ? cur.filter(Boolean) : []);
     var fin = srv.slice(); local.forEach(function(f){ if(fin.indexOf(f) < 0) fin.push(f); });
     if(quitar) fin = fin.filter(function(f){ return f !== quitar; });
@@ -1699,7 +1734,7 @@ function _writeToFirebase(){
     if(window._fbDB && window._fbReady){
       window._localWriteTs = Date.now();
       var _lc = parseInt(DB['lastCorrelativo_LG'],10)||0;
-      if(_lc>0) window._fbDB.ref('montasa/lastCorrelativo_LG').transaction(function(c){ c = parseInt(c)||0; return _lc>c ? _lc : undefined; }).catch(function(){});
+      if(_lc>0) window._fbDB.ref(_NXR+'/lastCorrelativo_LG').transaction(function(c){ c = parseInt(c)||0; return _lc>c ? _lc : undefined; }).catch(function(){});
       _Sync.guardar();
     } else {
       setTimeout(_writeToFirebase, 2000);
@@ -1969,7 +2004,7 @@ function mthGuardar(eqId){
   if(!DB.horometros) DB.horometros = {};
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes][eqId] = reg;
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/'+eqId).set(reg); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/'+eqId).set(reg); }catch(e){}
   _mthPintarFila(eqId);
   _mthPintarAvance();
   toast(_mthEsc(eq.codigo)+': '+lectura.toLocaleString('en-US')+' '+uni+' ✓ (pendiente de finalizar)');
@@ -2004,7 +2039,7 @@ function mthBorrar(eqId){
     return;
   }
   delete DB.horometros[mes][eqId];
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/'+eqId).remove(); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/'+eqId).remove(); }catch(e){}
   const inp = document.getElementById('mth-in-'+eqId);
   if(inp) inp.value = '';
   _mthPintarFila(eqId);
@@ -2042,7 +2077,7 @@ function mthNuevaTomaCrear(){
   const marca = { ts: Date.now() };
   if(!DB.horometros) DB.horometros = {};
   DB.horometros[mes] = { _creada: marca };
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_creada').set(marca); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/_creada').set(marca); }catch(e){}
   _mthMesVista = mes;
   renderMtHorometros();
   toast('Toma de '+mthMesLabel(mes)+' creada ✓ — lista para capturar');
@@ -2053,7 +2088,7 @@ function _mthFichasActualizar(conLectura, lecturas){
   if(!conLectura.length) return Promise.resolve(0);
   try{
     if(!window._fbDB) return Promise.resolve(0);
-    return window._fbDB.ref('montasa/equipos').once('value').then(function(sn){
+    return window._fbDB.ref(_NXR+'/equipos').once('value').then(function(sn){
       const v = sn.val(); if(!v) return 0;
       const updates = {};
       conLectura.forEach(function(e){
@@ -2062,7 +2097,7 @@ function _mthFichasActualizar(conLectura, lecturas){
         else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===e.id){ idx=ks[i]; break; } } }
         if(idx!==-1 && idx!==undefined && !(typeof window._nxBaja === 'function' && window._nxBaja((v[idx]||{}).horometro, lecturas[e.id].lectura, e.codigo||e.id))) updates[idx+'/horometro'] = String(lecturas[e.id].lectura);   // (2026-10-20) no bajar
       });
-      if(Object.keys(updates).length) return window._fbDB.ref('montasa/equipos').update(updates).then(function(){ return conLectura.length; });
+      if(Object.keys(updates).length) return window._fbDB.ref(_NXR+'/equipos').update(updates).then(function(){ return conLectura.length; });
       return 0;
     });
   }catch(e){ return Promise.resolve(0); }
@@ -2084,7 +2119,7 @@ function finalizarTomaMtHorometros(){
   const ts = Date.now();
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes]._cierre = { ts: ts };
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_cierre').set({ ts: ts }); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/_cierre').set({ ts: ts }); }catch(e){}
   _mthFichasActualizar(conLectura, lecturas).then(function(n){
     toast('✅ Toma finalizada — '+n+' fichas actualizadas');
     try{ if(typeof saveDB==='function') saveDB(); }catch(e){}
@@ -2156,7 +2191,7 @@ function mthFirmaGuardar(rol){
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   if(!DB.horometros[mes]._firmas) DB.horometros[mes]._firmas = {};
   DB.horometros[mes]._firmas[rol] = data;
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_firmas/'+rol).set(data); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/_firmas/'+rol).set(data); }catch(e){}
   const ov = document.getElementById('mth-firma-overlay'); if(ov) ov.remove();
   renderMtHorometros();
   toast('Firma guardada ✓');
@@ -2165,7 +2200,7 @@ function mthFirmaBorrar(rol){
   if(!confirm('¿Borrar esta firma?')) return;
   const mes = _mthMesVista || mthMesActual();
   try{ delete DB.horometros[mes]._firmas[rol]; }catch(e){}
-  try{ if(window._fbDB) window._fbDB.ref('montasa/horometros/'+mes+'/_firmas/'+rol).remove(); }catch(e){}
+  try{ if(window._fbDB) window._fbDB.ref(_NXR+'/horometros/'+mes+'/_firmas/'+rol).remove(); }catch(e){}
   renderMtHorometros();
   toast('Firma borrada');
 }
@@ -2315,11 +2350,12 @@ async function _mthGenerarPDF(mes, modo){
 // instante en las dos apps sin depender del snapshot de la raíz.
 let _mthSuscrito = false;
 function _mthSuscribir(){
+  if(_NXR !== 'montasa') return;   // (2026-10-28) los horómetros de MONHACO van en su propia app
   if(_mthSuscrito) return;
   if(!window._fbDB){ setTimeout(_mthSuscribir, 800); return; }
   _mthSuscrito = true;
   try{
-    window._fbDB.ref('montasa/horometros').on('value', function(sn){
+    window._fbDB.ref(_NXR+'/horometros').on('value', function(sn){
       DB.horometros = sn.val() || {};
       const act = document.activeElement;
       if(act && /^mth-in-/.test(act.id||'')) return;   // no estorbar mientras capturan
@@ -2472,13 +2508,13 @@ function _gpsFichaBorrar(equipoId){
   if(eq) eq.ubicacionLink = '';
   try{
     if(!window._fbDB) return;
-    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+    window._fbDB.ref(_NXR+'/equipos').once('value').then(function(s){
       const v = s.val(); if(!v) return;
       let idx = -1;
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      _nxSetSeguro('montasa/equipos', idx, equipoId, 'ubicacionLink', '');   // (2026-10-19) confirma el id
+      _nxSetSeguro(_NXR+'/equipos', idx, equipoId, 'ubicacionLink', '');   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -2543,13 +2579,13 @@ function _gpsFichaLink(equipoId, link){
   if(eq && !eq.esGenerico) eq.ubicacionLink = link;
   try{
     if(!window._fbDB) return;
-    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+    window._fbDB.ref(_NXR+'/equipos').once('value').then(function(s){
       const v = s.val(); if(!v) return;
       let idx = -1;
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { const ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      _nxSetSeguro('montasa/equipos', idx, equipoId, 'ubicacionLink', link);   // (2026-10-19) confirma el id
+      _nxSetSeguro(_NXR+'/equipos', idx, equipoId, 'ubicacionLink', link);   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -2569,7 +2605,7 @@ function renderOrdenesLog(){
   const buscar = (document.getElementById('log-buscar')?.value||'').toLowerCase();
   const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
-  let list = (DB.logistica||[])
+  let list = _logVisibles()
     .filter(o=>o && !o.cerrado && o.estado!=='Completado')
     .filter(o=>!_logCarpeta || _logTipo(o)===_logCarpeta)   // (2026-10-16) carpeta abierta
     .sort((a,b)=>{
@@ -2860,7 +2896,7 @@ function abrirValeLG(ordenId){
   const _oMig = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(_oMig && _valeMigrarPersonas(_oMig) && window._fbDB && window._fbReady){
     const _iMig = DB.logistica.findIndex(o=>o.id===ordenId);
-    if(_iMig>=0) _fbRefPorId('montasa/logistica/'+_iMig+'/vales').set(_oMig.vales).catch(function(){});
+    if(_iMig>=0) _fbRefPorId(_NXR+'/logistica/'+_iMig+'/vales').set(_oMig.vales).catch(function(){});
   }
   const orden = (DB.logistica||[]).find(o=>o.id===ordenId);
   if(!orden) return;
@@ -2946,7 +2982,7 @@ function guardarValeLG(ordenId){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(o=>o.id===ordenId);
-      if(idx>=0) _fbRefPorId('montasa/logistica/'+idx+'/vales').set(orden.vales)
+      if(idx>=0) _fbRefPorId(_NXR+'/logistica/'+idx+'/vales').set(orden.vales)
         .catch(err=>console.error('Error guardando vale LG:', err));
     }
     toast('Vale guardado ✓');
@@ -3091,7 +3127,7 @@ function _eliminarOrdenLog(id){
     if(window._fbDB && window._fbReady){
       // Eliminar leyendo la lista REAL del servidor (no la local, que puede estar
       // desactualizada y borraría órdenes creadas por otros dispositivos).
-      window._fbDB.ref('montasa/logistica').once('value').then(snap=>{
+      window._fbDB.ref(_NXR+'/logistica').once('value').then(snap=>{
         const rem=snap.val();
         const arr=(Array.isArray(rem)?rem:Object.values(rem||{})).filter(o=>o&&o.id&&o.id!==id);
         return _Sync.guardar();
@@ -3532,7 +3568,7 @@ function cerrarOrdenLog(id){
         try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
         if(window._fbDB && window._fbReady){
           var _idx = DB.logistica.findIndex(function(x){return x.id===o.id;});
-          if(_idx>=0) _fbRefPorId('montasa/logistica/'+_idx+'/vales').set(_v);
+          if(_idx>=0) _fbRefPorId(_NXR+'/logistica/'+_idx+'/vales').set(_v);
         }
       }
     }
@@ -3563,7 +3599,7 @@ function renderHistorialLog(){
   const buscar = (document.getElementById('log-buscar')?.value||'').toLowerCase();   // (2026-10-16) un solo buscador en la carpeta
   const tipoLabels = {renta:'🚛 Renta',renta_operador:'👷 Renta de Operador',entrega:'📦 Entrega de Equipo',retiro:'🔙 Retiro de Equipo',apoyo_mantenimiento:'🔩 Apoyo Mant.',atencion_compras:'🛒 Atención de Compras'};
 
-  let list = (DB.logistica||[])
+  let list = _logVisibles()
     .filter(o=>o && (o.cerrado||o.estado==='Completado'||o.estado==='Cancelado'))
     .filter(o=>!_logCarpeta || _logTipo(o)===_logCarpeta)   // (2026-10-16) carpeta abierta
     .sort((a,b)=>{
@@ -4021,7 +4057,7 @@ function limpiarFirma(canvasId){
       saveDB();
       if(window._fbDB && window._fbReady){
         const idx = DB.logistica.findIndex(x=>x.id===ordenId);
-        if(idx>=0) _fbRefPorId('montasa/logistica/'+idx+'/firma').set('');
+        if(idx>=0) _fbRefPorId(_NXR+'/logistica/'+idx+'/firma').set('');
       }
     }
   }
@@ -4093,8 +4129,8 @@ try{
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
-  window._fbDB = firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar('montasa', window._fbDB); }catch(e){ console.warn('Sync', e); }
-  const FB_REF = window._fbDB.ref('montasa');
+  window._fbDB = firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB); }catch(e){ console.warn('Sync', e); }
+  const FB_REF = window._fbDB.ref(_NXR);
 
   _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(snap=>{
     try{
@@ -4114,7 +4150,7 @@ try{
         } else { loadDB(); }
       } else { loadDB(); }
     }catch(e){ console.warn('Error cargando datos:', e); loadDB(); }
-    if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+    if(!DB.equipos||!DB.equipos.length) DB.equipos=(_NXR === 'montasa' ? JSON.parse(JSON.stringify(EQUIPOS_INICIALES)) : []);
     window._fbReady = true;
     console.log('_fbReady = true SET');
     renderDashboardLog();
@@ -4168,7 +4204,7 @@ function _mergeLogViaticos(remotos){
       if(d.preventivos) DB.preventivos = _toArr(d.preventivos);
       if(d.correctivos) DB.correctivos = _toArr(d.correctivos);
       if(d.equipos && _toArr(d.equipos).length) DB.equipos = _toArr(d.equipos);
-      if(!DB.equipos||!DB.equipos.length) DB.equipos=JSON.parse(JSON.stringify(EQUIPOS_INICIALES));
+      if(!DB.equipos||!DB.equipos.length) DB.equipos=(_NXR === 'montasa' ? JSON.parse(JSON.stringify(EQUIPOS_INICIALES)) : []);
       if(ownWrite) return;
       const active=document.querySelector('.section.active');
       if(!active) return;
@@ -5313,7 +5349,7 @@ function editarOrdenCerradaLog(id){
     saveDB();
     if(window._fbDB && window._fbReady){
       const idx = DB.logistica.findIndex(x=>x.id===id);
-      if(idx>=0) _fbRefPorId('montasa/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
+      if(idx>=0) _fbRefPorId(_NXR+'/logistica/'+idx).update({cerrado:false,estado:'En proceso',fechaCierre:''});
     }
     openHistLog.delete(id);
     renderHistorialLog();
@@ -5340,13 +5376,13 @@ function _cambiarEstadoEquipo(equipoId, nuevoEstado){
   // estado volviera a EN RENTA al recargar.
   try{
     if(!window._fbDB || !window._fbReady) return;
-    window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+    window._fbDB.ref(_NXR+'/equipos').once('value').then(function(s){
       var v = s.val(); if(!v) return;
       var idx = -1;
       if(Array.isArray(v)){ idx = v.findIndex(function(x){ return x && x.id===equipoId; }); }
       else { var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(v[ks[i]] && v[ks[i]].id===equipoId){ idx=ks[i]; break; } } }
       if(idx===-1 || idx===undefined) return;
-      _nxSetSeguro('montasa/equipos', idx, equipoId, 'estado', nuevoEstado);   // (2026-10-19) confirma el id
+      _nxSetSeguro(_NXR+'/equipos', idx, equipoId, 'estado', nuevoEstado);   // (2026-10-19) confirma el id
     }).catch(function(){});
   }catch(e){}
 }
@@ -5567,6 +5603,7 @@ function _cliOrdenAlCerrar(o){
 // historial de TODOS los suministros de esta empresa (por mes). En Gerencia: el mismo historial con «✏️ Editar (PIN)».
 // Datos en <raíz>/combustible/<id>. El km pasa a la ficha del vehículo (si baja o salta de más, pregunta).
 (function(){
+  if((window._NX_EMP || 'montasa') !== 'montasa') return;   // (2026-10-28) MONHACO tiene su propio combustible
   var RAIZ = 'montasa', OTRA = RAIZ === 'montasa' ? 'monhaco' : 'montasa', GER = false;
   var st = { veh: null, per: null, guardando: false, reloj: null, abierto: false, edit: null, mes: '' };
   function db(){ return window._fbDB; }
@@ -5857,12 +5894,12 @@ function _logPintarCarpetas(){
     grid.style.display = 'none'; vista.style.display = 'block';
     var c = _LOG_CARPETAS.find(function(x){ return x.t === _logCarpeta; }) || {icon:'📋', label:'Otras', color:'#2d6a9f'};
     var tt = document.getElementById('log-carpeta-titulo'); tt.innerHTML = c.icon + ' ' + c.label; tt.style.borderBottom = '2px solid ' + c.color; tt.style.paddingBottom = '8px';
-    var nc = (DB.logistica || []).filter(function(o){ return o && _logTipo(o) === _logCarpeta && (o.cerrado || o.estado === 'Completado' || o.estado === 'Cancelado'); }).length;
+    var nc = _logVisibles().filter(function(o){ return o && _logTipo(o) === _logCarpeta && (o.cerrado || o.estado === 'Completado' || o.estado === 'Cancelado'); }).length;
     var ct = document.getElementById('log-cerradas-titulo'); if(ct) ct.textContent = '✅ Cerradas (' + nc + ')';
     return;
   }
   grid.style.display = 'block'; vista.style.display = 'none';
-  var L = (DB.logistica || []).filter(Boolean), cs = _LOG_CARPETAS.slice();
+  var L = _logVisibles().filter(Boolean), cs = _LOG_CARPETAS.slice();
   if(L.some(function(o){ return _logTipo(o) === 'otros'; })) cs.push({t:'otros', icon:'📋', label:'Otras', color:'#2d6a9f'});
   grid.innerHTML = '<div class="carpeta-grid">' + cs.map(function(c){
     var n = {pen:0, pro:0, cer:0, can:0}; L.forEach(function(o){ if(_logTipo(o) === c.t) n[_logEstadoDe(o)]++; });
@@ -6001,7 +6038,7 @@ function _logCerrarCarpeta(){ _logCarpeta = null; var b = document.getElementByI
 // están en el servidor. Al guardar (Guardar o Descargar PDF) se vuelve a mirar el servidor: si otra persona los cambió mientras tanto,
 // se avisa y NO se guarda encima. Sin señal no se puede revisar: se guarda como antes.
 (function(){
-  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa', huella = {}, propia = {};
+  var RAIZ = (window._NX_EMP || (/MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa')), huella = {}, propia = {};
   function canon(x){
     if(x === null || x === undefined) return undefined;
     if(Array.isArray(x) || (typeof x === 'object' && Object.keys(x).length && Object.keys(x).every(function(k){ return /^[0-9]+$/.test(k); }))){
@@ -6147,8 +6184,8 @@ function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTra
 // grande con animación (una sola vez por día en cada teléfono). Los datos salen de <raíz>/rrhh/plantilla, que publica
 // Gerencia (módulo Personal): cum = MM-DD (sin año) y t = 'o' (compañero) / 'a' (compañera) / vacío (mensaje neutro).
 (function(){
-  if(window._nxCumpleListo) return; window._nxCumpleListo = true;
-  var RAIZ = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa';
+  if(window._nxCumpleListo || window._NX_DENTRO) return; window._nxCumpleListo = true;   // (2026-10-28) dentro de otra app no se repite
+  var RAIZ = (window._NX_EMP || (/MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa'));
   var plantilla = null, mostrado = false;
   try{ var g = localStorage.getItem('nx_plantilla_' + RAIZ); if(g) plantilla = JSON.parse(g); }catch(e){}
   function esc(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -6246,6 +6283,71 @@ function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTra
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+</script>
+<script>
+// (2026-10-28) LOGÍSTICA PARA LAS DOS EMPRESAS: pantalla según la empresa y si está dentro de otra app
+(function(){
+  if(window._NX_EMP === 'monhaco'){
+    document.title = 'Nexo Logística MH · Órdenes';
+    var t = document.querySelector('.app-header div[style*="font-size:17px"]'); if(t) t.textContent = 'MONHACO Logística';
+    var nav = document.getElementById('nx-nav-log'); if(nav) nav.style.display = 'none';
+    // sin la marca de agua de MONTASA ni el menú ☰ (solo hay Órdenes)
+    var st = document.createElement('style'); st.textContent = '.watermark{display:none!important}#nx-menu-fab,#nx-menu-panel,#nx-menu-overlay{display:none!important}'; document.head.appendChild(st);
+  }
+  if(!window._NX_DENTRO) return;
+  var h = document.querySelector('.app-header'); if(h) h.style.display = 'none';
+  var fr = document.getElementById('log-frase'); if(fr) fr.style.display = 'none';
+  var b = document.createElement('div');
+  b.style.cssText = 'position:sticky;top:0;z-index:150;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:#1f3864;color:#fff';
+  b.innerHTML = '<div><div style="font-weight:800;font-size:15px">🏢 ' + (window._NX_EMP === 'monhaco' ? 'MONHACO' : 'MT Rental') + ' · Órdenes de logística</div>'
+    + (window._NX_SOLO_MT ? '<div style="font-size:11px;color:#c9d6ea">Donde va personal de MT · sus horas cuentan en MT Rental</div>' : '') + '</div>'
+    + '<button type="button" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:8px 12px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer">✕ Cerrar</button>';
+  b.querySelector('button').onclick = function(){ try{ window.parent.postMessage({ nxCerrarOrdenes: 1 }, '*'); }catch(e){} };
+  document.body.insertBefore(b, document.body.firstChild);
+})();
+</script>
+<script>
+// ══ ÓRDENES DE MONHACO CON PERSONAL DE MT (2026-10-28, pedido de Miguel) ══ Los operadores de MT ven aquí las órdenes de logística de
+// MONHACO donde van asignados (sus horas cuentan en MT Rental). Se abren con el mismo módulo, apuntando a MONHACO (&solo=mt).
+(function(){
+  if(window._NX_EMP !== 'montasa' || window._NX_DENTRO) return;
+  var ov = null;
+  function cerrar(desdeAtras){
+    if(!ov) return; ov.remove(); ov = null; document.documentElement.style.overflow = ''; document.body.style.overflow = '';
+    if(!desdeAtras){ try{ if(history.state && history.state.nxOrdenes) history.back(); }catch(e){} }
+  }
+  function abrirOrdenes(){
+    if(ov) return;
+    ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#fff';
+    var f = document.createElement('iframe'); f.src = 'MONTASA_Logistica.html?empresa=monhaco&solo=mt'; f.title = 'Órdenes MONHACO';
+    f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; web-share; fullscreen');
+    f.style.cssText = 'border:0;width:100%;height:100%;display:block';
+    ov.appendChild(f); document.body.appendChild(ov);
+    document.documentElement.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
+    try{ history.pushState({ nxOrdenes: 1 }, ''); }catch(e){}
+  }
+  window.addEventListener('popstate', function(){ if(ov) cerrar(true); });
+  window.addEventListener('message', function(e){ if(e && e.data && e.data.nxCerrarOrdenes) cerrar(false); });
+  window._nxAbrirOrdenesMH = abrirOrdenes;
+  var lista = [];
+  function nombresMT(){ return (typeof window._nxPersonas === 'function' ? window._nxPersonas() : []).map(function(p){ return p.n; }); }
+  function pintar(){
+    var el = document.getElementById('nx-mh-btn'); if(!el) return;
+    var mt = nombresMT();
+    var mias = lista.filter(function(o){ return o && o.id && typeof _nxPersonasOrden === 'function' && _nxPersonasOrden(o).some(function(n){ return mt.indexOf(n) >= 0; }); });
+    if(!mias.length){ el.style.display = 'none'; return; }
+    var ab = mias.filter(function(o){ return !o.cerrado && o.estado !== 'Completado' && o.estado !== 'Cancelado'; }).length;
+    el.style.display = '';
+    el.innerHTML = '<button type="button" onclick="_nxAbrirOrdenesMH()" style="width:100%;margin:0 0 12px;padding:12px 14px;border:none;border-radius:12px;background:#7c3aed;color:#fff;font-size:14px;font-weight:800;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'
+      + '<span>🏢 Órdenes MONHACO</span><span style="background:rgba(255,255,255,.25);padding:2px 10px;border-radius:12px">' + ab + ' abierta' + (ab === 1 ? '' : 's') + '</span></button>';
+  }
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1500); return; }
+    db.ref('monhaco/logistica').on('value', function(s){ var v = s.val(); lista = Array.isArray(v) ? v : (v ? Object.keys(v).map(function(k){ return v[k]; }) : []); pintar(); });
+    setInterval(pintar, 15000);   // por si cambia la lista de personal
+  }
+  escuchar();
 })();
 </script>
 </body>

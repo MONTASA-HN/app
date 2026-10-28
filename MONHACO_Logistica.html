@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='25b391f9f88a';
+  var APP_VERSION='ea874b9dfdbd';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -354,6 +354,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     <button id="seg-hor" class="on" onclick="lgVista('hor')">📟 Horómetros</button>
     <button id="seg-rc" onclick="lgVista('rc')">💰 Cobros</button>
     <button id="seg-comb" onclick="lgVista('comb')">⛽ Combustible</button>
+    <button id="seg-ord" onclick="lgAbrirOrdenes()">📋 Órdenes</button>
   </div>
   <div id="hor-cont"></div>
   <div id="rc-cont" style="display:none"></div>
@@ -3015,6 +3016,31 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+</script>
+<script>
+// ══ ÓRDENES DE LOGÍSTICA MONHACO (2026-10-28, pedido de Miguel) ══ Las órdenes (renta, entregas, retiros, apoyo, compras…) se trabajan
+// con el mismo módulo de Logística MT apuntando a MONHACO (MONTASA_Logistica.html?empresa=monhaco), abierto aquí a pantalla completa.
+// Horómetros, Cobros y Combustible siguen igual.
+(function(){
+  var ov = null;
+  function cerrar(desdeAtras){
+    if(!ov) return; ov.remove(); ov = null; document.documentElement.style.overflow = ''; document.body.style.overflow = '';
+    if(!desdeAtras){ try{ if(history.state && history.state.nxOrdenes) history.back(); }catch(e){} }
+  }
+  function abrirOrdenes(){
+    if(ov) return;
+    ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#fff';
+    var f = document.createElement('iframe'); f.src = 'MONTASA_Logistica.html?empresa=monhaco'; f.title = 'Órdenes MONHACO';
+    f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; web-share; fullscreen');
+    f.style.cssText = 'border:0;width:100%;height:100%;display:block';
+    ov.appendChild(f); document.body.appendChild(ov);
+    document.documentElement.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
+    try{ history.pushState({ nxOrdenes: 1 }, ''); }catch(e){}
+  }
+  window.addEventListener('popstate', function(){ if(ov) cerrar(true); });
+  window.addEventListener('message', function(e){ if(e && e.data && e.data.nxCerrarOrdenes) cerrar(false); });
+  window.lgAbrirOrdenes = abrirOrdenes;
 })();
 </script>
 </body>

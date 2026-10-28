@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='aad9572fb199';
+  var APP_VERSION='7af0e49732d1';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -15157,10 +15157,23 @@ function _cliOrdenAlCerrar(o){
     if(e.trato === 'o' || e.trato === 'a') r.t = e.trato;
     return r; }
   function canon(o){ return JSON.stringify(o, function(k, v){ return v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce(function(a, x){ a[x] = v[x]; return a; }, {}) : v; }); }
+  // (2026-10-28) Operadores y motoristas de MT que pueden ir en órdenes de logística de MONHACO: solo nombre y rol (sin teléfono)
+  // en monhaco/rrhh/plantillaMT. Sus horas siguen contando en MT Rental.
+  var _mtPub = null;
+  function publicarMT(pl){
+    if(R !== 'montasa' || !pl || !window._fbDB) return;
+    var mt = {}; Object.keys(pl).forEach(function(k){ var e = pl[k] || {}, r = (e.roles || []).filter(function(x){ return x === 'op' || x === 'mot'; }); if(e.n && r.length) mt[k] = { n: e.n, roles: r }; });
+    var c = canon(mt); if(c === _mtPub) return;
+    window._fbDB.ref('monhaco/rrhh/plantillaMT').once('value').then(function(s){
+      if(canon(s.val() || {}) === c){ _mtPub = c; return; }
+      return window._fbDB.ref('monhaco/rrhh/plantillaMT').set(mt).then(function(){ _mtPub = c; });
+    }).catch(function(e){ console.warn('plantillaMT', e); });
+  }
   function publicarPlantilla(){
     if(!window._fbDB || !datos._cargado || !datos._plantCargada) return;   // esperar a tener Personal y la plantilla
     var nueva = {}; lista(datos.empleados).filter(function(e){ return e.activo !== false && e.id; }).forEach(function(e){ nueva[e.id] = entradaPlantilla(e); });
     if(!Object.keys(nueva).length){ if(datos.plantilla) return; nueva = null; }   // nunca vaciar la lista de las órdenes por sí sola
+    publicarMT(nueva);
     if(canon(nueva) === canon(datos.plantilla || null)) return;
     datos.plantilla = nueva;
     window._fbDB.ref(R + '/rrhh/plantilla').set(nueva).catch(function(e){ console.warn('plantilla', e); });
