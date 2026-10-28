@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6d6330d0cd9c';
+  var APP_VERSION='c8c98e35ea56';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -3920,7 +3920,7 @@ function renderPersonal(){
   // ══════════════════════════════════════════════════════════════════════
   // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
   // ══════════════════════════════════════════════════════════════════════
-  const logCerradasMes = (DB.logistica||[]).filter(o => {
+  const logCerradasMes = (DB.logistica||[]).concat(_nxLogMHparaMT()).filter(o => {   // (2026-10-28) + órdenes de MONHACO con personal de MT
     if(!o.cerrado || o.estado==='Cancelado') return false;
     const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
     return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(o, mes, anio);   // (2026-10-24) o con días en este mes
@@ -12530,6 +12530,26 @@ setTimeout(_nxConciliarRentas, 12000); setInterval(_nxConciliarRentas, 60000);
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
+</script>
+<script>
+// ══ HORAS DE MT EN ÓRDENES DE MONHACO (2026-10-28, pedido de Miguel) ══ Los operadores y motoristas de MT que van en órdenes de logística
+// de MONHACO suman sus horas aquí (MT Rental). Se leen las órdenes de monhaco/logistica y de cada una solo queda el personal de MT.
+(function(){
+  window._mhLogistica = [];
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1500); return; }
+    db.ref('monhaco/logistica').on('value', function(s){ var v = s.val(); window._mhLogistica = Array.isArray(v) ? v.filter(Boolean) : (v ? Object.keys(v).map(function(k){ return v[k]; }).filter(Boolean) : []); });
+  }
+  escuchar();
+})();
+function _nxLogMHparaMT(){
+  var mt = (typeof window._nxPersonas === 'function' ? window._nxPersonas() : []).map(function(p){ return p.n; });
+  if(!mt.length) return [];
+  var K = ['operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
+  return (window._mhLogistica || []).filter(function(o){ return o && o.id && K.some(function(k){ return o[k] && mt.indexOf(o[k]) >= 0; }); }).map(function(o){
+    var c = Object.assign({}, o, { _empresa: 'monhaco' }); K.forEach(function(k){ if(c[k] && mt.indexOf(c[k]) < 0) c[k] = ''; }); return c;
+  });
+}
 </script>
 </body>
 </html>
