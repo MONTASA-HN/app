@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ed00a858e25d';
+  var APP_VERSION='263ea889fb63';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1796,13 +1796,20 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 (function(){
   var RAIZ = 'monhaco', CLAVE = 'nx_plantilla_' + RAIZ;
   var plantilla = null, originales = {}, estaticos = null;
+  // (2026-10-29) Personal de MT publicado en monhaco/rrhh/plantillaMT (aquí solo el que tiene 'mant': órdenes de mantenimiento)
+  var extraMT = null; try{ var gm = localStorage.getItem('nx_plantillaMT'); if(gm) extraMT = JSON.parse(gm); }catch(e){}
   try{ var g = localStorage.getItem(CLAVE); if(g) plantilla = JSON.parse(g); }catch(e){}
   function escH(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function escJ(t){ return String(t == null ? '' : t).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-  function personas(){ return plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null; }
+  function personas(){
+    var a = plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null;
+    if(extraMT){ var ya = (a || []).map(function(p){ return p.n; });   // (2026-10-29) personal de MT
+      a = (a || []).concat(Object.keys(extraMT).map(function(k){ return extraMT[k]; }).filter(function(p){ return p && p.n && ya.indexOf(p.n) < 0; }).map(function(p){ return { n: p.n, roles: (p.roles || []).slice(), mt: true }; })); }
+    return a;
+  }
   function es(p, r){ return (p.roles || []).indexOf(r) >= 0; }
   var FILTROS = {
-    tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot'); },   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
+    tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot') || es(p, 'mant'); },   // (2026-10-29) mant: solo para elegir en órdenes   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
     tecPuro: function(p){ return es(p, 'tec') || es(p, 'jefe'); },                   // solo técnicos: Agenda y Productividad                       // órdenes de mantenimiento
     op: function(p){ return es(p, 'op') || es(p, 'mot'); },                          // operadores de logística
     mot: RAIZ === 'monhaco' ? function(p){ return es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); }   // en MONHACO manejan los técnicos
@@ -1810,9 +1817,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     revision: function(p){ return es(p, 'op') || es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); },
     aviso: function(p){ return es(p, 'aviso'); }
   };
+  // (2026-10-29) Persona que solo está para elegir en órdenes de mantenimiento (casilla de Personal): fuera de productividad y Agenda
+  window._nxSoloMant = function(n){ return (personas() || []).some(function(p){ return p.n === n && es(p, 'mant') && !es(p, 'tec') && !es(p, 'jefe') && !es(p, 'op') && !es(p, 'mot'); }); };
   function nombresDe(tipo){
     var a = personas(); if(!a) return null;
-    return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
+    return a.filter(function(p){ return !p.mt || tipo === 'op' || tipo === 'mot' || (tipo === 'tec' && (p.roles || []).indexOf('mant') >= 0); }).filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
       .filter(function(n, i, l){ return l.indexOf(n) === i; }).sort(function(x, y){ return x.localeCompare(y, 'es'); });
   }
   function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return ''; }
@@ -1946,6 +1955,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       var v = s.val() || null;
       plantilla = v && Object.keys(v).length ? v : null;
       try{ if(plantilla) localStorage.setItem(CLAVE, JSON.stringify(plantilla)); else localStorage.removeItem(CLAVE); }catch(e){}
+      aplicar();
+    });
+    db.ref('monhaco/rrhh/plantillaMT').on('value', function(s){   // (2026-10-29) personal de MT
+      var v = s.val() || null; extraMT = v && Object.keys(v).length ? v : null;
+      try{ if(extraMT) localStorage.setItem('nx_plantillaMT', JSON.stringify(extraMT)); else localStorage.removeItem('nx_plantillaMT'); }catch(e){}
       aplicar();
     });
   }

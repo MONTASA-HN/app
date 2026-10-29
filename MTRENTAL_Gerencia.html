@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b4ebbf1590f7';
+  var APP_VERSION='df1036ebacd7';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1563,7 +1563,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   function personas(){ return plantilla ? Object.keys(plantilla).map(function(k){ return plantilla[k]; }).filter(function(p){ return p && p.n; }) : null; }
   function es(p, r){ return (p.roles || []).indexOf(r) >= 0; }
   var FILTROS = {
-    tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot'); },   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
+    tec: function(p){ return es(p, 'tec') || es(p, 'jefe') || es(p, 'op') || es(p, 'mot') || es(p, 'mant'); },   // (2026-10-29) mant: solo para elegir en órdenes   // (2026-10-16) operadores y motoristas también en órdenes de mantenimiento
     tecPuro: function(p){ return es(p, 'tec') || es(p, 'jefe'); },                   // solo técnicos: Agenda y Productividad                       // órdenes de mantenimiento
     op: function(p){ return es(p, 'op') || es(p, 'mot'); },                          // operadores de logística
     mot: RAIZ === 'monhaco' ? function(p){ return es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); }   // en MONHACO manejan los técnicos
@@ -1571,6 +1571,8 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     revision: function(p){ return es(p, 'op') || es(p, 'mot') || es(p, 'tec') || es(p, 'jefe'); },
     aviso: function(p){ return es(p, 'aviso'); }
   };
+  // (2026-10-29) Persona que solo está para elegir en órdenes de mantenimiento (casilla de Personal): fuera de productividad y Agenda
+  window._nxSoloMant = function(n){ return (personas() || []).some(function(p){ return p.n === n && es(p, 'mant') && !es(p, 'tec') && !es(p, 'jefe') && !es(p, 'op') && !es(p, 'mot'); }); };
   function nombresDe(tipo){
     var a = personas(); if(!a) return null;
     return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
@@ -7036,7 +7038,8 @@ function _horasDelMes(mes, anio){
     const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, r.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, r.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
   });
-  const sortedTec = Object.entries(statsTec)
+  const sortedTec = Object.entries(statsTec).filter(([n]) => !(typeof window._nxSoloMant === 'function' && window._nxSoloMant(n)))   // (2026-10-29)
+   
     .filter(([,s]) => s.ordenes > 0 || s.minutos > 0)
     .sort((a,b) => b[1].minutos - a[1].minutos);
   const sortedLog = Object.entries(statsLog)
@@ -15074,11 +15077,13 @@ function _cliOrdenAlCerrar(o){
       + '<label>Cuenta bancaria <span style="font-weight:400;color:#667085">(opcional)</span></label><input id="e-cta" inputmode="numeric" placeholder="Número de cuenta" value="' + esc(e.cuentaBancaria || '') + '" autocomplete="off">'
       + '<label>5. Fecha de nacimiento</label><input id="e-fn" type="date" value="' + esc(e.fechaNacimiento) + '">'
       + '<label>Felicitar en su cumpleaños como <span style="font-weight:400;color:#667085">(mensaje en todas las apps)</span></label><select id="e-trato"><option value="">— Sin indicar (mensaje neutro) —</option><option value="o"' + (e.trato === 'o' ? ' selected' : '') + '>Compañero</option><option value="a"' + (e.trato === 'a' ? ' selected' : '') + '>Compañera</option></select>'
+      + '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:10px"><input type="checkbox" id="e-enmant"' + (e.enMant ? ' checked' : '') + ' style="width:auto;margin:0"> 🔧 También aparece en órdenes de mantenimiento</label><div style="font-size:11px;color:#667085;margin:-2px 0 6px 26px">Se puede elegir en preventivos, correctivos y demás órdenes, sin contar en productividad ni en la Agenda.</div>'
       + '<label>6. Contacto de emergencia</label><input id="e-cn" placeholder="Nombre" value="' + esc(ce.nombre) + '" autocomplete="off">'
       + '<div class="g2" style="margin-top:6px"><div><input id="e-cp" placeholder="Parentesco (opcional)" value="' + esc(ce.parentesco) + '" autocomplete="off"></div><div><input id="e-ct" type="tel" placeholder="Teléfono del contacto" value="' + esc(ce.telefono) + '" autocomplete="off"></div></div>'
       + '<label>7. Dirección de vivienda (opcional)</label><textarea id="e-dir" rows="2">' + esc(e.direccion) + '</textarea>',
       function(w){
-        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), cargo: val(w, 'e-cargo'), nombreOrdenes: val(w, 'e-nord').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), cuentaBancaria: soloDigitos(val(w, 'e-cta')), fechaNacimiento: val(w, 'e-fn'), trato: val(w, 'e-trato'),
+        var d = { nombreCompleto: val(w, 'e-nom').replace(/\s+/g, ' '), cargo: val(w, 'e-cargo'), nombreOrdenes: val(w, 'e-nord').replace(/\s+/g, ' '), identidad: fmtIdentidad(val(w, 'e-id')), telefono: fmtTel(val(w, 'e-tel')), cuentaBancaria: soloDigitos(val(w, 'e-cta')), fechaNacimiento: val(w, 'e-fn'), trato: val(w, 'e-trato'), enMant: !!(w.querySelector('#e-enmant') && w.querySelector('#e-enmant').checked),   // (2026-10-29)
+         
           contactoEmergencia: { nombre: val(w, 'e-cn'), parentesco: val(w, 'e-cp'), telefono: fmtTel(val(w, 'e-ct')) }, direccion: val(w, 'e-dir') };
         var falta = [];
         if(!d.nombreCompleto) falta.push('nombre completo');
@@ -15175,6 +15180,7 @@ function _cliOrdenAlCerrar(o){
   var NOMBRE_ROL = { tec: 'Mantenimiento', jefe: 'Jefe de taller', op: 'Operador', mot: 'Motorista', aviso: 'Recibe avisos' };
   // cum (MM-DD, sin año) y t (o/a) son para el mensaje de cumpleaños de todas las apps (2026-10-25, pedido de Miguel).
   function entradaPlantilla(e){ var r = { n: e.nombreOrdenes || nombreOrdenesAuto(e.nombreCompleto), nc: e.nombreCompleto || '', c: e.cargo || '', roles: rolesDeCargo(e.cargo), tel: e.telefono || '' };
+    if(e.enMant && ['tec', 'jefe', 'op', 'mot'].every(function(x){ return r.roles.indexOf(x) < 0; })) r.roles.push('mant');   // (2026-10-29) casilla de Personal
     var m = String(e.fechaNacimiento || '').match(/^\d{4}-(\d{2})-(\d{2})/); if(m) r.cum = m[1] + '-' + m[2];
     if(e.trato === 'o' || e.trato === 'a') r.t = e.trato;
     return r; }
@@ -15184,7 +15190,7 @@ function _cliOrdenAlCerrar(o){
   var _mtPub = null;
   function publicarMT(pl){
     if(R !== 'montasa' || !pl || !window._fbDB) return;
-    var mt = {}; Object.keys(pl).forEach(function(k){ var e = pl[k] || {}, r = (e.roles || []).filter(function(x){ return x === 'op' || x === 'mot'; }); if(e.n && r.length) mt[k] = { n: e.n, roles: r }; });
+    var mt = {}; Object.keys(pl).forEach(function(k){ var e = pl[k] || {}, r = (e.roles || []).filter(function(x){ return x === 'op' || x === 'mot' || x === 'mant'; }); if(e.n && r.length) mt[k] = { n: e.n, roles: r }; });
     var c = canon(mt); if(c === _mtPub) return;
     window._fbDB.ref('monhaco/rrhh/plantillaMT').once('value').then(function(s){
       if(canon(s.val() || {}) === c){ _mtPub = c; return; }
