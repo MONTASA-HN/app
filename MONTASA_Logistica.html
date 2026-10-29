@@ -14,6 +14,51 @@
 })();
 </script>
 <script>
+// ══ DOS CAJONES EN LOGÍSTICA MT (2026-10-29) ══ Ver «LOGÍSTICA MT CON ÓRDENES DE MONHACO EN LAS MISMAS CARPETAS» al final.
+// Aquí: el contexto actual ('mt' | 'mh') y que todo lo que se deja corriendo recuerde el contexto en que se pidió.
+(function(){
+  window._NX_DOS = window._NX_EMP === 'montasa' && !window._NX_DENTRO;
+  window._nxCtxActual = 'mt';
+  window._nxEn = function(c, fn){ var prev = window._nxCtxActual; if(c === prev || !window._nxPonerCtx) return fn(); window._nxPonerCtx(c); try{ return fn(); } finally { window._nxPonerCtx(prev); } };
+  window._nxEnOrden = function(o, fn){ return fn(); };
+  window._nxAttrCtx = function(){ return ''; };
+  if(!window._NX_DOS) return;
+  function env(f){ if(typeof f !== 'function') return f; var c = window._nxCtxActual; return function(){ var self = this, a = arguments; return window._nxEn(c, function(){ return f.apply(self, a); }); }; }
+  window._nxEnv = env;
+  var then0 = Promise.prototype.then; Promise.prototype.then = function(a, b){ return then0.call(this, env(a), env(b)); };
+  ['setTimeout', 'setInterval'].forEach(function(n){ var o = window[n]; window[n] = function(f){ var a = [].slice.call(arguments); a[0] = env(f); return o.apply(window, a); }; });
+  if(window.requestAnimationFrame){ var r0 = window.requestAnimationFrame; window.requestAnimationFrame = function(f){ return r0.call(window, env(f)); }; }
+  if(window.queueMicrotask){ var q0 = window.queueMicrotask; window.queueMicrotask = function(f){ return q0.call(window, env(f)); }; }
+  // El toque decide el cajón: dentro de una tarjeta (o ventana) marcada data-ctx="mh" se trabaja en MONHACO; si no, en MT
+  function ctxDe(t){ try{ var e = (t && t.nodeType === 1) ? t : (t && t.parentElement); var m = e && e.closest && e.closest('[data-ctx]'); return (m && m.getAttribute('data-ctx') === 'mh') ? 'mh' : 'mt'; }catch(e){ return 'mt'; } }
+  ['click', 'dblclick', 'change', 'input', 'keydown', 'keyup', 'focus', 'blur', 'focusin', 'focusout', 'submit', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'contextmenu']
+    .forEach(function(ev){ window.addEventListener(ev, function(e){ var c = ctxDe(e.target); if(window._nxPonerCtx && c !== window._nxCtxActual) window._nxPonerCtx(c); }, true); });
+  // Ventanas (hijas de <body>) que se llenan o se agregan trabajando una orden: quedan marcadas con ese cajón
+  function marcar(n){ try{ if(n && n.nodeType === 1 && n.parentNode === document.body) n.setAttribute('data-ctx', window._nxCtxActual); }catch(e){} }
+  var d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  if(d && d.set) Object.defineProperty(Element.prototype, 'innerHTML', { configurable: true, enumerable: d.enumerable, get: d.get, set: function(v){ d.set.call(this, v); marcar(this); } });
+  var ap = Node.prototype.appendChild, ib = Node.prototype.insertBefore;
+  Node.prototype.appendChild = function(n){ var r = ap.apply(this, arguments); if(this === document.body) marcar(n); return r; };
+  Node.prototype.insertBefore = function(n){ var r = ib.apply(this, arguments); if(this === document.body) marcar(n); return r; };
+  // Conexión a la base: cada aviso (on/once/transaction) corre en el cajón desde el que se pidió
+  var MET = { child: 1, orderByChild: 1, orderByKey: 1, orderByValue: 1, equalTo: 1, startAt: 1, endAt: 1, limitToFirst: 1, limitToLast: 1 };
+  var mapa = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function envQ(q){
+    if(!q || typeof q !== 'object') return q;
+    return new Proxy(q, { get: function(t, pr){
+      var v = t[pr]; if(typeof v !== 'function') return v;
+      if(pr === 'on') return function(ev, cb){ var a = [].slice.call(arguments); if(typeof cb === 'function'){ var w = env(cb); if(mapa) mapa.set(cb, w); a[1] = w; } v.apply(t, a); return cb; };
+      if(pr === 'off') return function(ev, cb){ var a = [].slice.call(arguments); if(typeof cb === 'function' && mapa && mapa.get(cb)) a[1] = mapa.get(cb); return v.apply(t, a); };
+      if(pr === 'once') return function(ev, cb){ var a = [].slice.call(arguments); if(typeof cb === 'function') a[1] = env(cb); return v.apply(t, a); };
+      if(pr === 'transaction') return function(fn, fin){ var a = [].slice.call(arguments); a[0] = env(fn); if(typeof fin === 'function') a[1] = env(fin); return v.apply(t, a); };
+      if(MET[pr]) return function(){ return envQ(v.apply(t, arguments)); };
+      return v.bind(t);
+    } });
+  }
+  window._nxEnvolverDB = function(db){ try{ var r0 = db.ref.bind(db); db.ref = function(pth){ return envQ(r0(pth)); }; }catch(e){} return db; };
+})();
+</script>
+<script>
 // (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
 // distinto al esperado, el navegador no lo ejecuta. Cubre también las que se cargan sobre la marcha (appendChild/insertBefore).
 (function(){
@@ -205,7 +250,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b7dbfca3e221';
+  var APP_VERSION='fc3c78c2c908';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1630,8 +1675,8 @@ function _calcCostoViaticos(v){
 }
 
 
-const _NXR = window._NX_EMP || 'montasa';   // (2026-10-28) empresa de las órdenes
-const LS_KEY = _NXR + '_log_v1';
+let _NXR = window._NX_EMP || 'montasa';   // (2026-10-28) empresa de las órdenes; (2026-10-29) cambia con el cajón (MT/MONHACO)
+let LS_KEY = _NXR + '_log_v1';
 const MOTORISTAS_LOGISTICA = ['Francisco Narvaez', 'Miguel Lopez', 'Jorge Martinez'];
 const OPERADORES_LOGISTICA = [
   'Francisco Narvaez',
@@ -2646,7 +2691,7 @@ function renderOrdenesLog(){
 
   if(!list.length){ el.innerHTML='<div class="empty">Sin órdenes activas</div>'; return; }
 
-  el.innerHTML = list.map(o=>{
+  el.innerHTML = list.map(o=>_nxEnOrden(o, ()=>{   // (2026-10-29) LGMH en su cajón
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
     const _ublog = o.ubicacionLog||'fuera';
@@ -2659,7 +2704,7 @@ function renderOrdenesLog(){
     const cbId = 'cb-log-'+o.id;
     const isOpen = openSubgrupos.has(cbId);
     if(isOpen && _fotosPendientes(o)) _hidratarFotos(o);
-    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;cursor:pointer" data-lgid="${o.id}">
+    return `<div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid #2d6a9f;cursor:pointer" data-lgid="${o.id}"${_nxAttrCtx(o)}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
@@ -2852,7 +2897,7 @@ function renderOrdenesLog(){
         </button>` : ''}
       </div>
     </div>`;
-  }).join('');
+  })).join('');
   setTimeout(_restoreFirmas, 50);
 }
 
@@ -3639,14 +3684,14 @@ function renderHistorialLog(){
 
   if(!list.length){ el.innerHTML='<div class="empty">Sin órdenes cerradas</div>'; return; }
 
-  el.innerHTML = list.map(o=>{
+  el.innerHTML = list.map(o=>_nxEnOrden(o, ()=>{   // (2026-10-29) LGMH en su cajón
     const eq = DB.equipos.find(e=>e.id===o.equipoId)||{};
     const eqLabel = eq.codigo?eq.codigo+' – '+(eq.marca||''):(o.clienteNombre||'—');
     const tipoLbl = tipoLabels[o.tipoLogistica]||o.tipoLogistica||'Logística';
     const horas = calcHoras(o.fechaInicio, o.fechaFin);
     const isOpen = openHistLog.has(o.id);
     // MINIATURA siempre visible
-    let card = '<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:10px;cursor:pointer" data-hid="'+o.id+'">';
+    let card = '<div class="card" style="padding:12px 14px;border-left:3px solid #2d6a9f;margin-bottom:10px;cursor:pointer" data-hid="'+o.id+'"'+_nxAttrCtx(o)+'>';
     card += '<div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">';
     card += '<div style="flex:1">';
     card += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
@@ -3673,7 +3718,7 @@ function renderHistorialLog(){
     }
     card += '</div>';
     return card;
-  }).join('');
+  })).join('');
 
 }
 
@@ -4150,7 +4195,7 @@ try{
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
-  window._fbDB = firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB); }catch(e){ console.warn('Sync', e); }
+  window._fbDB = window._nxEnvolverDB ? window._nxEnvolverDB(firebase.database()) : firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._fbDB.ref(_NXR);
 
   _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(snap=>{
@@ -6333,7 +6378,7 @@ function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTra
 // ══ ÓRDENES DE MONHACO CON PERSONAL DE MT (2026-10-28, pedido de Miguel) ══ Los operadores de MT ven aquí las órdenes de logística de
 // MONHACO donde van asignados (sus horas cuentan en MT Rental). Se abren con el mismo módulo, apuntando a MONHACO (&solo=mt).
 (function(){
-  if(window._NX_EMP !== 'montasa' || window._NX_DENTRO) return;
+  return;   // (2026-10-29) reemplazado: las órdenes LGMH van dentro de las carpetas normales (ver «MISMAS CARPETAS»)
   var ov = null;
   function cerrar(desdeAtras){
     if(!ov) return; ov.remove(); ov = null; document.documentElement.style.overflow = ''; document.body.style.overflow = '';
@@ -6514,6 +6559,67 @@ function _findesSync(){
   h+='</div>';
   wrap.innerHTML=h;
 }
+</script>
+<script>
+// ══ LOGÍSTICA MT CON ÓRDENES DE MONHACO EN LAS MISMAS CARPETAS (2026-10-29, pedido de Miguel) ══ Las órdenes de logística de MONHACO
+// donde va personal de MT salen en las carpetas de siempre, mezcladas con las de MT, y se abren y trabajan igual; solo cambia el
+// correlativo (LGMT / LGMH). Cajón MT = DB de siempre + motor _Sync (montasa). Cajón MH = DBMH + su propio motor (monhaco), creado con
+// el mismo código del sincronizador. Ver «DOS CAJONES» arriba.
+(function(){
+  if(!window._NX_DOS) return;
+  var MT = { DB: DB, NXR: 'montasa', LS: LS_KEY, Sync: _Sync };
+  var DBMH = { equipos: [], logistica: [], preventivos: [], correctivos: [] };
+  var fuente = [].map.call(document.scripts, function(x){ return x.text || ''; }).filter(function(t){ return t.indexOf('// ══ GUARDADO POR REGISTRO (sincronizador)') >= 0 && t.indexOf('var _Sync = (function(){') >= 0; })[0];
+  if(!fuente){ console.warn('[MH] no se encontró el sincronizador'); return; }
+  // window propio para el motor de MONHACO: sus lápidas no pisan las de MT
+  var winMH = new Proxy(window, {
+    get: function(t, pr){ if(pr === '_nxLapidas') return t._nxLapidasMH; var v = Reflect.get(t, pr); return (typeof v === 'function' && /\[native code\]/.test(Function.prototype.toString.call(v))) ? v.bind(t) : v; },
+    set: function(t, pr, v){ if(pr === '_nxLapidas') t._nxLapidasMH = v; else t[pr] = v; return true; }
+  });
+  var SyncMH;
+  try{ SyncMH = (new Function('DB', 'window', fuente + '\n;return _Sync;'))(DBMH, winMH); }catch(e){ console.warn('[MH] motor', e); return; }
+  var MH = { DB: DBMH, NXR: 'monhaco', LS: 'montasa_logmh_v1', Sync: SyncMH };
+  window._nxPonerCtx = function(c){ var x = c === 'mh' ? MH : MT; DB = x.DB; _NXR = x.NXR; LS_KEY = x.LS; _Sync = x.Sync; window._nxCtxActual = c; };
+  window._nxCTX = { mt: MT, mh: MH };
+  window._nxEsMH = function(o){ return !!o && DBMH.logistica.indexOf(o) >= 0; };
+  window._nxEnOrden = function(o, fn){ return window._nxEn(window._nxEsMH(o) ? 'mh' : 'mt', fn); };
+  window._nxAttrCtx = function(o){ return window._nxEsMH(o) ? ' data-ctx="mh"' : ''; };
+  // Órdenes que se ven: las de MT + las de MONHACO donde va personal de MT
+  _logVisibles = function(){
+    var mt = (typeof window._nxPersonas === 'function' ? window._nxPersonas() : []).map(function(p){ return p.n; });
+    return (MT.DB.logistica || []).concat((DBMH.logistica || []).filter(function(o){ return o && o.id && _nxPersonasOrden(o).some(function(n){ return mt.indexOf(n) >= 0; }); }));
+  };
+  // Pantallas: siempre en el cajón MT (cada tarjeta LGMH se arma en el suyo)
+  ['renderOrdenesLog', 'renderHistorialLog', '_logPintarCarpetas', 'renderDashboardLog'].forEach(function(n){
+    var f = window[n]; if(typeof f !== 'function') return;
+    window[n] = function(){ var self = this, a = arguments; return window._nxEn('mt', function(){ return f.apply(self, a); }); };
+  });
+  if(typeof _restoreFirmas === 'function'){ var rf = _restoreFirmas; _restoreFirmas = function(){ var a = arguments; window._nxEn('mt', function(){ rf.apply(null, a); }); window._nxEn('mh', function(){ rf.apply(null, a); }); }; }
+  // Datos de MONHACO
+  function arr(v){ return Array.isArray(v) ? v.filter(Boolean) : (v ? Object.keys(v).sort(function(a, b){ return (+a) - (+b); }).map(function(k){ return v[k]; }).filter(Boolean) : []); }
+  var pintando = null;
+  function repintar(){ if(pintando) return; pintando = setTimeout(function(){ pintando = null;
+    var a = document.activeElement; if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   // no borrar lo que se está escribiendo
+    try{ renderOrdenesLog(); }catch(e){} }, 120); }
+  function iniciar(){
+    if(!window._fbDB || !window._fbReady){ setTimeout(iniciar, 800); return; }
+    window._nxEn('mh', function(){
+      try{ SyncMH.iniciar('monhaco', window._fbDB, ['logistica', 'equipos']); }catch(e){ console.warn('[MH] iniciar', e); }
+      window._fbDB.ref('monhaco/equipos').on('value', function(sn){ DBMH.equipos = arr(sn.val()); repintar(); });
+      window._fbDB.ref('monhaco/logistica').on('value', function(sn){
+        var prev = DBMH.logistica || [];
+        DBMH.logistica = arr(sn.val()).filter(function(o){ return o && o.id; }).map(function(r){
+          var l = prev.find(function(x){ return x && x.id === r.id; }); if(!l) return r;
+          var pend = false; try{ pend = SyncMH.pendienteReg('logistica', r.id); }catch(e){}
+          return pend ? l : r;
+        });
+        repintar();
+      });
+    });
+  }
+  iniciar();
+  var b = document.getElementById('nx-mh-btn'); if(b) b.remove();
+})();
 </script>
 </body>
 </html>
