@@ -146,7 +146,7 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   const cache = J(A.DB()), ls = J(A.ls);
   SERVIDOR.clientes = SERVIDOR.clientes.filter(x => x !== A);        // se cerró la app: su cola se pierde
   ok('8. (sin señal) el cierre todavía no llegó al servidor', srv('logistica')[1].estado === 'En proceso');
-  const A2 = cliente('A2', cache, ls); await esperar(); await esperar();
+  const A17 = cliente('A17', cache, ls); await esperar(); await esperar();
   ok('   al volver a abrir la app con señal → el cierre se sube', srv('logistica')[1].estado === 'Completado' && srv('logistica')[1].cerrado === true, 'estado=' + srv('logistica')[1].estado);
 
   await sinDuplicados('antes del caso 9');
@@ -209,6 +209,30 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   A = cliente('A', { logistica: [lg('lg1'), lg('lg280', { descripcion: 'LG-0280 borrada' })] }); await esperar();
   await A.sync.guardar(); await esperar(); await esperar();
   ok('16. Copia vieja con una orden borrada → NO vuelve al servidor y desaparece del teléfono', !srv('logistica').some(o => o.id === 'lg280') && !A.DB().logistica.some(o => o.id === 'lg280'), 'teléfono: ' + A.DB().logistica.map(o => o.id).join(','));
+
+  await sinDuplicados('antes del caso 17');
+  // 17 ─ (2026-10-28, rentas que volvían y LGMT que regresaba a LG) Teléfono que abre la app con su copia guardada VIEJA pero con la
+  // última foto del servidor ya al día (la foto se guardó después que la copia): NO debe subir lo viejo; debe tomar lo del servidor.
+  reset({ montasa: { logistica: [lg('r1', { diasRenta: 15, correlativo: 'LG-0262' })] } });
+  A = cliente('A', { logistica: J(srv('logistica')) }); await esperar();
+  B = cliente('B', { logistica: J(srv('logistica')) }); await esperar();
+  B.DB().logistica[0].diasRenta = 30; B.DB().logistica[0].correlativo = 'LGMT-0262'; await B.sync.guardar(); await esperar();   // Gerencia ajusta
+  const lsA = J(A.ls);                                                                                                           // la foto de A ya vio el 30
+  A.online = false; SERVIDOR.clientes = SERVIDOR.clientes.filter(c => c !== A);                                                  // A se cierra
+  const T17 = cliente('T17', { logistica: [lg('r1', { diasRenta: 15, correlativo: 'LG-0262' })] }, lsA); await esperar();          // reabre con copia vieja
+  await T17.sync.guardar(); await esperar(); await esperar();
+  const r17 = srv('logistica')[0];
+  ok('17. Copia vieja al abrir (foto ya al día) → NO sube lo viejo y el teléfono toma lo del servidor', r17.diasRenta === 30 && r17.correlativo === 'LGMT-0262' && T17.DB().logistica[0].diasRenta === 30,
+     'servidor: ' + r17.diasRenta + ' / ' + r17.correlativo + ' · teléfono: ' + T17.DB().logistica[0].diasRenta);
+
+  // 18 ─ Cambio REAL hecho sin señal y la app cerrada antes de subirlo → al reabrir con señal SÍ se sube
+  reset({ montasa: { logistica: [lg('r1', { diasRenta: 30 })] } });
+  const C = cliente('C', { logistica: J(srv('logistica')) }); await esperar();
+  C.sinSenal(); C.DB().logistica[0].diasRenta = 45; await Promise.race([C.sync.guardar(), esperar()]); await esperar();
+  const lsC = J(C.ls), dbC = J(C.DB());
+  SERVIDOR.clientes = SERVIDOR.clientes.filter(c => c !== C);                                                                    // se cerró sin subir
+  const C2 = cliente('C2', dbC, lsC); await esperar(); await C2.sync.guardar(); await esperar(); await esperar();
+  ok('18. Cambio real sin señal, app cerrada y reabierta → se sube', srv('logistica')[0].diasRenta === 45, 'servidor: ' + srv('logistica')[0].diasRenta);
 
   await sinDuplicados('final');
   console.log(fallas ? '\n✗ ' + fallas + ' falla(s)' : '\nTodo bien');
