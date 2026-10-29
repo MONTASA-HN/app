@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='530a2d14992f';
+  var APP_VERSION='2683fc5dcc90';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -863,6 +863,10 @@ var _Sync = (function(){
     // lo vuelve a subir. Si la lápida se rechaza (sin cargo), no se intenta borrar.
     var u = {}; ids.forEach(function(id){ u['_borradas/' + id] = Date.now(); lapidas[id] = 1; });
     return db.ref(raiz).update(u).then(function(){
+    // (2026-10-29) Con la posición conocida se borra cada registro suelto: reescribir la lista entera fallaba al borrar el ÚLTIMO
+    // (la lista quedaba vacía y las reglas no lo permiten; LGMH-0001 volvía a aparecer). Las reglas v4 permiten borrar uno con lápida.
+    var ks = {}, todas = ids.every(function(id){ var k = claves[col] && claves[col][id]; if(k === undefined) return false; ks[k] = null; return true; });
+    if(todas) return db.ref(raiz + '/' + col).update(ks).then(function(){ ids.forEach(function(id){ delete base[col][id]; delete claves[col][id]; }); _guardarBase(); });
     return db.ref(raiz + '/' + col).transaction(function(cur){
       if(cur === null) return cur;
       var quedan = _entradas(cur).map(function(e){ return e[1]; }).filter(function(x){ return !(x && x.id && ids.indexOf(x.id) >= 0); });

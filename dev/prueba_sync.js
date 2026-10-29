@@ -234,6 +234,15 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   const C2 = cliente('C2', dbC, lsC); await esperar(); await C2.sync.guardar(); await esperar(); await esperar();
   ok('18. Cambio real sin señal, app cerrada y reabierta → se sube', srv('logistica')[0].diasRenta === 45, 'servidor: ' + srv('logistica')[0].diasRenta);
 
+  // 19 ─ (2026-10-29, LGMH-0001 que volvía) Borrar la ÚNICA orden de la lista: debe borrarse ella sola (su posición), no reescribiendo
+  // la lista entera vacía (eso lo rechazan las reglas de la base). En este simulador, reescribir la lista deja «[]».
+  reset({ montasa: { logistica: [lg('u1')] } });
+  const D = cliente('D', { logistica: J(srv('logistica')) }); await esperar();
+  D.DB().logistica = []; await D.sync.guardar(); await esperar(); await esperar();
+  const n19 = get(SERVIDOR.tree, 'montasa/logistica');
+  ok('19. Borrar la única orden → se borra sola (no se reescribe la lista vacía) y deja lápida', srv('logistica').length === 0 && !(Array.isArray(n19) && n19.length === 0) && !!get(SERVIDOR.tree, 'montasa/_borradas/u1'),
+     'lista en el servidor: ' + JSON.stringify(n19));
+
   await sinDuplicados('final');
   console.log(fallas ? '\n✗ ' + fallas + ' falla(s)' : '\nTodo bien');
   process.exitCode = fallas ? 1 : 0;
