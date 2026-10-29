@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='dfd2a48be05f';
+  var APP_VERSION='5382eb5d7980';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -2462,6 +2462,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 
   <!-- LOGÍSTICA -->
   <div id="tab-logistica" class="section">
+    <div class="carpeta-back" onclick="showTab('loghc', document.getElementById('nav-loghc'))">← <span>Volver a Logística</span></div>   <!-- (2026-10-28) -->
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:4px 0 14px"><select id="filt-log-estado" style="font-size:13px"><option value="">Estado de la orden…</option><option>Pendiente</option><option>En proceso</option><option>Cerrada</option><option>Cancelado</option></select><button type="button" onclick="_estBuscarLog()" style="font-size:13px;padding:8px 14px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Buscar</button></div>
     <div id="logistica-list"></div>
   </div>
@@ -5970,8 +5971,16 @@ function _hcRenderCarpetas(){
     + '<div class="carpeta-item" style="--carpeta-color:#8a4800;position:relative" onclick="_hcAbrir(\'rc\')">'
     + '<span class="carpeta-icon">💰</span><span class="carpeta-label">Reportes<br>de cobro</span>'
     + (rcPend?'<span style="position:absolute;top:8px;right:10px;background:#E8811A;color:white;font-size:11px;font-weight:700;border-radius:11px;padding:3px 8px">'+rcPend+'</span>':'')
-    + '</div></div>';
+    + '</div>'
+    // (2026-10-28) órdenes de logística (renta, entregas, retiros…): una carpeta más, no otro botón
+    + (function(){ var n = 0; try{ n = _nxLogAbiertas().length; }catch(e){}
+        return '<div class="carpeta-item" style="--carpeta-color:#1f3864;position:relative" onclick="_hcAbrirOrdenes()">'
+          + '<span class="carpeta-icon">🚛</span><span class="carpeta-label">Órdenes de<br>logística</span>'
+          + (n ? '<span style="position:absolute;top:8px;right:10px;background:#c00;color:white;font-size:11px;font-weight:700;border-radius:11px;padding:3px 8px">' + n + '</span>' : '')
+          + '</div>'; })()
+    + '</div>';
 }
+function _hcAbrirOrdenes(){ showTab('logistica', document.getElementById('nav-loghc')); }
 function _hcAbrir(cual){
   document.getElementById('hc-carpetas').style.display = 'none';
   const vista = document.getElementById('hc-vista');
@@ -13114,17 +13123,14 @@ function _verFotoGrande(src){
   <button class="nav-btn active" onclick="showTab('flota',this)">
     <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>Flota
   </button>
-  <button class="nav-btn" onclick="showTab('logistica',this)">
-    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="nav-badge" id="badge-log-ger"></span></span>Logística
-  </button>
   <button class="nav-btn" onclick="showTab('historial',this)">
     <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nav-badge" id="badge-mant-ger"></span></span>Mantenimiento
   </button>
   <button class="nav-btn" onclick="showTab('solicitudes',this)">
     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Solicitudes
   </button>
-  <button class="nav-btn" onclick="showTab('loghc',this)">
-    <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Logística
+  <button class="nav-btn" id="nav-loghc" onclick="showTab('loghc',this)">
+    <span class="nav-icon-wrap"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="nav-badge" id="badge-log-ger"></span></span>Logística
   </button>
   <button class="nav-btn" onclick="showTab('reportes',this)">
     <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes
