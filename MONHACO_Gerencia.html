@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='412589c32d7a';
+  var APP_VERSION='4ab22e30b410';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -16532,6 +16532,32 @@ function _findesSync(){
   h+='</div>';
   wrap.innerHTML=h;
 }
+</script>
+<script>
+// ══ DIAGNÓSTICO DE VENTA (2026-10-30, temporal) ══ La venta de la E-20 no dejaba rastro en la base. Se guardan los últimos avisos del
+// sincronizador y, 6 s después de vender, se anota en accesos/<uid>/diagVenta qué pasó (sin datos personales). Quitar al resolver.
+(function(){
+  var avisos = []; var cw = console.warn;
+  console.warn = function(){ try{ avisos.push(new Date().toISOString().slice(11,19) + ' ' + [].map.call(arguments, function(x){ return String(x && x.message || x); }).join(' ').slice(0, 200)); if(avisos.length > 30) avisos.shift(); }catch(e){} return cw.apply(console, arguments); };
+  window.addEventListener('error', function(e){ avisos.push('ERROR ' + String(e && e.message).slice(0, 200)); });
+  if(typeof venderEquipo !== 'function') return;
+  var orig = venderEquipo;
+  venderEquipo = function(){
+    var id = (typeof modalEquipoId !== 'undefined') ? modalEquipoId : null, eq = id && (DB.equipos || []).find(function(e){ return e && e.id === id; });
+    var r = orig.apply(this, arguments);
+    setTimeout(function(){
+      try{
+        var uid = window._nxAcceso && window._nxAcceso.uid; if(!uid || !window._fbDB) return;
+        var d = { ts: Date.now(), app: location.pathname.split('/').pop(), version: (document.documentElement.innerHTML.match(/APP_VERSION='([^']+)'/) || [])[1] || '',
+          codigo: eq ? eq.codigo : '', sigueEnPantalla: !!(id && (DB.equipos || []).some(function(e){ return e && e.id === id; })),
+          enVendidosPantalla: !!(id && (DB.vendidos || []).some(function(v){ return v && (v.equipoId === id || v.id === id); })),
+          fbReady: !!window._fbReady, equiposFBok: window._equiposFBok, rol: (typeof window._nxRol === 'function' ? window._nxRol() : ''), avisos: avisos.slice(-15) };
+        window._fbDB.ref('accesos/' + uid + '/diagVenta').push(d);
+      }catch(e){}
+    }, 6000);
+    return r;
+  };
+})();
 </script>
 </body>
 </html>
