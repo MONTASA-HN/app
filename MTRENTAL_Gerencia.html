@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d6db6748661a';
+  var APP_VERSION='d294f8e3e5c7';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -624,6 +624,7 @@ var _Sync = (function(){
   var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
+  var COLGADA = 30000;   // (2026-10-30) una subida sin respuesta en 30 s se reintenta
   var raiz = null, db = null;
   var base = {}, claves = {}, listo = {}, enVuelo = {}, visto = {}, lapidas = {}, pendiente = false, corriendo = false;
   // (2026-10-28) Cambios hechos DE VERDAD en este teléfono y aún sin confirmar por el servidor: {col:{id:{campo:huella}}}. Al abrir la
@@ -924,7 +925,7 @@ var _Sync = (function(){
     var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [];
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
-      if(!o || !o.id || enVuelo[col + '/' + o.id]) { if(o && o.id) vistos[o.id] = 1; return; }
+      if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1; return; }   // (2026-10-30) colgada > 30 s: reintentar
       vistos[o.id] = 1;
       var hb = b[o.id], p = null;
       if(!hb){
@@ -941,9 +942,9 @@ var _Sync = (function(){
         Object.keys(cambios).forEach(function(k){ _marcarSucio(col, o.id, k, _h(cambios[k])); }); quitar.forEach(function(k){ _marcarSucio(col, o.id, k, VACIO); }); _guardarSucio();   // (2026-10-28)
         p = _actualizar(col, o.id, cambios, quitar, 0);
       }
-      var llave = col + '/' + o.id; enVuelo[llave] = 1;
+      var llave = col + '/' + o.id, mio = enVuelo[llave] = Date.now();
       prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
-        .then(function(){ delete enVuelo[llave]; }));
+        .then(function(){ if(enVuelo[llave] === mio) delete enVuelo[llave]; }));
     });
     quitarLoc.forEach(function(id){ if(quitando[col + '/' + id]) return; quitando[col + '/' + id] = 1;   // se confirma con la base (una recién restaurada ya no tiene lápida)
       db.ref(raiz + '/_borradas/' + id).once('value').then(function(s){ if(s && s.val() && claves[col][id] === undefined) _quitarLocal(col, id); }, function(){}).then(function(){ delete quitando[col + '/' + id]; }); });
@@ -959,7 +960,9 @@ var _Sync = (function(){
     corriendo = true;
     var prom = [];
     activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
-    return Promise.all(prom).then(function(){
+    // (2026-10-30) Una subida colgada (se fue la señal a mitad) ya no deja trabado el guardado de toda la sesión: a los 30 s se sigue
+    var tope = new Promise(function(listo){ setTimeout(listo, COLGADA); });
+    return Promise.race([Promise.all(prom), tope]).then(function(){
       corriendo = false;
       if(pendiente){ pendiente = false; return guardar(); }
     });

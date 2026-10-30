@@ -266,7 +266,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='15d4dfd98920';
+  var APP_VERSION='5bf5de54ce65';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -464,6 +464,7 @@ var _Sync = (function(){
   var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
   var OMITIR = { fotos:1, foto:1, fotosPend:1, checklistPdf:1 };
   var MAX_BORRADOS = 2;
+  var COLGADA = 30000;   // (2026-10-30) una subida sin respuesta en 30 s se reintenta
   var raiz = null, db = null;
   var base = {}, claves = {}, listo = {}, enVuelo = {}, visto = {}, lapidas = {}, pendiente = false, corriendo = false;
   // (2026-10-28) Cambios hechos DE VERDAD en este teléfono y aún sin confirmar por el servidor: {col:{id:{campo:huella}}}. Al abrir la
@@ -764,7 +765,7 @@ var _Sync = (function(){
     var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [];
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
-      if(!o || !o.id || enVuelo[col + '/' + o.id]) { if(o && o.id) vistos[o.id] = 1; return; }
+      if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1; return; }   // (2026-10-30) colgada > 30 s: reintentar
       vistos[o.id] = 1;
       var hb = b[o.id], p = null;
       if(!hb){
@@ -781,9 +782,9 @@ var _Sync = (function(){
         Object.keys(cambios).forEach(function(k){ _marcarSucio(col, o.id, k, _h(cambios[k])); }); quitar.forEach(function(k){ _marcarSucio(col, o.id, k, VACIO); }); _guardarSucio();   // (2026-10-28)
         p = _actualizar(col, o.id, cambios, quitar, 0);
       }
-      var llave = col + '/' + o.id; enVuelo[llave] = 1;
+      var llave = col + '/' + o.id, mio = enVuelo[llave] = Date.now();
       prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
-        .then(function(){ delete enVuelo[llave]; }));
+        .then(function(){ if(enVuelo[llave] === mio) delete enVuelo[llave]; }));
     });
     quitarLoc.forEach(function(id){ if(quitando[col + '/' + id]) return; quitando[col + '/' + id] = 1;   // se confirma con la base (una recién restaurada ya no tiene lápida)
       db.ref(raiz + '/_borradas/' + id).once('value').then(function(s){ if(s && s.val() && claves[col][id] === undefined) _quitarLocal(col, id); }, function(){}).then(function(){ delete quitando[col + '/' + id]; }); });
@@ -799,7 +800,9 @@ var _Sync = (function(){
     corriendo = true;
     var prom = [];
     activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
-    return Promise.all(prom).then(function(){
+    // (2026-10-30) Una subida colgada (se fue la señal a mitad) ya no deja trabado el guardado de toda la sesión: a los 30 s se sigue
+    var tope = new Promise(function(listo){ setTimeout(listo, COLGADA); });
+    return Promise.race([Promise.all(prom), tope]).then(function(){
       corriendo = false;
       if(pendiente){ pendiente = false; return guardar(); }
     });
@@ -6643,6 +6646,76 @@ function _findesSync(){
   }
   iniciar();
   var b = document.getElementById('nx-mh-btn'); if(b) b.remove();
+})();
+</script>
+<script>
+// ── AVISO «SIN SUBIR» (2026-10-30) ─────────────────────────────────────────────────────────────────────────────────────
+// La LGMT-0313 quedó completada en el teléfono del motorista y nunca llegó a la base (Gerencia la veía «En proceso»), sin que
+// nadie se enterara. Ahora: una orden con cambios que este teléfono no ha logrado subir en más de 20 s muestra una franja roja,
+// y arriba sale una barra con el total; al tocarla se reintenta. Si después de 1 min sigue sin subir, se anota un diagnóstico
+// (accesos/<uid>/diagSync, una vez por orden y sesión) para saber por qué.
+(function(){
+  var ESPERA = 20000, DIAG = 60000, desde = {}, anotado = {}, avisos = [];
+  try{ var _w = console.warn; console.warn = function(){ try{ avisos.push(new Date().toTimeString().slice(0, 8) + ' ' + Array.prototype.map.call(arguments, function(a){ return a && a.message ? a.message : String(a); }).join(' ').slice(0, 200)); if(avisos.length > 15) avisos.shift(); }catch(e){} return _w.apply(console, arguments); }; }catch(e){}
+  function motores(){
+    var c = window._nxCTX;
+    if(c && c.mt && c.mh) return [{ ctx: '', S: c.mt.Sync, DB: c.mt.DB }, { ctx: 'mh', S: c.mh.Sync, DB: c.mh.DB }];
+    return [{ ctx: '', S: (typeof _Sync !== 'undefined' ? _Sync : null), DB: (typeof DB !== 'undefined' ? DB : null) }];
+  }
+  function conCtxMT(fn){   // el motor de MT lee la lista del DB activo: asegurar el cajón MT mientras se revisa
+    var antes = window._nxCtxActual;
+    try{ if(window._nxPonerCtx && antes && antes !== 'mt') window._nxPonerCtx('mt'); return fn(); }
+    finally{ try{ if(window._nxPonerCtx && antes && antes !== 'mt') window._nxPonerCtx(antes); }catch(e){} }
+  }
+  function revisar(){
+    var ahora = Date.now(), pend = {}, lista = [];
+    conCtxMT(function(){
+      motores().forEach(function(m){
+        if(!m.S || !m.S.pendienteReg || !m.DB) return;
+        (m.DB.logistica || []).forEach(function(o){
+          if(!o || !o.id) return; var k = m.ctx + ':' + o.id, p = false;
+          try{ p = m.S.pendienteReg('logistica', o.id); }catch(e){}
+          if(!p){ delete desde[k]; return; }
+          desde[k] = desde[k] || ahora;
+          if(ahora - desde[k] < ESPERA) return;
+          pend[k] = 1; lista.push(o.correlativo || o.id);
+          if(ahora - desde[k] >= DIAG && !anotado[k]) diag(k, o);
+        });
+      });
+    });
+    Object.keys(desde).forEach(function(k){ if(!pend[k] && ahora - desde[k] >= ESPERA) delete desde[k]; });
+    // franjas en las tarjetas
+    document.querySelectorAll('[data-lgid],[data-hid]').forEach(function(c){
+      var id = c.getAttribute('data-lgid') || c.getAttribute('data-hid'), k = (c.getAttribute('data-ctx') === 'mh' ? 'mh' : '') + ':' + id;
+      var b = c.querySelector(':scope > .nx-sinsubir');
+      if(pend[k] && !b){ b = document.createElement('div'); b.className = 'nx-sinsubir';
+        b.style.cssText = 'background:#fdeaea;color:#8b2020;border:1px solid #f0b8b8;border-radius:6px;padding:5px 9px;margin:-2px 0 8px;font-size:11.5px;font-weight:600;pointer-events:none';
+        b.textContent = '⚠️ Sin subir a la base: los demás no ven estos cambios. Busca señal y no cierres la app.'; c.insertBefore(b, c.firstChild); }
+      if(!pend[k] && b) b.remove();
+    });
+    // barra arriba
+    var bar = document.getElementById('nx-barra-sinsubir');
+    if(lista.length){
+      if(!bar){ bar = document.createElement('div'); bar.id = 'nx-barra-sinsubir';
+        bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:84px;z-index:9998;background:#8b2020;color:#fff;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;text-align:center';
+        bar.onclick = reintentar; document.body.appendChild(bar); }
+      bar.textContent = '⚠️ ' + (lista.length === 1 ? 'La orden ' + lista[0] + ' no se ha subido' : lista.length + ' órdenes no se han subido (' + lista.slice(0, 3).join(', ') + (lista.length > 3 ? '…' : '') + ')') + ' a la base. Toca para reintentar.';
+    } else if(bar) bar.remove();
+  }
+  function reintentar(){
+    try{ toast('Reintentando subir…'); }catch(e){}
+    conCtxMT(function(){ motores().forEach(function(m){ try{ if(m.S && m.S.guardar) Promise.resolve(m.S.guardar()).catch(function(){}); }catch(e){} }); });
+    setTimeout(revisar, 4000);
+  }
+  function diag(k, o){
+    anotado[k] = 1;
+    try{
+      var uid = window._nxAcceso && window._nxAcceso.uid; if(!uid || !window._fbDB) return;
+      window._fbDB.ref('accesos/' + uid + '/diagSync').push({ ts: Date.now(), version: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), orden: o.correlativo || '', id: o.id,
+        estado: o.estado || '', fbReady: !!window._fbReady, enLinea: navigator.onLine, avisos: avisos.slice() }).catch(function(){});
+    }catch(e){}
+  }
+  setInterval(revisar, 5000);
 })();
 </script>
 </body>
