@@ -221,7 +221,7 @@ window._nxSpecFuera = function(spec){
 // al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
 window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
   try{ var a = (window.firebase && firebase.auth) ? firebase.auth() : null; if(!a){ fin(); return; } if(a.currentUser){ fin(); return; }
-    var q = a.onAuthStateChanged(function(u){ if(u){ try{ q && q(); }catch(e){} fin(); } }); setTimeout(fin, 8000); }catch(e){ fin(); } }); };
+    var q = a.onAuthStateChanged(function(u){ if(u){ try{ q && q(); }catch(e){} fin(); } }); setTimeout(fin, 30000);   /* (2026-10-30) antes 8000: un teléfono lento leía sin sesión y la base lo rechazaba */ }catch(e){ fin(); } }); };
 </script>
 <script>
 // ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
@@ -266,7 +266,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4c7a44673e43';
+  var APP_VERSION='15d4dfd98920';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1228,7 +1228,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     rest('accesos/' + uid).then(function(r){
       if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
         // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
-        if(r.estado === 'aprobado' && !window._NX_DENTRO) rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
+        if(r.estado === 'aprobado' && !window._NX_DENTRO) rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' }, ms: Math.round((window.performance && performance.now()) || 0), nav: (function(){ try{ return (performance.getEntriesByType('navigation')[0] || {}).type || ''; }catch(e){ return ''; } })() }   /* (2026-10-30) ms: tiempo hasta tener sesión; nav: navigate/reload/back_forward */).catch(function(){});
         estado(r); }   // una vez por sesión
       else { if(CERRADA) cerrar(); if(!window._NX_DENTRO) pedirNombre(uid); }
     }).catch(function(){
@@ -4219,7 +4219,9 @@ try{
   window._fbDB = window._nxEnvolverDB ? window._nxEnvolverDB(firebase.database()) : firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB, ['logistica', 'equipos']); }catch(e){ console.warn('Sync', e); }
   const FB_REF = window._nxRaizLigera(window._fbDB, _NXR, ['logistica', 'equipos', 'vendidos', 'lastCorrelativo_LG', '_ts', '_sid']);   // (2026-10-30) solo lo que usa Logística
 
-  _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(snap=>{
+  // (2026-10-30) La carga es una función: si la primera lectura falla, al reconectar se termina de cargar AQUÍ, sin recargar la
+  // página (antes location.reload(): con sesión lenta se volvía un ciclo cada 20-30 s que borraba lo escrito).
+  const _nxCargarSnap = snap=>{
     try{
       const remote = snap.val(); try{ if(typeof _Sync !== 'undefined' && _Sync.mezclar) _Sync.mezclar(remote); }catch(_e){}
       if(remote && remote._ts){
@@ -4305,14 +4307,15 @@ function _mergeLogViaticos(remotos){
       if(id==='ordenes' && !_escribiendo)   renderOrdenesLog();
       if(id==='historial' && !_escribiendo) renderHistorialLog();
     });
-  }).catch(e=>{
+  };
+  _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(_nxCargarSnap).catch(e=>{
     // (2026-10-19, auditoría) Antes: con la primera lectura fallida se habilitaba GUARDAR con la copia vieja del teléfono (mismo
     // mecanismo del 14-oct) y además no quedaba escuchando cambios. Ahora: se muestran los datos del teléfono SIN habilitar el
     // guardado, y se reintenta; al volver la conexión la app se recarga con los datos reales.
     console.warn('Firebase once error:', e); loadDB();
     try{ renderDashboardLog(); renderOrdenesLog(); }catch(_e){}
     try{ toast('⚠️ Sin conexión con la base: estás viendo los datos del teléfono. Los cambios no se guardan hasta reconectar.', true); }catch(_e){}
-    var _reint = setInterval(function(){ _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(function(){ clearInterval(_reint); location.reload(); }).catch(function(){}); }, 20000);
+    var _reint = setInterval(function(){ _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(function(snap){ clearInterval(_reint); _nxCargarSnap(snap); try{ toast('✓ Conectado con la base'); }catch(_e){} }).catch(function(){}); }, 20000);   // (2026-10-30) sin recargar
   });
 })();
 

@@ -190,7 +190,7 @@ window._nxSpecFuera = function(spec){
 // al abrir la app la sesión tarda un momento en recuperarse. Máximo 8 s (sin señal se sigue igual).
 window._nxEsperarSesion = function(){ return new Promise(function(ok){ var hecho = false, fin = function(){ if(!hecho){ hecho = true; ok(); } };
   try{ var a = (window.firebase && firebase.auth) ? firebase.auth() : null; if(!a){ fin(); return; } if(a.currentUser){ fin(); return; }
-    var q = a.onAuthStateChanged(function(u){ if(u){ try{ q && q(); }catch(e){} fin(); } }); setTimeout(fin, 8000); }catch(e){ fin(); } }); };
+    var q = a.onAuthStateChanged(function(u){ if(u){ try{ q && q(); }catch(e){} fin(); } }); setTimeout(fin, 30000);   /* (2026-10-30) antes 8000: un teléfono lento leía sin sesión y la base lo rechazaba */ }catch(e){ fin(); } }); };
 </script>
 <script>
 // ══ ESCRITURA SEGURA POR ID (2026-10-19, auditoría) ══ Las listas de la base se guardan por posición (0,1,2…). Si la lista cambió
@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='831046b71a68';
+  var APP_VERSION='63644c72cee2';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1518,7 +1518,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     rest('accesos/' + uid).then(function(r){
       if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
         // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
-        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' } }).catch(function(){});
+        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' }, ms: Math.round((window.performance && performance.now()) || 0), nav: (function(){ try{ return (performance.getEntriesByType('navigation')[0] || {}).type || ''; }catch(e){ return ''; } })() }   /* (2026-10-30) ms: tiempo hasta tener sesión; nav: navigate/reload/back_forward */).catch(function(){});
         estado(r); }   // una vez por sesión
       else { if(CERRADA) cerrar(); pedirNombre(uid); }
     }).catch(function(){
