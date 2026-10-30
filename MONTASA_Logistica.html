@@ -12,6 +12,22 @@
   window._NX_DENTRO = (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
   window._NX_SOLO_MT = window._NX_EMP === 'monhaco' && /[?&]solo=mt\b/i.test(q);
 })();
+// (2026-10-30) RAÍZ LIVIANA: Logística solo baja y vigila las partes que usa (antes la raíz completa de 1.4 MB, y cualquier cambio de
+// otra app —un técnico guardando— la hacía reprocesar todo). Se comporta como la raíz: once('value') y on('value', cb) con .val().
+window._nxRaizLigera = function(db, raiz, hijos){
+  function snap(d){ return { val: function(){ return Object.keys(d).length ? d : null; } }; }
+  return {
+    once: function(){ return Promise.all(hijos.map(function(h){ return db.ref(raiz + '/' + h).once('value').then(function(s){ return [h, s.val()]; }); }))
+      .then(function(par){ var d = {}; par.forEach(function(x){ if(x[1] !== null && x[1] !== undefined) d[x[0]] = x[1]; }); return snap(d); }); },
+    on: function(ev, cb){ var d = {}, llego = {}, t = null;
+      hijos.forEach(function(h){ db.ref(raiz + '/' + h).on('value', function(s){
+        var v = s.val(); if(v === null || v === undefined) delete d[h]; else d[h] = v; llego[h] = 1;
+        if(Object.keys(llego).length < hijos.length) return;          // la primera vez, esperar a que lleguen todas
+        clearTimeout(t); t = setTimeout(function(){ cb(snap(d)); }, 120);   // varios cambios juntos = un solo reproceso
+      }); });
+      return cb; }
+  };
+};
 </script>
 <script>
 // ══ DOS CAJONES EN LOGÍSTICA MT (2026-10-29) ══ Ver «LOGÍSTICA MT CON ÓRDENES DE MONHACO EN LAS MISMAS CARPETAS» al final.
@@ -250,7 +266,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e249b3dc52b4';
+  var APP_VERSION='4c7a44673e43';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -826,6 +842,7 @@ var _Sync = (function(){
     raiz = r; db = fbdb;
     if(Array.isArray(soloCols) && soloCols.length) activas = COLS.filter(function(c){ return soloCols.indexOf(c) >= 0; });
     try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
+    if(Array.isArray(soloCols) && soloCols.length) Object.keys(base).forEach(function(c){ if(activas.indexOf(c) < 0) delete base[c]; });   // (2026-10-30) foto más liviana
     try{ sucio = JSON.parse(localStorage.getItem(_claveSucio()) || '{}') || {}; }catch(e){ sucio = {}; }   // (2026-10-28)
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; lapidasListas = true; });
     if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
@@ -4199,8 +4216,8 @@ try{
     appId: "1:607446513526:web:45512e46850440e7d52c57"
   };
   try{ firebase.initializeApp(firebaseConfig); }catch(e){}
-  window._fbDB = window._nxEnvolverDB ? window._nxEnvolverDB(firebase.database()) : firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB); }catch(e){ console.warn('Sync', e); }
-  const FB_REF = window._fbDB.ref(_NXR);
+  window._fbDB = window._nxEnvolverDB ? window._nxEnvolverDB(firebase.database()) : firebase.database(); try{ if(window._nxPuerta) window._nxPuerta(window._fbDB); }catch(_e){} try{ _Sync.iniciar(_NXR, window._fbDB, ['logistica', 'equipos']); }catch(e){ console.warn('Sync', e); }
+  const FB_REF = window._nxRaizLigera(window._fbDB, _NXR, ['logistica', 'equipos', 'vendidos', 'lastCorrelativo_LG', '_ts', '_sid']);   // (2026-10-30) solo lo que usa Logística
 
   _nxEsperarSesion().then(function(){ return FB_REF.once('value'); }).then(snap=>{
     try{
