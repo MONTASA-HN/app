@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4ab22e30b410';
+  var APP_VERSION='8336abb9113c';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -7163,10 +7163,13 @@ function venderEquipo(){
   solicitarPINAccion(()=>{
     const eq = DB.equipos.find(e=>e.id===modalEquipoId);
     if(!eq) return toast('Equipo no encontrado',true);
-    // Move to vendidos
-    if(!DB.vendidos) DB.vendidos = [];
+    // (2026-10-30) Primero la venta en la base (confirmada) y después se quita el equipo. Antes se hacían las dos a la vez en el
+    // teléfono y el aviso en vivo de la base (disparado al borrar el equipo) borraba la venta antes de subirla.
+    if(!window._fbDB || !window._fbReady){ toast('⚠️ Sin conexión con la base: no se puede vender ahora. Intenta de nuevo con señal.', true); return; }
+    const R = /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa';
+    const idEq = eq.id, cod = eq.codigo;
     const vnd = {
-      id:           'vnd-' + eq.id,   // (2026-10-30) id propio: con el mismo id que el equipo, la lápida del equipo borraba la venta
+      id:           'vnd-' + eq.id,   // id propio (con el id del equipo, su lápida borraba la venta)
       equipoId:     eq.id,
       codigo:       eq.codigo,
       serie:        eq.serie||'',
@@ -7176,13 +7179,29 @@ function venderEquipo(){
       lugarVenta:   '',
       clienteVenta: '',
     };
-    DB.vendidos.push(vnd);
-    // Remove from active fleet
-    DB.equipos = DB.equipos.filter(e=>e.id!==modalEquipoId);
-    saveDB(); saveAllEquipos();
     cerrarModal();
-    renderEquipos();
-    toast('Equipo '+eq.codigo+' movido a Vendidos ✓');
+    toast('Registrando la venta de ' + cod + '…');
+    const ref = window._fbDB.ref(R + '/vendidos');
+    const buscar = function(){ return ref.orderByChild('id').equalTo(vnd.id).once('value').then(function(s){ var v = s.val(); return !!v && Object.keys(v).length > 0; }); };
+    const limite = new Promise(function(_, no){ setTimeout(function(){ no(new Error('sin respuesta de la base')); }, 20000); });   // sin señal no se queda esperando
+    Promise.race([limite, buscar().then(function(ya){
+      if(ya) return;
+      return ref.once('value').then(function(s){
+        var mx = -1; s.forEach(function(c){ var n = parseInt(c.key, 10); if(!isNaN(n) && n > mx) mx = n; });
+        return ref.child(String(mx + 1)).transaction(function(cur){ return cur === null ? vnd : undefined; });
+      });
+    }).then(buscar)]).then(function(quedo){
+      if(!quedo) throw new Error('la venta no quedó en la base');
+      // La venta ya está en la base: ahora sí sale de la flota (el sincronizador pone la lápida y la borra)
+      DB.equipos = (DB.equipos||[]).filter(e=>e.id!==idEq);
+      saveDB(); try{ saveAllEquipos(); }catch(e){}
+      if(window._fbDB && window._fbReady) Promise.resolve(_Sync.guardar()).catch(()=>{});
+      try{ renderEquipos(); }catch(e){}
+      toast('Equipo ' + cod + ' movido a Vendidos ✓');
+    }).catch(function(err){
+      console.warn('venta', err);
+      toast('⚠️ No se pudo registrar la venta de ' + cod + '. El equipo sigue en la flota; intenta de nuevo.', true);
+    });
   }, '🏷️ Vender equipo', 'Ingresa tu PIN para confirmar la venta');
 }
 
