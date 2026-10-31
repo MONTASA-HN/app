@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d372e1f2cf80';
+  var APP_VERSION='f83cb60db144';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -203,7 +203,8 @@ function _rentaManualPedir(e, nuevoEstado, cliente){
 // ── HUECOS EN LAS LISTAS (2026-10-31) ── Al borrar un registro en su posición la base deja un hueco (null) en la lista. La app no
 // los esperaba (nextCorrelativo/renderDashboard leían campos de null y NO se podía crear ninguna orden). Se quitan al entrar los datos.
 function _nxListaSinHuecos(v){
-  if(Array.isArray(v)) return v.some(function(x){ return x === null || x === undefined; }) ? v.filter(function(x){ return x !== null && x !== undefined; }) : v;
+  // (2026-10-31) recorrer posición por posición: Firebase entrega el hueco como casilla VACÍA (no null) y some/filter se la saltan
+  if(Array.isArray(v)){ var r = [], hubo = false; for(var i = 0; i < v.length; i++){ var x = v[i]; if(x === null || x === undefined) hubo = true; else r.push(x); } return hubo ? r : v; }
   if(v && typeof v === 'object'){   // con muchos huecos Firebase la entrega como objeto {"0":…,"5":…}
     var ks = Object.keys(v);
     if(ks.length && ks.every(function(k){ return /^\d+$/.test(k); })) return ks.sort(function(a, b){ return a - b; }).map(function(k){ return v[k]; }).filter(function(x){ return x !== null && x !== undefined; });
