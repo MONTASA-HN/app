@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='19ce9ff0e8ff';
+  var APP_VERSION='1ec0cf7f3e6f';
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -583,6 +583,24 @@ function _faltanEquipoClienteForm(pref){
 // app sin señal y se sube la próxima vez. La forma de los datos en Firebase NO cambia
 // (siguen siendo listas), así el tablero de flota y el mundo isométrico no se enteran.
 // Fotos: nunca se suben por aquí (viven en fotosOrden_*; campo fotos/foto/fotosPend/checklistPdf).
+// ── HUECOS EN LAS LISTAS (2026-10-31) ── Al borrar un registro en su posición la base deja un hueco (null) en la lista. La app no
+// los esperaba (nextCorrelativo/renderDashboard leían campos de null y NO se podía crear ninguna orden). Se quitan al entrar los datos.
+function _nxListaSinHuecos(v){
+  if(Array.isArray(v)) return v.some(function(x){ return x === null || x === undefined; }) ? v.filter(function(x){ return x !== null && x !== undefined; }) : v;
+  if(v && typeof v === 'object'){   // con muchos huecos Firebase la entrega como objeto {"0":…,"5":…}
+    var ks = Object.keys(v);
+    if(ks.length && ks.every(function(k){ return /^\d+$/.test(k); })) return ks.sort(function(a, b){ return a - b; }).map(function(k){ return v[k]; }).filter(function(x){ return x !== null && x !== undefined; });
+  }
+  return v;
+}
+function _nxSinHuecos(obj){
+  if(!obj || typeof obj !== 'object') return obj;
+  ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos','soldaduras'].forEach(function(c){
+    if(obj[c] !== undefined && obj[c] !== null) obj[c] = _nxListaSinHuecos(obj[c]);
+  });
+  Object.keys(obj).forEach(function(c){ if(Array.isArray(obj[c])) obj[c] = _nxListaSinHuecos(obj[c]); });
+  return obj;
+}
 var _Sync = (function(){
   var COLS = ['logistica','preventivos','correctivos','revisiones','evaluaciones','solicitudes','ordenesCerradas','equipos','vendidos','soldaduras'];   // soldaduras: 2026-10-14
   var activas = COLS;   // listas que esta app vigila (iniciar puede limitarlas; Comercial usa solo algunas)
@@ -937,6 +955,7 @@ var _Sync = (function(){
   // subió (sin señal, app cerrada…) y los registros creados aquí que el servidor todavía no tiene. Luego se sube.
   // Nunca quita datos del servidor (la copia local no guarda fotos) ni agrega equipos/vendidos.
   function mezclar(obj){
+    try{ _nxSinHuecos(obj); }catch(_e){}   // (2026-10-31) quitar huecos (null) de las listas antes de que la app las use
     // (2026-10-14) DESACTIVADO DE URGENCIA: con una copia vieja en el teléfono subía datos viejos encima de los buenos
     // (equipos que volvían a disponible, liquidaciones vaciadas). No volver a activar sin revisar TRAMPAS.md.
     return obj;
@@ -2482,7 +2501,7 @@ const EQUIPOS_INICIALES = [
 
 function loadDB(){
   try{
-    const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+    const d = _nxSinHuecos(JSON.parse(localStorage.getItem(LS_KEY)||'{}'));   // (2026-10-31) sin huecos
     if(d.preventivos)     DB.preventivos     = d.preventivos;
     if(d.correctivos)     DB.correctivos     = d.correctivos;
     _protegerOrdenesRecientes();
