@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3637fab22293';
+  var APP_VERSION='99b6a28efecf';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -931,7 +931,7 @@ var _Sync = (function(){
     // solo después de haber leído los equipos de Firebase (una copia vieja no resucita vendidos).
     if(!window._fbReady) return [];
     if((col === 'equipos' || col === 'vendidos') && window._equiposFBok === false) return [];
-    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [];
+    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [], lgViejos = 0;
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
       if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1; return; }   // (2026-10-30) colgada > 30 s: reintentar
@@ -947,6 +947,15 @@ var _Sync = (function(){
         var cambios = {}, quitar = [], hay = false;
         _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k)){ cambios[k] = JSON.parse(JSON.stringify(o[k])); hay = true; } });
         Object.keys(hb).forEach(function(k){ if(!OMITIR[k] && o[k] === undefined){ quitar.push(k); hay = true; } });
+        // (2026-10-31) Nombre viejo LG-#### en el teléfono y LGMT/LGMH en la base (renombradas el 28-oct): manda la base. La regla no
+        // deja volver a LG- y el teléfono lo reintentaba para siempre (184 órdenes «sin subir» en el de un motorista).
+        var sv = ultimoSrv[col] && ultimoSrv[col][o.id];
+        if(cambios.correlativo !== undefined && sv && /^LG-/.test(String(o.correlativo || '')) && /^LGM[TH]-/.test(String(sv.correlativo || ''))){
+          o.correlativo = sv.correlativo; delete cambios.correlativo; hb.correlativo = _h(sv.correlativo);
+          if(sucio[col] && sucio[col][o.id]){ delete sucio[col][o.id].correlativo; if(!Object.keys(sucio[col][o.id]).length) delete sucio[col][o.id]; _guardarSucio(); }
+          _guardarBase(); lgViejos++;
+          hay = Object.keys(cambios).length > 0 || quitar.length > 0;
+        }
         if(!hay) return;
         Object.keys(cambios).forEach(function(k){ _marcarSucio(col, o.id, k, _h(cambios[k])); }); quitar.forEach(function(k){ _marcarSucio(col, o.id, k, VACIO); }); _guardarSucio();   // (2026-10-28)
         p = _actualizar(col, o.id, cambios, quitar, 0);
@@ -955,6 +964,7 @@ var _Sync = (function(){
       prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
         .then(function(){ if(enVuelo[llave] === mio) delete enVuelo[llave]; }));
     });
+    if(lgViejos){ _avisar(col + ': ' + lgViejos + ' órdenes con el nombre viejo LG- toman el de la base'); try{ if(typeof saveDB === 'function') setTimeout(saveDB, 300); }catch(e){} }
     quitarLoc.forEach(function(id){ if(quitando[col + '/' + id]) return; quitando[col + '/' + id] = 1;   // se confirma con la base (una recién restaurada ya no tiene lápida)
       db.ref(raiz + '/_borradas/' + id).once('value').then(function(s){ if(s && s.val() && claves[col][id] === undefined) _quitarLocal(col, id); }, function(){}).then(function(){ delete quitando[col + '/' + id]; }); });
     var fuera = Object.keys(b).filter(function(id){ return !vistos[id] && v[id] && claves[col][id] !== undefined; });
