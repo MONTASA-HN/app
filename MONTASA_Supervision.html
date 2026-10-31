@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='56a79d430c88';
+  var APP_VERSION='938d2d5765a2';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -924,6 +924,8 @@ var _Sync = (function(){
       if(n){ _avisar('solicitudes de órdenes borradas: se quitan ' + n); setTimeout(function(){ guardar(); try{ if(typeof renderSolicitudes === 'function') renderSolicitudes(); }catch(e){} }, 300); }
     }catch(e){}
   }
+  function _cerrada(x){ return !!x && (x.cerrado === true || x.completado === true || x.estado === 'Completado' || x.estado === 'Cerrado'); }
+  function _puedeReabrir(){ try{ var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; return !r || r === 'gerencia' || r === 'supervision'; }catch(e){ return true; } }   // sin cargo conocido: no se toca
   function _guardarCol(col){
     var loc = _lista(col), b = base[col];
     if(!loc || !b || !listo[col]) return [];
@@ -931,7 +933,7 @@ var _Sync = (function(){
     // solo después de haber leído los equipos de Firebase (una copia vieja no resucita vendidos).
     if(!window._fbReady) return [];
     if((col === 'equipos' || col === 'vendidos') && window._equiposFBok === false) return [];
-    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [], lgViejos = 0;
+    var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [], lgViejos = 0, cerradasViejas = [];
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
       if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1; return; }   // (2026-10-30) colgada > 30 s: reintentar
@@ -956,6 +958,14 @@ var _Sync = (function(){
           _guardarBase(); lgViejos++;
           hay = Object.keys(cambios).length > 0 || quitar.length > 0;
         }
+        // (2026-10-31) Orden CERRADA en la base y abierta en este teléfono de alguien sin permiso de reabrir (campo): la copia de aquí
+        // es vieja. Se toma la orden entera de la base (subir el resto borraría km/firma/cierre que este teléfono no tiene).
+        if(hay && sv && !_puedeReabrir() && _cerrada(sv) && !_cerrada(o)){
+          Object.keys(o).forEach(function(k){ if(!OMITIR[k] && sv[k] === undefined) delete o[k]; });
+          _campos(sv).forEach(function(k){ o[k] = JSON.parse(JSON.stringify(sv[k])); });
+          b[o.id] = _huellas(sv); if(sucio[col] && sucio[col][o.id]){ delete sucio[col][o.id]; _guardarSucio(); } _guardarBase();
+          cerradasViejas.push(o.correlativo || o.id); return;
+        }
         if(!hay) return;
         Object.keys(cambios).forEach(function(k){ _marcarSucio(col, o.id, k, _h(cambios[k])); }); quitar.forEach(function(k){ _marcarSucio(col, o.id, k, VACIO); }); _guardarSucio();   // (2026-10-28)
         p = _actualizar(col, o.id, cambios, quitar, 0);
@@ -964,6 +974,9 @@ var _Sync = (function(){
       prom.push(Promise.resolve(p).catch(function(e){ _avisar('Error al guardar ' + llave + ': ' + (e && e.message)); })
         .then(function(){ if(enVuelo[llave] === mio) delete enVuelo[llave]; }));
     });
+    if(cerradasViejas.length){ _avisar(col + ': ' + cerradasViejas.join(', ') + ' ya cerradas en la base: se toma la versión de la base');
+      try{ if(typeof saveDB === 'function') setTimeout(saveDB, 300); }catch(e){}
+      try{ if(typeof toast === 'function') toast('ℹ️ ' + (cerradasViejas.length === 1 ? 'La orden ' + cerradasViejas[0] + ' ya estaba cerrada' : cerradasViejas.length + ' órdenes ya estaban cerradas') + ' en la base: se actualizó este teléfono.'); }catch(e){} }
     if(lgViejos){ _avisar(col + ': ' + lgViejos + ' órdenes con el nombre viejo LG- toman el de la base'); try{ if(typeof saveDB === 'function') setTimeout(saveDB, 300); }catch(e){} }
     quitarLoc.forEach(function(id){ if(quitando[col + '/' + id]) return; quitando[col + '/' + id] = 1;   // se confirma con la base (una recién restaurada ya no tiene lápida)
       db.ref(raiz + '/_borradas/' + id).once('value').then(function(s){ if(s && s.val() && claves[col][id] === undefined) _quitarLocal(col, id); }, function(){}).then(function(){ delete quitando[col + '/' + id]; }); });
