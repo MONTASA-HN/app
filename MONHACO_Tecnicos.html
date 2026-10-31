@@ -199,7 +199,8 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='97edd876ad3a';
+  var APP_VERSION='f0846b743038';
+  window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
   if(!archivo) return;
@@ -1789,7 +1790,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     rest('accesos/' + uid).then(function(r){
       if(r){ rest('accesos/' + uid + '/ultimaVez', 'PUT', Date.now()).catch(function(){});
         // (2026-10-20) historial de entradas: una por apertura de la app, solo teléfonos aprobados
-        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' }, ms: Math.round((window.performance && performance.now()) || 0), nav: (function(){ try{ return (performance.getEntriesByType('navigation')[0] || {}).type || ''; }catch(e){ return ''; } })() }   /* (2026-10-30) ms: tiempo hasta tener sesión; nav: navigate/reload/back_forward */).catch(function(){});
+        if(r.estado === 'aprobado') rest('accesos/' + uid + '/entradas', 'POST', { app: APP, v: window._nxVersion || '', empresa: EMPRESA, disp: dispositivo(), ts: { '.sv': 'timestamp' }, ms: Math.round((window.performance && performance.now()) || 0), nav: (function(){ try{ return (performance.getEntriesByType('navigation')[0] || {}).type || ''; }catch(e){ return ''; } })() }   /* (2026-10-30) ms: tiempo hasta tener sesión; nav: navigate/reload/back_forward */).catch(function(){});
         estado(r); }   // una vez por sesión
       else { if(CERRADA) cerrar(); pedirNombre(uid); }
     }).catch(function(){
