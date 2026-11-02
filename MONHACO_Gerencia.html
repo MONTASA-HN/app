@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7e283fc8fe5d';
+  var APP_VERSION='e7530b59af69';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -652,9 +652,11 @@ var _Sync = (function(){
   // subía y borraba lo hecho en otro lado: días de renta que volvían, números LGMT que regresaban a LG).
   var sucio = {};
   function _claveSucio(){ return '_sync_sucio_' + raiz + '_' + _APPK; }
-  function _guardarSucio(){ try{ localStorage.setItem(_claveSucio(), JSON.stringify(sucio)); }catch(e){} }
-  function _marcarSucio(col, id, k, h){ var c = sucio[col] || (sucio[col] = {}), r = c[id] || (c[id] = {}); r[k] = h; }
-  function _limpiarSucio(col, id, marca){ var r = sucio[col] && sucio[col][id]; if(!r) return; Object.keys(marca).forEach(function(k){ if(r[k] === marca[k]) delete r[k]; }); if(!Object.keys(r).length) delete sucio[col][id]; _guardarSucio(); }
+  // (2026-11-02) Hora de cada marca ({'col/id/campo': ms}). Marca de más de 24 h cuyo dato la base cambió por otro lado: gana la base.
+  var sucioTs = {}, VIEJA = 24 * 3600000;
+  function _guardarSucio(){ try{ localStorage.setItem(_claveSucio(), JSON.stringify(sucio)); localStorage.setItem(_claveSucio() + '_ts', JSON.stringify(sucioTs)); }catch(e){} }
+  function _marcarSucio(col, id, k, h){ var c = sucio[col] || (sucio[col] = {}), r = c[id] || (c[id] = {}), ll = col + '/' + id + '/' + k; if(r[k] !== h || !sucioTs[ll]) sucioTs[ll] = Date.now(); r[k] = h; }
+  function _limpiarSucio(col, id, marca){ var r = sucio[col] && sucio[col][id]; if(!r) return; Object.keys(marca).forEach(function(k){ if(r[k] === marca[k]){ delete r[k]; delete sucioTs[col + '/' + id + '/' + k]; } }); if(!Object.keys(r).length) delete sucio[col][id]; _guardarSucio(); }
   // Lo que este teléfono está subiendo y el servidor aún no confirma. Firebase muestra
   // enseguida los cambios propios (aunque no haya señal): ese «eco» NO cuenta como
   // confirmado, si no, al cerrar la app sin señal el cambio se perdería.
@@ -765,12 +767,21 @@ var _Sync = (function(){
     var vv = visto[col] || (visto[col] = {});
     (loc || []).forEach(function(o){ if(o && o.id){ porId[o.id] = o; vv[o.id] = 1; } });
     if(!listo[col] && loc){   // (2026-10-28) primera llegada del servidor: lo distinto a la foto que NO se cambió aquí es copia vieja → servidor
-      var sc = sucio[col] || {}, viejos = 0;
+      var sc = sucio[col] || {}, viejos = 0, vencidas = [];
       loc.forEach(function(l){ if(!l || !l.id) return; var s0 = srv[l.id], hb0 = b[l.id]; if(!s0 || !hb0) return;
         var tk = {}; _campos(l).concat(Object.keys(hb0)).forEach(function(k){ if(!OMITIR[k]) tk[k] = 1; });
-        Object.keys(tk).forEach(function(k){ var hl = _h(l[k]); if(hl === _hb(hb0, k)) return; if(sc[l.id] && sc[l.id][k] === hl) return;
+        Object.keys(tk).forEach(function(k){ var hl = _h(l[k]); if(hl === _hb(hb0, k)) return;
+          if(sc[l.id] && sc[l.id][k] === hl){
+            // (2026-11-02) Cambio de aquí: se sube, salvo que la marca tenga más de 24 h y la base haya cambiado ese dato por otro lado
+            var tsM = sucioTs[col + '/' + l.id + '/' + k];
+            if(!(tsM && Date.now() - tsM > VIEJA && _h(s0[k]) !== _hb(hb0, k))) return;
+            delete sc[l.id][k]; delete sucioTs[col + '/' + l.id + '/' + k]; if(!Object.keys(sc[l.id]).length) delete sc[l.id]; vencidas.push(_nombre(l) + ' «' + k + '»');
+          }
           if(s0[k] === undefined) delete l[k]; else l[k] = JSON.parse(JSON.stringify(s0[k])); viejos++; }); });
       if(viejos) _avisar(col + ': ' + viejos + ' datos viejos del teléfono se cambiaron por los del servidor (no se suben)');
+      if(vencidas.length){ _guardarSucio(); _avisar(col + ': cambios de más de 24 h sin subir que la base ya cambió (gana la base): ' + vencidas.slice(0, 10).join(', '));
+        try{ if(typeof saveDB === 'function') setTimeout(saveDB, 300); }catch(e){}
+        try{ if(typeof toast === 'function') toast('ℹ️ ' + vencidas.length + ' cambio(s) de hace más de un día que no se subieron fueron reemplazados por lo que ya tenía la base.'); }catch(e){} }
     }
     Object.keys(srv).forEach(function(id){
       var s = srv[id], l = porId[id], hb = b[id];
@@ -937,6 +948,19 @@ var _Sync = (function(){
   }
   function _cerrada(x){ return !!x && (x.cerrado === true || x.completado === true || x.estado === 'Completado' || x.estado === 'Cerrado'); }
   function _puedeReabrir(){ try{ var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; return !r || r === 'gerencia' || r === 'supervision'; }catch(e){ return true; } }   // sin cargo conocido: no se toca
+  // (2026-11-02) Diagnóstico diario de copia vieja: cuántos registros tiene este teléfono «sin subir» y cuántas marcas (y viejas)
+  function _diagCopia(){
+    try{
+      var hoy = new Date().toISOString().slice(0, 10), kk = '_nx_diagcopia_' + raiz + '_' + _APPK;
+      if(localStorage.getItem(kk) === hoy) return;
+      var uid = window._nxAcceso && window._nxAcceso.uid; if(!uid || !db || !window._fbReady) return;
+      if(activas.some(function(c){ return !listo[c]; })) return;
+      var r = { ts: Date.now(), app: _APPK, raiz: raiz, v: window._nxVersion || '', pendientes: 0, ejemplos: [], marcas: 0, marcasViejas: 0 };
+      activas.forEach(function(c){ (_lista(c) || []).forEach(function(o){ if(o && o.id && pendienteReg(c, o.id)){ r.pendientes++; if(r.ejemplos.length < 8) r.ejemplos.push(c + ':' + _nombre(o)); } }); });
+      Object.keys(sucioTs).forEach(function(ll){ var p = ll.split('/'); if(!(sucio[p[0]] && sucio[p[0]][p[1]] && sucio[p[0]][p[1]][p[2]] !== undefined) || !pendienteReg(p[0], p[1])) return; r.marcas++; if(Date.now() - sucioTs[ll] > VIEJA) r.marcasViejas++; });
+      db.ref('accesos/' + uid + '/diagCopia/' + raiz + '_' + _APPK).set(r).then(function(){ try{ localStorage.setItem(kk, hoy); }catch(e){} }, function(){});
+    }catch(e){}
+  }
   function _guardarCol(col){
     var loc = _lista(col), b = base[col];
     if(!loc || !b || !listo[col]) return [];
@@ -1053,6 +1077,9 @@ var _Sync = (function(){
     try{ base = JSON.parse(localStorage.getItem(_clave()) || localStorage.getItem('_sync_base_' + raiz) || '{}') || {}; }catch(e){ base = {}; }
     if(Array.isArray(soloCols) && soloCols.length) Object.keys(base).forEach(function(c){ if(activas.indexOf(c) < 0) delete base[c]; });   // (2026-10-30) foto más liviana
     try{ sucio = JSON.parse(localStorage.getItem(_claveSucio()) || '{}') || {}; }catch(e){ sucio = {}; }   // (2026-10-28)
+    try{ sucioTs = JSON.parse(localStorage.getItem(_claveSucio() + '_ts') || '{}') || {}; }catch(e){ sucioTs = {}; }   // (2026-11-02)
+    (function(){ var t = Date.now(), hubo = false; Object.keys(sucio).forEach(function(c){ Object.keys(sucio[c] || {}).forEach(function(id){ Object.keys(sucio[c][id] || {}).forEach(function(k){ var ll = c + '/' + id + '/' + k; if(!sucioTs[ll]){ sucioTs[ll] = t; hubo = true; } }); }); }); if(hubo) _guardarSucio(); })();
+    if(typeof setTimeout === 'function'){ setTimeout(_diagCopia, 90000); if(typeof setInterval === 'function') setInterval(_diagCopia, 3600000); }   // (2026-11-02)
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; lapidasListas = true; });
     if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
     activas.forEach(function(col){
