@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='684bfc9836cc';
+  var APP_VERSION='96c1d7012714';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -543,11 +543,13 @@ var _Sync = (function(){
         // (2026-10-31) Nombre viejo LG-#### en el teléfono y LGMT/LGMH en la base (renombradas el 28-oct): manda la base. La regla no
         // deja volver a LG- y el teléfono lo reintentaba para siempre (184 órdenes «sin subir» en el de un motorista).
         var sv = ultimoSrv[col] && ultimoSrv[col][o.id];
-        if(cambios.correlativo !== undefined && sv && /^LG-/.test(String(o.correlativo || '')) && /^LGM[TH]-/.test(String(sv.correlativo || ''))){
-          o.correlativo = sv.correlativo; delete cambios.correlativo; hb.correlativo = _h(sv.correlativo);
-          if(sucio[col] && sucio[col][o.id]){ delete sucio[col][o.id].correlativo; if(!Object.keys(sucio[col][o.id]).length) delete sucio[col][o.id]; _guardarSucio(); }
-          _guardarBase(); lgViejos++;
-          hay = Object.keys(cambios).length > 0 || quitar.length > 0;
+        if(sv && /^LG-/.test(String(o.correlativo || '')) && /^LGM[TH]-/.test(String(sv.correlativo || ''))){
+          // (2026-11-02) TODA la copia de esta orden es vieja: se toma entera de la base y NO se sube nada. (El 31-oct solo se quitaba el
+          // nombre y el resto de datos viejos SÍ subía: devolvió días de renta ajustados, etc. — LGMT-0203/0232.)
+          Object.keys(o).forEach(function(k){ if(!OMITIR[k] && sv[k] === undefined) delete o[k]; });
+          _campos(sv).forEach(function(k){ o[k] = JSON.parse(JSON.stringify(sv[k])); });
+          b[o.id] = _huellas(sv); if(sucio[col] && sucio[col][o.id]){ delete sucio[col][o.id]; _guardarSucio(); }
+          _guardarBase(); lgViejos++; return;
         }
         // (2026-10-31) Orden CERRADA en la base y abierta en este teléfono de alguien sin permiso de reabrir (campo): la copia de aquí
         // es vieja. Se toma la orden entera de la base (subir el resto borraría km/firma/cierre que este teléfono no tiene).
