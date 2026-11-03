@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='cf3d26d5c917';
+  var APP_VERSION='f8d47ed4de48';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -321,7 +321,13 @@ function _fbRefPorId(ruta){
   // Registro nuevo: se agrega al final de la lista del SERVIDOR (transacción: no pisa a nadie)
   // (2026-10-20) Ya no reescribe la lista entera (las reglas solo se lo permiten a Gerencia/Supervisión): toma la casilla
   // siguiente a la última del servidor, solo si está vacía (o ya es este mismo registro); si otro la ganó, prueba la siguiente.
-  function agregar(valor){
+  function agregar(valor){   // (2026-11-03) volver a preguntar si ya existe con ese id (el sincronizador pudo agregarlo antes): no duplicar
+    return db.ref(base).orderByChild('id').equalTo(valor.id).once('value').then(function(q){
+      var ya = false; q.forEach(function(ch){ var v = ch.val(); if(v && v.id === valor.id) ya = true; });
+      if(!ya) return agregar0(valor);
+    });
+  }
+  function agregar0(valor){
     return db.ref(base).orderByKey().limitToLast(1).once('value').then(function(s){
       var max = -1; s.forEach(function(ch){ var n = parseInt(ch.key, 10); if(!isNaN(n) && n > max) max = n; });
       function intentar(n, vueltas){
@@ -867,7 +873,12 @@ var _Sync = (function(){
     // (2026-10-24) Antes de agregar algo nuevo, preguntar a la BASE si ese id fue borrado (la copia local de lápidas puede ir atrasada)
     if(intento === undefined) return db.ref(raiz + '/_borradas/' + o.id).once('value').then(function(s){
       if(s && s.val()){ lapidas[o.id] = s.val(); _quitarLocal(col, o.id); return; }
-      return _agregar(col, o, 0);
+      // (2026-11-03) ¿Ya está en la base con ese id? (la app pudo agregarlo un instante antes): antes quedaba DOS veces (Pale Ksjd/Mula)
+      return db.ref(raiz + '/' + col).orderByChild('id').equalTo(o.id).once('value').then(function(q){
+        var k = null, v = null; q.forEach(function(ch){ var x = ch.val(); if(k === null && x && x.id === o.id){ k = ch.key; v = x; } });
+        if(k !== null){ claves[col][o.id] = k; base[col][o.id] = _huellas(v); _guardarBase(); return; }
+        return _agregar(col, o, 0);
+      });
     });
     var k = String(_proxima(col)), valor = _limpio(o), llaveA = col + '/' + o.id;
     subiendo[llaveA] = _huellas(valor);
@@ -1030,8 +1041,34 @@ var _Sync = (function(){
   // Antes de que la app reemplace sus listas con esa copia, se le vuelve a poner lo que este teléfono cambió y aún no
   // subió (sin señal, app cerrada…) y los registros creados aquí que el servidor todavía no tiene. Luego se sube.
   // Nunca quita datos del servidor (la copia local no guarda fotos) ni agrega equipos/vendidos.
+  // (2026-11-03) Al llegar la base la app reemplaza sus listas con las de la base. Lo hecho en ESTE teléfono que aún no sube se perdía si
+  // la app se recargaba sin señal (Técnicos). Se copia sobre lo que llega SOLO lo marcado «cambiado aquí» que sigue con el valor marcado.
+  function _reponerPendientes(obj){
+    if(!obj || typeof obj !== 'object' || !raiz) return;
+    var n = 0;
+    activas.forEach(function(col){
+      var sc = sucio[col], loc = _lista(col), lista = obj[col];
+      if(!sc || !loc || !lista || typeof lista !== 'object') return;
+      var porId = {}; loc.forEach(function(o){ if(o && o.id) porId[o.id] = o; });
+      var srv = {}; _entradas(lista).forEach(function(e){ if(e[1].id) srv[e[1].id] = e[1]; });
+      Object.keys(sc).forEach(function(id){
+        var l = porId[id], s = srv[id], hb = base[col] && base[col][id]; if(!l || !s || l === s) return;
+        Object.keys(sc[id] || {}).forEach(function(k){
+          if(OMITIR[k]) return;
+          var hl = _h(l[k]); if(hl !== sc[id][k]) return;          // ya no es el valor marcado
+          if(_h(s[k]) === hl) return;                              // la base ya lo tiene
+          var ts = sucioTs[col + '/' + id + '/' + k];
+          if(ts && Date.now() - ts > VIEJA && hb && _h(s[k]) !== _hb(hb, k)) return;   // más de 24 h y la base lo cambió: gana la base
+          if(l[k] === undefined) delete s[k]; else s[k] = JSON.parse(JSON.stringify(l[k]));
+          n++;
+        });
+      });
+    });
+    if(n){ _avisar(n + ' cambio(s) de este teléfono aún sin subir se conservaron al llegar la base'); setTimeout(function(){ try{ guardar(); }catch(e){} }, 5000); }
+  }
   function mezclar(obj){
     try{ _nxSinHuecos(obj); }catch(_e){}   // (2026-10-31) quitar huecos (null) de las listas antes de que la app las use
+    try{ _reponerPendientes(obj); }catch(_e){ _avisar('reponer: ' + (_e && _e.message)); }   // (2026-11-03) no perder lo hecho sin señal
     // (2026-10-14) DESACTIVADO DE URGENCIA: con una copia vieja en el teléfono subía datos viejos encima de los buenos
     // (equipos que volvían a disponible, liquidaciones vaciadas). No volver a activar sin revisar TRAMPAS.md.
     return obj;
@@ -1069,6 +1106,8 @@ var _Sync = (function(){
     try{ sucioTs = JSON.parse(localStorage.getItem(_claveSucio() + '_ts') || '{}') || {}; }catch(e){ sucioTs = {}; }   // (2026-11-02)
     (function(){ var t = Date.now(), hubo = false; Object.keys(sucio).forEach(function(c){ Object.keys(sucio[c] || {}).forEach(function(id){ Object.keys(sucio[c][id] || {}).forEach(function(k){ var ll = c + '/' + id + '/' + k; if(!sucioTs[ll]){ sucioTs[ll] = t; hubo = true; } }); }); }); if(hubo) _guardarSucio(); })();
     if(typeof setTimeout === 'function'){ setTimeout(_diagCopia, 90000); if(typeof setInterval === 'function') setInterval(_diagCopia, 3600000); }   // (2026-11-02)
+    // (2026-11-03) Reintento automático: cada minuto, si quedó algo sin subir (p. ej. el primer intento fue antes de terminar de cargar), se sube
+    if(typeof setInterval === 'function') setInterval(function(){ try{ if(window._fbReady && !corriendo && hayPendientes()) guardar(); }catch(e){} }, 60000);
     db.ref(raiz + '/_borradas').on('value', function(s){ lapidas = s.val() || {}; window._nxLapidas = lapidas; lapidasListas = true; });
     if(typeof setInterval === 'function') setInterval(function(){ _marcarVistos(); _limpiarSolicitudes(); }, 2000);   // (2026-10-23)
     activas.forEach(function(col){
