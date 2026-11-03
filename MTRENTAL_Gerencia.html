@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='52ee8e7476aa';
+  var APP_VERSION='acf1fd1de7c5';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8117,6 +8117,8 @@ function calcularNotificacionesMant(){
       return fb-fa;
     });
     const ultimo = prevsCompletados[0];
+    // (2026-11-03) Ya hay una orden preventiva abierta para este equipo (p. ej. creada desde este aviso): sin aviso
+    if(_mantPrevAbierta(eq.id)) return;
 
     // ── VEHÍCULOS: lógica por kilometraje ────────────────────────────────
     if(eq.esVehiculo){
@@ -8401,6 +8403,96 @@ function _rentaProgramarRetiro(id){
       : '<div style="flex:1;font-size:13px;color:#b45309">✅ ' + esc(correlativo) + ' creada. ' + esc(op.n) + ' no tiene teléfono en Personal: avísale tú.</div><button data-x="1" style="padding:10px 14px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-weight:700">Cerrar</button>';
   });
 }
+// ── Crear la orden preventiva desde el aviso de mantenimiento (2026-11-03, pedido de Miguel) ──────────────
+// Igual que «Programar retiro»: se eligen técnico(s) y tipo de preventivo, se crea la orden MH y se avisa por WhatsApp.
+// Mientras la orden esté abierta el aviso no sale; al completarla, el próximo aviso se calcula desde ella.
+function _mantPrevAbierta(equipoId){
+  return (DB.preventivos||[]).find(function(p){ return p && p.equipoId === equipoId && !p.completado && p.estado !== 'Completado' && p.estado !== 'Cancelado'; }) || null;
+}
+function _mantProgramarPreventivo(equipoId){
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ SIN CONEXIÓN A INTERNET\n\nNo se puede crear la orden preventiva sin conexión.'); return; }
+  var eq = (DB.equipos||[]).find(function(e){ return e && e.id === equipoId; }); if(!eq) return toast('Equipo no encontrado', true);
+  var abierta = _mantPrevAbierta(eq.id);
+  if(abierta){ alert('⚠️ El equipo ' + eq.codigo + ' ya tiene una orden PREVENTIVA abierta (' + abierta.correlativo + ').'); return; }
+  // Técnicos: los mismos del formulario de Solicitudes (nombre y teléfono)
+  var tecs = Array.prototype.slice.call(document.querySelectorAll('#sol-tecnicos-grid input[type=checkbox]')).map(function(c){ return { n: c.dataset.nombre || '', tel: c.value || '' }; })
+    .filter(function(t, i, l){ return t.n && l.findIndex(function(x){ return x.n === t.n; }) === i; });
+  if(!tecs.length){ alert('No se encontró la lista de técnicos. Usa Solicitudes.'); return; }
+  var tiposMant = Array.prototype.slice.call((document.getElementById('sol-mant-tipo') || {}).options || []).filter(function(o){ return o.value; });
+  // Cliente y ubicación: si el equipo está fuera (renta / demo), el cliente de su última entrega o renta y «campo»
+  var fuera = /EN RENTA|DEMO/.test(String(eq.estado || '').toUpperCase());
+  var cliente = _SOL_CLI_INTERNO[_SP_RAIZ] || 'USO INTERNO';
+  if(fuera){
+    var ult = (DB.logistica||[]).filter(function(o){ return o && o.equipoId === eq.id && (o.tipoLogistica === 'renta' || o.tipoLogistica === 'entrega') && o.estado !== 'Cancelado' && o.clienteOrden; })
+      .sort(function(a, b){ return String(b.fecha || '').localeCompare(String(a.fecha || '')); })[0];
+    if(ult) cliente = ult.clienteOrden;
+  }
+  var esc = _x;
+  var w = document.createElement('div'); w.id = 'mp-modal';
+  w.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  var sel = 'width:100%;padding:9px;border:1px solid #c9d1dc;border-radius:8px;font-size:14px;box-sizing:border-box';
+  var lbl = 'display:block;font-size:12px;font-weight:700;color:#475467;margin:10px 0 4px';
+  w.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:18px;box-sizing:border-box;font-family:inherit;max-height:90vh;overflow:auto;color:#1a1a18">'
+    + '<div style="font-weight:800;font-size:16px;color:#1f3864;margin-bottom:8px">🔧 Orden preventiva de ' + esc(eq.codigo) + '</div>'
+    + '<div style="font-size:13px;color:#475467;line-height:1.6">• Orden nueva de PREVENTIVO (número MH nuevo)<br>• Cliente: <b>' + esc(cliente) + '</b></div>'
+    + '<label style="' + lbl + '">Tipo de mantenimiento</label>'
+    + '<select id="mp-tipo" style="' + sel + '"><option value="">-- Seleccionar --</option>' + tiposMant.map(function(o){ return '<option value="' + esc(o.value) + '">' + esc(o.textContent) + '</option>'; }).join('') + '</select>'
+    + '<label style="' + lbl + '">Dónde se hace</label>'
+    + '<select id="mp-ubic" style="' + sel + '"><option value="plantel"' + (fuera ? '' : ' selected') + '>🏭 En plantel</option><option value="campo"' + (fuera ? ' selected' : '') + '>📍 En campo (donde el cliente)</option></select>'
+    + '<label style="' + lbl + '">Técnico(s)</label>'
+    + '<div id="mp-tecs" style="display:flex;flex-wrap:wrap;gap:6px">' + tecs.map(function(t, i){ return '<label style="display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer"><input type="checkbox" value="' + i + '"> ' + esc(t.n) + '</label>'; }).join('') + '</div>'
+    + '<div id="mp-err" style="color:#c0392b;font-size:12.5px;font-weight:700;min-height:16px;margin-top:8px"></div>'
+    + '<div id="mp-pie" style="display:flex;gap:8px;margin-top:8px"><button data-x="1" style="flex:1;padding:10px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-weight:700;cursor:pointer">Cancelar</button>'
+    + '<button data-ok="1" style="flex:2;padding:10px;border-radius:8px;border:none;background:#2d6a2d;color:#fff;font-weight:700;cursor:pointer">Crear orden y avisar por WhatsApp</button></div></div>';
+  document.body.appendChild(w);
+  w.addEventListener('click', function(ev){
+    if(ev.target === w || ev.target.closest('[data-x]')){ w.remove(); return; }
+    if(!ev.target.closest('[data-ok]')) return;
+    var mantTipo = w.querySelector('#mp-tipo').value;
+    var elegidos = Array.prototype.slice.call(w.querySelectorAll('#mp-tecs input:checked')).map(function(c){ return tecs[parseInt(c.value, 10)]; });
+    var falta = []; if(!mantTipo) falta.push('tipo de mantenimiento'); if(!elegidos.length) falta.push('técnico');
+    if(falta.length){ w.querySelector('#mp-err').textContent = 'Falta: ' + falta.join(', '); return; }
+    if(_mantPrevAbierta(eq.id)){ w.remove(); return toast('El equipo ya tiene una orden preventiva abierta', true); }
+    var ubicacion = w.querySelector('#mp-ubic').value;
+    var link = ubicacion === 'campo' ? (eq.ubicacionLink || '') : '';
+    var correlativo = nextCorrelativo('MH'), ordenId = uid();
+    var tecnicoNombre = elegidos.map(function(t){ return t.n; }).join(', ');
+    var d = new Date(), fecha = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var cli = !!eq.esEquipoCliente;
+    var msg = '🔧 *ASIGNACION DE TRABAJO - MONTASA*\n📲 *Revisa la app NEXO para el seguimiento de esta orden.*\n\n'
+      + '🔢 *Orden:* ' + correlativo + '\n👷 *Tecnico:* ' + tecnicoNombre + '\n📋 *Equipo:* ' + eq.codigo + '\n🚛 *Tipo:* Preventivo\n'
+      + '📝 *Detalle:* ' + mantTipo + '\n⚡ *Prioridad:* Normal\n📅 *Fecha:* ' + fecha + (link ? '\n📍 *Ubicación:* ' + link : '');
+    var urls = elegidos.map(function(t){ var n = String(t.tel || '').replace(/[^0-9]/g, ''); if(n.length === 8) n = '504' + n; return { t: t, url: n ? 'https://wa.me/' + n + '?text=' + encodeURIComponent(msg) : '' }; });
+    // WhatsApp del primero en el mismo toque (si se abre después de guardar, el navegador lo puede bloquear)
+    var primero = urls.filter(function(u){ return u.url; })[0];
+    var ventana = primero ? window.open(primero.url, '_blank') : null;
+    var entry = { id: ordenId, correlativo: correlativo, equipoId: eq.id, servicio: mantTipo, fecha: new Date().toISOString().slice(0, 10), fechaInicio: '', fechaFin: '', horometro: '', tecnico: '',
+      notas: mantTipo, sugerencias: '', foto: '', estado: 'Pendiente', prioridad: 'Normal', completado: false,
+      clienteNombre: cli ? (eq.clienteNombre || eq.cliente || '') : '', clienteMarca: cli ? (eq.marca || '') : '', clienteModelo: cli ? (eq.modelo || eq.desc || '') : '', clienteSerie: cli ? (eq.serie || '') : '',
+      estadoEquipoAnterior: eq.estado || 'DISPONIBLE', ubicacion: ubicacion, ubicacionLink: link || eq.ubicacionLink || '', contactoCliente: '', clienteOrden: cliente, desdeAviso: true };
+    if(!DB.preventivos) DB.preventivos = [];
+    DB.preventivos.push(entry);
+    _guardarOrdenMantResiliente('prev', entry);
+    if(!cli) _cambiarEstadoEquipoAuto(eq.id, 'EN MANTENIMIENTO');
+    if(!DB.solicitudes) DB.solicitudes = [];
+    DB.solicitudes.unshift({ id: ordenId, correlativo: correlativo, equipoTxt: eq.codigo, equipoId: eq.id, desc: mantTipo, fecha: fecha, tecnicoNombre: tecnicoNombre, prioridad: 'Normal', tipo: 'preventivo', estado: 'Enviada' });
+    saveDB();
+    toast('Orden preventiva ' + correlativo + ' creada ✓');
+    try{ _agendarDesdeOrden(correlativo, elegidos.map(function(t){ return t.n; }), fecha, 'Preventivo ' + eq.codigo + ' — ' + String(mantTipo).slice(0, 60), _agDurPreventivo(mantTipo)); }catch(e){}
+    try{ renderNotificacionesTab(); }catch(e){} try{ actualizarBadgeNotifMant(); }catch(e){} try{ renderDashboard(); }catch(e){}
+    // Los demás técnicos (o si se bloqueó / no hay teléfono): botones para mandar el aviso a mano
+    var resto = urls.filter(function(u){ return !(ventana && u === primero); });
+    if(!resto.length){ w.remove(); return; }
+    w.querySelectorAll('select, input').forEach(function(x){ x.disabled = true; });
+    w.querySelector('#mp-err').textContent = '';
+    w.querySelector('#mp-pie').style.flexDirection = 'column';
+    w.querySelector('#mp-pie').innerHTML = '<div style="font-size:13px;color:#1a5c1a;font-weight:700">✅ ' + esc(correlativo) + ' creada. Falta avisar a:</div>'
+      + resto.map(function(u){ return u.url
+        ? '<a href="' + esc(u.url) + '" target="_blank" rel="noopener" onclick="this.style.opacity=.5" style="display:block;text-align:center;padding:11px;border-radius:8px;background:#25d366;color:#fff;font-weight:800;text-decoration:none">📲 Enviar WhatsApp a ' + esc(u.t.n) + '</a>'
+        : '<div style="font-size:13px;color:#b45309">' + esc(u.t.n) + ' no tiene teléfono: avísale tú.</div>'; }).join('')
+      + '<button data-x="1" style="padding:10px;border-radius:8px;border:1px solid #c9d1dc;background:#fff;font-weight:700;cursor:pointer">Cerrar</button>';
+  });
+}
 function _rentaVencimientos(){
   const out = [];
   const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -8473,6 +8565,7 @@ function renderNotificacionesTab(){
         </div>
         <div class="notif-line">Próximo PM a los <b>${n.kmProximo.toLocaleString()} km</b> — Km actual: <b>${n.kmActual.toLocaleString()} km</b></div>
         <div class="notif-line">Último PM: orden <b>${_x(n.ultimoCorrelativo)}</b> a los <b>${n.ultimoKm.toLocaleString()} km</b></div>
+        ${n.completada ? '' : `<button data-eid="${_x(n.equipoId)}" onclick="_mantProgramarPreventivo(this.dataset.eid)" style="width:100%;margin-top:10px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔧 Crear orden preventiva</button>`}
         ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
       </div>`;
     }
@@ -8489,6 +8582,7 @@ function renderNotificacionesTab(){
       </div>
       <div class="notif-line">Próximo mantenimiento del equipo <b>${_x(n.codigo)}</b>${urgente?'':' en '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s')}</div>
       <div class="notif-line">Último mantenimiento: <b>${_x(n.ultimoServicio)}</b> — orden <b>${_x(n.ultimoCorrelativo)}</b></div>
+      ${n.completada ? '' : `<button data-eid="${_x(n.equipoId)}" onclick="_mantProgramarPreventivo(this.dataset.eid)" style="width:100%;margin-top:10px;padding:9px;background:#2d6a2d;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔧 Crear orden preventiva</button>`}
       ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
     </div>`;
   }).join('') : (_rvHTML ? '' : '<div class="empty">Sin mantenimientos ni vencimientos próximos por ahora</div>'));
