@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f47dd95028d4';
+  var APP_VERSION='d4bf4fb55d2c';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2385,56 +2385,14 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <div style="padding:0 0 14px">
     <button class="btn btn-primary btn-full" onclick="toggleForm('form-rev')">+ Nueva revisión físico-técnica</button>
     <div id="form-rev" style="display:none;margin-top:14px;background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)">
-      <div class="form-group"><label>Estado</label><select id="rev-estado"><option>Pendiente</option><option selected>En proceso</option><option>Completado</option></select></div>
-      <div class="form-group"><label>📍 Ubicación del trabajo</label>
-        <select id="rev-ubicacion" onchange="toggleRevKm(this.value)">
-          <option value="campo">🚗 Fuera del plantel (técnico se desplaza)</option>
-          <option value="plantel">🏭 En plantel</option>
-        </select>
-      </div>
+      <!-- (2026-11-07, Miguel) Solo cliente y técnico(s): la revisión se crea «En proceso» y lo demás se llena en su tarjeta -->
+      <div class="form-group"><label>🏢 Cliente</label><input id="rev-cliente" list="rev-cliente-lista" autocomplete="off" placeholder="Escribe y elige de la lista" onfocus="_revCliCargar()"><datalist id="rev-cliente-lista"></datalist></div>
       <div class="form-group"><label>Técnicos asignados (máx. 2)</label>
         <select id="rev-tec1"><option value="">— Seleccionar —</option><option>Francisco Narvaez</option><option>Miguel Lopez</option><option>Elvis Pineda</option><option>Jonathan Martinez</option><option>Sergio Madrid</option><option>Elkin Perez</option><option>Kevin Deras</option><option>Fernando Benavides</option><option>Eliberto Peña</option></select>
         <select id="rev-tec2" style="margin-top:8px"><option value="">— Segundo técnico (opcional) —</option><option>Francisco Narvaez</option><option>Miguel Lopez</option><option>Elvis Pineda</option><option>Jonathan Martinez</option><option>Sergio Madrid</option><option>Elkin Perez</option><option>Kevin Deras</option><option>Fernando Benavides</option><option>Eliberto Peña</option></select>
       </div>
-      <!-- (2026-11-07) Cliente: la misma lista de Solicitudes (sale en la miniatura de Gerencia y Comercial) -->
-      <div class="form-group"><label>🏢 Cliente</label><input id="rev-cliente" list="rev-cliente-lista" autocomplete="off" placeholder="Escribe y elige de la lista" onfocus="_revCliCargar()"><datalist id="rev-cliente-lista"></datalist></div>
-      <div class="form-group"><label>Descripción</label><textarea id="rev-desc" rows="3" placeholder="Descripción de la revisión..."></textarea></div>
-      
-      <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
-        <div class="form-group" style="margin-bottom:0"><label>Fecha</label><input type="date" id="rev-fecha"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" id="rev-hora-ini"></div>
-      </div>
-      <div class="form-group"><label>Hora final</label><input type="time" id="rev-hora-fin"></div>
-      <div class="form-group"><label>Placa del vehículo a revisar</label><input id="rev-placa" placeholder="Ej: PBM-1234"></div>
-      <div class="form-group"><label>Tipo de vehículo a revisar</label>
-        <select id="rev-tipo-vehiculo"><option value="">— Seleccionar —</option><option>Microbus</option><option>Bus</option><option>Camion no articulado</option><option>Cabezal</option><option>Contenedor</option><option>Remolque</option><option>Cisterna</option></select>
-      </div>
-      <!-- (2026-10-13) Cilindraje y capacidad: obligatorios para finalizar -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group"><label>Cilindraje (cc)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-cilindraje" placeholder="Ej: 2400"></div>
-        <div class="form-group"><label>Capacidad (kg)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-capacidad" placeholder="Ej: 10000"></div>
-      </div>
-      <!-- (2026-11-07) Lo mismo que la tarjeta de la revisión: dimensiones y fotografías -->
-      <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">📏 Dimensiones (mts)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:12px">
-        <div class="form-group" style="margin-bottom:0"><label>Largo (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-largo" placeholder="0"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Ancho (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-ancho" placeholder="0"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Alto (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-alto" placeholder="0"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 1-2 (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje12" placeholder="0"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 2-3 (mts) — opcional</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje23" placeholder="0"></div>
-        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 3-4 (mts) — opcional</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje34" placeholder="0"></div>
-      </div>
-      <div class="form-group">
-        <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
-        <div id="rev-nueva-fotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
-        <div style="display:flex;gap:8px">
-          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="_revNuevaAgregarFotos(this)">📷 Cámara</label>
-          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="_revNuevaAgregarFotos(this)">🖼 Galería</label>
-        </div>
-      </div>
-      <div id="rev-km-wrap" style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">
-      </div>
-      <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:14px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Placa, dimensiones, fotos y horas se llenan en la tarjeta de la orden antes de finalizar.</div>
+      <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:4px">
         <button class="btn-finalizar" style="background:#1f3864;margin-top:0" onclick="guardarRevision()">Guardar</button>
         <button class="btn" onclick="toggleForm('form-rev')">Cancelar</button>
       </div>
@@ -6259,109 +6217,38 @@ function _revCliCargar(){
     if(L.length){ _REV_CLI = L; try{ localStorage.setItem('nx_rev_clientes', JSON.stringify(L)); }catch(e){} _revCliPintar(); }
   }).catch(function(){}).then(function(){ window._revCliPidiendo = false; });
 }
-// (2026-11-07) Fotos del formulario «Nueva revisión»: se guardan en memoria hasta «Guardar» (máx. 10, comprimidas como en la tarjeta)
-window._revNuevaFotos = window._revNuevaFotos || [];
-function _revNuevaPintarFotos(){
-  var el = document.getElementById('rev-nueva-fotos'); if(!el) return;
-  el.innerHTML = window._revNuevaFotos.map(function(f, i){
-    return '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0"><img src="' + f + '" style="width:100%;height:100%;object-fit:cover" onclick="_verFotoGrande(window._revNuevaFotos[' + i + '])">'
-      + '<button type="button" onclick="window._revNuevaFotos.splice(' + i + ',1);_revNuevaPintarFotos()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
-  }).join('');
-}
-function _revNuevaAgregarFotos(input){
-  var archivos = Array.from(input.files || []); input.value = '';
-  var espacio = 10 - window._revNuevaFotos.length;
-  if(espacio <= 0){ toast('Límite de 10 fotos alcanzado', true); return; }
-  if(archivos.length > espacio) toast('Solo se agregaron ' + espacio + ' de ' + archivos.length + ' (límite 10)', true);
-  archivos.slice(0, espacio).forEach(function(file){
-    var reader = new FileReader();
-    reader.onload = function(e){
-      var img = new Image();
-      img.onload = function(){
-        try{
-          var MAX = 1024, w = img.width, h = img.height;
-          if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
-          if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
-          var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
-          if(window._revNuevaFotos.length < 10) window._revNuevaFotos.push(c.toDataURL('image/jpeg', 0.7));
-          _revNuevaPintarFotos();
-        }catch(err){ toast('No se pudo procesar una foto', true); }
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 function guardarRevision(){
-  const estado    = document.getElementById('rev-estado').value;
-  const ubicacion = document.getElementById('rev-ubicacion')?.value || 'campo';
-  const tec1      = document.getElementById('rev-tec1').value;
-  const tec2      = document.getElementById('rev-tec2').value;
-  const desc      = (document.getElementById('rev-desc')?.value||'').trim();
-  const fecha     = document.getElementById('rev-fecha')?.value||'';
-  const horaIni   = document.getElementById('rev-hora-ini')?.value||'';
-  const horaFin   = document.getElementById('rev-hora-fin')?.value||'';
-  const placa     = document.getElementById('rev-placa')?.value.trim()||'';
-  const tipoVeh   = document.getElementById('rev-tipo-vehiculo')?.value||'';
-  const cilindraje = (document.getElementById('rev-cilindraje')?.value||'').trim();
-  const capacidad  = (document.getElementById('rev-capacidad')?.value||'').trim();
-  const _rv = function(id){ return ((document.getElementById(id)||{}).value||'').trim(); };   // (2026-11-07) dimensiones
-  const cliente = _revCliExacto(_rv('rev-cliente'));   // (2026-11-07)
-  const largo = _rv('rev-largo'), ancho = _rv('rev-ancho'), alto = _rv('rev-alto'), eje12 = _rv('rev-eje12'), eje23 = _rv('rev-eje23'), eje34 = _rv('rev-eje34');
-  const kmSal     = document.getElementById('rev-km-sal')?.value||'';
-  const kmRet     = document.getElementById('rev-km-ret')?.value||'';
-  const deptoRev  = (document.getElementById('rev-departamento')||{}).value||'';
-  const ciudadRev = ((document.getElementById('rev-ciudad')||{}).value||'').trim();
+  // (2026-11-07, Miguel) Nueva revisión desde Técnicos: solo cliente y técnico(s). Se crea «En proceso» con fecha y hora de inicio de
+  // ahora y se abre su tarjeta: placa, dimensiones, fotos, horas y descripción se llenan ahí y se exigen al «Finalizar orden».
+  const tec1 = document.getElementById('rev-tec1').value;
+  const tec2 = document.getElementById('rev-tec2').value;
+  const cliente = _revCliExacto((document.getElementById('rev-cliente')||{}).value||'');
   const faltantes = [];
-  if(!tec1) faltantes.push('Técnico asignado');
   if(!cliente) faltantes.push('🏢 Cliente');
-  if(!desc) faltantes.push('Descripción');
-  // (2026-11-07) Guardada directo como «Completado»: lo mismo que pide «Finalizar orden»
-  if(estado==='Completado'){
-    if(!fecha) faltantes.push('Fecha'); if(!horaIni) faltantes.push('Hora inicio'); if(!horaFin) faltantes.push('Hora final');
-    if(!placa) faltantes.push('Placa del vehículo'); if(!tipoVeh) faltantes.push('Tipo de vehículo');
-    if(!cilindraje) faltantes.push('Cilindraje (cc)'); if(!capacidad) faltantes.push('Capacidad (kg)');
-    if(!largo) faltantes.push('Largo (mts)'); if(!ancho) faltantes.push('Ancho (mts)'); if(!alto) faltantes.push('Alto (mts)');
-    if(!eje12) faltantes.push('Distancia entre eje 1-2 (mts)');
-  }
-    if(ubicacion !== 'plantel'){
-  }
+  if(!tec1) faltantes.push('Técnico asignado');
   if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
   if(!DB.revisiones) DB.revisiones = [];
   const nRev = (function(){ var mx = 0, re = /^RV-([0-9]+)/; (DB.revisiones||[]).concat(Array.isArray(DB.papelera)?DB.papelera:Object.values(DB.papelera||{})).forEach(function(o){ var m = o && String(o.correlativo||'').match(re); if(m) mx = Math.max(mx, parseInt(m[1],10)); }); return mx + 1; })();   // (2026-10-19) el más alto + 1, no la cantidad
   const correlativo = 'RV-'+(nRev<10?'000':nRev<100?'00':nRev<1000?'0':'')+nRev;
+  const d = new Date(), fecha = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const horaIni = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const entry = {
-    id: uid(), correlativo, estado, ubicacion,
-    tecnicos: [tec1, tec2].filter(Boolean),
-    notas: desc, fecha, horaIni, horaFin,
-    fechaInicio: fecha&&horaIni ? fecha+'T'+horaIni : fecha,
-    fechaFin: fecha&&horaFin ? fecha+'T'+horaFin : fecha,
-    placa, tipoVehiculo: tipoVeh, cilindraje, capacidad,
-    largo, ancho, alto, ejeUnoDos: eje12, ejeDosTres: eje23, ejeTresCuatro: eje34,
-    clienteOrden: cliente,
-    ubicacionLink:(document.getElementById('rev-ublink')||{}).value||'', departamento: deptoRev, ciudad: ciudadRev,
-    kmSalida: kmSal, kmRetorno: kmRet,
-    completado: estado==='Completado'
+    id: uid(), correlativo, estado: 'En proceso', ubicacion: 'campo',
+    tecnicos: [tec1, tec2].filter(Boolean), clienteOrden: cliente,
+    notas: '', fecha, horaIni, horaFin: '', fechaInicio: fecha+'T'+horaIni, fechaFin: '',
+    placa: '', tipoVehiculo: '', cilindraje: '', capacidad: '',
+    completado: false
   };
-  if(estado==='Completado') entry.fechaCierre = new Date().toISOString().slice(0,10);   // (2026-11-07) como «Finalizar orden»
-  const _fotosNuevas = (window._revNuevaFotos||[]).slice();
-  if(_fotosNuevas.length) entry.fotos = _fotosNuevas;
   DB.revisiones.push(entry);
-  if(_fotosNuevas.length) _persistirFotosOrden(entry);   // las fotos van aparte (fotosOrden_montasa), como en la tarjeta
-  window._revNuevaFotos = []; _revNuevaPintarFotos();
   saveDB();
-  if(window._fbDB && window._fbReady)
-    _Sync.guardar();
-  ['rev-cliente','rev-placa','rev-cilindraje','rev-capacidad','rev-largo','rev-ancho','rev-alto','rev-eje12','rev-eje23','rev-eje34','rev-desc','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('rev-estado').value='En proceso';   // (2026-11-07) por defecto «En proceso»
+  if(window._fbDB && window._fbReady) _Sync.guardar();
+  document.getElementById('rev-cliente').value='';
   document.getElementById('rev-tec1').selectedIndex=0;
   document.getElementById('rev-tec2').selectedIndex=0;
-  document.getElementById('rev-tipo-vehiculo').selectedIndex=0;
   toggleForm('form-rev');
+  _openRev.add(entry.id);   // abrir la tarjeta para seguir llenando
   renderRevisiones();
-  toast('Revisión guardada ✓');
+  toast('Revisión ' + correlativo + ' creada ✓ — completa los datos en la tarjeta');
 }
 
 function renderRevisiones(){
