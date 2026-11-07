@@ -266,7 +266,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a9194f9122f0';
+  var APP_VERSION='d214e2e07875';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -4486,14 +4486,46 @@ function _mergeLogViaticos(remotos){
 // La identidad y la cuenta NO se guardan en la solicitud: Gerencia las completa al mostrarla o imprimirla.
 const GESTORES_VIATICOS = [];
 function _nzGestor(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+// (2026-11-07, Miguel) Gestores COMBINADOS MT Rental + MONHACO para todos los viáticos. Se leen las dos empresas una vez (y cada
+// 10 min): Gerencia de rrhh/<raíz>/empleados (identidad y cuenta), las demás apps de <raíz>/rrhh/plantilla (solo nombres).
+window._nxGestAmbas = window._nxGestAmbas || { montasa: [], monhaco: [] };
+function _gestAmbasCargar(){
+  if(!window._fbDB || window._gestAmbasPidiendo) return;
+  if(window._gestAmbasTs && Date.now() - window._gestAmbasTs < 600000) return;
+  window._gestAmbasPidiendo = true; window._gestAmbasTs = Date.now();
+  var ger = (typeof window._nxGestoresGer === 'function');
+  var EMP = { montasa: 'MT Rental', monhaco: 'MONHACO' };
+  var depto = function(cargo, roles){ var c = String(cargo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(), r = roles || [];
+    if(r.indexOf('aviso') >= 0 || /GEREN/.test(c)) return 'Gerencia';
+    if(r.indexOf('op') >= 0 || r.indexOf('mot') >= 0 || /MOTORIST|OPERADOR|GRUA/.test(c)) return 'Logística';
+    return 'Taller'; };
+  var una = function(raiz){
+    var ruta = ger ? 'rrhh/' + raiz + '/empleados' : raiz + '/rrhh/plantilla';
+    return window._fbDB.ref(ruta).once('value').then(function(s){
+      var v = s.val() || {}, out = [];
+      Object.keys(v).forEach(function(k){ var e = v[k]; if(!e || e.activo === false) return;
+        var nom = ger ? e.nombreCompleto : (e.nc || e.n); if(!nom) return;
+        out.push({ nombre: String(nom).toUpperCase(), id: ger ? (e.identidad || '') : '', cuenta: ger ? (e.cuentaBancaria || '') : '',
+          depto: depto(ger ? e.cargo : e.c, e.roles) + ' · ' + EMP[raiz] }); });
+      window._nxGestAmbas[raiz] = out;
+    }).catch(function(){});
+  };
+  Promise.all([una('montasa'), una('monhaco')]).then(function(){ window._gestAmbasPidiendo = false; });
+}
 function _gestores(){
+  try{ _gestAmbasCargar(); }catch(e){}
   var l = (typeof window._nxGestoresGer === 'function') ? window._nxGestoresGer() : null;
   if(!l || !l.length){
     var ps = (typeof window._nxPersonas === 'function') ? window._nxPersonas() : [];
     l = ps.map(function(p){ var r = p.roles || [];
       return { nombre: String(p.nc || p.n || '').toUpperCase(), id: '', cuenta: '', depto: r.indexOf('aviso') >= 0 ? 'Gerencia' : (r.indexOf('op') >= 0 || r.indexOf('mot') >= 0) ? 'Logística' : 'Taller' }; });
   }
-  l = l.filter(function(g){ return g && g.nombre; }).sort(function(a, b){ return a.nombre.localeCompare(b.nombre, 'es'); });
+  // (2026-11-07) + empleados de las dos empresas; sin repetidos (gana el que trae identidad / cuenta)
+  l = (l || []).concat(window._nxGestAmbas.montasa || [], window._nxGestAmbas.monhaco || []);
+  var _vistos = {};
+  l = l.filter(function(g){ return g && g.nombre; }).sort(function(a, b){ return ((b.id || b.cuenta) ? 1 : 0) - ((a.id || a.cuenta) ? 1 : 0); })
+    .filter(function(g){ var k = _nzGestor(g.nombre); if(_vistos[k]) return false; _vistos[k] = 1; return true; });
+  l = l.sort(function(a, b){ return a.nombre.localeCompare(b.nombre, 'es'); });
   if(l.length){ GESTORES_VIATICOS.length = 0; Array.prototype.push.apply(GESTORES_VIATICOS, l); }
   return GESTORES_VIATICOS;
 }
@@ -4501,6 +4533,7 @@ function _gestorDato(nombre, campo){
   var n = _nzGestor(nombre); if(!n) return '';
   var g = _gestores().find(function(x){ return _nzGestor(x.nombre) === n; }); return g ? (g[campo] || '') : '';
 }
+(function _gestAmbasInicio(){ var n = 0, t = setInterval(function(){ if(window._fbDB && window._fbReady){ try{ _gestAmbasCargar(); }catch(e){} clearInterval(t); } else if(++n > 120) clearInterval(t); }, 2000); })();
 function _gestorSinDato(){ return (typeof window._nxGestoresGer === 'function') ? '—' : 'Lo completa Gerencia'; }
 // ── Destinos fuera de Honduras: la tabla nacional de alimentación y hospedaje
 // no aplica, y hay gastos de frontera que van en "otros gastos" ─────────────
