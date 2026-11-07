@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='acf1fd1de7c5';
+  var APP_VERSION='b1d62165c5d4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -3375,7 +3375,7 @@ function _dataURLaBlob(u){
 function _extFoto(u){ var m=/data:image\/(png|jpe?g|webp|gif)/i.exec(u||''); if(!m) return 'jpg'; var e=m[1].toLowerCase(); return e==='jpeg'?'jpg':e; }
 function _btnDescFotos(id){ return '<button onclick="event.stopPropagation();abrirDescargaFotos(\''+id+'\')" style="margin-bottom:8px;padding:5px 12px;font-size:12px;font-weight:600;background:#eef4fb;color:#1f5488;border:1px solid #cfe0f0;border-radius:8px;cursor:pointer">📥 Descargar fotografía</button>'; }
 function abrirDescargaFotos(id){
-  var arrs=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.logistica,DB.cortinas];
+  var arrs=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.logistica,DB.cortinas,(typeof _spLista==='function'?_spLista():DB.soldaduras)];   // (2026-11-07) + soldadura / pintura
   var o=null;
   for(var i=0;i<arrs.length;i++){ if(Array.isArray(arrs[i])){ var f=arrs[i].find(function(x){return x&&x.id===id;}); if(f){o=f;break;} } }
   if(!o){ try{toast('Orden no encontrada',true);}catch(e){} return; }
@@ -3460,10 +3460,20 @@ function _fotosPendientes(o){
 function _fotosCargandoHTML(){
   return '<div style="font-size:12px;color:var(--text3);padding:8px 0">📷 Cargando fotografías…</div>';
 }
+// (2026-11-07) Las vistas dibujan COPIAS de las órdenes ({...o}): las fotos se ponen también en la orden real. Si no, cada redibujo
+// volvía a pedirlas y redibujaba sin fin (los botones de la tarjeta no respondían y las fotos no abrían). true = la orden no las tenía.
+function _fotosAlOriginal(id, arr){
+  var hubo = false;
+  [DB.preventivos, DB.correctivos, DB.revisiones, DB.evaluaciones, DB.logistica, DB.cortinas, DB.soldaduras].forEach(function(l){
+    if(!l || typeof l !== 'object') return;
+    (Array.isArray(l) ? l : Object.values(l)).forEach(function(r){ if(r && r.id === id && !(Array.isArray(r.fotos) && r.fotos.length)){ r.fotos = arr; hubo = true; } });
+  });
+  return hubo;
+}
 function _hidratarFotos(o, cb){
   if(!o || !o.id) return;
   const cacheado = window._fotosOrdenCache[o.id];
-  if(cacheado && cacheado.length){ o.fotos = cacheado; if(cb) cb(); else _refrescarVistasFotos(); return; }
+  if(cacheado && cacheado.length){ o.fotos = cacheado; var _nv = _fotosAlOriginal(o.id, cacheado); if(cb) cb(); else if(_nv) _refrescarVistasFotos(); return; }
   if(!window._fbDB || window._fotosHidratando[o.id]) return;
   window._fotosHidratando[o.id] = true;
   window._fbDB.ref('fotosOrden_montasa/'+o.id).once('value').then(function(s){
@@ -3471,7 +3481,7 @@ function _hidratarFotos(o, cb){
     const v = s.val();
     const arr = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
     window._fotosOrdenCache[o.id] = arr;
-    if(arr.length){ o.fotos = arr; if(cb) cb(); else _refrescarVistasFotos(); }
+    if(arr.length){ o.fotos = arr; _fotosAlOriginal(o.id, arr); if(cb) cb(); else _refrescarVistasFotos(); }
   }).catch(function(){ delete window._fotosHidratando[o.id]; });
 }
 function _persistirFotosOrden(o){
@@ -16009,7 +16019,7 @@ function _buildDetalleSP(x, tecs, est){
   if(typeof _fotosPendientes === 'function' && _fotosPendientes(x)){ d += _fotosCargandoHTML(); _hidratarFotos(x); }
   if(x.fotos && x.fotos.length){
     if(typeof _btnDescFotos === 'function') d += _btnDescFotos(x.id);
-    d += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">' + x.fotos.map(function(ft){ return '<a href="' + _img(ft) + '" target="_blank" rel="noopener"><img src="' + _img(ft) + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px"></a>'; }).join('') + '</div>';
+    d += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">' + x.fotos.map(function(ft){ return '<img src="' + _img(ft) + '" onclick="event.stopPropagation();_spVerFoto(this.src)" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:zoom-in">'; }).join('') + '</div>';
   }
   var B = 'width:100%;margin-top:4px;padding:8px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;';
   d += '<button onclick="event.stopPropagation();abrirViaticos(\'' + _idS(x.id) + '\',\'soldadura\')" style="' + B + 'background:' + (x.viaticos ? '#1f3864' : '#2d6a9f') + ';color:white;border:none">' + (x.viaticos ? '📋 Ver / editar viáticos' : '📋 Solicitar viáticos') + '</button>';
@@ -16020,6 +16030,13 @@ function _buildDetalleSP(x, tecs, est){
   }
   d += '<button onclick="event.stopPropagation();_elimSP(\'' + _idS(x.id) + '\')" style="' + B + 'background:#fdeaea;color:#c00;border:none">🗑 Eliminar orden</button>';
   return d + '</div>';
+}
+// (2026-11-07) Foto en grande dentro de la app; tocar para cerrar
+function _spVerFoto(src){
+  var ov = document.createElement('div'), im = document.createElement('img');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  im.src = src; im.style.cssText = 'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px';
+  ov.appendChild(im); ov.onclick = function(){ ov.remove(); }; document.body.appendChild(ov);
 }
 function _elimSP(id){
   if(typeof _papeleraGuardar !== 'function'){ toast('Solo Gerencia puede editar o eliminar órdenes de trabajo', true); return; }   // Supervisión
