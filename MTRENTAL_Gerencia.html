@@ -26,8 +26,8 @@
 </script>
 <script>
 // (2026-10-26) Lista y colección de la ventana de vales de mantenimiento según el tipo: preventivo, soldadura o correctivo
-function _valeMantArr(t){ return t === 'preventivo' ? (DB.preventivos || []) : t === 'soldadura' ? ((typeof _spLista === 'function') ? _spLista() : (DB.soldaduras || [])) : (DB.correctivos || []); }
-function _valeMantCol(t){ return t === 'preventivo' ? 'preventivos' : t === 'soldadura' ? 'soldaduras' : 'correctivos'; }
+function _valeMantArr(t){ return t === 'preventivo' ? (DB.preventivos || []) : t === 'revision' ? (DB.revisiones || []) : t === 'soldadura' ? ((typeof _spLista === 'function') ? _spLista() : (DB.soldaduras || [])) : (DB.correctivos || []); }
+function _valeMantCol(t){ return t === 'preventivo' ? 'preventivos' : t === 'revision' ? 'revisiones' : t === 'soldadura' ? 'soldaduras' : 'correctivos'; }
 </script>
 <script>
 // ══ DOMINGOS TRABAJADOS Y VALES DE FIN DE SEMANA (2026-10-26, pedido de Miguel) ══
@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='91906ea4f89d';
+  var APP_VERSION='da642c314cae';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -9432,12 +9432,15 @@ function _buildDetalleRV(x, tecs, estRV, ESTADOS_COLOR){
     d += `</div></div>`;
   }
   d += `<button onclick="event.stopPropagation();abrirViaticos('${_idS(x.id)}','revision')" style="width:100%;margin-top:4px;padding:8px;background:${x.viaticos?'#1f3864':'#2d6a9f'};color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📋 ${x.viaticos?'Ver Viáticos':'Solicitar Viáticos'}</button>`;
+  // (2026-11-07, Miguel) Vale de alimentación también en revisiones (como soldadura / pintura): no se puede si ya pidió viáticos
+  if(!x.viaticos) d += `<button onclick="event.stopPropagation();abrirValeMant('${_idS(x.id)}','revision')" style="width:100%;margin-top:4px;padding:8px;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">${(x.vales && x.vales.length) ? '🍽 Vale' : '🍽 Solicitar Vale de Alimentación'}</button>`;
   if(estRV==='Completado'){
     // (2026-10-15, pedido de Miguel) reabrir para editar también las revisiones físico-técnicas
-    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('rv','${_idS(x.id)}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Editar orden (PIN)</button>`;
+    d += `<button onclick="event.stopPropagation();_reabrirOrdenMant('rv','${_idS(x.id)}')" style="width:100%;margin-top:4px;padding:8px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🔓 Reabrir para editar</button>`;
     d += `<button onclick="event.stopPropagation();copiarImagenOrden('revision_fisica','${_idS(x.id)}')" style="width:100%;margin-top:4px;padding:8px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">📤 Compartir imagen</button>`;
-    d += `<button onclick="event.stopPropagation();eliminarDelHistorial('rv','${_idS(x.id)}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar</button>`;
   }
+  // (2026-11-07) Eliminar también cuando está pendiente o en proceso (antes solo completada)
+  d += `<button onclick="event.stopPropagation();eliminarDelHistorial('rv','${_idS(x.id)}')" style="width:100%;margin-top:4px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">🗑 Eliminar orden</button>`;
   d += `</div>`;
   return d;
 }
@@ -10190,6 +10193,11 @@ function eliminarDelHistorial(tipo, id){
       } else {
         renderLogistica(); renderHistorial(); toast('Orden eliminada ✓');
       }
+    } else if(tipo==='rv'){
+      // (2026-11-07) antes caía en «correctivos» y la revisión no se borraba
+      _papeleraGuardar((DB.revisiones||[]).find(x=>x&&x.id===id), 'rv');
+      DB.revisiones = (DB.revisiones||[]).filter(x=>x.id!==id);
+      saveDB(); fillHistSel(); renderHistorial(); toast('Orden eliminada');
     } else {
       const ordenCorr = DB.correctivos.find(x=>x.id===id);
       _papeleraGuardar(ordenCorr, 'corr');
@@ -13903,7 +13911,9 @@ function abrirValeMant(ordenId, tipo){
   const orden = arr.find(o=>o.id===ordenId);
   if(!orden) return;
   const yaGenerado = orden.vales && orden.vales.length;
-  const estaCompletada = tipo==='preventivo' ? orden.completado : orden.estado==='Completado';
+  const estaCompletada = tipo==='preventivo' ? orden.completado : (orden.estado==='Completado' || (tipo==='revision' && orden.completado));
+  // (2026-11-07) Revisión: la tarjeta de Técnicos guarda fecha + hora inicio/final por separado; armar inicio/fin para calcular el vale
+  if(tipo==='revision' && !yaGenerado && orden.fecha && orden.horaIni && orden.horaFin){ orden.fechaInicio = orden.fecha + 'T' + orden.horaIni; orden.fechaFin = orden.fecha + 'T' + orden.horaFin; }
   if(!yaGenerado && estaCompletada){
     solicitarPINAccion(()=>{
       _abrirValeMantInterno(ordenId, tipo);
@@ -14042,6 +14052,7 @@ function _ejecutarGuardarValeMant(){
   if(_valeMantTipo==='preventivo' && typeof renderPreventivos==='function') renderPreventivos();
   else if(typeof renderCorrectivos==='function') renderCorrectivos();
   if(_valeMantTipo==='soldadura'){ try{ if(typeof renderHistorial==='function') renderHistorial(); }catch(e){} try{ if(typeof renderSoldaduras==='function') renderSoldaduras(); }catch(e){} }   // (2026-10-26)
+  if(_valeMantTipo==='revision'){ try{ if(typeof renderHistorial==='function') renderHistorial(); }catch(e){} }   // (2026-11-07)
 }
 
 function cerrarValeMant(){
@@ -14130,7 +14141,7 @@ function imprimirValeMant(){
   const arr = _valeMantArr(_valeMantTipo);
   const orden = arr.find(o=>o.id===_valeMantOrdenId);
   if(!orden) return;
-  _valeComprobanteImprimir(orden, (_valeMantTipo==='soldadura' ? 'soldadura / pintura' : _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo'));
+  _valeComprobanteImprimir(orden, (_valeMantTipo==='soldadura' ? 'soldadura / pintura' : _valeMantTipo==='revision' ? 'revisión físico-técnica' : _valeMantTipo==='preventivo' ? 'mantenimiento preventivo' : 'mantenimiento correctivo'));
 }
 
 function _cambiarEstadoEquipo(equipoId, nuevoEstado){
