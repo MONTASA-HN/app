@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d2d1d9303b46';
+  var APP_VERSION='5fc1929ce089';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2396,6 +2396,8 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
         <select id="rev-tec1"><option value="">— Seleccionar —</option><option>Francisco Narvaez</option><option>Miguel Lopez</option><option>Elvis Pineda</option><option>Jonathan Martinez</option><option>Sergio Madrid</option><option>Elkin Perez</option><option>Kevin Deras</option><option>Fernando Benavides</option><option>Eliberto Peña</option></select>
         <select id="rev-tec2" style="margin-top:8px"><option value="">— Segundo técnico (opcional) —</option><option>Francisco Narvaez</option><option>Miguel Lopez</option><option>Elvis Pineda</option><option>Jonathan Martinez</option><option>Sergio Madrid</option><option>Elkin Perez</option><option>Kevin Deras</option><option>Fernando Benavides</option><option>Eliberto Peña</option></select>
       </div>
+      <!-- (2026-11-07) Cliente: la misma lista de Solicitudes (sale en la miniatura de Gerencia y Comercial) -->
+      <div class="form-group"><label>🏢 Cliente</label><input id="rev-cliente" list="rev-cliente-lista" autocomplete="off" placeholder="Escribe y elige de la lista" onfocus="_revCliCargar()"><datalist id="rev-cliente-lista"></datalist></div>
       <div class="form-group"><label>Descripción</label><textarea id="rev-desc" rows="3" placeholder="Descripción de la revisión..."></textarea></div>
       
       <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
@@ -6241,6 +6243,21 @@ function toggleEvalKm(val){
   if(el) el.style.display = val==='plantel' ? 'none' : 'grid';
 }
 
+// (2026-11-07) Clientes para «Nueva revisión»: montasa/clientesLista (la de Solicitudes); se recuerda en el teléfono para sin señal
+var _REV_CLI_INTERNO = 'MONTASA HANDLING CO. (USO INTERNO)', _REV_CLI = null;
+function _revCliNorm(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+function _revCliTodos(){ return [_REV_CLI_INTERNO].concat(_REV_CLI || []); }
+function _revCliExacto(t){ var q = _revCliNorm(t); if(!q) return ''; var e = _revCliTodos().find(function(n){ return _revCliNorm(n) === q; }); return e || String(t).trim().replace(/\s+/g, ' ').toUpperCase(); }   // cliente nuevo: en mayúsculas como la lista
+function _revCliPintar(){ var dl = document.getElementById('rev-cliente-lista'); if(dl) dl.innerHTML = _revCliTodos().map(function(n){ return '<option value="' + _x(n) + '">'; }).join(''); }
+function _revCliCargar(){
+  if(!_REV_CLI){ try{ var c = JSON.parse(localStorage.getItem('nx_rev_clientes') || 'null'); if(c && c.length) _REV_CLI = c; }catch(e){} _revCliPintar(); }
+  if(!window._fbDB || window._revCliPidiendo) return;
+  window._revCliPidiendo = true;
+  window._fbDB.ref('montasa/clientesLista').once('value').then(function(s){
+    var v = s.val(), L = (Array.isArray(v) ? v : Object.values(v || {})).map(function(x){ return x && x.nombre; }).filter(Boolean);
+    if(L.length){ _REV_CLI = L; try{ localStorage.setItem('nx_rev_clientes', JSON.stringify(L)); }catch(e){} _revCliPintar(); }
+  }).catch(function(){}).then(function(){ window._revCliPidiendo = false; });
+}
 // (2026-11-07) Fotos del formulario «Nueva revisión»: se guardan en memoria hasta «Guardar» (máx. 10, comprimidas como en la tarjeta)
 window._revNuevaFotos = window._revNuevaFotos || [];
 function _revNuevaPintarFotos(){
@@ -6288,6 +6305,7 @@ function guardarRevision(){
   const cilindraje = (document.getElementById('rev-cilindraje')?.value||'').trim();
   const capacidad  = (document.getElementById('rev-capacidad')?.value||'').trim();
   const _rv = function(id){ return ((document.getElementById(id)||{}).value||'').trim(); };   // (2026-11-07) dimensiones
+  const cliente = _revCliExacto(_rv('rev-cliente'));   // (2026-11-07)
   const largo = _rv('rev-largo'), ancho = _rv('rev-ancho'), alto = _rv('rev-alto'), eje12 = _rv('rev-eje12'), eje23 = _rv('rev-eje23'), eje34 = _rv('rev-eje34');
   const kmSal     = document.getElementById('rev-km-sal')?.value||'';
   const kmRet     = document.getElementById('rev-km-ret')?.value||'';
@@ -6295,6 +6313,7 @@ function guardarRevision(){
   const ciudadRev = ((document.getElementById('rev-ciudad')||{}).value||'').trim();
   const faltantes = [];
   if(!tec1) faltantes.push('Técnico asignado');
+  if(!cliente) faltantes.push('🏢 Cliente');
   if(!desc) faltantes.push('Descripción');
   // (2026-11-07) Guardada directo como «Completado»: lo mismo que pide «Finalizar orden»
   if(estado==='Completado'){
@@ -6318,6 +6337,7 @@ function guardarRevision(){
     fechaFin: fecha&&horaFin ? fecha+'T'+horaFin : fecha,
     placa, tipoVehiculo: tipoVeh, cilindraje, capacidad,
     largo, ancho, alto, ejeUnoDos: eje12, ejeDosTres: eje23, ejeTresCuatro: eje34,
+    clienteOrden: cliente,
     ubicacionLink:(document.getElementById('rev-ublink')||{}).value||'', departamento: deptoRev, ciudad: ciudadRev,
     kmSalida: kmSal, kmRetorno: kmRet,
     completado: estado==='Completado'
@@ -6331,7 +6351,7 @@ function guardarRevision(){
   saveDB();
   if(window._fbDB && window._fbReady)
     _Sync.guardar();
-  ['rev-placa','rev-cilindraje','rev-capacidad','rev-largo','rev-ancho','rev-alto','rev-eje12','rev-eje23','rev-eje34','rev-desc','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
+  ['rev-cliente','rev-placa','rev-cilindraje','rev-capacidad','rev-largo','rev-ancho','rev-alto','rev-eje12','rev-eje23','rev-eje34','rev-desc','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('rev-estado').selectedIndex=0;
