@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='27bdafd2f58d';
+  var APP_VERSION='12fd07f9c59b';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2332,7 +2332,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   <div style="padding:0 0 14px">
     <button class="btn btn-primary btn-full" onclick="toggleForm('form-cortinas')">+ Nueva orden de cortinas / niveladoras</button>
     <div id="form-cortinas" style="display:none;margin-top:14px;background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border)">
-      <div class="form-group"><label>Estado</label><select id="cort-estado"><option>Pendiente</option><option>En proceso</option><option>Completado</option></select></div>
+      <div class="form-group"><label>Estado</label><select id="cort-estado"><option>Pendiente</option><option selected>En proceso</option><option>Completado</option></select></div>
       <div class="form-group"><label>Nombre del cliente</label><input id="cort-cliente" placeholder="Nombre completo del cliente"></div>
       <div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         <div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" id="cort-fecha-ini"></div>
@@ -3650,6 +3650,7 @@ function guardarPreventivo(finalizar=false){
   getFotoBase64('prev-foto-input').then(foto=>{
     if(foto) entry.foto=foto;
     if(finalizar){ entry.completado=true; entry.estado='Completado'; entry.fechaCompletado=new Date().toISOString().slice(0,10); }
+    else if(!entry.estado) entry.estado = 'En proceso';   // (2026-11-07) creada por el técnico: ya la está haciendo
     const _eqAuto = DB.equipos.find(e=>e.id===entry.equipoId);
     if(_eqAuto) entry.estadoEquipoAnterior = _eqAuto.estado || 'DISPONIBLE';
     DB.preventivos.push(entry);
@@ -5609,7 +5610,7 @@ function guardarCortina(){
   ['cort-cliente','cort-desc','cort-fecha-ini','cort-hora-ini','cort-fecha-fin','cort-hora-fin'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  document.getElementById('cort-estado').selectedIndex=0;
+  document.getElementById('cort-estado').value='En proceso';   // (2026-11-07) por defecto «En proceso»
   document.querySelectorAll('#cort-tecnicos-grid input[type=checkbox]').forEach(cb=>{ cb.checked=false; cb.closest('.tecnico-check')?.classList.remove('selected'); });
   limpiarFirma('firma-cort-new');
   toggleForm('form-cortinas');
