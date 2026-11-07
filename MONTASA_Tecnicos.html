@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='421997d9add2';
+  var APP_VERSION='d2d1d9303b46';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2411,6 +2411,24 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label>Cilindraje (cc)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-cilindraje" placeholder="Ej: 2400"></div>
         <div class="form-group"><label>Capacidad (kg)</label><input type="number" inputmode="numeric" min="0" step="1" id="rev-capacidad" placeholder="Ej: 10000"></div>
+      </div>
+      <!-- (2026-11-07) Lo mismo que la tarjeta de la revisión: dimensiones y fotografías -->
+      <div style="font-size:12px;font-weight:700;color:#2d6a9f;margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">📏 Dimensiones (mts)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:12px">
+        <div class="form-group" style="margin-bottom:0"><label>Largo (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-largo" placeholder="0"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Ancho (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-ancho" placeholder="0"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Alto (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-alto" placeholder="0"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 1-2 (mts)</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje12" placeholder="0"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 2-3 (mts) — opcional</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje23" placeholder="0"></div>
+        <div class="form-group" style="margin-bottom:0"><label>Distancia entre eje 3-4 (mts) — opcional</label><input type="number" inputmode="decimal" min="0" step="any" id="rev-eje34" placeholder="0"></div>
+      </div>
+      <div class="form-group">
+        <label>📷 Fotografías de la orden <span style="font-size:11px;color:var(--text3);font-weight:400">(máx. 10 — solo uso interno)</span></label>
+        <div id="rev-nueva-fotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="_revNuevaAgregarFotos(this)">📷 Cámara</label>
+          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:10px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;color:var(--accent)"><input type="file" accept="image/*" multiple style="display:none" onchange="_revNuevaAgregarFotos(this)">🖼 Galería</label>
+        </div>
       </div>
       <div id="rev-km-wrap" style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px">
       </div>
@@ -6223,6 +6241,39 @@ function toggleEvalKm(val){
   if(el) el.style.display = val==='plantel' ? 'none' : 'grid';
 }
 
+// (2026-11-07) Fotos del formulario «Nueva revisión»: se guardan en memoria hasta «Guardar» (máx. 10, comprimidas como en la tarjeta)
+window._revNuevaFotos = window._revNuevaFotos || [];
+function _revNuevaPintarFotos(){
+  var el = document.getElementById('rev-nueva-fotos'); if(!el) return;
+  el.innerHTML = window._revNuevaFotos.map(function(f, i){
+    return '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;flex-shrink:0"><img src="' + f + '" style="width:100%;height:100%;object-fit:cover" onclick="_verFotoGrande(window._revNuevaFotos[' + i + '])">'
+      + '<button type="button" onclick="window._revNuevaFotos.splice(' + i + ',1);_revNuevaPintarFotos()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;padding:0;line-height:1">✕</button></div>';
+  }).join('');
+}
+function _revNuevaAgregarFotos(input){
+  var archivos = Array.from(input.files || []); input.value = '';
+  var espacio = 10 - window._revNuevaFotos.length;
+  if(espacio <= 0){ toast('Límite de 10 fotos alcanzado', true); return; }
+  if(archivos.length > espacio) toast('Solo se agregaron ' + espacio + ' de ' + archivos.length + ' (límite 10)', true);
+  archivos.slice(0, espacio).forEach(function(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        try{
+          var MAX = 1024, w = img.width, h = img.height;
+          if(w > MAX){ h = Math.round(h*MAX/w); w = MAX; }
+          if(h > MAX){ w = Math.round(w*MAX/h); h = MAX; }
+          var c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+          if(window._revNuevaFotos.length < 10) window._revNuevaFotos.push(c.toDataURL('image/jpeg', 0.7));
+          _revNuevaPintarFotos();
+        }catch(err){ toast('No se pudo procesar una foto', true); }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function guardarRevision(){
   const estado    = document.getElementById('rev-estado').value;
   const ubicacion = document.getElementById('rev-ubicacion')?.value || 'campo';
@@ -6236,6 +6287,8 @@ function guardarRevision(){
   const tipoVeh   = document.getElementById('rev-tipo-vehiculo')?.value||'';
   const cilindraje = (document.getElementById('rev-cilindraje')?.value||'').trim();
   const capacidad  = (document.getElementById('rev-capacidad')?.value||'').trim();
+  const _rv = function(id){ return ((document.getElementById(id)||{}).value||'').trim(); };   // (2026-11-07) dimensiones
+  const largo = _rv('rev-largo'), ancho = _rv('rev-ancho'), alto = _rv('rev-alto'), eje12 = _rv('rev-eje12'), eje23 = _rv('rev-eje23'), eje34 = _rv('rev-eje34');
   const kmSal     = document.getElementById('rev-km-sal')?.value||'';
   const kmRet     = document.getElementById('rev-km-ret')?.value||'';
   const deptoRev  = (document.getElementById('rev-departamento')||{}).value||'';
@@ -6243,6 +6296,14 @@ function guardarRevision(){
   const faltantes = [];
   if(!tec1) faltantes.push('Técnico asignado');
   if(!desc) faltantes.push('Descripción');
+  // (2026-11-07) Guardada directo como «Completado»: lo mismo que pide «Finalizar orden»
+  if(estado==='Completado'){
+    if(!fecha) faltantes.push('Fecha'); if(!horaIni) faltantes.push('Hora inicio'); if(!horaFin) faltantes.push('Hora final');
+    if(!placa) faltantes.push('Placa del vehículo'); if(!tipoVeh) faltantes.push('Tipo de vehículo');
+    if(!cilindraje) faltantes.push('Cilindraje (cc)'); if(!capacidad) faltantes.push('Capacidad (kg)');
+    if(!largo) faltantes.push('Largo (mts)'); if(!ancho) faltantes.push('Ancho (mts)'); if(!alto) faltantes.push('Alto (mts)');
+    if(!eje12) faltantes.push('Distancia entre eje 1-2 (mts)');
+  }
     if(ubicacion !== 'plantel'){
   }
   if(faltantes.length){ alert('Faltan:\n• '+faltantes.join('\n• ')); return; }
@@ -6256,15 +6317,21 @@ function guardarRevision(){
     fechaInicio: fecha&&horaIni ? fecha+'T'+horaIni : fecha,
     fechaFin: fecha&&horaFin ? fecha+'T'+horaFin : fecha,
     placa, tipoVehiculo: tipoVeh, cilindraje, capacidad,
+    largo, ancho, alto, ejeUnoDos: eje12, ejeDosTres: eje23, ejeTresCuatro: eje34,
     ubicacionLink:(document.getElementById('rev-ublink')||{}).value||'', departamento: deptoRev, ciudad: ciudadRev,
     kmSalida: kmSal, kmRetorno: kmRet,
     completado: estado==='Completado'
   };
+  if(estado==='Completado') entry.fechaCierre = new Date().toISOString().slice(0,10);   // (2026-11-07) como «Finalizar orden»
+  const _fotosNuevas = (window._revNuevaFotos||[]).slice();
+  if(_fotosNuevas.length) entry.fotos = _fotosNuevas;
   DB.revisiones.push(entry);
+  if(_fotosNuevas.length) _persistirFotosOrden(entry);   // las fotos van aparte (fotosOrden_montasa), como en la tarjeta
+  window._revNuevaFotos = []; _revNuevaPintarFotos();
   saveDB();
   if(window._fbDB && window._fbReady)
     _Sync.guardar();
-  ['rev-placa','rev-cilindraje','rev-capacidad','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
+  ['rev-placa','rev-cilindraje','rev-capacidad','rev-largo','rev-ancho','rev-alto','rev-eje12','rev-eje23','rev-eje34','rev-desc','rev-ublink','rev-departamento','rev-ciudad','rev-hora-ini','rev-hora-fin','rev-fecha'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('rev-estado').selectedIndex=0;
