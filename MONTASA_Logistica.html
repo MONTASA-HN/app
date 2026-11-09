@@ -266,7 +266,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d214e2e07875';
+  var APP_VERSION='d70ddec62fb8';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -3469,9 +3469,11 @@ function _optsVehiculos(sel){
   const v = String(sel||'');
   let h = (DB.equipos||[]).filter(function(e){ return e && e.esVehiculo && (e.estado||'DISPONIBLE')!=='MAL ESTADO'; })
     .map(function(e){ return '<option value="'+esc(e.codigo)+'"'+(v===e.codigo?' selected':'')+'>'+esc(e.codigo)+'</option>'; }).join('');
+  // (2026-11-07, Miguel) Órdenes LGMH (MONHACO): también la grúa GR-01 y el camión CM-35 de MT Rental como vehículo de traslado
+  if(_NXR === 'monhaco') ['GR-01','CM-35'].forEach(function(c){ if(!(DB.equipos||[]).some(function(e){ return e && e.codigo===c; })) h += '<option value="'+c+'"'+(v===c?' selected':'')+'>'+c+' (MT Rental)</option>'; });
   h += '<option value="'+_VEH_PERSONAL+'"'+(v===_VEH_PERSONAL?' selected':'')+'>🚗 '+_VEH_PERSONAL+'</option>';
   // Conservar un valor guardado que ya no exista en la flota
-  if(v && v!==_VEH_PERSONAL && !(DB.equipos||[]).some(function(e){ return e && e.codigo===v; })) h += '<option value="'+esc(v)+'" selected>'+esc(v)+'</option>';
+  if(v && v!==_VEH_PERSONAL && !(_NXR === 'monhaco' && (v==='GR-01'||v==='CM-35')) && !(DB.equipos||[]).some(function(e){ return e && e.codigo===v; })) h += '<option value="'+esc(v)+'" selected>'+esc(v)+'</option>';
   return h;
 }
 
