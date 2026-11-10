@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ad6c9a939bbc';
+  var APP_VERSION='a843f0163d61';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1920,6 +1920,11 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   </div>
 
   
+  <!-- (2026-11-10) COMBUSTIBLE VEHICULAR (igual que Técnicos MONHACO) -->
+  <div id="tab-combustible" class="section">
+    <div id="comb-cont"></div>
+  </div>
+
   <!-- REPORTES MENSUALES POR CLIENTE -->
   <div id="tab-reportes" class="section">
     <div id="rm-cont"></div>
@@ -2256,9 +2261,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="supShowTab('sup-dashboard',this)">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    Inicio
+    Órdenes
   </button>
-  <button class="nav-btn" onclick="supShowTab('historial',this)">
+  <!-- (2026-11-10, Miguel) el módulo «Órdenes» de carpetas se quitó: «Órdenes» (antes Inicio) abre cada carpeta -->
+  <button class="nav-btn" style="display:none" onclick="supShowTab('historial',this)">
     <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
     Órdenes
   </button>
@@ -2268,6 +2274,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   </button>
   <button class="nav-btn" onclick="supShowTab('loghc',this)">
     <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Logística
+  </button>
+  <button class="nav-btn" onclick="supShowTab('combustible',this)">
+    <svg viewBox="0 0 24 24"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><line x1="3" y1="22" x2="15" y2="22"/><rect x="6" y="6" width="6" height="5"/><path d="M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg>
+    Combustible
   </button>
   <button class="nav-btn" onclick="supShowTab('reportes',this)">
     <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes
@@ -5432,7 +5442,7 @@ function actualizarCampoOrden(tipo, id, campo, valor){
 }
 
 function irACorrectivosConBuscar(buscar){
-  const btn = document.querySelector('.nav-btn:nth-child(3)');
+  const btn = document.querySelector('.nav-btn');   // (2026-11-10) «Órdenes»
   showTab('historial', btn);
   setTimeout(()=>{
     const input = document.getElementById('hist-buscar');
@@ -5441,7 +5451,7 @@ function irACorrectivosConBuscar(buscar){
 }
 
 function irAPreventivosConBuscar(buscar){
-  const btn = document.querySelector('.nav-btn:nth-child(3)');
+  const btn = document.querySelector('.nav-btn');   // (2026-11-10) «Órdenes»
   showTab('historial', btn);
   setTimeout(()=>{
     const input = document.getElementById('hist-buscar');
@@ -7450,6 +7460,7 @@ function _cerrarCarpetaMantSup(){
   _carpetaMantSup = null;
   const el = document.getElementById('historial-list');
   if(el) _renderCarpetasMantSup(el);
+  supShowTab('sup-dashboard', document.querySelector('.nav-btn'));   // (2026-11-10) ya no hay módulo de carpetas: volver a «Órdenes»
 }
 
 function _renderOrdenesMantSup(el, tipo){
@@ -7496,7 +7507,7 @@ function _renderOrdenesMantSup(el, tipo){
     info.label += ' · ' + all.length;
   }
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaMantSup()">
-    ← <span>Volver a carpetas</span>
+    ← <span>Volver a Órdenes</span>
   </div>
   <div class="carpeta-titulo" style="border-bottom:2px solid ${info.color};padding-bottom:8px">
     ${info.icon} ${info.label}
@@ -11493,19 +11504,21 @@ function renderDashboardTec(){
   const prev = contarEstados(DB.preventivos, o=>o.completado?'Completado':(o.estado||'Pendiente'));
   const corr = contarEstados(DB.correctivos, o=>o.estado||'Pendiente');
   const cort = contarEstados(DB.cortinas||[], o=>o.completado?'Completado':(o.estado||'Pendiente'));
+  const sold = contarEstados(DB.soldaduras||[], o=>o.completado?'Completado':(o.estado||'Pendiente'));   // (2026-11-10)
 
   // ── Completadas este mes ────────────────────────────────────────────────
   function esMes(f){ const d=new Date(f); return !isNaN(d)&&d.getMonth()===mes&&d.getFullYear()===anio; }
   const nPrev = DB.preventivos.filter(o=>o.completado && esMes(o.fechaCompletado||o.fechaFin||o.fecha)).length;
   const nCorr = DB.correctivos.filter(o=>o.estado==='Completado' && esMes(o.fechaCierre||o.fechaFin||o.fecha)).length;
   const nCort = (DB.cortinas||[]).filter(o=>o.completado && esMes(o.fechaCierre||o.fecha)).length;
-  const totalMes = nPrev + nCorr + nCort;
+  const nSold = (DB.soldaduras||[]).filter(o=>(o.completado||o.estado==='Completado') && esMes(o.fechaCierre||o.fecha)).length;
+  const totalMes = nPrev + nCorr + nCort + nSold;
 
   // ── Dona de completadas del mes ─────────────────────────────────────────
-  const COLORS_MES = ['#2E83C3','#C9211E','#9B59B6'];
+  const COLORS_MES = ['#2E83C3','#C9211E','#9B59B6','#7c3aed'];
   function donaHero(){
     const R=38, C=2*Math.PI*R;
-    const segs=[{v:nPrev,c:COLORS_MES[0]},{v:nCorr,c:COLORS_MES[1]},{v:nCort,c:COLORS_MES[2]}];
+    const segs=[{v:nPrev,c:COLORS_MES[0]},{v:nCorr,c:COLORS_MES[1]},{v:nCort,c:COLORS_MES[2]},{v:nSold,c:COLORS_MES[3]}];
     if(totalMes===0) return `<svg class="dash-donut" viewBox="0 0 84 84"><circle class="dash-donut-bg" cx="42" cy="42" r="38"/></svg>`;
     let acc=0, paths='';
     segs.forEach(s=>{
@@ -11544,7 +11557,7 @@ function renderDashboardTec(){
       abiertas===0?`<div style="text-align:center;padding:4px;color:var(--text3);font-size:11px">✅ Sin órdenes abiertas</div>`:''
     ].join('');
     const clickFn = carpetaTipo
-      ? `_abrirCarpetaMantSup('${carpetaTipo}');supShowTab('historial',document.querySelector('.nav-btn:nth-child(${navIdx})'))`
+      ? `_abrirCarpetaMantSup('${carpetaTipo}');supShowTab('historial',document.querySelector('.nav-btn'))`
       : `document.querySelector('.nav-btn:nth-child(${navIdx})').click()`;
     return `<div class="dash-type-card" style="--dtc-color:${color};--dtc-bg:${bg}" onclick="${clickFn}">
       <div class="dtc-glow"></div><div class="dtc-corner"></div>
@@ -11596,6 +11609,7 @@ function renderDashboardTec(){
         <div class="dash-legend-item"><span class="dash-legend-dot" style="background:${COLORS_MES[0]}"></span>Prev. (${nPrev})</div>
         <div class="dash-legend-item"><span class="dash-legend-dot" style="background:${COLORS_MES[1]}"></span>Corr. (${nCorr})</div>
         <div class="dash-legend-item"><span class="dash-legend-dot" style="background:${COLORS_MES[2]}"></span>Cortinas (${nCort})</div>
+        <div class="dash-legend-item"><span class="dash-legend-dot" style="background:${COLORS_MES[3]}"></span>Soldadura (${nSold})</div>
       </div>
     </div>
 
@@ -11604,6 +11618,7 @@ function renderDashboardTec(){
     ${typeCard('📋','Preventivos','#2E83C3','#e8f2fb',prev,2,'P')}
     ${typeCard('🔧','Correctivos','#C9211E','#fbe8e8',corr,2,'C')}
     ${typeCard('🚪','Cortinas / Niveladoras','#9B59B6','#f3e8f8',cort,2,'CT')}
+    ${typeCard('🔥','Soldadura / Pintura','#7c3aed','#f3e8ff',sold,2,'SP')}
     </div>
 
     <!-- Leyenda de colores de estado -->
@@ -11617,7 +11632,7 @@ function renderDashboardTec(){
 
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────
-const SUP_TABS = ['sup-dashboard','historial','solicitudes','personal','notificaciones'];
+const SUP_TABS = ['sup-dashboard','solicitudes','personal','notificaciones'];   // (2026-11-10) sin «historial» (deslizar está desactivado)
 
 function supShowTab(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -11637,6 +11652,7 @@ function supShowTab(id, btn) {
     renderSolicitudes && renderSolicitudes();
   }
   if(id === 'notificaciones') renderNotificacionesTab();
+  if(id === 'combustible' && typeof window._combRender === 'function') window._combRender();   // (2026-11-10)
   window.scrollTo(0, 0);
 }
 
@@ -13855,6 +13871,191 @@ function _findesSync(){
   var g = function(){ try{ if(typeof _nxSinHuecos === 'function' && typeof DB !== 'undefined') _nxSinHuecos(DB); }catch(_){}   // por si quedó algún hueco
     try{ return Promise.resolve(f.apply(this, arguments)).catch(avisar); }catch(e){ avisar(e); } };
   g._nxAvisa = true; window.enviarSolicitudWA = g;
+})();
+
+// (2026-11-10, Miguel) Combustible en Supervisión MONHACO: copia del módulo de Técnicos MONHACO
+// ══ SUMINISTRO DE COMBUSTIBLE VEHICULAR (2026-10-15, cambios 2026-10-16, pedido de Miguel) ═════════════════════════
+// Botón «⛽ Nuevo suministro» → formulario: empleado (Personal de esta empresa), fecha automática (hora del servidor, no se
+// edita), vehículo (todos los de MT Rental y MONHACO), kilometraje y lempiras. «✅ Cerrar registro» lo guarda. Abajo, el
+// historial de TODOS los suministros de esta empresa (por mes). En Gerencia: el mismo historial con «✏️ Editar (PIN)».
+// Datos en <raíz>/combustible/<id>. El km pasa a la ficha del vehículo (si baja o salta de más, pregunta).
+(function(){
+  var RAIZ = 'monhaco', OTRA = RAIZ === 'montasa' ? 'monhaco' : 'montasa', GER = false;
+  var st = { veh: null, per: null, guardando: false, reloj: null, abierto: false, edit: null, mes: '' };
+  function db(){ return window._fbDB; }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function aviso(m, err){ try{ if(typeof toast === 'function'){ toast(m, err); return; } }catch(e){} alert(m); }
+  function num(v){ var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+  function lps(n){ return 'L. ' + Number(n || 0).toLocaleString('es-HN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function p2(x){ return ('0' + x).slice(-2); }
+  function fechaTxt(ms){ var d = new Date(ms); return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+  function mesDe(ms){ var d = new Date(ms); return d.getFullYear() + '-' + p2(d.getMonth() + 1); }
+  function mesTxt(k){ var t = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1).toLocaleString('es-HN', {month:'long', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); }
+  function miId(){
+    try{ var u = firebase.auth().currentUser; if(u && u.uid) return u.uid; }catch(e){}
+    var k = 'nx_dev_id', d = null; try{ d = localStorage.getItem(k); }catch(e){}
+    if(!d){ d = 'dev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); try{ localStorage.setItem(k, d); }catch(e){} }
+    return d;
+  }
+  function lista(v){ return Array.isArray(v) ? v.map(function(x, i){ return [String(i), x]; }) : Object.keys(v || {}).map(function(k){ return [k, v[k]]; }); }
+  function cargarVeh(){
+    if(!db()) return Promise.resolve([]);
+    return Promise.all([RAIZ, OTRA].map(function(r){
+      return db().ref(r + '/equipos').once('value').then(function(s){
+        return lista(s.val()).filter(function(x){ return x[1] && x[1].esVehiculo && x[1].codigo; }).map(function(x){ var e = x[1];
+          return { raiz: r, key: x[0], id: e.id, codigo: e.codigo, placa: e.placa || '', desc: e.subtipo || e.desc || '', km: num(e.kilometraje || e.horometro) }; });
+      }).catch(function(){ return []; });
+    })).then(function(r){
+      var m = {}; r[0].concat(r[1]).forEach(function(v){ if(!m[v.codigo]) m[v.codigo] = v; });   // el de esta empresa primero
+      st.veh = Object.keys(m).map(function(k){ return m[k]; }).sort(function(a, b){ return a.codigo.localeCompare(b.codigo); });
+      return st.veh;
+    });
+  }
+  function cargarPer(){
+    var de = function(v){ return Object.keys(v || {}).map(function(k){ return v[k]; }).filter(function(p){ return p && p.n; }).map(function(p){ return p.n; })
+      .filter(function(n, i, a){ return a.indexOf(n) === i; }).sort(function(a, b){ return a.localeCompare(b, 'es'); }); };
+    var cache = null; try{ cache = JSON.parse(localStorage.getItem('nx_plantilla_' + RAIZ) || 'null'); }catch(e){}
+    if(!db()){ st.per = de(cache); return Promise.resolve(st.per); }
+    return db().ref(RAIZ + '/rrhh/plantilla').once('value').then(function(s){ st.per = de(s.val() || cache); return st.per; })
+      .catch(function(){ st.per = de(cache); return st.per; });
+  }
+  var B = 'padding:12px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;';
+  function formHTML(){
+    var per = (st.per || []).slice(), veh = st.veh || [], ed = st.edit;
+    if(ed && ed.empleado && per.indexOf(ed.empleado) < 0) per.unshift(ed.empleado);   // nombre que ya no está en Personal
+    var empleado = per.length
+      ? '<select id="comb-emp"><option value="">-- Seleccionar empleado --</option>' + per.map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('') + '</select>'
+      : '<input id="comb-emp" placeholder="Nombre del empleado">';
+    return '<div class="card" style="padding:16px;border:2px solid ' + (ed ? '#b45309' : '#18A303') + '">'
+      + '<div style="font-size:17px;font-weight:800;color:#1f3864;margin-bottom:12px">' + (ed ? '✏️ Editar suministro' : '⛽ Nuevo suministro de combustible') + '</div>'
+      + '<div class="form-group"><label>👷 Empleado <span style="color:#c00">*</span></label>' + empleado + '</div>'
+      + '<div class="form-group"><label>📅 Fecha y hora</label><div id="comb-fecha" style="padding:10px 12px;background:#f3f5f8;border-radius:8px;font-weight:700;color:#1c2330">' + fechaTxt(ed ? (ed.fecha || ed.fechaLocal) : Date.now()) + '</div>'
+      + '<div style="font-size:11px;color:#888;margin-top:3px">' + (ed ? 'La fecha del registro no se cambia.' : 'Automática: se guarda la hora en que se cierra el registro.') + '</div></div>'
+      + '<div class="form-group"><label>🚗 Vehículo <span style="color:#c00">*</span></label><select id="comb-veh" onchange="_combVehCambio()"><option value="">' + (veh.length ? '-- Seleccionar vehículo --' : 'Cargando vehículos…') + '</option>'
+      + veh.map(function(v){ return '<option value="' + esc(v.codigo) + '">' + esc(v.codigo + (v.placa ? ' · ' + v.placa : '') + (v.desc ? ' · ' + v.desc : '')) + '</option>'; }).join('') + '</select></div>'
+      + '<div class="form-group"><label>🛣 Kilometraje del vehículo <span style="color:#c00">*</span></label><input id="comb-km" type="number" inputmode="decimal" min="0" step="1" placeholder="Ej: 125430">'
+      + '<div id="comb-km-ayuda" style="font-size:11px;color:#888;margin-top:3px"></div></div>'
+      + '<div class="form-group"><label>💵 Cantidad suministrada (lempiras) <span style="color:#c00">*</span></label><input id="comb-monto" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 1500.00"></div>'
+      + '<div style="display:flex;gap:8px;margin-top:6px">'
+      + '<button type="button" id="comb-cerrar" onclick="_combCerrar()" style="' + B + 'flex:2;background:#18A303;color:#fff">' + (ed ? '💾 Guardar cambios' : '✅ Cerrar registro') + '</button>'
+      + '<button type="button" onclick="_combCancelar()" style="' + B + 'flex:1;background:#eef1f5;color:#444">Cancelar</button></div>'
+      + '</div>';
+  }
+  function leer(){ var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+    return { emp: g('comb-emp').trim(), veh: g('comb-veh'), km: g('comb-km'), monto: g('comb-monto') }; }
+  function poner(v){ var p = function(id, x){ var e = document.getElementById(id); if(e && x != null) e.value = x; };
+    p('comb-emp', v.emp); p('comb-veh', v.veh); p('comb-km', v.km); p('comb-monto', v.monto); }
+  window._combVehCambio = function(){
+    var c = (document.getElementById('comb-veh') || {}).value, v = (st.veh || []).find(function(x){ return x.codigo === c; });
+    var a = document.getElementById('comb-km-ayuda'); if(a) a.textContent = v && v.km ? 'Último kilometraje en la ficha: ' + v.km.toLocaleString('es-HN') + ' km' : '';
+  };
+  function pintarForm(v){
+    var el = document.getElementById('comb-form'); if(!el) return;
+    if(!st.abierto){
+      el.innerHTML = GER ? '' : '<button type="button" onclick="_combNuevo()" style="' + B + 'width:100%;background:#1f3864;color:#fff;font-size:16px;padding:14px">⛽ Nuevo suministro</button>';
+      return;
+    }
+    el.innerHTML = formHTML(); if(v) poner(v); window._combVehCambio();
+  }
+  window._combNuevo = function(){ st.abierto = true; st.edit = null; pintarForm(null); };
+  window._combCancelar = function(){ st.abierto = false; st.edit = null; pintarForm(null); };
+  window._combEditar = function(id){
+    var hacer = function(){
+      db().ref(RAIZ + '/combustible/' + id).once('value').then(function(s){
+        var r = s.val(); if(!r){ aviso('Registro no encontrado', true); return; }
+        st.edit = r; st.abierto = true;
+        var go = function(){ pintarForm({ emp: r.empleado, veh: r.vehiculo, km: r.km, monto: r.monto }); var el = document.getElementById('comb-form'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); };
+        Promise.all([st.veh || cargarVeh(), st.per || cargarPer()]).then(go);
+      });
+    };
+    if(typeof solicitarPINAccion === 'function') solicitarPINAccion(hacer, '✏️ Editar suministro', 'Ingresa tu PIN para reabrir este registro y editarlo');
+    else hacer();
+  };
+  function kmAFicha(v, km){
+    if(!v || !km || !v.key) return Promise.resolve();
+    var raro = '';
+    if(v.km && km < v.km) raro = 'es MENOR que la que tiene la ficha';
+    else if(v.km && km > v.km * 2 && (km - v.km) > 5000) raro = 'es mucho MAYOR que la que tiene la ficha';
+    if(raro && !confirm('⚠️ El kilometraje ' + km + ' de ' + v.codigo + ' ' + raro + ' (' + v.km + ' km).\n\nAceptar = es correcto, guardarlo también en la ficha.\nCancelar = dejar la ficha como está (el registro conserva su número).')) return Promise.resolve();
+    var txt = String(km);
+    if(v.raiz === RAIZ){ try{ var eq = (DB.equipos || []).find(function(e){ return e && e.id === v.id; }); if(eq){ eq.horometro = txt; eq.kilometraje = txt; } }catch(e){} }
+    v.km = km;
+    return _nxSetSeguro(v.raiz + '/equipos', v.key, v.id, 'horometro', txt).then(function(){ return _nxSetSeguro(v.raiz + '/equipos', v.key, v.id, 'kilometraje', txt); });   // (2026-10-19) confirma el id
+  }
+  window._combCerrar = function(){
+    if(st.guardando) return;
+    var v = leer(), falta = [], ed = st.edit;
+    if(!v.emp) falta.push('👷 Empleado');
+    if(!v.veh) falta.push('🚗 Vehículo');
+    var km = num(v.km), monto = num(v.monto);
+    if(!(km > 0)) falta.push('🛣 Kilometraje');
+    if(!(monto > 0)) falta.push('💵 Cantidad en lempiras');
+    if(falta.length){ alert('No se puede ' + (ed ? 'guardar' : 'cerrar el registro') + '.\nFalta:\n\n• ' + falta.join('\n• ')); return; }
+    if(!db() || !navigator.onLine){ alert('⚠️ Sin conexión a internet.\n\nNo se guardó. Intenta de nuevo con señal.'); return; }
+    var veh = (st.veh || []).find(function(x){ return x.codigo === v.veh; }) || { codigo: v.veh, raiz: RAIZ };
+    if(!confirm((ed ? '¿Guardar los cambios?' : '¿Cerrar este registro?') + '\n\n' + v.emp + '\n' + veh.codigo + (veh.placa ? ' · ' + veh.placa : '') + '\n' + km + ' km · ' + lps(monto) + (ed ? '' : '\n\nYa no se podrá editar.'))) return;
+    st.guardando = true;
+    var btn = document.getElementById('comb-cerrar'); if(btn){ btn.disabled = true; btn.textContent = 'Guardando…'; }
+    var datos = { empleado: v.emp, vehiculo: veh.codigo, placa: veh.placa || '', vehiculoEmpresa: veh.raiz, km: km, monto: monto };
+    var p;
+    if(ed){
+      var cambio = { fecha: Date.now(), antes: { empleado: ed.empleado || '', vehiculo: ed.vehiculo || '', km: ed.km || 0, monto: ed.monto || 0 } };
+      datos.editado = true; datos.editadoFecha = firebase.database.ServerValue.TIMESTAMP;
+      p = db().ref(RAIZ + '/combustible/' + ed.id).update(datos).then(function(){ return db().ref(RAIZ + '/combustible/' + ed.id + '/ediciones').push(cambio); })
+        .then(function(){ return num(ed.km) !== km || ed.vehiculo !== veh.codigo ? kmAFicha(veh, km) : null; });
+    } else {
+      var ref = db().ref(RAIZ + '/combustible').push();
+      datos.id = ref.key; datos.fecha = firebase.database.ServerValue.TIMESTAMP; datos.fechaLocal = Date.now(); datos.uid = miId();
+      datos.app = (location.pathname.split('/').pop() || ''); datos.cerrado = true;
+      p = ref.set(datos).then(function(){ return kmAFicha(veh, km); });
+    }
+    p.then(function(){
+      st.guardando = false; st.abierto = false; st.edit = null;
+      aviso(ed ? '✏️ Suministro actualizado ✓' : '⛽ Suministro registrado ✓'); pintarForm(null); historial();
+    }).catch(function(e){
+      st.guardando = false; if(btn){ btn.disabled = false; btn.textContent = ed ? '💾 Guardar cambios' : '✅ Cerrar registro'; }
+      alert('⚠️ No se pudo guardar.\n\n' + (e && e.message ? e.message : '') + '\n\nIntenta de nuevo.');
+    });
+  };
+  window._combMes = function(v){ st.mes = v; historial(); };
+  function historial(){
+    var el = document.getElementById('comb-hist'); if(!el || !db()) return;
+    el.innerHTML = '<div style="font-size:13px;color:#888;padding:8px 0">Cargando historial…</div>';
+    db().ref(RAIZ + '/combustible').once('value').then(function(s){
+      var todos = lista(s.val()).map(function(x){ var r = x[1]; if(r && !r.id) r.id = x[0]; return r; }).filter(function(r){ return r && r.vehiculo; });
+      var meses = {}; meses[mesDe(Date.now())] = 1; todos.forEach(function(r){ meses[mesDe(r.fecha || r.fechaLocal)] = 1; });
+      var lm = Object.keys(meses).sort().reverse(); if(!st.mes || (st.mes !== 'todos' && !meses[st.mes])) st.mes = lm[0];
+      var L = todos.filter(function(r){ return st.mes === 'todos' || mesDe(r.fecha || r.fechaLocal) === st.mes; }).sort(function(a, b){ return (b.fecha || b.fechaLocal || 0) - (a.fecha || a.fechaLocal || 0); });
+      var tot = L.reduce(function(a, r){ return a + num(r.monto); }, 0);
+      el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 8px">'
+        + '<div style="font-size:16px;font-weight:800;color:#1f3864">🧾 Historial de suministros</div>'
+        + '<select onchange="_combMes(this.value)" style="font-size:13px;padding:8px 10px;border-radius:8px">' + lm.map(function(k){ return '<option value="' + k + '"' + (k === st.mes ? ' selected' : '') + '>' + mesTxt(k) + '</option>'; }).join('')
+        + '<option value="todos"' + (st.mes === 'todos' ? ' selected' : '') + '>Todos los meses</option></select></div>'
+        + '<div style="background:#f3f5f8;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:14px;color:#1c2330"><b>' + L.length + '</b> suministro' + (L.length === 1 ? '' : 's') + ' · Total <b>' + lps(tot) + '</b></div>'
+        + (L.length ? L.map(function(r){
+          var n = r.ediciones ? Object.keys(r.ediciones).length : 0;
+          return '<div class="card" style="padding:12px 14px;margin-bottom:8px">'
+            + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b style="color:#1f3864">⛽ ' + esc(r.vehiculo) + (r.placa ? ' · ' + esc(r.placa) : '') + '</b><b>' + lps(r.monto) + '</b></div>'
+            + '<div style="font-size:13px;color:#555;margin-top:4px">📅 ' + fechaTxt(r.fecha || r.fechaLocal) + ' · 👷 ' + esc(r.empleado) + ' · 🛣 ' + Number(r.km || 0).toLocaleString('es-HN') + ' km'
+            + (r.editado ? ' · <span style="color:#b45309;font-weight:700">✏️ Editado' + (n > 1 ? ' (' + n + ' veces)' : '') + '</span>' : '') + '</div>'
+            + (GER ? '<button type="button" onclick="_combEditar(\'' + esc(r.id) + '\')" style="margin-top:8px;padding:7px 12px;background:#eaf2fb;color:#1a4a8a;border:1px solid #b9d2ef;border-radius:8px;font-weight:700;cursor:pointer">✏️ Editar (PIN)</button>' : '')
+            + '</div>';
+        }).join('') : '<div style="font-size:13px;color:#888">Sin suministros en este mes.</div>');
+    }).catch(function(){ el.innerHTML = '<div style="font-size:13px;color:#888">No se pudo cargar el historial.</div>'; });
+  }
+  window._combRender = function(){
+    var cont = document.getElementById('comb-cont'); if(!cont) return;
+    if(!document.getElementById('comb-form')) cont.innerHTML = (GER ? '<div style="font-size:22px;font-weight:600;margin-bottom:6px">⛽ Combustible vehicular</div>' : '') + '<div id="comb-form"></div><div id="comb-hist"></div>';
+    var v = st.abierto && document.getElementById('comb-emp') ? leer() : null;
+    pintarForm(v);
+    Promise.all([st.veh || cargarVeh(), st.per || cargarPer()]).then(function(){ if(st.abierto) pintarForm(document.getElementById('comb-emp') ? leer() : v); });
+    historial();
+    clearInterval(st.reloj); st.reloj = setInterval(function(){ var f = document.getElementById('comb-fecha'); if(f && !st.edit) f.textContent = fechaTxt(Date.now()); else if(!f) clearInterval(st.reloj); }, 30000);
+  };
+  if(typeof showTab === 'function'){
+    var _st = showTab;
+    showTab = function(id){ var r = _st.apply(this, arguments); if(id === 'combustible') window._combRender(); return r; };
+  }
 })();
 </script>
 </body>
