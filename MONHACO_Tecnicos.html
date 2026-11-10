@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='12fd07f9c59b';
+  var APP_VERSION='c55828c4861f';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -3285,13 +3285,39 @@ function _autoGuardarFirma(canvas){
 }
 
 
+// (2026-11-10, Miguel) Orden a la que pertenece un recuadro de firma (mismo criterio que guardarFirmaOrden)
+function _firmaOrdenDeCanvas(cid){
+  let oid, arrays;
+  if(cid.indexOf('firma-eval-')===0){ oid=cid.slice(11); arrays=[DB.evaluaciones]; }
+  else if(cid.indexOf('firma-rev-')===0){ oid=cid.slice(10); arrays=[DB.revisiones]; }
+  else if(cid.indexOf('firma-cort-')===0){ oid=cid.slice(11); arrays=[DB.cortinas]; }
+  else if(cid.indexOf('firma-sp-')===0){ oid=cid.slice(9); arrays=[DB.soldaduras]; }
+  else { oid=cid.slice(6); arrays=[DB.preventivos,DB.correctivos,DB.revisiones,DB.evaluaciones,DB.cortinas]; }
+  for(const a of arrays){ if(a){ const f=(Array.isArray(a)?a:Object.values(a)).find(x=>x&&x.id===oid); if(f) return { o:f, esPrev:(a===DB.preventivos), esCorr:(a===DB.correctivos) }; } }
+  return null;
+}
 function limpiarFirma(canvasId){
   const canvas = document.getElementById(canvasId);
-  if(!canvas) return;
-  if(canvas.classList.contains('firmado') && !confirm('¿Borrar el trazo del recuadro de firma?\n\nOJO: la firma ya GUARDADA en la orden NO se pierde con esto. Para reemplazarla, firme de nuevo y toque 💾 Guardar firma.')) return;
+  if(!canvas) return false;
+  // (2026-11-10) Orden ya creada con firma guardada: «Borrar» la quita también de la orden (antes reaparecía al volver a abrirla)
+  const _fo = /-new$/.test(canvasId) ? null : _firmaOrdenDeCanvas(canvasId);
+  if(_fo && _fo.o.firma){
+    if(!confirm('¿Borrar la firma de esta orden?\n\nSe quita también la firma guardada. Para firmar de nuevo, firme en el recuadro y toque 💾 Guardar firma.')) return false;
+    const o = _fo.o; o.firma = '';
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); canvas.classList.remove('firmado');
+    saveDB();
+    if(_fo.esPrev || _fo.esCorr){ try{ _guardarOrdenMantResiliente(_fo.esPrev ? 'prev' : 'corr', o); }catch(e){} }
+    else if(window._fbDB && window._fbReady){ try{ if((DB.cortinas||[]).some(x=>x&&x.id===o.id) && typeof _syncCortina==='function') _syncCortina(o); else _Sync.guardar(); }catch(e){} }
+    try{ const tag = canvas.parentElement ? canvas.parentElement.parentElement.querySelector('.firma-guardada-tag') : null; if(tag) tag.style.display='none'; }catch(e){}
+    try{ (canvas.parentElement ? canvas.parentElement.querySelectorAll('div') : []).forEach(function(d){ if(!d.children.length && /✓ Firma guardada/.test(d.textContent)) d.remove(); }); }catch(e){}
+    toast('🗑 Firma borrada de la orden');
+    return true;
+  }
+  if(canvas.classList.contains('firmado') && !confirm('¿Borrar el trazo del recuadro de firma?\n\nOJO: la firma ya GUARDADA en la orden NO se pierde con esto. Para reemplazarla, firme de nuevo y toque 💾 Guardar firma.')) return false;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.classList.remove('firmado');
+  return true;
 }
 
 // ── Blindaje de firma: guardado explícito + restauración en el lienzo ───────
@@ -3534,7 +3560,6 @@ function renderPreventivos(){
           <div class="form-group" style="margin:0"><label>Número de serie</label><input type="text" value="${_x(p.clienteSerie||'')}" placeholder="Número de serie" onchange="actualizarCampoOrden('prev','${_idS(p.id)}','clienteSerie',this.value)"></div>
         </div>
       </div>`:``}
-      <div class="form-group"><label>👤 Cliente</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','cliente',this.value)">${_cliSelOptions(p.cliente)}</select></div>
       <div class="form-group"><label>Tipo de mantenimiento</label><select onchange="actualizarCampoOrden('prev','${_idS(p.id)}','servicio',this.value)">
         <option value="">-- Seleccionar --</option>
         <option value="Mantenimiento 250 horas" ${p.servicio==='Mantenimiento 250 horas'?'selected':''}>⏱ 250 horas</option>
@@ -3981,7 +4006,6 @@ function renderCorrectivos(){
         </div>
       </div>`:``}
       <div class="form-group"><label>Horómetro del equipo (hrs)</label><input type="number" value="${c.horometro||''}" placeholder="0" onchange="event.stopPropagation();actualizarCampoOrden('corr','${_idS(c.id)}','horometro',this.value)" oninput="event.stopPropagation()"></div>
-      <div class="form-group"><label>👤 Cliente</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','cliente',this.value)">${_cliSelOptions(c.cliente)}</select></div>
       <div class="form-group"><label>Sistema afectado</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','sistema',this.value)"><option value="">-- Seleccionar sistema --</option><option value="Motor / Transmisión" ${(c.sistema||"")==="Motor / Transmisión"?"selected":""}>Motor / Transmisión</option><option value="Sistema hidráulico" ${(c.sistema||"")==="Sistema hidráulico"?"selected":""}>Sistema hidráulico</option><option value="Sistema eléctrico" ${(c.sistema||"")==="Sistema eléctrico"?"selected":""}>Sistema eléctrico</option><option value="Sistema de frenos" ${(c.sistema||"")==="Sistema de frenos"?"selected":""}>Sistema de frenos</option><option value="Sistema de dirección" ${(c.sistema||"")==="Sistema de dirección"?"selected":""}>Sistema de dirección</option><option value="Mástil / Elevación" ${(c.sistema||"")==="Mástil / Elevación"?"selected":""}>Mástil / Elevación</option><option value="Chasis / Estructura" ${(c.sistema||"")==="Chasis / Estructura"?"selected":""}>Chasis / Estructura</option><option value="Llantas / Rodos" ${(c.sistema||"")==="Llantas / Rodos"?"selected":""}>Llantas / Rodos</option><option value="Sistema de enfriamiento" ${(c.sistema||"")==="Sistema de enfriamiento"?"selected":""}>Sistema de enfriamiento</option><option value="Cabina / Tablero" ${(c.sistema||"")==="Cabina / Tablero"?"selected":""}>Cabina / Tablero</option><option value="Batería / Cargador" ${(c.sistema||"")==="Batería / Cargador"?"selected":""}>Batería / Cargador</option><option value="Sistema de gas / Combustible" ${(c.sistema||"")==="Sistema de gas / Combustible"?"selected":""}>Sistema de gas / Combustible</option><option value="Otro" ${(c.sistema||"")==="Otro"?"selected":""}>Otro</option></select></div>
       <div class="form-group"><label>🔧 ¿Cómo quedó el equipo? *</label><select onchange="actualizarCampoOrden('corr','${_idS(c.id)}','equipoQuedo',this.value)">${_eqQuedoOpts(c.equipoQuedo)}</select></div>
       <div class="form-group"><label>Falla / Trabajo a realizar</label><textarea rows="2" onchange="actualizarCampoOrden('corr','${_idS(c.id)}','falla',this.value)">${_x(c.falla||'')}</textarea></div>
@@ -5685,7 +5709,7 @@ function renderCortinas(){
         card += est==='Pendiente'?`<style>#cb-cort-${o.id} input,#cb-cort-${o.id} textarea{pointer-events:none;opacity:0.5}#cb-cort-${o.id} select:not(.estado-select){pointer-events:none;opacity:0.5}</style>`:'';
         card += `<div class="form-group"><label>Estado</label><select class="estado-select" onchange="actualizarCortina('${_idS(o.id)}','estado',this.value)"><option${est==='Pendiente'?' selected':''}>Pendiente</option><option${est==='En proceso'?' selected':''}>En proceso</option><option${est==='Completado'?' selected':''}>Completado</option></select>
         ${est==='Pendiente'?'<div style="font-size:12px;color:#f39c12;margin-top:4px">🔒 Cambia a "En proceso" para poder editar los campos</div>':''}</div>`;
-        card += `<div class="form-group"><label>Nombre del cliente</label><select onchange="actualizarCortina('${_idS(o.id)}','cliente',this.value)">${_cliSelOptions(o.cliente)}</select></div>`;
+        card += _cliCampoHTML(o, "actualizarCortina('" + o.id + "','cliente',this.value.trim())");   // (2026-11-10) el cliente viene de la solicitud
         card += `<div style="display:inline-flex;flex-wrap:wrap;gap:10px;align-items:flex-end">`;
         card += `<div class="form-group" style="margin-bottom:0"><label>Fecha inicio</label><input type="date" value="${o.fecha||''}" onchange="actualizarCortina('${_idS(o.id)}','fecha',this.value)"></div>`;
         card += `<div class="form-group" style="margin-bottom:0"><label>Hora inicio</label><input type="time" value="${o.horaIni||''}" onchange="actualizarCortina('${_idS(o.id)}','horaIni',this.value)"></div>`;
@@ -5768,7 +5792,7 @@ function guardarFirmaCortina(id){
 }
 
 function limpiarFirmaCortina(id){
-  limpiarFirma('firma-cort-'+id);
+  if(limpiarFirma('firma-cort-'+id) === false) return;   // (2026-11-10) canceló: no tocar la firma
   const o = (DB.cortinas||[]).find(x=>x&&x.id===id);
   if(o){ o.firma=''; saveDB(); _syncCortina(o); }
 }
