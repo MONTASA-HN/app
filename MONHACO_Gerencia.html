@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='67c90e676fdb';
+  var APP_VERSION='fb80405970ae';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1994,6 +1994,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
       <div style="display:flex;gap:10px;margin-top:6px">
         <button class="btn btn-danger" onclick="eliminarDesdeModal()">🗑 Eliminar</button>
         <button class="btn" style="border-color:#f39c12;color:#f39c12;font-weight:600" onclick="venderEquipo()">🏷️ Vender</button>
+        <button class="btn" style="border-color:#1f3864;color:#1f3864;font-weight:600" onclick="trasladarEquipo()">🔁 Trasladar</button>
         <button class="btn btn-primary" style="flex:1;font-size:15px" onclick="guardarDesdeModal()">Guardar cambios</button>
       </div>
     </div>
@@ -3808,6 +3809,7 @@ function abrirModal(id){
   }
   modalEquipoId = id;
   _insertarBtnCompartirEq();
+  try{ _eqHistOtraEmpresa(e); }catch(_e){}   // (2026-11-10) historial en la otra empresa (equipos trasladados)
 
   // Para equipos de cliente: mostrar datos del cliente, ocultar estados no aplicables
   const detEstado = document.getElementById('det-estado');
@@ -7328,6 +7330,100 @@ function venderEquipo(){
       toast('⚠️ No se pudo registrar la venta de ' + cod + '. El equipo sigue en la flota; intenta de nuevo.', true);
     });
   }, '🏷️ Vender equipo', 'Ingresa tu PIN para confirmar la venta');
+}
+
+// ══ TRASLADAR EQUIPO ENTRE EMPRESAS (2026-11-10, pedido de Miguel) ══════════════════════════════════════════════════════════════
+// Copia el equipo con todos sus datos a <destino>/equipos con el código siguiente libre de esa empresa (editable), confirma que llegó
+// a la base y recién entonces lo quita de esta flota (el sincronizador pone la lápida). Lo anota en <origen>/equiposTrasladados.
+// Las órdenes se quedan en esta empresa (horas, viáticos y reportes intactos); en la ficha de la otra empresa se ven con
+// «📜 Historial en …» (solo lectura). El equipo conserva su id: así se encuentran sus órdenes.
+function _eqRaizApp(){ return /MONHACO_/i.test(location.pathname) ? 'monhaco' : 'montasa'; }
+function _eqNombreEmp(r){ return r === 'monhaco' ? 'MONHACO' : 'MT Rental'; }
+function _eqListaBase(v){ return Array.isArray(v) ? v.map(function(x, i){ return [String(i), x]; }) : Object.keys(v || {}).map(function(k){ return [k, v[k]]; }); }
+function _eqSiguienteCodigo(cod, lista){
+  var m = String(cod || '').toUpperCase().match(/^([A-Z]+)-?(\d+)/); if(!m) return '';
+  var pref = m[1], mx = 0;
+  lista.forEach(function(e){ var k = e && String(e.codigo || '').toUpperCase().match(/^([A-Z]+)-?(\d+)$/); if(k && k[1] === pref) mx = Math.max(mx, parseInt(k[2], 10)); });
+  var n = String(mx + 1); while(n.length < Math.max(2, m[2].length > 2 ? 2 : m[2].length)) n = '0' + n;
+  return pref + '-' + n;
+}
+function trasladarEquipo(){
+  if(!modalEquipoId) return;
+  var eq = (DB.equipos || []).find(function(e){ return e && e.id === modalEquipoId; });
+  if(!eq) return toast('Equipo no encontrado', true);
+  if(eq.esGenerico || eq.esEquipoCliente){ toast('Solo se trasladan equipos de la flota', true); return; }
+  if(!window._fbDB || !window._fbReady || !navigator.onLine){ alert('⚠️ SIN CONEXIÓN\n\nEl traslado necesita señal.'); return; }
+  var R = _eqRaizApp(), D = R === 'montasa' ? 'monhaco' : 'montasa', db = window._fbDB, idEq = eq.id, codViejo = eq.codigo;
+  db.ref(D + '/equipos').once('value').then(function(s){
+    var dest = _eqListaBase(s.val()).map(function(x){ return x[1]; }).filter(Boolean);
+    if(dest.some(function(e){ return e.id === idEq; })){ alert('⚠️ Este equipo ya está en la flota de ' + _eqNombreEmp(D) + '.'); return; }
+    var prop = _eqSiguienteCodigo(codViejo, dest) || codViejo;
+    var abiertas = ['preventivos', 'correctivos', 'logistica', 'revisiones', 'soldaduras'].reduce(function(n, c){
+      return n + ((DB[c] || []).filter(function(o){ return o && o.equipoId === idEq && !o.completado && !o.cerrado && o.estado !== 'Completado' && o.estado !== 'Cancelado'; }).length); }, 0);
+    var nuevo = prompt('🔁 Trasladar ' + codViejo + ' a ' + _eqNombreEmp(D) + '\n\nCódigo que tendrá en ' + _eqNombreEmp(D) + ' (siguiente libre, puedes cambiarlo):', prop);
+    if(nuevo === null) return;
+    nuevo = String(nuevo).trim().toUpperCase().replace(/\s+/g, '');
+    if(!nuevo){ alert('Falta el código.'); return; }
+    if(dest.some(function(e){ return String(e.codigo || '').toUpperCase() === nuevo; })){ alert('⚠️ ' + nuevo + ' ya existe en la flota de ' + _eqNombreEmp(D) + '. Elige otro código.'); return; }
+    solicitarPINAccion(function(){
+      var copia = JSON.parse(JSON.stringify(eq));
+      delete copia.fotos;
+      copia.codigo = nuevo;
+      copia.trasladoDe = { raiz: R, codigo: codViejo, fecha: new Date().toISOString(), id: idEq };
+      var ref = db.ref(D + '/equipos');
+      var buscar = function(){ return ref.orderByChild('id').equalTo(idEq).once('value').then(function(s2){ var v = s2.val(); return !!v && Object.keys(v).length > 0; }); };
+      var limite = new Promise(function(_, no){ setTimeout(function(){ no(new Error('sin respuesta de la base')); }, 20000); });
+      try{ cerrarModal(); }catch(e){}
+      toast('Trasladando ' + codViejo + ' a ' + _eqNombreEmp(D) + '…');
+      Promise.race([limite, db.ref(D + '/_borradas/' + idEq).remove().catch(function(){}).then(function(){
+        return ref.once('value').then(function(s3){
+          var mx = -1; s3.forEach(function(c){ var n = parseInt(c.key, 10); if(!isNaN(n) && n > mx) mx = n; });
+          return ref.child(String(mx + 1)).transaction(function(cur){ return cur === null ? copia : undefined; });
+        });
+      }).then(buscar)]).then(function(quedo){
+        if(!quedo) throw new Error('el equipo no quedó en ' + _eqNombreEmp(D));
+        db.ref(R + '/equiposTrasladados/' + idEq).set({ codigo: codViejo, codigoNuevo: nuevo, destino: D, fecha: copia.trasladoDe.fecha,
+          marca: eq.marca || '', modelo: eq.desc || eq.modelo || '', serie: eq.serie || '' }).catch(function(){});
+        // Ya está en la otra empresa: ahora sí sale de esta flota (el sincronizador pone la lápida)
+        DB.equipos = (DB.equipos || []).filter(function(e){ return e.id !== idEq; });
+        saveDB(); try{ saveAllEquipos(); }catch(e){}
+        Promise.resolve(_Sync.guardar()).catch(function(){});
+        try{ renderEquipos(); }catch(e){}
+        toast('✅ ' + codViejo + ' trasladado a ' + _eqNombreEmp(D) + ' como ' + nuevo);
+      }).catch(function(err){
+        console.warn('traslado', err);
+        alert('⚠️ No se pudo trasladar ' + codViejo + ' (' + (err && err.message) + ').\n\nEl equipo sigue en esta flota; intenta de nuevo.');
+      });
+    }, '🔁 Trasladar ' + codViejo + ' → ' + nuevo + ' (' + _eqNombreEmp(D) + ')' + (abiertas ? ' · tiene ' + abiertas + ' orden(es) abierta(s) que se quedan aquí' : ''), 'Ingresa tu PIN para trasladar el equipo');
+  }).catch(function(){ alert('⚠️ No se pudo leer la flota de ' + _eqNombreEmp(D) + '. Intenta de nuevo con señal.'); });
+}
+// Historial de la otra empresa en la ficha (equipos que llegaron trasladados): solo lectura
+function _eqHistOtraEmpresa(e){
+  var box = document.getElementById('det-hist-otra');
+  if(!box){
+    var fila = document.querySelector('#modal-equipo button[onclick="venderEquipo()"]') || document.querySelector('button[onclick="venderEquipo()"]');
+    if(!fila || !fila.parentElement) return;
+    box = document.createElement('div'); box.id = 'det-hist-otra'; box.style.cssText = 'margin:6px 0 10px';
+    fila.parentElement.parentElement.insertBefore(box, fila.parentElement);
+  }
+  box.innerHTML = '';
+  if(!e || !e.trasladoDe || !e.trasladoDe.raiz || !window._fbDB) return;
+  var T = e.trasladoDe, idO = T.id || e.id, emp = _eqNombreEmp(T.raiz);
+  box.innerHTML = '<div style="font-size:12px;color:#555;padding:8px 10px;background:#f3f5f8;border-radius:8px">🔁 Trasladado desde ' + emp + ' (antes ' + _x(T.codigo || '') + ', ' + _x(String(T.fecha || '').slice(0, 10)) + ') · 📜 Cargando historial…</div>';
+  var COLS = [['preventivos', 'Preventivo'], ['correctivos', 'Correctivo'], ['logistica', 'Logística'], ['revisiones', 'Revisión'], ['soldaduras', 'Soldadura']];
+  Promise.all(COLS.map(function(c){
+    return window._fbDB.ref(T.raiz + '/' + c[0]).orderByChild('equipoId').equalTo(idO).once('value').then(function(s){
+      return _eqListaBase(s.val()).map(function(x){ return x[1]; }).filter(Boolean).map(function(o){ return { t: c[1], o: o }; }); }).catch(function(){ return []; });
+  })).then(function(r){
+    if(modalEquipoId !== e.id) return;
+    var L = [].concat.apply([], r).sort(function(a, b){ return String(b.o.fecha || b.o.fechaInicio || '').localeCompare(String(a.o.fecha || a.o.fechaInicio || '')); });
+    box.innerHTML = '<details style="background:#f3f5f8;border-radius:8px;padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:700;color:#1f3864">📜 Historial en ' + emp + ' (' + L.length + ') · antes ' + _x(T.codigo || '') + '</summary>'
+      + (L.length ? L.map(function(x){ var o = x.o, est = o.completado || o.cerrado ? 'Completado' : (o.estado || 'Pendiente');
+          return '<div style="font-size:12px;padding:5px 0;border-top:1px solid #e1e5ea"><b>' + _x(o.correlativo || '—') + '</b> · ' + x.t + ' · ' + _x(String(o.fecha || o.fechaInicio || '').slice(0, 10))
+            + ' · ' + _x(est) + '<div style="color:#666">' + _x(String(o.servicio || o.falla || o.descripcion || o.notas || '').slice(0, 90)) + '</div></div>'; }).join('')
+        : '<div style="font-size:12px;color:#777;padding-top:6px">Sin órdenes en ' + emp + '.</div>')
+      + '<div style="font-size:11px;color:#888;margin-top:6px">Solo lectura: las órdenes siguen en ' + emp + '.</div></details>';
+  });
 }
 
 // ── RENDER VENDIDOS ────────────────────────────────────────────────────────
