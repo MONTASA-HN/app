@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='efeaec32c2f5';
+  var APP_VERSION='ee2bc6f4e52c';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -12776,6 +12776,49 @@ window._nxExcelConLogo = function(wbX, archivo){
     });
   });
 };
+
+// ══ BOTONES DE ACCIÓN EN LA MINIATURA DE CADA ORDEN (2026-11-11, pedido de Miguel) ══ Los mismos botones de la orden abierta
+// (viáticos, vale, reabrir, compartir, eliminar) también en la tarjeta cerrada. Se toman del detalle de la orden (armado sin fotos),
+// así la miniatura y la orden abierta siempre tienen los mismos botones y con los mismos permisos.
+(function(){
+  var RX = /^(abrirViaticos|verViaticosResumen|abrirValeMant|abrirValeGerencia|_reabrir[A-Za-z]*|copiarImagenOrden|compartirPDFOrden|eliminarDelHistorial|_elim[A-Za-z]*)$/;
+  function nombre(b){ var m = String(b.getAttribute('onclick') || '').replace(/event\.stopPropagation\(\);?\s*/, '').match(/^\s*(?:this\.disabled=true;)?\s*([A-Za-z_$][\w$]*)\(/); return m ? m[1] : ''; }
+  function fila(html){
+    var t = document.createElement('template'); t.innerHTML = html; var vistos = {}, out = [];
+    t.content.querySelectorAll('button').forEach(function(b){
+      var n = nombre(b); if(!n || !RX.test(n)) return;
+      var clave = n + '|' + b.textContent.trim(); if(vistos[clave]) return; vistos[clave] = 1;
+      b.style.width = 'auto'; b.style.marginTop = '0'; b.style.flex = '0 0 auto'; b.removeAttribute('id');
+      out.push(b.outerHTML);
+    });
+    return out.length ? '<div class="nx-acc-mini" onclick="event.stopPropagation()" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">' + out.join('') + '</div>' : '';
+  }
+  ['_buildCardRV', '_buildCardEV', '_buildCardP', '_buildCardC', '_buildCardSP', '_buildCardCT', '_buildCardCTSup'].forEach(function(fn){
+    var orig = window[fn]; if(typeof orig !== 'function') return;
+    window[fn] = function(x){
+      var html = orig.apply(this, arguments);
+      try{
+        if(!x || !x.id || typeof openHistGer === 'undefined' || openHistGer.has(x.id)) return html;
+        var args = [].slice.call(arguments); args[0] = Object.assign({}, x, { fotos: [], nFotos: 0 });   // sin fotos: no pedirlas por cada tarjeta
+        openHistGer.add(x.id); var full; try{ full = orig.apply(this, args); } finally { openHistGer.delete(x.id); }
+        var f = fila(full); if(!f) return html;
+        var k = html.lastIndexOf('</div>'); return html.slice(0, k) + f + html.slice(k);
+      }catch(e){ return html; }
+    };
+  });
+  // Logística: las órdenes cerradas plegadas tienen sus botones escondidos en el detalle; se copian a la miniatura. Se vigila la
+  // lista (cualquier vista o carpeta que la dibuje) y se decora cada tarjeta una sola vez.
+  function decorarLog(){
+    document.querySelectorAll('[data-lgid]').forEach(function(card){
+      if(card.querySelector('.nx-acc-mini')) return;
+      var det = [].slice.call(card.querySelectorAll('div')).find(function(d){ return d.style.display === 'none' && d.querySelector('button'); });
+      if(!det) return; var f = fila(det.innerHTML); if(f) card.insertAdjacentHTML('beforeend', f);
+    });
+  }
+  var pend = false;
+  try{ new MutationObserver(function(){ if(pend) return; pend = true; setTimeout(function(){ pend = false; try{ decorarLog(); }catch(e){} }, 60); })
+    .observe(document.body, { childList: true, subtree: true }); }catch(e){}
+})();
 </script>
 </body>
 </html>
