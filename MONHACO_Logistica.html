@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a9e29c7f103b';
+  var APP_VERSION='f661320842b8';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -500,7 +500,9 @@ function _horMeses(){
 function _horEquipos(){
   return (DB.equipos||[]).filter(function(e){
     if(!e || e.esGenerico || e.esVehiculo || e.esEquipoCliente) return false;
-    if(!HOR_TIPOS.includes(String(e.tipo||'').toUpperCase().trim())) return false;
+    // (2026-11-11) también los nombres de MT Rental (equipos trasladados): sin tildes y «Plataforma aérea» = ELEVADORA
+    var _tp = String(e.tipo||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim(); if(_tp === 'PLATAFORMA AEREA') _tp = 'ELEVADORA';
+    if(!HOR_TIPOS.includes(_tp)) return false;
     // Solo equipos operativos: en renta, disponibles o en mantenimiento (inactivos no)
     return ['DISPONIBLE','EN RENTA','EN MANTENIMIENTO'].includes(String(e.estado||'DISPONIBLE').toUpperCase().trim());
   }).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });

@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0392b5b6fa3b';
+  var APP_VERSION='abf03eda3997';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -7448,6 +7448,10 @@ function trasladarEquipo(){
       var copia = JSON.parse(JSON.stringify(eq));
       delete copia.fotos;
       copia.codigo = nuevo;
+      // (2026-11-11) el tipo con el nombre de la empresa destino (MONHACO: MONTACARGAS / ELEVADORA; MT: Montacargas / Plataforma aérea)
+      (function(){ var t = String(copia.tipo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+        if(D === 'monhaco'){ if(t === 'MONTACARGAS') copia.tipo = 'MONTACARGAS'; else if(t === 'PLATAFORMA AEREA' || t === 'ELEVADORA') copia.tipo = 'ELEVADORA'; }
+        else { if(t === 'MONTACARGAS') copia.tipo = 'Montacargas'; else if(t === 'ELEVADORA' || t === 'PLATAFORMA AEREA') copia.tipo = 'Plataforma aérea'; } })();
       copia.trasladoDe = { raiz: R, codigo: codViejo, fecha: new Date().toISOString(), id: idEq };
       var ref = db.ref(D + '/equipos');
       var buscar = function(){ return ref.orderByChild('id').equalTo(idEq).once('value').then(function(s2){ var v = s2.val(); return !!v && Object.keys(v).length > 0; }); };
