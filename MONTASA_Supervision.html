@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9c6152e6768b';
+  var APP_VERSION='a914ac4bc40a';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -6319,8 +6319,9 @@ function exportarExcel(){
       ...DB.correctivos.map(c=>{const eq=getEq(c.equipoId);return[c.correlativo||'',eq.codigo,eq.marca,c.sistema||'',c.falla,c.prioridad,fmtDT(c.fechaInicio||c.fecha),fmtDT(c.fechaFin||''),calcHoras(c.fechaInicio,c.fechaFin),c.tecnico||'',c.diagnostico||'',c.estado,c.fechaCierre||''];})
     ]),'Correctivos');
 
-    XLSX.writeFile(wb,'MONTASA_Mantenimiento_'+hoy+'.xlsx');
-    toast('Excel descargado');
+    // (2026-11-11) con el logo de MONTASA arriba de cada hoja; si ExcelJS no carga, el Excel de antes (sin logo)
+    window._nxExcelConLogo(wb, 'MONTASA_Mantenimiento_'+hoy+'.xlsx').then(function(){ toast('Excel descargado'); })
+      .catch(function(){ XLSX.writeFile(wb,'MONTASA_Mantenimiento_'+hoy+'.xlsx'); toast('Excel descargado (sin logo: no cargó la librería)'); });
   }catch(e){ toast('Error al exportar',true); }
   finally{ btn.textContent='Exportar'; btn.disabled=false; }
 }
@@ -8546,13 +8547,16 @@ async function _descargarDocPDF(htmlContent, nombreArchivo, apaisado){
       pdf.save(nombreArchivo);
       return;
     }
+    // (2026-11-11) de la 2.ª hoja en adelante también va el logo arriba (se reservan 40 pt)
+    var LOGO=(typeof window._nxLogo==='function')?window._nxLogo():'', RES=LOGO?40:0;
     var y=0, primera=true;
     while(y<canvas.height){
-      var sliceH=Math.min(altoPagPx, canvas.height-y);
+      var disp=primera?altoPagPx:Math.floor((usableH-RES)*pxPorPt);
+      var sliceH=Math.min(disp, canvas.height-y);
       var c2=document.createElement('canvas'); c2.width=canvas.width; c2.height=sliceH;
       c2.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceH,0,0,canvas.width,sliceH);
-      if(!primera) pdf.addPage();
-      pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',margen,margen,usableW,sliceH/pxPorPt);
+      if(!primera){ pdf.addPage(); if(LOGO){ try{ pdf.addImage(LOGO,'PNG',margen,margen,97,30); }catch(e){} } }
+      pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',margen,primera?margen:margen+RES,usableW,sliceH/pxPorPt);
       primera=false; y+=sliceH;
     }
     pdf.save(nombreArchivo);
@@ -9111,8 +9115,7 @@ function imprimirVale(){
   // se lee como UTC y en Honduras salía un día antes.
   const d = (function(t){ const m = String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(t||''); })(orden.fechaFin||orden.fechaCierre||orden.fechaInicio||orden.fecha);
   const fecha = isNaN(d)?'—':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-  const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]');
-  const logoB64 = logoEl ? logoEl.src : '';
+  const logoB64 = (typeof window._nxLogo === 'function') ? window._nxLogo() : '';   // (2026-11-11) una sola fuente del logo
 
   // Grid dinámico de firmas
   const totalFirmas = numPersonas + 1;
@@ -9790,8 +9793,7 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   // se lee como UTC y en Honduras salía un día antes.
   const d = (function(t){ const m = String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(t||''); })(orden.fechaFin||orden.fechaCierre||orden.fechaInicio||orden.fecha);
   const fecha = isNaN(d)?'\u2014':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-  const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]') || document.querySelector('header img') || document.querySelector('img[src^="data:image"]');
-  const logoB64 = logoEl ? logoEl.src : '';
+  const logoB64 = (typeof window._nxLogo === 'function') ? window._nxLogo() : '';   // (2026-11-11) una sola fuente del logo
   const corr = orden.correlativo || String(orden.id||'').slice(-6).toUpperCase();
 
   const totalFirmas = numPersonas + 1;
@@ -10657,6 +10659,7 @@ function _srChipsHTML(oid){
   }catch(e){ return ''; }
 }
 function _srLogo(){
+  try{ if(typeof window._nxLogo === 'function'){ var _l = window._nxLogo(); if(_l) return _l; } }catch(e){}   // (2026-11-11) una sola fuente del logo
   if(window._LOGO_MONTASA_B64) return window._LOGO_MONTASA_B64;
   const im=document.querySelector('img[src^="data:image/png;base64,"]');
   return im?im.src:'';
@@ -12779,6 +12782,50 @@ function _nxLogMHparaMT(){
     try{ return Promise.resolve(f.apply(this, arguments)).catch(avisar); }catch(e){ avisar(e); } };
   g._nxAvisa = true; window.enviarSolicitudWA = g;
 })();
+
+// ══ LOGO DE MONTASA EN TODO DOCUMENTO DE NEXO (2026-11-11, pedido de Miguel) ══ Una sola fuente: la constante del logo si la app
+// la tiene; si no, el logo del encabezado (leído UNA vez al abrir y guardado). También una copia como imagen para dibujar en lienzos.
+(function(){
+  var cache = '';
+  window._nxLogo = function(){
+    if(cache) return cache;
+    try{ if(typeof _LOGO_MONTASA_B64 !== 'undefined' && _LOGO_MONTASA_B64) return (cache = _LOGO_MONTASA_B64); }catch(e){}
+    try{ var i = document.querySelector('img[src^="data:image/png"]'); if(i && i.src) cache = i.src; }catch(e){}
+    return cache;
+  };
+  function precargar(){ try{ var s = window._nxLogo(); if(s && !window._nxLogoImg){ var im = new Image(); im.src = s; window._nxLogoImg = im; } }catch(e){} }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', precargar); else precargar();
+})();
+
+// (2026-11-11) Excel con logo: convierte un libro armado con XLSX (SheetJS) a ExcelJS con el logo de MONTASA arriba de cada hoja
+window._nxExcelConLogo = function(wbX, archivo){
+  var cargar = new Promise(function(res, rej){
+    if(window.ExcelJS) return res();
+    var sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    sc.onload = function(){ res(); }; sc.onerror = function(){ rej(new Error('No se pudo cargar la librería Excel')); }; document.head.appendChild(sc);
+  });
+  return cargar.then(function(){
+    var wb = new ExcelJS.Workbook(), logo = window._nxLogo ? window._nxLogo() : '', imgId = null;
+    try{ if(logo) imgId = wb.addImage({ base64: logo, extension: 'png' }); }catch(e){}
+    wbX.SheetNames.forEach(function(nom){
+      var data = XLSX.utils.sheet_to_json(wbX.Sheets[nom], { header: 1, defval: '' });
+      var ws = wb.addWorksheet(String(nom).slice(0, 31));
+      if(imgId != null) ws.addImage(imgId, { tl: { col: 0.15, row: 0.2 }, ext: { width: 190, height: 59 } });
+      ws.getRow(1).height = 16; ws.getRow(2).height = 16; ws.getRow(3).height = 16;
+      var nC = 1; data.forEach(function(r){ if(r.length > nC) nC = r.length; });
+      data.forEach(function(r, i){
+        var row = ws.getRow(5 + i); row.values = r;
+        if(i === 0){ row.eachCell(function(c){ c.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } }; }); }
+      });
+      for(var k = 1; k <= nC; k++){ var mx = 14; data.forEach(function(r){ var l = String(r[k - 1] == null ? '' : r[k - 1]).length; if(l > mx) mx = l; }); ws.getColumn(k).width = Math.min(45, mx); }
+    });
+    return wb.xlsx.writeBuffer().then(function(buf){
+      var url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      var a = document.createElement('a'); a.href = url; a.download = archivo; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    });
+  });
+};
 </script>
 </body>
 </html>

@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d022876f348c';
+  var APP_VERSION='9b59e6cec9aa';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2090,16 +2090,20 @@ async function rcCompartirPDF(id){
     const altoPag = pdf.internal.pageSize.getHeight();
     const pxPorMM = canvas.width / anchoMM;
     const altoPagPx = Math.floor((altoPag - margen*2) * pxPorMM);
+    // (2026-11-11) logo de MONTASA también en las hojas siguientes (y en las de fotos)
+    const LOGO = (typeof window._nxLogo === 'function') ? window._nxLogo() : '';
+    const nuevaPag = function(){ pdf.addPage(); if(LOGO){ try{ pdf.addImage(LOGO, 'PNG', margen, 5, 36, 11.2); }catch(e){} } return LOGO ? 20 : margen; };
     let y = 0, pagina = 0, yMM = margen;
     while(y < canvas.height){
-      const tramo = Math.min(altoPagPx, canvas.height - y);
+      const top = pagina > 0 ? (LOGO ? 20 : margen) : margen;
+      const tramo = Math.min(Math.floor((altoPag - margen - top) * pxPorMM), canvas.height - y);
       const c2 = document.createElement('canvas');
       c2.width = canvas.width; c2.height = tramo;
       c2.getContext('2d').drawImage(canvas, 0, y, canvas.width, tramo, 0, 0, canvas.width, tramo);
-      if(pagina > 0){ pdf.addPage(); yMM = margen; }
+      if(pagina > 0) nuevaPag();
       const tramoMM = tramo / pxPorMM;
-      pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', margen, margen, anchoMM, tramoMM);
-      yMM = margen + tramoMM;
+      pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', margen, top, anchoMM, tramoMM);
+      yMM = top + tramoMM;
       y += tramo; pagina++;
     }
     // 2) Fotografías: cada una completa, saltando de página cuando no cabe
@@ -2117,7 +2121,7 @@ async function rcCompartirPDF(id){
       const cellW = (anchoMM - gap) / 2;
       const maxCellH = 85;
       yMM += 6;
-      if(yMM + 10 > altoPag - margen){ pdf.addPage(); yMM = margen; }
+      if(yMM + 10 > altoPag - margen){ yMM = nuevaPag(); }
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(11);
       pdf.setTextColor(138, 72, 0);
@@ -2127,7 +2131,7 @@ async function rcCompartirPDF(id){
         const h1 = Math.min(cellW * dims[i].h / dims[i].w, maxCellH);
         const h2 = (i+1 < fotos.length) ? Math.min(cellW * dims[i+1].h / dims[i+1].w, maxCellH) : 0;
         const filaH = Math.max(h1, h2);
-        if(yMM + filaH > altoPag - margen){ pdf.addPage(); yMM = margen; }
+        if(yMM + filaH > altoPag - margen){ yMM = nuevaPag(); }
         try{ pdf.addImage(fotos[i], 'JPEG', margen, yMM, cellW, h1); }catch(e){}
         if(i+1 < fotos.length){ try{ pdf.addImage(fotos[i+1], 'JPEG', margen + cellW + gap, yMM, cellW, h2); }catch(e){} }
         yMM += filaH + gap;
@@ -2181,7 +2185,7 @@ function _rmMesDe(o){
   if(m) return m[3]+'-'+String(m[2]).padStart(2,'0');
   return '';
 }
-function _rmCliDe(o){ return String(o.cliente||'').trim().toUpperCase(); }
+function _rmCliDe(o){ return String(o.clienteOrden||o.cliente||o.clienteNombre||'').trim().replace(/\s+/g,' ').toUpperCase(); }   // (2026-11-11) el cliente viene de la solicitud (clienteOrden)
 function _rmArr(k){ return k==='prev'?(DB.preventivos||[]):k==='corr'?(DB.correctivos||[]):(DB.cortinas||[]); }
 function _rmOrdenes(cliente, mes){
   cliente = String(cliente||'').trim().toUpperCase();
@@ -2385,7 +2389,7 @@ async function rmCompartirPDF(){
     const poner = async function(html){
       const c = await _rmCanvasDe(_rmDOMBase(html));
       const cMM = c.height / (c.width / anchoMM);
-      if(yMM + cMM > altoPag - margen){ pdf.addPage(); yMM = margen; }
+      if(yMM + cMM > altoPag - margen){ pdf.addPage(); try{ var _lg = window._nxLogo && window._nxLogo(); if(_lg){ pdf.addImage(_lg, 'PNG', margen, 5, 36, 11.2); yMM = 20; } else yMM = margen; }catch(e){ yMM = margen; } }   // (2026-11-11) logo en cada hoja
       pdf.addImage(c.toDataURL('image/jpeg',0.92), 'JPEG', margen, yMM, anchoMM, cMM);
       yMM += cMM;
     };
@@ -3265,6 +3269,20 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
       }catch(e){ console.warn('horómetros eliminar', e); }
     };
   }
+})();
+
+// ══ LOGO DE MONTASA EN TODO DOCUMENTO DE NEXO (2026-11-11, pedido de Miguel) ══ Una sola fuente: la constante del logo si la app
+// la tiene; si no, el logo del encabezado (leído UNA vez al abrir y guardado). También una copia como imagen para dibujar en lienzos.
+(function(){
+  var cache = '';
+  window._nxLogo = function(){
+    if(cache) return cache;
+    try{ if(typeof _LOGO_MONTASA_B64 !== 'undefined' && _LOGO_MONTASA_B64) return (cache = _LOGO_MONTASA_B64); }catch(e){}
+    try{ var i = document.querySelector('img[src^="data:image/png"]'); if(i && i.src) cache = i.src; }catch(e){}
+    return cache;
+  };
+  function precargar(){ try{ var s = window._nxLogo(); if(s && !window._nxLogoImg){ var im = new Image(); im.src = s; window._nxLogoImg = im; } }catch(e){} }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', precargar); else precargar();
 })();
 </script>
 </body>

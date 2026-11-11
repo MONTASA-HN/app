@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c55828c4861f';
+  var APP_VERSION='2e39a908d5df';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1410,8 +1410,7 @@ function _valeComprobanteImprimir(orden, tipoDesc){
   // se lee como UTC y en Honduras salía un día antes.
   const d = (function(t){ const m = String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(t||''); })(orden.fechaFin||orden.fechaCierre||orden.fechaInicio||orden.fecha);
   const fecha = isNaN(d)?'\u2014':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-  const logoEl = document.querySelector('img[alt="MONTASA Handling Co."]') || document.querySelector('header img') || document.querySelector('img[src^="data:image"]');
-  const logoB64 = logoEl ? logoEl.src : '';
+  const logoB64 = (typeof window._nxLogo === 'function') ? window._nxLogo() : '';   // (2026-11-11) una sola fuente del logo
   const corr = orden.correlativo || String(orden.id||'').slice(-6).toUpperCase();
 
   const totalFirmas = numPersonas + 1;
@@ -6983,6 +6982,20 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+
+// ══ LOGO DE MONTASA EN TODO DOCUMENTO DE NEXO (2026-11-11, pedido de Miguel) ══ Una sola fuente: la constante del logo si la app
+// la tiene; si no, el logo del encabezado (leído UNA vez al abrir y guardado). También una copia como imagen para dibujar en lienzos.
+(function(){
+  var cache = '';
+  window._nxLogo = function(){
+    if(cache) return cache;
+    try{ if(typeof _LOGO_MONTASA_B64 !== 'undefined' && _LOGO_MONTASA_B64) return (cache = _LOGO_MONTASA_B64); }catch(e){}
+    try{ var i = document.querySelector('img[src^="data:image/png"]'); if(i && i.src) cache = i.src; }catch(e){}
+    return cache;
+  };
+  function precargar(){ try{ var s = window._nxLogo(); if(s && !window._nxLogoImg){ var im = new Image(); im.src = s; window._nxLogoImg = im; } }catch(e){} }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', precargar); else precargar();
 })();
 </script>
 </body>
