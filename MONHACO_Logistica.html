@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c82ed3cf8f25';
+  var APP_VERSION='d022876f348c';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1347,6 +1347,8 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
       { t:'HOROMETRAJE\nFINAL', w:27.45, a:'right' },
     ];
     const FILA = 7.4, HDR = 11;
+    // (2026-11-11, Miguel) logo de MONTASA en todo documento de Nexo: arriba a la izquierda de cada página
+    function logo(){ try{ if(typeof _LOGO_MONTASA_B64 !== 'undefined') pdf.addImage(_LOGO_MONTASA_B64, 'PNG', M, 6, 40, 12.4); }catch(e){} }
 
     function encabezadoTabla(y){
       let x = M;
@@ -1375,17 +1377,18 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
 
     function nuevaPagSi(y, alto){
       if(y + alto <= H - M) return y;
-      pdf.addPage();
-      return M + 4;
+      pdf.addPage(); logo();
+      return 24;
     }
 
-    let y = M + 2;
+    logo();
+    let y = 24;
     nombres.forEach(function(cli, gi){
       const grupo = grupos[cli];
       const cierre = _horCierreCli(mes, _horCliKey(cli));
       // Espacio mínimo para título + encabezado + 2 filas
       y = nuevaPagSi(y, 14 + HDR + FILA*2);
-      if(gi > 0 && y > M + 4) y += 4;
+      if(gi > 0 && y > 24) y += 4;
       // Título + fecha
       pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
       pdf.text('CONTROL DE HOROMETRAJE '+cli, M, y+4);
