@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7cb65a289f16';
+  var APP_VERSION='fac9d9e2e769';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5987,7 +5987,7 @@ function renderReporteMensual(){
   h += _rmResumenHTML(datos, mes);
   if(datos.total){
     h += '<div style="display:flex;gap:8px;margin-bottom:4px">'
-      + '<button onclick="rmCompartirPDF()" style="flex:1;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📄 Compartir PDF</button>'
+      + '<button onclick="rmCompartirReportesPDF()" style="flex:1;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px"' + (datos.completadas ? '' : ' disabled title="Sin órdenes completadas"') + '>📄 Compartir reportes PDF (' + datos.completadas + ')</button>'   // (2026-11-11)
       + '<button onclick="rmCompartirImagen()" style="flex:1;padding:12px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px">📤 Compartir imagen</button>'
       + '</div>';
     _RM_TIPOS.forEach(function(tp){
@@ -6057,6 +6057,16 @@ async function rmCompartirImagen(){
       _entregarImagen(blob, 'Reporte_'+_rmCliente.replace(/[^\w]+/g,'_')+'_'+mes);
     }, 'image/png');
   }catch(err){ toast('Error al generar la imagen: '+err.message, true); }
+}
+// (2026-11-11, Miguel) Un toque: el PDF formal de CADA orden completada del cliente en el mes (antes era una captura del resumen)
+function rmCompartirReportesPDF(){
+  const mes = _rmMes||horMesActual();
+  const datos = _rmOrdenes(_rmCliente, mes);
+  const T = { prev:'preventivo', corr:'correctivo', cort:'cortinas' };
+  const items = [];
+  _RM_TIPOS.forEach(function(tp){ (datos[tp.k]||[]).forEach(function(o){ if(o && (o.completado || o.estado==='Completado')) items.push({ tipo: T[tp.k], o: o }); }); });
+  if(typeof window.compartirPDFsOrdenes !== 'function'){ toast('No está disponible el PDF de órdenes', true); return; }
+  window.compartirPDFsOrdenes(items, 'Reportes ' + _rmCliente + ' — ' + horMesLabel(mes));
 }
 async function rmCompartirPDF(){
   try{
@@ -13920,6 +13930,63 @@ function _cliOrdenAlCerrar(o){
       console.error('PDF de la orden:', err);
       if(typeof toast==='function') toast('No se pudo generar el PDF: '+(err && err.message || err), true);
     }
+  };
+  // (2026-11-11, Miguel) Varios PDF de una vez (Reportes): mismo PDF formal de cada orden, como archivo, y luego una ventanita con
+  // «Compartir» (un toque nuevo: el teléfono no deja compartir si pasó mucho tiempo desde el toque) o «Descargar».
+  async function pdfArchivo(tipo, o){
+    var d = spec(tipo, o), r = construir(d), host = r.host;
+    try{
+      await esperarImgs(host);
+      var pdf = new window.jspdf.jsPDF({ unit:'pt', format:'letter', compress:true });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      for(var i=0;i<r.paginas.length;i++){
+        var c = await window.html2canvas(r.paginas[i], { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false, width:W, height:H, windowWidth:W });
+        if(i>0) pdf.addPage();
+        pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pw, ph, undefined, 'FAST');
+      }
+      return new File([pdf.output('blob')], (d.corr || 'orden').replace(/[^\w\-]+/g,'_') + '.pdf', { type:'application/pdf' });
+    } finally { host.remove(); }
+  }
+  window.compartirPDFsOrdenes = async function(items, titulo){
+    var ok = (items || []).filter(function(it){ return it && it.o && completada(it.tipo, it.o); });
+    if(!ok.length){ if(typeof toast==='function') toast('No hay órdenes completadas para compartir', true); return; }
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99990;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;box-sizing:border-box;font-family:inherit;color:#1a1a18">'
+      + '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:8px">📄 ' + String(titulo || 'Reportes').replace(/[<>&]/g, '') + '</div>'
+      + '<div id="pdfs-est" style="font-size:13px;color:#475467;margin-bottom:12px">Preparando ' + ok.length + ' PDF…</div>'
+      + '<div id="pdfs-pie" style="display:flex;gap:8px;flex-wrap:wrap"><button data-x="1" style="flex:1;padding:11px;border:1px solid #ccc;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button></div></div>';
+    document.body.appendChild(ov);
+    var cancelado = false;
+    ov.addEventListener('click', function(ev){ if(ev.target.closest('[data-x]')){ cancelado = true; ov.remove(); } });
+    var files = [], fallos = 0;
+    try{
+      await cargarLibs();
+      for(var i = 0; i < ok.length && !cancelado; i++){
+        var est = ov.querySelector('#pdfs-est'); if(est) est.textContent = 'Generando PDF ' + (i + 1) + ' de ' + ok.length + ' (' + (ok[i].o.correlativo || '') + ')…';
+        try{ await conFotos(ok[i].o); files.push(await pdfArchivo(ok[i].tipo, ok[i].o)); }catch(e){ fallos++; console.error('PDF', ok[i].o.correlativo, e); }
+      }
+    }catch(e){ if(typeof toast==='function') toast('No se pudieron preparar los PDF: ' + (e && e.message || e), true); ov.remove(); return; }
+    if(cancelado) return;
+    if(!files.length){ ov.querySelector('#pdfs-est').textContent = 'No se pudo generar ningún PDF.'; return; }
+    var puede = false; try{ puede = !!(navigator.canShare && navigator.canShare({ files: files })); }catch(e){}
+    ov.querySelector('#pdfs-est').innerHTML = '✅ ' + files.length + ' PDF listos' + (fallos ? ' · ' + fallos + ' no se pudieron generar' : '') + ':<br><span style="font-size:12px;color:#667">' + files.map(function(f){ return f.name.replace(/\.pdf$/, ''); }).join(', ') + '</span>';
+    ov.querySelector('#pdfs-pie').innerHTML = (puede ? '<button data-sh="1" style="flex:2;padding:12px;border:none;background:#25d366;color:#fff;border-radius:8px;font-weight:800;cursor:pointer">📤 Compartir ' + files.length + ' PDF</button>' : '')
+      + '<button data-dl="1" style="flex:2;padding:12px;border:none;background:#1f3864;color:#fff;border-radius:8px;font-weight:800;cursor:pointer">📥 Descargar</button>'
+      + '<button data-x="1" style="flex:1;padding:12px;border:1px solid #ccc;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cerrar</button>';
+    ov.querySelector('#pdfs-pie').addEventListener('click', async function(ev){
+      if(ev.target.closest('[data-sh]')){
+        try{ await navigator.share({ files: files, title: titulo || 'Reportes' }); if(typeof toast==='function') toast('📤 ' + files.length + ' PDF compartidos ✓'); ov.remove(); }
+        catch(err){ if(!(err && err.name === 'AbortError') && typeof toast==='function') toast('No se pudo compartir: usa «Descargar»', true); }
+      } else if(ev.target.closest('[data-dl]')){
+        for(var k = 0; k < files.length; k++){
+          var url = URL.createObjectURL(files[k]), a = document.createElement('a'); a.href = url; a.download = files[k].name; document.body.appendChild(a); a.click(); a.remove();
+          (function(u){ setTimeout(function(){ URL.revokeObjectURL(u); }, 60000); })(url);
+          await new Promise(function(r){ setTimeout(r, 700); });
+        }
+        if(typeof toast==='function') toast('📥 ' + files.length + ' PDF descargados');
+      }
+    });
   };
   // Para pruebas
   window._opdfSpec = spec; window._opdfConstruir = construir;
