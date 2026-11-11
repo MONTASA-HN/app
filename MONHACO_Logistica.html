@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f661320842b8';
+  var APP_VERSION='ba84db045eed';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -528,6 +528,8 @@ function _horAnteriorReg(eq, mes){
   return isNaN(h) ? null : { lectura: h, ts: null };
 }
 function _horAnterior(eq, mes){ const r = _horAnteriorReg(eq, mes); return r ? r.lectura : null; }
+// (2026-11-11, Miguel, SOLO HOY 11/11/2026) la toma de octubre 2026 se registra con fecha 30/10/2026; otro día u otra toma: la hora real
+function _horAhora(mes){ var h = new Date(); if(String(mes || '') === '2026-10' && h.getFullYear() === 2026 && h.getMonth() === 10 && h.getDate() === 11) return new Date(2026, 9, 30, 17, 0, 0).getTime(); return Date.now(); }
 function _horFechaTs(ts){
   if(!ts) return '—';
   const d = new Date(ts); if(isNaN(d)) return '—';
@@ -658,7 +660,7 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
     + pieCliente;
   return '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:0 0 6px">'
     + '<div style="font-weight:800;color:#1f3864;font-size:13px;text-transform:uppercase;letter-spacing:0.3px">CONTROL DE HOROMETRAJE '+_hcEsc(planta)+'</div>'
-    + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_horFechaTs(Date.now())+'</div></div>'
+    + '<div style="font-size:11px;color:#55534b;white-space:nowrap"><b>FECHA:</b> '+_horFechaTs(_horAhora(mes))+'</div></div>'
     + '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:'+(editable?'620':'560')+'px;background:#fff">'
     + '<tr>'
     + '<th rowspan="2" style="'+th+'">EQUIPO</th>'
@@ -794,7 +796,7 @@ function horGuardar(eqId){
   if(ant!=null && lectura < ant){
     if(!confirm('⚠️ La lectura ('+lectura.toLocaleString('en-US')+') es MENOR que la anterior ('+ant.toLocaleString('en-US')+' hrs).\n¿Guardarla de todas formas? (ej. cambio de reloj)')) { inp.value=''; return; }
   }
-  const reg = { lectura: lectura, ts: Date.now(), codigo: eq.codigo||'' };
+  const reg = { lectura: lectura, ts: _horAhora(mes), codigo: eq.codigo||'' };
   if(!DB.horometros) DB.horometros = {};
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes][eqId] = reg;
@@ -921,7 +923,7 @@ function finalizarTomaCliente(cli){
   if(!confirm('\u00bfFinalizar la toma de '+cli+' ('+horMesLabel(mes)+')?\n\nLos hor\u00f3metros de '+conLectura.length+' equipos se actualizar\u00e1n en la ficha de cada equipo y la hoja quedar\u00e1 en solo lectura.'+(pend?('\n\n(Ojo: quedan '+pend+' equipos de '+cli+' sin toma)'):''))) return;
   let completo = false;
   _horFinalizarConFichas(conLectura, lecturas, function(){
-    const ts = Date.now();
+    const ts = _horAhora(mes);
     _horSellarCliente(mes, ck, ts);
     completo = _horSellarGlobalSiCompleto(mes, ts);
   }, function(n){
@@ -944,7 +946,7 @@ function finalizarTomaHorometros(){
   if(!conLectura.length){ toast('No hay lecturas para finalizar', true); return; }
   if(!confirm('\u00bfFinalizar la toma de TODOS los clientes pendientes ('+pendientes.join(', ')+')?\n\nLos hor\u00f3metros de '+conLectura.length+' equipos se actualizar\u00e1n en la ficha de cada equipo.')) return;
   _horFinalizarConFichas(conLectura, lecturas, function(){
-    const ts = Date.now();
+    const ts = _horAhora(mes);
     pendientes.forEach(function(c){ _horSellarCliente(mes, _horCliKey(c), ts); });
     _horSellarGlobalSiCompleto(mes, ts);
   }, function(n){
@@ -1195,7 +1197,7 @@ function _horLibroXLSX(mes){
   const cierre = _horCierre(mes);
   const plantas = _horClientes(equipos);
   const nombres = Object.keys(plantas).sort();
-  const hoy = new Date();
+  const hoy = new Date(_horAhora(mes));
   const fechaTxt = (_HC_MESES[hoy.getMonth()].charAt(0).toUpperCase()+_HC_MESES[hoy.getMonth()].slice(1))+' '+hoy.getDate()+'-'+hoy.getFullYear();
   const AZUL = '1F3864', RELLENO = 'DCE6F1';
   const bordeFino = { style:'thin', color:{rgb:'000000'} };
@@ -1331,7 +1333,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
     const firmas = _horFirmas(mes);
     const grupos = _horClientes(equipos);
     const nombres = Object.keys(grupos).sort();
-    const hoyTxt = _horFechaTs(Date.now());
+    const hoyTxt = _horFechaTs(_horAhora(mes));
 
     // Columnas (ancho total = W - 2M = 191.9)
     const cols = [
