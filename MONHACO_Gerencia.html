@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='212a2b7eebb5';
+  var APP_VERSION='72bb8939df80';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -4191,7 +4191,7 @@ function _hcEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/<
 function horMesActual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function horMesLabel(mes){ const p=(mes||'').split('-'); if(p.length<2) return mes||''; const n=_HC_MESES[parseInt(p[1],10)-1]||''; return n.charAt(0).toUpperCase()+n.slice(1)+' '+p[0]; }
 function _horMeses(){
-  const set = new Set(Object.keys(DB.horometros||{}));
+  const set = new Set(Object.keys(DB.horometros||{}).filter(function(m){ return /^\d{4}-\d{2}$/.test(m); }));   // (2026-11-11) sin la marca _lista
   set.add(horMesActual());
   return Array.from(set).sort();
 }
@@ -17039,7 +17039,9 @@ function _findesSync(){
     var lec = _horLecturas(mes);
     var items = Object.keys(lec).filter(function(k){ return k.charAt(0) !== '_' && _horTiene(lec[k]); }).map(function(k){ return { eqId: k, lectura: lec[k].lectura, excluir: function(f, kk){ return f === 'm' && kk === mes; } }; });
     solicitarPINAccion(function(){
-      conPlazo(db().ref('monhaco/horometros/' + mes).remove()).then(function(){
+      // (2026-11-11) La base no deja vaciar una lista entera: al borrar la ÚLTIMA toma queda la marca _lista (como en las parciales)
+      var _up = {}; _up[mes] = null; _up._lista = true;
+      conPlazo(db().ref('monhaco/horometros').update(_up)).then(function(){
         delete DB.horometros[mes]; _horMesVista = null;
         return revertir(items);
       }).then(fin('Toma de ' + horMesLabel(mes) + ' eliminada')).catch(error);
