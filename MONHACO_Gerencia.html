@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f60c2d4a2e37';
+  var APP_VERSION='4e6917902408';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -6851,6 +6851,16 @@ function renderTableroGer(){
     porEq[n] = (porEq[n] || 0) + 1;
   });
   const top10 = Object.fromEntries(Object.entries(porEq).sort((a, b) => b[1] - a[1]).slice(0, 10));
+  // (2026-11-11, Miguel) Top 10 de clientes con más servicios de mantenimiento en el mes (fecha de la orden; sin canceladas ni uso interno)
+  const cliSrv = {};
+  [['Preventivo', prev], ['Correctivo', corr], ['Soldadura / pintura', sold]].concat(_TAB_CORTINAS ? [['Cortinas', cort]] : []).forEach(([t, arr]) => arr.forEach(o => {
+    if(cancel(o) || !enMes(o.fecha || String(o.fechaInicio || '').slice(0, 10))) return;
+    const c = String(o.clienteOrden || o.clienteNombre || o.cliente || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    if(!c || /USO INTERNO/.test(c)) return;
+    const r = cliSrv[c] || (cliSrv[c] = { v: 0, t: {} }); r.v++; r.t[t] = (r.t[t] || 0) + 1;
+  }));
+  const topCli = Object.entries(cliSrv).sort((a, b) => b[1].v - a[1].v || a[0].localeCompare(b[0], 'es')).slice(0, 10)
+    .map(([n, r]) => ({ n: n, v: r.v, det: Object.entries(r.t).map(([t, k]) => k + ' ' + t.toLowerCase()).join(', '), peq: Object.entries(r.t).map(([t, k]) => k + ' ' + ({ 'Preventivo': 'prev', 'Correctivo': 'corr', 'Soldadura / pintura': 'sold', 'Cortinas': 'cort' })[t]).join(' · ') }));
 
   // ── Dibujo ──
   const fmt = n => Number(n).toLocaleString('es-HN');
@@ -6893,6 +6903,7 @@ function renderTableroGer(){
     +   tarjeta('Productividad · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', prod(hm.sortedLog) + '<div class="tb-nota">Meta: 189 h al mes = 100%. Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
     +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''), '#e34948')
     +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'), '#008300')
+    +   tarjeta('Clientes con más servicios', 'top 10 · ' + nomMes, barras(topCli, 'servicios') + '<div class="tb-nota">Órdenes de mantenimiento del mes (preventivo, correctivo, soldadura / pintura' + (_TAB_CORTINAS ? ', cortinas' : '') + '). Sin canceladas ni uso interno.</div>', '#7c3aed')   // (2026-11-11)
     + '</div></div>';
 }
 
