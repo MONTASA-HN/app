@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7fd577e52033';
+  var APP_VERSION='43d7f16b2943';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -3042,6 +3042,213 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
   window.addEventListener('popstate', function(){ if(ov) cerrar(true); });
   window.addEventListener('message', function(e){ if(e && e.data && e.data.nxCerrarOrdenes) cerrar(false); });
   window.lgAbrirOrdenes = abrirOrdenes;
+})();
+
+// ══ HORÓMETROS: TOMA PARCIAL POR CLIENTE + ELIMINAR TOMAS DESDE GERENCIA (2026-11-11, pedido de Miguel) ═══════════════════════
+// · Toma parcial (Logística MONHACO): cualquier día, un cliente, SIN firmas. «Guardar» pasa las lecturas a la ficha de cada equipo
+//   (igual que al finalizar la mensual) y queda en monhaco/horometrosParciales/<id> = {id, cliente, ts, lecturas:{eqId:{lectura,
+//   codigo, anterior}}}. Va APARTE de la toma mensual (la hoja mensual y su PDF siguen iguales).
+// · Gerencia: eliminar una toma completa (mes), la de un cliente en un mes, una lectura suelta o una toma parcial. Si la ficha del
+//   equipo tenía ese horómetro, regresa a la lectura anterior válida (otra toma mensual o parcial). Supervisión: solo consulta.
+(function(){
+  var GER = /Gerencia\.html$/i.test(location.pathname);
+  window._horParc = window._horParc || {};
+  function db(){ return window._fbDB; }
+  function esc(t){ return _hcEsc(t); }
+  function aviso(m, e){ try{ toast(m, e); }catch(x){ alert(m); } }
+  function repintar(){ try{ if(!_horMesVista && !document.getElementById('horp-ov') && document.getElementById(_HC_HOR_CONT)) renderHorometros(_HC_HOR_CONT); }catch(e){} }
+  (function escuchar(){
+    if(!db()) return setTimeout(escuchar, 1500);
+    db().ref('monhaco/horometrosParciales').on('value', function(s){ window._horParc = s.val() || {}; repintar(); }, function(){});
+  })();
+  function parciales(){ var v = window._horParc || {}; return Object.keys(v).map(function(k){ return v[k]; }).filter(function(p){ return p && p.id && p.lecturas; }).sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); }); }
+  function num(x){ var n = parseFloat(x); return isNaN(n) ? null : n; }
+  function fmt(n){ return Number(n).toLocaleString('en-US'); }
+  function fechaHora(ts){ var d = new Date(ts); return _horFechaTs(ts) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function conPlazo(p){ return Promise.race([p, new Promise(function(_, no){ setTimeout(function(){ no(new Error('sin respuesta de la base (¿sin señal?)')); }, 20000); })]); }
+
+  // ── Ficha: regresar a la lectura anterior válida cuando se borra la que tenía ──
+  function ultimaValida(eqId, excluir){
+    var best = null;
+    Object.keys(DB.horometros || {}).forEach(function(m){
+      if(!/^\d{4}-\d{2}$/.test(m) || excluir('m', m)) return;
+      var l = (DB.horometros[m] || {})[eqId]; if(!_horTiene(l)) return;
+      if(!best || (l.ts || 0) > best.ts) best = { lectura: num(l.lectura), ts: l.ts || 0 };
+    });
+    parciales().forEach(function(p){
+      if(excluir('p', p.id)) return;
+      var l = p.lecturas[eqId]; if(!l || num(l.lectura) == null) return;
+      if(!best || (p.ts || 0) > best.ts) best = { lectura: num(l.lectura), ts: p.ts || 0 };
+    });
+    return best;
+  }
+  function revertir(items){
+    var cambios = [];
+    items.forEach(function(it){
+      var eq = (DB.equipos || []).find(function(e){ return e && e.id === it.eqId; }); if(!eq) return;
+      if(num(eq.horometro) !== num(it.lectura)) return;            // la ficha ya tiene otra lectura: no se toca
+      var b = ultimaValida(it.eqId, it.excluir); if(!b || b.lectura == null) return;
+      cambios.push({ eq: eq, val: String(b.lectura) });
+    });
+    if(!cambios.length || !db()) return Promise.resolve(0);
+    return db().ref('monhaco/equipos').once('value').then(function(sn){
+      var v = sn.val() || {}, ks = Object.keys(v);
+      return Promise.all(cambios.map(function(c){
+        var idx = null; for(var i = 0; i < ks.length; i++){ if(v[ks[i]] && v[ks[i]].id === c.eq.id){ idx = ks[i]; break; } }
+        if(idx == null) return false;
+        c.eq.horometro = c.val;
+        return _nxSetSeguro('monhaco/equipos', idx, c.eq.id, 'horometro', c.val);
+      })).then(function(){ return cambios.length; });
+    });
+  }
+  function fin(txt){ return function(n){ aviso('🗑 ' + txt + (n ? ' · ' + n + ' ficha(s) regresaron a la lectura anterior' : '')); try{ renderHorometros(_HC_HOR_CONT); }catch(e){} }; }
+  function error(e){ aviso('⚠️ No se pudo eliminar: ' + ((e && e.message) || e), true); }
+
+  // ── Gerencia: eliminar ──
+  window.horElimLectura = function(mes, eqId){
+    var l = _horLecturas(mes)[eqId]; if(!_horTiene(l)) return;
+    var eq = _horEqDe(mes, eqId) || { codigo: eqId };
+    solicitarPINAccion(function(){
+      conPlazo(db().ref('monhaco/horometros/' + mes + '/' + eqId).remove()).then(function(){
+        if(DB.horometros[mes]) delete DB.horometros[mes][eqId];
+        return revertir([{ eqId: eqId, lectura: l.lectura, excluir: function(f, k){ return f === 'm' && k === mes; } }]);
+      }).then(fin('Lectura de ' + (eq.codigo || '') + ' eliminada')).catch(error);
+    }, '🗑 Eliminar la lectura de ' + (eq.codigo || '') + ' (' + horMesLabel(mes) + ')', 'Ingresa tu PIN para eliminar la lectura');
+  };
+  window.horElimCliente = function(mes, cli){
+    var ck = _horCliKey(cli), grupo = (_horClientes(_horEquiposVista(mes))[cli]) || [], lec = _horLecturas(mes);
+    var items = grupo.filter(function(e){ return _horTiene(lec[e.id]); }).map(function(e){ return { eqId: e.id, lectura: lec[e.id].lectura, excluir: function(f, k){ return f === 'm' && k === mes; } }; });
+    solicitarPINAccion(function(){
+      var up = {}; grupo.forEach(function(e){ up[e.id] = null; }); up['_cierres/' + ck] = null; up['_firmas/' + ck] = null; up['_cierre'] = null;
+      conPlazo(db().ref('monhaco/horometros/' + mes).update(up)).then(function(){
+        var m = DB.horometros[mes] || {}; grupo.forEach(function(e){ delete m[e.id]; });
+        if(m._cierres) delete m._cierres[ck]; if(m._firmas) delete m._firmas[ck]; delete m._cierre;
+        return revertir(items);
+      }).then(fin('Toma de ' + cli + ' (' + horMesLabel(mes) + ') eliminada')).catch(error);
+    }, '🗑 Eliminar la toma de ' + cli + ' de ' + horMesLabel(mes) + ' (' + items.length + ' lectura(s), firmas y cierre)', 'Ingresa tu PIN para eliminar la toma de este cliente');
+  };
+  window.horElimMes = function(mes){
+    var lec = _horLecturas(mes);
+    var items = Object.keys(lec).filter(function(k){ return k.charAt(0) !== '_' && _horTiene(lec[k]); }).map(function(k){ return { eqId: k, lectura: lec[k].lectura, excluir: function(f, kk){ return f === 'm' && kk === mes; } }; });
+    solicitarPINAccion(function(){
+      conPlazo(db().ref('monhaco/horometros/' + mes).remove()).then(function(){
+        delete DB.horometros[mes]; _horMesVista = null;
+        return revertir(items);
+      }).then(fin('Toma de ' + horMesLabel(mes) + ' eliminada')).catch(error);
+    }, '🗑 Eliminar la toma COMPLETA de ' + horMesLabel(mes) + ' (' + items.length + ' lectura(s) de todos los clientes)', 'Ingresa tu PIN para eliminar la toma completa');
+  };
+  window.horElimParcial = function(id){
+    var p = parciales().find(function(x){ return x.id === id; }); if(!p) return;
+    var items = Object.keys(p.lecturas).map(function(k){ return { eqId: k, lectura: p.lecturas[k].lectura, excluir: function(f, kk){ return f === 'p' && kk === id; } }; });
+    solicitarPINAccion(function(){
+      conPlazo(db().ref('monhaco/horometrosParciales/' + id).remove()).then(function(){
+        delete window._horParc[id];
+        return revertir(items);
+      }).then(fin('Toma parcial de ' + p.cliente + ' (' + fechaHora(p.ts) + ') eliminada')).catch(error);
+    }, '🗑 Eliminar la toma parcial de ' + p.cliente + ' del ' + fechaHora(p.ts), 'Ingresa tu PIN para eliminar la toma parcial');
+  };
+
+  // ── Toma parcial: formulario (Logística MONHACO) ──
+  window.horParcialAbrir = function(){
+    if(document.getElementById('horp-ov')) return;
+    var grupos = _horClientes(_horEquipos()), clientes = Object.keys(grupos).sort();
+    var ov = document.createElement('div'); ov.id = 'horp-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;max-height:90vh;overflow:auto;box-sizing:border-box">'
+      + '<div style="font-weight:800;color:#1f3864;font-size:16px;margin-bottom:4px">🕐 Toma parcial de horómetros</div>'
+      + '<div style="font-size:12px;color:#888;margin-bottom:12px">Cualquier día, por cliente. Sin firmas: al guardar, las lecturas pasan a la ficha de cada equipo. No cambia la toma mensual.</div>'
+      + '<select id="horp-cli" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:14px;background:#fff;margin-bottom:10px"><option value="">— Seleccionar cliente —</option>'
+      + clientes.map(function(c){ return '<option value="' + esc(c) + '">' + esc(c) + ' (' + grupos[c].length + ')</option>'; }).join('') + '</select>'
+      + '<div id="horp-eqs"></div>'
+      + '<div style="display:flex;gap:8px;margin-top:12px"><button data-x="1" style="flex:1;padding:12px;background:#eee;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>'
+      + '<button data-ok="1" style="flex:2;padding:12px;background:#1f3864;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">💾 Guardar toma parcial</button></div></div>';
+    document.body.appendChild(ov);
+    var sel = ov.querySelector('#horp-cli');
+    sel.onchange = function(){
+      var g = grupos[sel.value] || [];
+      ov.querySelector('#horp-eqs').innerHTML = g.length ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="background:#dce6f1;color:#1f3864"><th style="padding:6px;text-align:left">Equipo</th><th style="padding:6px;text-align:right">Última en ficha</th><th style="padding:6px">Lectura hoy</th></tr>'
+        + g.map(function(e){ var a = num(e.horometro); return '<tr style="border-bottom:1px solid #eee"><td style="padding:6px;font-weight:800;color:#1f3864">' + esc(e.codigo) + '<div style="font-size:10.5px;color:#888;font-weight:400">' + esc(e.ubicacion || '') + '</div></td>'
+          + '<td style="padding:6px;text-align:right">' + (a != null ? fmt(a) : '—') + '</td>'
+          + '<td style="padding:4px;text-align:center"><input type="number" inputmode="decimal" data-eq="' + esc(e.id) + '" placeholder="hrs" style="width:96px;padding:8px;border:1.5px solid #ccc;border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td></tr>'; }).join('')
+        + '</table><div style="font-size:11px;color:#888;margin-top:6px">Deja vacío el equipo que no se tomó.</div>' : '';
+    };
+    ov.addEventListener('click', function(ev){
+      if(ev.target.closest('[data-x]')){ ov.remove(); return; }
+      if(!ev.target.closest('[data-ok]')) return;
+      var cli = sel.value; if(!cli){ aviso('Elige el cliente', true); return; }
+      var lect = {}, con = [], reg = { id: 'hp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), cliente: cli, ts: Date.now(), lecturas: {} };
+      var ins = ov.querySelectorAll('input[data-eq]');
+      for(var i = 0; i < ins.length; i++){
+        var v = ins[i].value.trim(); if(v === '') continue;
+        var n = parseFloat(v), e = (grupos[cli] || []).find(function(x){ return x.id === ins[i].dataset.eq; }); if(!e) continue;
+        if(isNaN(n) || n < 0){ aviso('Lectura inválida en ' + e.codigo, true); return; }
+        var a = num(e.horometro);
+        if(a != null && n < a && !confirm('⚠️ ' + e.codigo + ': la lectura (' + fmt(n) + ') es MENOR que la de la ficha (' + fmt(a) + ').\n¿Guardarla de todas formas? (ej. cambio de reloj)')) return;
+        lect[e.id] = { lectura: n }; con.push(e); reg.lecturas[e.id] = { lectura: n, codigo: e.codigo || '', anterior: a };
+      }
+      if(!con.length){ aviso('Escribe al menos una lectura', true); return; }
+      if(!confirm('¿Guardar la toma parcial de ' + cli + '?\n\n' + con.length + ' equipo(s): el horómetro pasa a la ficha de cada uno.')) return;
+      var bt = ev.target.closest('[data-ok]'); bt.disabled = true; bt.textContent = '⏳ Guardando…';
+      conPlazo(Promise.resolve(_horFichasActualizar(con, lect))).then(function(n){
+        if(HOR_PRUEBA) return n;
+        return db().ref('monhaco/horometrosParciales/' + reg.id).set(reg).then(function(){ return db().ref('monhaco/horometrosParciales/_lista').set(true); }).then(function(){ return n; });
+      }).then(function(n){
+        window._horParc[reg.id] = reg; ov.remove(); repintar();
+        aviso('✅ Toma parcial de ' + cli + ' guardada — ' + (HOR_PRUEBA ? '(PRUEBA) fichas no tocadas' : n + ' ficha(s) actualizadas'));
+      }).catch(function(e){ bt.disabled = false; bt.textContent = '💾 Guardar toma parcial'; aviso('⚠️ No se guardó: ' + ((e && e.message) || e) + '. Intenta de nuevo con señal.', true); });
+    });
+  };
+
+  // ── Listado de tomas parciales en el inicio de Horómetros ──
+  window._horParcVer = function(id){ var d = document.getElementById('horp-det-' + id); if(d) d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
+  function parcialesHTML(){
+    var L = parciales(), h = '';
+    h += '<div style="font-size:12.5px;font-weight:800;color:#1f3864;margin:14px 0 8px">🕐 Tomas parciales' + (L.length ? ' (' + L.length + ')' : '') + '</div>';
+    if(HOR_CAPTURA) h += '<button onclick="horParcialAbrir()" style="width:100%;padding:12px;background:#fff;color:#1f3864;border:1.5px solid #1f3864;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;margin-bottom:10px">🕐 Toma parcial por cliente</button>';
+    if(!L.length) return h + '<div style="font-size:12px;color:var(--text3,#888);padding:4px 0 10px">Sin tomas parciales todavía.</div>';
+    L.slice(0, 30).forEach(function(p){
+      var ids = Object.keys(p.lecturas);
+      h += '<div style="background:var(--surface,#fff);border:1px solid #c9d9ef;border-left:4px solid #2d6a9f;border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+        + '<div onclick="_horParcVer(\'' + esc(p.id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center">'
+        + '<div><div style="font-weight:800;color:#1f3864;font-size:13px">' + esc(p.cliente) + '</div><div style="font-size:11px;color:#667">' + fechaHora(p.ts) + ' · ' + ids.length + ' equipo(s)</div></div><span style="color:#888">⌄</span></div>'
+        + '<div id="horp-det-' + esc(p.id) + '" style="display:none;margin-top:8px">'
+        + ids.map(function(k){ var l = p.lecturas[k]; return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-top:1px solid #eee"><b>' + esc(l.codigo || k) + '</b><span>' + (l.anterior != null ? fmt(l.anterior) + ' → ' : '') + '<b>' + fmt(l.lectura) + ' hrs</b></span></div>'; }).join('')
+        + (GER ? '<button onclick="horElimParcial(\'' + esc(p.id) + '\')" style="width:100%;margin-top:8px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12.5px">🗑 Eliminar toma parcial (PIN)</button>' : '')
+        + '</div></div>';
+    });
+    return h;
+  }
+  var _home = _horHomeHTML;
+  _horHomeHTML = function(){ return _home.apply(this, arguments) + parcialesHTML(); };
+
+  // ── Gerencia: botones de eliminar en la toma mensual ──
+  if(GER){
+    var _rh = renderHorometros;
+    renderHorometros = function(contId){
+      _rh.apply(this, arguments);
+      try{
+        var mes = _horMesVista, cont = document.getElementById(contId); if(!mes || !cont || !(DB.horometros || {})[mes]) return;
+        var B = 'padding:8px 12px;background:#fdeaea;color:#c00;border:1px solid #f5c6c6;border-radius:8px;font-weight:700;cursor:pointer;font-size:12.5px;';
+        var pdf = cont.querySelector('button[onclick^="compartirHorometros"]');
+        if(pdf && pdf.parentElement){ var bm = document.createElement('button'); bm.style.cssText = B + 'width:100%;margin:0 0 12px'; bm.textContent = '🗑 Eliminar toma completa de ' + horMesLabel(mes) + ' (PIN)'; bm.onclick = function(){ horElimMes(mes); }; pdf.parentElement.insertAdjacentElement('afterend', bm); }
+        var lec = _horLecturas(mes);
+        cont.querySelectorAll('div').forEach(function(d){
+          if(d.children.length || !/^CONTROL DE HOROMETRAJE /.test(d.textContent)) return;
+          var cli = d.textContent.replace(/^CONTROL DE HOROMETRAJE /, '').trim();
+          var grupo = (_horClientes(_horEquiposVista(mes))[cli]) || [];
+          if(!grupo.some(function(e){ return _horTiene(lec[e.id]); }) && !(_horFirmas(mes)[_horCliKey(cli)])) return;
+          var bc = document.createElement('button'); bc.style.cssText = B + 'margin:0 0 8px'; bc.textContent = '🗑 Eliminar toma de ' + cli + ' (PIN)'; bc.onclick = function(){ horElimCliente(mes, cli); };
+          d.parentElement.insertAdjacentElement('beforebegin', bc);
+        });
+        cont.querySelectorAll('td[id^="hor-hasta-"]').forEach(function(td){
+          var id = td.id.slice(10); if(!_horTiene(lec[id])) return;
+          var ult = td.parentElement.lastElementChild; if(!ult) return;
+          var x = document.createElement('span'); x.textContent = ' 🗑'; x.title = 'Eliminar lectura'; x.style.cssText = 'cursor:pointer;color:#c00;font-weight:400';
+          x.onclick = function(){ horElimLectura(mes, id); }; ult.appendChild(x);
+        });
+      }catch(e){ console.warn('horómetros eliminar', e); }
+    };
+  }
 })();
 </script>
 </body>
