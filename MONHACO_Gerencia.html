@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='bcac6f26fda1';
+  var APP_VERSION='5dc5866e0bc6';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5159,6 +5159,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
 // ── Fotos y firma DENTRO del formulario (antes de guardar) ───────────────────
 let _rcFotosTmp = [];
 let _rcFirmaTmp = '';
+let _rcFirmaTallerTmp = '';   // (2026-11-12) firma del ENCARGADO DE TALLER
 function _rcFormFotosUI(){
   const cont = document.getElementById('rc-form-fotos'); if(!cont) return;
   let h = '<label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">📷 Fotografías del daño <span style="font-weight:400;text-transform:none">(máx. 10)</span></label>';
@@ -5227,22 +5228,25 @@ function rcFormFotosEliminar(i){
 // pantalla completa (girado a horizontal en teléfonos verticales) con botón
 // Guardar — así el scroll jamás mancha la firma.
 function _rcFormFirmaUI(){
+  // (2026-11-12, Miguel) Dos firmas: ENCARGADO DE TALLER (r.firmaTaller) y ENCARGADO DE ÁREA (r.firma, la que antes era «del cliente»)
   const cont = document.getElementById('rc-form-firma'); if(!cont) return;
-  let h = '<label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">✍️ Firma del cliente</label>';
-  if(_rcFirmaTmp){
-    h += '<div onclick="rcFirmaAbrir()" style="border:1.5px solid #27ae60;border-radius:10px;background:#fff;padding:6px;cursor:pointer;text-align:center">'
-      + '<img src="'+_rcFirmaTmp+'" style="max-width:100%;max-height:90px;object-fit:contain">'
-      + '</div>'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
-      + '<span style="font-size:12px;color:#27ae60;font-weight:700">✓ Firma guardada — toca para rehacerla</span>'
-      + '<button onclick="event.stopPropagation();_rcFirmaTmp=\'\';_rcFormFirmaUI()" style="font-size:12px;background:none;border:1px solid var(--border2,#ccc);border-radius:6px;padding:5px 10px;cursor:pointer">🗑 Borrar</button>'
-      + '</div>';
-  } else {
-    h += '<div onclick="rcFirmaAbrir()" style="border:1.5px dashed var(--border2,#ccc);border-radius:10px;background:#fff;padding:22px 10px;cursor:pointer;text-align:center;color:var(--text3,#888);font-size:13px;font-weight:600">✍️ Toca aquí para firmar</div>';
-  }
-  cont.innerHTML = h;
+  const slot = function(rol, titulo, img){
+    let h = '<label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin:8px 0 4px">✍️ ' + titulo + '</label>';
+    if(img){
+      h += '<div onclick="rcFirmaAbrir(\'' + rol + '\')" style="border:1.5px solid #27ae60;border-radius:10px;background:#fff;padding:6px;cursor:pointer;text-align:center">'
+        + '<img src="'+img+'" style="max-width:100%;max-height:90px;object-fit:contain"></div>'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+        + '<span style="font-size:12px;color:#27ae60;font-weight:700">✓ Firma guardada — toca para rehacerla</span>'
+        + '<button onclick="event.stopPropagation();' + (rol === 'taller' ? '_rcFirmaTallerTmp' : '_rcFirmaTmp') + '=\'\';_rcFormFirmaUI()" style="font-size:12px;background:none;border:1px solid var(--border2,#ccc);border-radius:6px;padding:5px 10px;cursor:pointer">🗑 Borrar</button></div>';
+    } else {
+      h += '<div onclick="rcFirmaAbrir(\'' + rol + '\')" style="border:1.5px dashed var(--border2,#ccc);border-radius:10px;background:#fff;padding:22px 10px;cursor:pointer;text-align:center;color:var(--text3,#888);font-size:13px;font-weight:600">✍️ Toca aquí para firmar</div>';
+    }
+    return h;
+  };
+  cont.innerHTML = slot('taller', 'Encargado de taller', _rcFirmaTallerTmp) + slot('area', 'Encargado de área', _rcFirmaTmp);
 }
-function rcFirmaAbrir(){
+function rcFirmaAbrir(rol){
+  window._rcFirmaRol = rol === 'taller' ? 'taller' : 'area';   // (2026-11-12) qué firma se está haciendo
   const viejo = document.getElementById('rc-firma-overlay'); if(viejo) viejo.remove();
   const esPC = !('ontouchstart' in window) && window.innerWidth > 900;
   const portrait = window.innerHeight > window.innerWidth && !esPC;
@@ -5301,7 +5305,7 @@ function _rcFirmaLimpiarLienzo(){
 function rcFirmaGuardarOverlay(){
   const c = document.getElementById('rc-firma-canvas'); if(!c) return;
   if(!window._rcFirmaHayTrazo){ toast('Primero firme en el recuadro', true); return; }
-  _rcFirmaTmp = _firmaLigera(c);
+  if(window._rcFirmaRol === 'taller') _rcFirmaTallerTmp = _firmaLigera(c); else _rcFirmaTmp = _firmaLigera(c);
   const ov = document.getElementById('rc-firma-overlay'); if(ov) ov.remove();
   _rcFormFirmaUI();
   toast('Firma guardada ✓');
@@ -5515,6 +5519,7 @@ function rcAbrirForm(editId){
   if(editId && _rcFotosPend(r)){ toast('Cargando fotografías…'); _rcHidratar(r, function(){ rcAbrirForm(editId); }); return; }
   _rcFotosTmp = (r && Array.isArray(r.fotos)) ? r.fotos.slice() : [];
   _rcFirmaTmp = (r && r.firma) ? r.firma : '';
+  _rcFirmaTallerTmp = (r && r.firmaTaller) ? r.firmaTaller : '';
   const viejo = document.getElementById('rc-form-overlay'); if(viejo) viejo.remove();
   const campo = function(lbl, iid, val, ph, tipo){
     if(tipo==='textarea') return '<div style="margin-bottom:10px"><label style="display:block;font-size:11px;font-weight:700;color:var(--text2,#555);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">'+lbl+'</label><textarea id="'+iid+'" rows="3" placeholder="'+_hcEsc(ph||'')+'" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;font-family:inherit">'+_hcEsc(val||'')+'</textarea></div>';
@@ -5546,6 +5551,8 @@ function rcAbrirForm(editId){
   document.body.appendChild(ov);
   _rcFormFotosUI();
   _rcFormFirmaUI();
+  if(r && r.ordenId) _rcFijarLigados(null, null);   // (2026-11-12) ya ligado: cliente y técnico solo lectura
+  else if(typeof window._rcListas === 'function') window._rcListas();   // sin orden: de lista
 }
 function rcBuscarOrden(){
   const viejo = document.getElementById('rc-buscar-overlay'); if(viejo) viejo.remove();
@@ -5592,6 +5599,12 @@ function _rcFiltrarBusqueda(txt){
     d.style.display = (!txt || d.textContent.toLowerCase().includes(txt)) ? '' : 'none';
   });
 }
+// (2026-11-12) Cliente y técnico del reporte de cobro: los de la orden ligada, sin poder cambiarlos a mano
+function _rcFijarLigados(cli, tec){
+  [['rc-cliente', cli], ['rc-tecnico', tec]].forEach(function(p){ let el = document.getElementById(p[0]); if(!el) return;
+    if(el.tagName === 'SELECT'){ const inp = document.createElement('input'); inp.id = el.id; inp.className = el.className; inp.style.cssText = el.style.cssText; inp.value = el.value; el.parentNode.replaceChild(inp, el); el = inp; }
+    el.removeAttribute('list'); if(p[1] != null && p[1] !== '') el.value = p[1]; el.readOnly = true; el.style.background = '#f3f5f8'; el.title = 'Viene de la orden ligada'; });
+}
 function rcElegirOrden(tipo, oid){
   const arr = _valeMantArr(tipo);
   const o = arr.find(function(x){ return x && x.id===oid; }); if(!o) return;
@@ -5601,13 +5614,17 @@ function rcElegirOrden(tipo, oid){
   document.getElementById('rc-orden-corr').value = o.correlativo||'';
   document.getElementById('rc-orden-tipo').value = tipo;
   _rcSetEquipo(eq ? (eq.codigo+(eq.marca?' — '+eq.marca:'')) : (o.clienteNombre||''));
-  setV('rc-tecnico', o.tecnico || (o.tecnicos&&o.tecnicos.filter(Boolean).join(', ')) || '');
+  // (2026-11-12, Miguel) cliente y técnico vienen de la orden ligada (solo lectura)
+  const _sol = (DB.solicitudes||[]).find(function(s){ return s && (s.id===o.id || (o.correlativo && s.correlativo===o.correlativo)); });
+  _rcFijarLigados(o.clienteOrden || o.clienteNombre || o.cliente || (eq && (eq.clienteNombre || eq.cliente)) || '',
+    o.tecnico || (o.tecnicos&&o.tecnicos.filter(Boolean).join(', ')) || (_sol && _sol.tecnicoNombre) || '');
   const chip = document.getElementById('rc-orden-chip');
   if(chip) chip.innerHTML = '<span style="font-size:12px;font-weight:700;background:#eef2f8;color:#1f3864;padding:6px 12px;border-radius:10px;display:inline-block">🔗 Enlazado a '+_hcEsc(o.correlativo||'')+'</span>';
   const bo = document.getElementById('rc-buscar-overlay'); if(bo) bo.remove();
 }
 function rcGuardar(){
   const val = function(id){ const el=document.getElementById(id); return el ? el.value.trim() : ''; };
+  if(typeof window._rcValidarListas === 'function'){ const _ev = window._rcValidarListas(); if(_ev){ alert(_ev); return; } }   // (2026-11-12) nombres de lista
   const equipo = val('rc-equipo'), cliente = val('rc-cliente'), causa = val('rc-causa');
   if(!equipo){ toast('Falta el equipo', true); return; }
   if(!cliente){ toast('Falta el cliente responsable', true); return; }
@@ -5629,6 +5646,7 @@ function rcGuardar(){
   r.ordenCorrelativo = val('rc-orden-corr');
   r.ordenTipo = val('rc-orden-tipo');
   r.firma = _rcFirmaTmp || '';
+  r.firmaTaller = _rcFirmaTallerTmp || '';
   r.fotos = _rcFotosTmp.slice();
   r.nFotos = r.fotos.length;
   if(!DB.cobros || Array.isArray(DB.cobros)) DB.cobros = {};
@@ -5660,7 +5678,7 @@ function rcVer(id){
     + fila('Equipo', r.equipoTxt) + fila('Cliente', r.cliente) + fila('Fecha del daño', r.fechaDano)
     + (r.ordenCorrelativo?fila('Orden enlazada', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + bloque('⚠️ Daño y causa', r.causa)
-    + (r.firma?'<div style="margin-top:10px"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">✍️ Firma del cliente</div><img src="' + _img(r.firma) + '" style="width:100%;max-height:100px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff"></div>':'')
+    + ((r.firma||r.firmaTaller)?'<div style="display:flex;gap:10px;margin-top:10px">' + [['Encargado de taller', r.firmaTaller], ['Encargado de área', r.firma]].map(function(f){ return '<div style="flex:1;min-width:0"><div style="color:#6b6960;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:3px">✍️ ' + f[0] + '</div>' + (f[1] ? '<img src="' + _img(f[1]) + '" style="width:100%;max-height:100px;object-fit:contain;border:1px solid #e2e0d8;border-radius:8px;background:#fff">' : '<div style="height:60px;border:1px dashed #e2e0d8;border-radius:8px;color:#aaa;font-size:11px;display:flex;align-items:center;justify-content:center">Sin firma</div>') + '</div>'; }).join('') + '</div>':'')   // (2026-11-12) dos firmas
     + _rcFotosUIHTML(r)
     + '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
     + '<button onclick="rcCompartirPDF(\''+_idS(r.id)+'\')" style="flex:1;min-width:130px;padding:12px;background:#8a1f1f;color:#fff;border:none;border-radius:8px;font-weight:800;cursor:pointer">📄 Compartir PDF</button>'
@@ -5735,7 +5753,7 @@ function _rcConstruirDOM(r, sinFotos){
     + (r.ordenCorrelativo?fila('Orden de reparación', r.ordenCorrelativo):'') + fila('Técnico', r.tecnico)
     + '</div>'
     + bloque('⚠️ Daño y causa (mala operación)', r.causa)
-    + (r.firma?'<div style="padding:10px;border:1px solid #eeece4;border-radius:8px;margin-top:8px"><div style="color:#8a4800;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:4px">✍️ Firma del cliente</div><img src="' + _img(r.firma) + '" style="width:100%;max-height:110px;object-fit:contain;background:#fff"></div>':'')
+    + '<div style="display:flex;gap:10px;margin-top:8px">' + [['ENCARGADO DE TALLER', r.firmaTaller], ['ENCARGADO DE ÁREA', r.firma]].map(function(f){ return '<div style="flex:1;min-width:0;padding:10px;border:1px solid #eeece4;border-radius:8px;text-align:center">' + (f[1] ? '<img src="' + _img(f[1]) + '" style="width:100%;max-height:90px;object-fit:contain;background:#fff">' : '<div style="height:60px"></div>') + '<div style="border-top:1.5px solid #333;margin-top:4px;padding-top:4px;color:#8a4800;font-size:11px;font-weight:800">' + f[0] + '</div></div>'; }).join('') + '</div>'   // (2026-11-12) dos firmas, siempre con su línea
     + fotosHTML
     + '<div style="padding:12px 2px 2px;text-align:center;color:#9c9a90;font-size:10.5px">Documento generado desde NEXO — '+new Date().toLocaleDateString('es-HN')+'</div>';
   return cont;
@@ -17254,6 +17272,52 @@ window._nxExcelConLogo = function(wbX, archivo){
     window._nxValePDF = true; try{ toast('📄 Generando el PDF del vale…'); }catch(e){}
     try{ window[fn](a1); } catch(e){ window._nxValePDF = false; throw e; }
     setTimeout(function(){ window._nxValePDF = false; }, 15000);   // si la función no llegó a imprimir, no dejar la marca puesta
+  };
+})();
+
+// ══ REPORTE DE COBRO: CLIENTE Y TÉCNICO DE LISTA (2026-11-12, pedido de Miguel) ══ Sin orden ligada, el cliente se elige de la lista de
+// clientes (la de Solicitudes) y el técnico de los técnicos de Personal MONHACO, para que los nombres salgan siempre iguales.
+(function(){
+  var CLI = null, TEC = null;
+  try{ CLI = JSON.parse(localStorage.getItem('nx_rc_cli') || 'null'); TEC = JSON.parse(localStorage.getItem('nx_rc_tec') || 'null'); }catch(e){}
+  function norm(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function cargar(){
+    var db = window._fbDB; if(!db) return Promise.resolve();
+    var p1 = db.ref('monhaco/clientesLista').once('value').then(function(s){ var v = s.val(); var L = (Array.isArray(v) ? v : Object.values(v || {})).map(function(x){ return x && x.nombre; }).filter(Boolean);
+      if(L.length){ CLI = ['MONHACO (USO INTERNO)'].concat(L); try{ localStorage.setItem('nx_rc_cli', JSON.stringify(CLI)); }catch(e){} } }).catch(function(){});
+    var p2 = db.ref('monhaco/rrhh/plantilla').once('value').then(function(s){ var v = s.val() || {}; var L = Object.keys(v).map(function(k){ return v[k]; })
+        .filter(function(p){ return p && p.n && (p.roles || []).indexOf('tec') >= 0; }).map(function(p){ return p.n; })
+        .filter(function(n, i, a){ return a.indexOf(n) === i; }).sort(function(a, b){ return a.localeCompare(b, 'es'); });
+      if(L.length){ TEC = L; try{ localStorage.setItem('nx_rc_tec', JSON.stringify(TEC)); }catch(e){} } }).catch(function(){});
+    return Promise.all([p1, p2]);
+  }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function pintar(){
+    if((document.getElementById('rc-orden-id') || {}).value) return;   // ligado a una orden: vienen de la orden
+    var ci = document.getElementById('rc-cliente');
+    if(ci && ci.tagName === 'INPUT'){
+      var dl = document.getElementById('rc-cli-dl'); if(!dl){ dl = document.createElement('datalist'); dl.id = 'rc-cli-dl'; ci.parentNode.appendChild(dl); }
+      dl.innerHTML = (CLI || []).map(function(n){ return '<option value="' + esc(n) + '">'; }).join('');
+      ci.setAttribute('list', 'rc-cli-dl'); ci.setAttribute('autocomplete', 'off'); ci.placeholder = 'Escribe y elige el cliente de la lista';
+    }
+    var te = document.getElementById('rc-tecnico');
+    if(te && TEC && TEC.length){
+      var actual = te.value || '';
+      var sel = document.createElement('select'); sel.id = 'rc-tecnico'; sel.className = te.className; sel.style.cssText = te.style.cssText;
+      var ops = ['<option value="">— Seleccionar técnico —</option>'].concat(TEC.map(function(n){ return '<option' + (n === actual ? ' selected' : '') + '>' + esc(n) + '</option>'; }));
+      if(actual && TEC.indexOf(actual) < 0) ops.push('<option selected>' + esc(actual) + '</option>');
+      sel.innerHTML = ops.join(''); te.parentNode.replaceChild(sel, te);
+    }
+  }
+  window._rcListas = function(){ pintar(); cargar().then(pintar); };
+  // Al guardar sin orden ligada: el cliente debe ser uno de la lista (se escribe exacto como en la lista) y el técnico, elegido
+  window._rcValidarListas = function(){
+    if((document.getElementById('rc-orden-id') || {}).value) return '';
+    var ci = document.getElementById('rc-cliente'), te = document.getElementById('rc-tecnico');
+    if(ci && CLI && CLI.length){ var q = norm(ci.value); var e = CLI.find(function(n){ return norm(n) === q; });
+      if(!e) return 'El cliente debe elegirse de la lista (escribe y toca el nombre).'; ci.value = e; }
+    if(te && te.tagName === 'SELECT' && !te.value) return 'Elige el técnico de la lista.';
+    return '';
   };
 })();
 </script>
