@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a89751d459c3';
+  var APP_VERSION='3c55247b2883';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5633,6 +5633,14 @@ function guardarEquipo(){
   const codigo = document.getElementById('eq-codigo').value.trim();
   const desc = document.getElementById('eq-desc').value.trim();
   if(!codigo||!desc){ toast('Código y descripción requeridos',true); return; }
+  { // (2026-11-12, Miguel) Aviso: el sincronizador NO sube un equipo con serie en Vendidos ni con código/serie ya en la flota (parecía guardado)
+    const _n = function(x){ return String(x||'').trim().toUpperCase(); };
+    const _se = _n((document.getElementById('eq-serie-new')||{}).value); const _serie = (_se.length > 3 && _se !== '—' && _se !== '-') ? _se : '';
+    const _v = _serie && (DB.vendidos||[]).find(function(x){ return x && _n(x.serie) === _serie; });
+    if(_v){ alert('⚠️ Este equipo está en VENDIDOS.\n\nLa serie ' + _serie + ' está registrada como vendida (' + (_v.codigo || 'sin código') + (_v.clienteVenta ? ', a ' + _v.clienteVenta : '') + ').\n\nNo se puede crear de nuevo. Si volvió a la flota, pide que lo regresen desde Vendidos.'); return; }
+    const _r = (DB.equipos||[]).find(function(x){ return x && ((_serie && _n(x.serie) === _serie) || (!x.esEquipoCliente && _n(x.codigo) === _n(codigo))); });
+    if(_r){ alert('⚠️ Ya existe en la flota: ' + (_r.codigo || '') + (_r.serie ? ' (serie ' + _r.serie + ')' : '') + '.\n\nUsa otro código o edita el equipo existente.'); return; }
+  }
   DB.equipos.push({id:uid(),codigo,desc,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value.trim(),serie:document.getElementById('eq-serie-new').value.trim(),combustible:document.getElementById('eq-combustible').value,ubicacion:document.getElementById('eq-ubicacion-new').value.trim(),cliente:document.getElementById('eq-cliente-new').value.trim(),estado:'DISPONIBLE',horometro:'',observaciones:''});
   saveDB(); saveAllEquipos(); toggleForm('form-equipo');
   ['eq-codigo','eq-desc','eq-marca','eq-serie-new','eq-ubicacion-new','eq-cliente-new'].forEach(id=>{ const _el=document.getElementById(id); if(_el) _el.value=''; }); // saltar campos que no existen (T15)
