@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e5d9cfcc6b2e';
+  var APP_VERSION='6e049c7e89cd';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -4200,6 +4200,7 @@ function _horMeses(){
 function _horEquipos(){
   return (DB.equipos||[]).filter(function(e){
     if(!e || e.esGenerico || e.esVehiculo || e.esEquipoCliente) return false;
+    if(/USO INTERNO/i.test(String(e.cliente||''))) return false;   // (2026-11-12, Miguel) los de USO INTERNO no van en la toma de horómetros
     // (2026-11-11) también los nombres de MT Rental (equipos trasladados): sin tildes y «Plataforma aérea» = ELEVADORA
     var _tp = String(e.tipo||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim(); if(_tp === 'PLATAFORMA AEREA') _tp = 'ELEVADORA';
     if(!HOR_TIPOS.includes(_tp)) return false;
@@ -4245,7 +4246,7 @@ function _horExtAPseudo(k, m){
 function _horEquiposVista(mes){
   // Flota MONHACO + equipos externos recordados (ej. de MT Rental rentados a clientes MONHACO)
   const ext = _horExternos();
-  const extra = Object.keys(ext).map(function(k){ return _horExtAPseudo(k, ext[k]); });
+  const extra = Object.keys(ext).map(function(k){ return _horExtAPseudo(k, ext[k]); }).filter(function(e){ return !/USO INTERNO/i.test(String(e.cliente||'')); });   // (2026-11-12) sin USO INTERNO
   return _horEquipos().concat(extra).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
 }
 function _horEqDe(mes, eqId){
