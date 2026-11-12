@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b1ab71d7f307';
+  var APP_VERSION='b915985b07b7';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1429,7 +1429,8 @@ function _mostrarOverlayValeMant(ordenId, tipo){
     + '<span id="vale-mant-total" style="font-size:18px;font-weight:700">L. '+total.toFixed(2)+'</span></div>'
     + '<div style="display:flex;gap:8px">'
     + '<button onclick="cerrarValeMant()" style="flex:1;padding:13px;background:#888;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">Cerrar</button>'
-    + '<button onclick="imprimirValeMant()" style="flex:1;padding:13px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">📄 PDF</button>'
+    + '<button onclick="imprimirValeMant()" style="flex:1;padding:13px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">🖨 Imprimir</button>'
+    + '<button onclick="descargarValePDF(\'imprimirValeMant\')" style="flex:1;padding:13px;background:#2d6a2d;color:white;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">📥 Descargar PDF</button>'
     + '</div>'
     + '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:10px">Para editar este vale, contacta a Gerencia</div>'
     + '</div>';
@@ -7854,6 +7855,42 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
   };
   function precargar(){ try{ var s = window._nxLogo(); if(s && !window._nxLogoImg){ var im = new Image(); im.src = s; window._nxLogoImg = im; } }catch(e){} }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', precargar); else precargar();
+})();
+
+// ══ VALE DE ALIMENTACIÓN EN PDF (2026-11-12, pedido de Miguel) ══ «📥 Descargar PDF» dentro del vale: el MISMO comprobante que
+// «Imprimir», guardado como Vale_alimentacion_<orden>.pdf en vez de abrir la impresión.
+(function(){
+  var _imp = window._imprimirHTML;
+  function cargar(src, ok){ return new Promise(function(res, rej){ if(ok()) return res(); var s = document.createElement('script'); s.src = src; s.onload = function(){ res(); }; s.onerror = function(){ rej(new Error('No se pudo cargar el generador de PDF (¿sin señal?)')); }; document.head.appendChild(s); }); }
+  async function pdfPropio(html, nombre){   // para las apps sin _descargarDocPDF (Técnicos): una hoja carta
+    await cargar('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', function(){ return !!window.html2canvas; });
+    await cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); });
+    var ifr = document.createElement('iframe'); ifr.style.cssText = 'position:fixed;left:-12000px;top:0;width:860px;height:900px;border:0'; document.body.appendChild(ifr);
+    try{
+      await new Promise(function(r){ ifr.onload = function(){ r(); }; ifr.srcdoc = String(html).replace(/<button class="no-print[^>]*>[\s\S]*?<\/button>/, ''); });
+      await new Promise(function(r){ setTimeout(r, 500); });
+      var d = ifr.contentDocument; d.body.style.margin = '0'; var h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); ifr.style.height = h + 'px';
+      var c = await window.html2canvas(d.body, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 860, width: 860, height: h });
+      var pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' }), pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight(), m = 20;
+      var w = pw - 2 * m, hh = c.height * w / c.width; if(hh > ph - 2 * m){ w = w * (ph - 2 * m) / hh; hh = ph - 2 * m; }
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', (pw - w) / 2, m, w, hh);
+      pdf.save(nombre);
+    } finally { ifr.remove(); }
+  }
+  window._imprimirHTML = function(html){
+    if(!window._nxValePDF) return _imp.apply(this, arguments);
+    window._nxValePDF = false;
+    var m = String(html).match(/\b(MH|LG[A-Z]*|SP|RV|EV|CT)-\d{3,5}\b/), nombre = 'Vale_alimentacion' + (m ? '_' + m[0] : '') + '.pdf';
+    var p = (typeof window._descargarDocPDF === 'function') ? window._descargarDocPDF(html, nombre) : pdfPropio(html, nombre);
+    Promise.resolve(p).then(function(){ try{ toast('📥 PDF del vale descargado: ' + nombre); }catch(e){} })
+      .catch(function(e){ try{ toast('No se pudo generar el PDF: ' + ((e && e.message) || e), true); }catch(x){} });
+  };
+  window.descargarValePDF = function(fn, a1){
+    if(typeof window[fn] !== 'function') return;
+    window._nxValePDF = true; try{ toast('📄 Generando el PDF del vale…'); }catch(e){}
+    try{ window[fn](a1); } catch(e){ window._nxValePDF = false; throw e; }
+    setTimeout(function(){ window._nxValePDF = false; }, 15000);   // si la función no llegó a imprimir, no dejar la marca puesta
+  };
 })();
 </script>
 </body>
