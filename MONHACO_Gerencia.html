@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4cd1c2a04ead';
+  var APP_VERSION='e5d9cfcc6b2e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5925,11 +5925,35 @@ function _rmOrdenes(cliente, mes){
   out.equipos = eqs.size;
   return out;
 }
+function _rmNorm(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
 function _rmClientes(){
-  const set = new Set(CLIENTES_MONHACO);
+  // (2026-11-12, Miguel) Lista OFICIAL de clientes (la de Solicitudes) + «MONHACO (USO INTERNO)»; primero los que tienen órdenes
+  let ofi = null; try{ ofi = JSON.parse(localStorage.getItem('nx_rc_cli')||'null'); }catch(e){}
+  if(!Array.isArray(ofi) || !ofi.length){ ofi = ['MONHACO (USO INTERNO)'].concat(CLIENTES_MONHACO); _rmCargarOficial(); }
+  const conOrden = new Set();
   [].concat(DB.preventivos||[], DB.correctivos||[], DB.cortinas||[])
-    .filter(Boolean).forEach(function(o){ const c=_rmCliDe(o); if(c) set.add(c); });
-  return Array.from(set);
+    .filter(Boolean).forEach(function(o){ const c=_rmCliDe(o); if(c) conOrden.add(c); });
+  const vistos = {}, out = [];
+  const add = function(c){ const k=_rmNorm(c); if(k && !vistos[k]){ vistos[k]=1; out.push(String(c).trim().replace(/\s+/g,' ').toUpperCase()); } };
+  Array.from(conOrden).sort(function(a,b){ return a.localeCompare(b,'es'); }).forEach(add);
+  ofi.forEach(add);
+  return out;
+}
+let _rmOfiPidiendo = false;
+function _rmCargarOficial(){
+  if(_rmOfiPidiendo || !window._fbDB) return; _rmOfiPidiendo = true;
+  window._fbDB.ref('monhaco/clientesLista').once('value').then(function(s){
+    const v = s.val(); const L = (Array.isArray(v) ? v : Object.values(v||{})).map(function(x){ return x && x.nombre; }).filter(Boolean);
+    if(L.length){ try{ localStorage.setItem('nx_rc_cli', JSON.stringify(['MONHACO (USO INTERNO)'].concat(L))); }catch(e){}
+      if(document.getElementById('rm-cliente') && !(document.activeElement && document.activeElement.id==='rm-cliente')) renderReporteMensual(); }
+  }).catch(function(){}).then(function(){ _rmOfiPidiendo = false; });
+}
+function _rmElegirCli(v){
+  const q = _rmNorm(v);
+  if(!q){ _rmCliente=''; renderReporteMensual(); return; }
+  const e = _rmClientes().find(function(c){ return _rmNorm(c)===q; });
+  if(!e){ toast('Elige un cliente de la lista', true); return; }
+  _rmCliente = e; renderReporteMensual();
 }
 function _rmEquipoTxt(o){
   if(o.equipoId){
@@ -6007,10 +6031,9 @@ function renderReporteMensual(){
     + '<div style="flex:1;text-align:center;font-weight:800;color:#1f3864;font-size:15px">'+_hcEsc(horMesLabel(mes))+'</div>'
     + '<button onclick="_rmMoverMes(1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>'
     + '</div>';
-  h += '<select id="rm-cliente" onchange="_rmCliente=this.value;renderReporteMensual()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
-    + '<option value="">— Seleccionar cliente —</option>'
-    + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'"'+(c===_rmCliente?' selected':'')+'>'+_hcEsc(c)+'</option>'; }).join('')
-    + '</select>';
+  // (2026-11-12) ~1300 clientes oficiales: se escribe y se elige de la lista
+  h += '<input id="rm-cliente" list="rm-cli-dl" autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" onchange="_rmElegirCli(this.value)" onfocus="this.select()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
+    + '<datalist id="rm-cli-dl">' + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'">'; }).join('') + '</datalist>';
   if(!_rmCliente){
     h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes de trabajo del mes.</div>';
     cont.innerHTML = h; return;
