@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3b61d54403e5';
+  var APP_VERSION='2a884d0fe078';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -12908,11 +12908,57 @@ async function _mantCompartirAviso(equipoId){
   }catch(err){ toast('Error al generar la imagen: ' + err.message, true); }
 }
 
-// ══ VARIOS SISTEMAS AFECTADOS EN CORRECTIVOS (2026-11-13, pedido de Miguel) ══ Cada lista de «Sistema afectado» se vuelve cápsulas
-// que se marcan varias. El valor sigue en el mismo campo «sistema», como «Sistema hidráulico, Sistema eléctrico».
+// ══ VARIOS SISTEMAS AFECTADOS EN CORRECTIVOS (2026-11-13, pedido de Miguel) ══ «Sistema afectado» y «Técnico(s)» se eligen en una
+// lista desplegable con casillas (varios); debajo se ven en cápsulas solo los elegidos. Sistema: sigue en el campo «sistema» como
+// «Sistema hidráulico, Sistema eléctrico». Técnicos: la lista solo «toca» las casillas/botones de siempre (que quedan ocultos), así
+// guardar, permisos y órdenes bloqueadas funcionan igual que antes.
 (function(){
   window._sisLista = function(v){ return String(v || '').split(/\s*,\s*/).map(function(x){ return x.trim(); }).filter(Boolean); };
   var P = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  function esc(t){ return String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  // ── Lista desplegable con casillas (común) ──
+  // o: { ph: texto vacío, plural: 'sistemas'|'técnicos', items(): [{k, on, bloqueado}], tocar(k), estilo: {padding,fontSize,border,borderRadius} }
+  function crearUI(o){
+    var caja = document.createElement('div'); caja.className = 'nx-multi';
+    var st = o.estilo || {};
+    caja.innerHTML = '<button type="button" class="nx-m-btn" style="width:100%;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;cursor:pointer;'
+        + 'padding:' + (st.padding || '10px 12px') + ';font-size:' + (st.fontSize || '14px') + ';border:' + (st.border || '1px solid #ccc') + ';border-radius:' + (st.borderRadius || '8px') + ';background:#fff;color:#222">'
+        + '<span class="nx-m-txt" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="nx-m-fl" style="opacity:.6">▾</span></button>'
+      + '<div class="nx-m-lista" style="display:none;margin-top:4px;background:#fff;border:1px solid #ccc;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.14);max-height:280px;overflow-y:auto"></div>'
+      + '<div class="nx-m-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>';
+    var lista = caja.querySelector('.nx-m-lista');
+    function abrir(si){ lista.style.display = si ? 'block' : 'none'; caja.querySelector('.nx-m-fl').textContent = si ? '▴' : '▾'; }
+    function pintar(){
+      var its = o.items(), marc = its.filter(function(i){ return i.on; }), bloq = its.length && its.every(function(i){ return i.bloqueado; });
+      caja.querySelector('.nx-m-txt').textContent = marc.length ? (marc.length === 1 ? marc[0].k : marc.length + ' ' + o.plural + ' seleccionados') : o.ph;
+      var b = caja.querySelector('.nx-m-btn'); b.disabled = bloq; b.style.opacity = bloq ? '.55' : '1'; b.style.cursor = bloq ? 'default' : 'pointer';
+      if(bloq) abrir(false);
+      lista.innerHTML = its.map(function(i){
+        return '<div data-k="' + esc(i.k) + '" style="display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:14px;color:#222;cursor:pointer;border-bottom:1px solid #f1f1f1">'
+          + '<span style="width:20px;height:20px;flex-shrink:0;box-sizing:border-box;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;'
+          + (i.on ? 'background:#1f3864;border:2px solid #1f3864;color:#fff">✓' : 'background:#fff;border:2px solid #aaa;color:transparent">✓') + '</span><span>' + esc(i.k) + '</span></div>';
+      }).join('') + '<div style="position:sticky;bottom:0;background:#fff;padding:8px 10px;text-align:right"><button type="button" class="nx-m-listo" style="padding:7px 18px;border:none;border-radius:8px;background:#1f3864;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Listo</button></div>';
+      caja.querySelector('.nx-m-chips').innerHTML = marc.map(function(i){
+        return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 11px;border-radius:999px;background:#1f3864;color:#fff;font-size:12px;font-weight:700">' + esc(i.k)
+          + (bloq ? '<span style="width:4px"></span>' : '<button type="button" data-quitar="' + esc(i.k) + '" title="Quitar" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:999px;width:18px;height:18px;line-height:18px;padding:0;font-size:11px;cursor:pointer">✕</button>') + '</span>';
+      }).join('');
+    }
+    caja.addEventListener('click', function(ev){
+      var t = ev.target; ev.stopPropagation();
+      if(t.closest('.nx-m-btn')){ ev.preventDefault(); if(!t.closest('.nx-m-btn').disabled) abrir(lista.style.display === 'none'); return; }
+      if(t.closest('.nx-m-listo')){ ev.preventDefault(); abrir(false); return; }
+      var q = t.closest('[data-quitar]'); if(q){ ev.preventDefault(); o.tocar(q.getAttribute('data-quitar')); pintar(); return; }
+      var r = t.closest('[data-k]'); if(r){ ev.preventDefault(); o.tocar(r.getAttribute('data-k')); pintar(); }
+    });
+    caja._pintar = pintar; caja._abrir = abrir;
+    return caja;
+  }
+  // cerrar listas abiertas al tocar fuera
+  document.addEventListener('click', function(ev){
+    [].forEach.call(document.querySelectorAll('.nx-multi'), function(c){ if(!c.contains(ev.target) && c._abrir) c._abrir(false); });
+  }, true);
+
+  // ── Sistema afectado ──
   function esSis(sel){ return sel && sel.tagName === 'SELECT' && !sel._nxSis && sel.querySelector('option[value="Sistema hidráulico"]') && sel.querySelector('option[value="Motor / Transmisión"]'); }
   function inicial(sel){
     var oc = sel.getAttribute('onchange') || '', m;
@@ -12924,43 +12970,61 @@ async function _mantCompartirAviso(equipoId){
     }catch(e){}
     return P.get.call(sel) || '';
   }
-  function mejorar(sel){
+  function mejorarSis(sel){
     sel._nxSis = true;
-    var ops = [].slice.call(sel.options).map(function(o){ return o.value; }).filter(Boolean);
-    var caja = document.createElement('div'); caja.className = 'nx-sis-caja';
-    caja.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:2px';
-    sel.style.display = 'none'; sel.parentNode.insertBefore(caja, sel.nextSibling);
-    function pintar(){
-      var marc = window._sisLista(P.get.call(sel));
-      caja.innerHTML = ops.map(function(s){
-        var on = marc.indexOf(s) >= 0;
-        return '<button type="button" data-s="' + s.replace(/"/g, '&quot;') + '" style="padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;'
-          + (on ? 'background:#1f3864;color:#fff;border:1.5px solid #1f3864' : 'background:#fff;color:#444;border:1.5px solid #ccc') + '">' + (on ? '✓ ' : '') + s + '</button>';
-      }).join('') + '<div style="width:100%;font-size:11px;color:#888">Puedes marcar varios sistemas.</div>';
-    }
+    var ops = [].slice.call(sel.options).map(function(o){ return o.value; }).filter(Boolean), cs = getComputedStyle(sel);
+    var bloq = function(){ return sel.disabled || getComputedStyle(sel).pointerEvents === 'none'; };
+    var ui = crearUI({ ph: '-- Seleccionar sistema(s) --', plural: 'sistemas', estilo: { padding: cs.padding, fontSize: cs.fontSize, border: cs.border, borderRadius: cs.borderRadius },
+      items: function(){ var m = window._sisLista(P.get.call(sel)), b = bloq(); return ops.map(function(s){ return { k: s, on: m.indexOf(s) >= 0, bloqueado: b }; }); },
+      tocar: function(s){ var m = window._sisLista(P.get.call(sel)), i = m.indexOf(s); if(i >= 0) m.splice(i, 1); else m.push(s);
+        m.sort(function(a, b){ var ia = ops.indexOf(a), ib = ops.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+        fijar(m.join(', ')); sel.dispatchEvent(new Event('change', { bubbles: true })); } });
+    sel.parentNode.insertBefore(ui, sel.nextSibling);
     function fijar(v){
       v = window._sisLista(v).join(', ');
       if(v && ![].some.call(sel.options, function(o){ return o.value === v; })){ var op = document.createElement('option'); op.value = v; op.textContent = v; op.hidden = true; sel.appendChild(op); }
-      P.set.call(sel, v);
-      pintar();
+      P.set.call(sel, v); ui._pintar();
     }
     Object.defineProperty(sel, 'value', { configurable: true, get: function(){ return P.get.call(sel); }, set: fijar });
-    caja.addEventListener('click', function(ev){
-      var b = ev.target.closest('button[data-s]'); if(!b) return; ev.preventDefault(); ev.stopPropagation();
-      var marc = window._sisLista(P.get.call(sel)), s = b.getAttribute('data-s'), i = marc.indexOf(s);
-      if(i >= 0) marc.splice(i, 1); else marc.push(s);
-      marc.sort(function(a, b2){ var ia = ops.indexOf(a), ib = ops.indexOf(b2); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-      fijar(marc.join(', '));
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    });
     fijar(inicial(sel));
+    sel.style.display = 'none';
   }
+
+  // ── Técnicos: casillas de formularios (label.tecnico-check) y botones de las órdenes (.tec-btn) ──
+  function hijosTec(c){ return [].filter.call(c.children, function(h){ return (h.matches('label.tecnico-check') && h.querySelector('input[type=checkbox]')) || h.matches('.tec-btn'); }); }
+  function nombreDe(h){ return h.matches('.tec-btn') ? (h.getAttribute('data-n') || h.textContent.trim()) : (h.textContent || '').trim(); }
+  function onDe(h){ return h.matches('.tec-btn') ? h.classList.contains('on') : !!h.querySelector('input[type=checkbox]').checked; }
+  function mejorarTec(c){
+    c._nxTec = true;
+    var ui = crearUI({ ph: '-- Seleccionar técnico(s) --', plural: 'técnicos',
+      items: function(){ return hijosTec(c).map(function(h){ var x = h.matches('.tec-btn') ? h : h.querySelector('input');
+        return { k: nombreDe(h), on: onDe(h), bloqueado: x.disabled || getComputedStyle(h).pointerEvents === 'none' }; }); },
+      tocar: function(n){ var h = hijosTec(c).find(function(x){ return nombreDe(x) === n; }); if(!h) return;
+        if(h.matches('.tec-btn')) h.click(); else h.querySelector('input[type=checkbox]').click(); } });
+    c.parentNode.insertBefore(ui, c.nextSibling);
+    c.style.display = 'none';
+    ui._pintar();
+    var t = null; function repintar(){ clearTimeout(t); t = setTimeout(function(){ if(document.contains(ui)) ui._pintar(); }, 30); }
+    new MutationObserver(repintar).observe(c, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'disabled'] });
+    c.addEventListener('change', repintar);
+    // casillas marcadas por código (editar orden) no avisan: revisar al abrir el formulario
+    ui.addEventListener('pointerdown', repintar, true);
+  }
+  function contTec(raiz){
+    var set = [];
+    [].forEach.call(raiz.querySelectorAll('label.tecnico-check, .tec-btn'), function(h){ var p = h.parentElement; if(p && !p._nxTec && set.indexOf(p) < 0 && hijosTec(p).length >= 2) set.push(p); });
+    return set;
+  }
+
   function revisar(raiz){
-    if(!raiz || !raiz.querySelectorAll) return;
-    if(esSis(raiz)) mejorar(raiz);
-    if(!raiz.querySelector('option[value="Sistema hidráulico"]')) return;
-    [].forEach.call(raiz.querySelectorAll('select'), function(s){ if(esSis(s)) mejorar(s); });
+    if(!raiz || !raiz.querySelectorAll || (raiz.closest && raiz.closest('.nx-multi'))) return;
+    if(esSis(raiz)) mejorarSis(raiz);
+    if(raiz.querySelector('option[value="Sistema hidráulico"]')) [].forEach.call(raiz.querySelectorAll('select'), function(s){ if(esSis(s)) mejorarSis(s); });
+    var p = raiz.parentElement; if(p && !p._nxTec && raiz.matches && raiz.matches('label.tecnico-check, .tec-btn') && hijosTec(p).length >= 2) mejorarTec(p);
+    contTec(raiz).forEach(mejorarTec);
   }
+  // repintar todo de vez en cuando (casillas marcadas por código sin evento)
+  setInterval(function(){ [].forEach.call(document.querySelectorAll('.nx-multi'), function(c){ if(c._pintar && c.offsetParent !== null && c.querySelector('.nx-m-lista').style.display === 'none') c._pintar(); }); }, 1500);
   function arrancar(){
     revisar(document.body);
     new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1) revisar(n); }); }); })
