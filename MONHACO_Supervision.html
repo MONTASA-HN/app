@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9dfb6fbe44ff';
+  var APP_VERSION='d7c3c7a30f12';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -14515,6 +14515,67 @@ window._nxExcelConLogo = function(wbX, archivo){
     if(te && te.tagName === 'SELECT' && !te.value) return 'Elige el técnico de la lista.';
     return '';
   };
+})();
+
+// ══ VARIOS SISTEMAS AFECTADOS EN CORRECTIVOS (2026-11-13, pedido de Miguel) ══ Cada lista de «Sistema afectado» se vuelve cápsulas
+// que se marcan varias. El valor sigue en el mismo campo «sistema», como «Sistema hidráulico, Sistema eléctrico».
+(function(){
+  window._sisLista = function(v){ return String(v || '').split(/\s*,\s*/).map(function(x){ return x.trim(); }).filter(Boolean); };
+  var P = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  function esSis(sel){ return sel && sel.tagName === 'SELECT' && !sel._nxSis && sel.querySelector('option[value="Sistema hidráulico"]') && sel.querySelector('option[value="Motor / Transmisión"]'); }
+  function inicial(sel){
+    var oc = sel.getAttribute('onchange') || '', m;
+    try{
+      m = oc.match(/actualizarCampoOrden\('corr','([^']+)','sistema'/);
+      if(m){ var c = (DB.correctivos || []).find(function(x){ return x && x.id === m[1]; }); if(c) return c.sistema || ''; }
+      m = oc.match(/ordenesCerradas\.find\(x=>x\.id==='([^']+)'\)/);
+      if(m){ var o = (DB.ordenesCerradas || []).find(function(x){ return x && x.id === m[1]; }); if(o) return o.sistema || ''; }
+    }catch(e){}
+    return P.get.call(sel) || '';
+  }
+  function mejorar(sel){
+    sel._nxSis = true;
+    var ops = [].slice.call(sel.options).map(function(o){ return o.value; }).filter(Boolean);
+    var caja = document.createElement('div'); caja.className = 'nx-sis-caja';
+    caja.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:2px';
+    sel.style.display = 'none'; sel.parentNode.insertBefore(caja, sel.nextSibling);
+    function pintar(){
+      var marc = window._sisLista(P.get.call(sel));
+      caja.innerHTML = ops.map(function(s){
+        var on = marc.indexOf(s) >= 0;
+        return '<button type="button" data-s="' + s.replace(/"/g, '&quot;') + '" style="padding:7px 12px;border-radius:999px;font-size:12.5px;font-weight:700;cursor:pointer;'
+          + (on ? 'background:#1f3864;color:#fff;border:1.5px solid #1f3864' : 'background:#fff;color:#444;border:1.5px solid #ccc') + '">' + (on ? '✓ ' : '') + s + '</button>';
+      }).join('') + '<div style="width:100%;font-size:11px;color:#888">Puedes marcar varios sistemas.</div>';
+    }
+    function fijar(v){
+      v = window._sisLista(v).join(', ');
+      if(v && ![].some.call(sel.options, function(o){ return o.value === v; })){ var op = document.createElement('option'); op.value = v; op.textContent = v; op.hidden = true; sel.appendChild(op); }
+      P.set.call(sel, v);
+      pintar();
+    }
+    Object.defineProperty(sel, 'value', { configurable: true, get: function(){ return P.get.call(sel); }, set: fijar });
+    caja.addEventListener('click', function(ev){
+      var b = ev.target.closest('button[data-s]'); if(!b) return; ev.preventDefault(); ev.stopPropagation();
+      var marc = window._sisLista(P.get.call(sel)), s = b.getAttribute('data-s'), i = marc.indexOf(s);
+      if(i >= 0) marc.splice(i, 1); else marc.push(s);
+      marc.sort(function(a, b2){ var ia = ops.indexOf(a), ib = ops.indexOf(b2); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+      fijar(marc.join(', '));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    fijar(inicial(sel));
+  }
+  function revisar(raiz){
+    if(!raiz || !raiz.querySelectorAll) return;
+    if(esSis(raiz)) mejorar(raiz);
+    if(!raiz.querySelector('option[value="Sistema hidráulico"]')) return;
+    [].forEach.call(raiz.querySelectorAll('select'), function(s){ if(esSis(s)) mejorar(s); });
+  }
+  function arrancar(){
+    revisar(document.body);
+    new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1) revisar(n); }); }); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+  if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
 })();
 </script>
 </body>
