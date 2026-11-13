@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a32d843cce7b';
+  var APP_VERSION='ae0b42770fda';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -12927,7 +12927,9 @@ async function _mantCompartirAviso(equipoId){
       + '<div class="nx-m-lista" style="display:none;margin-top:4px;background:#fff;border:1px solid #ccc;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.14);max-height:280px;overflow-y:auto"></div>'
       + '<div class="nx-m-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>';
     var lista = caja.querySelector('.nx-m-lista');
-    function abrir(si){ lista.style.display = si ? 'block' : 'none'; caja.querySelector('.nx-m-fl').textContent = si ? '▴' : '▾'; }
+    function abrir(si){ lista.style.display = si ? 'block' : 'none'; caja.querySelector('.nx-m-fl').textContent = si ? '▴' : '▾';
+      // (2026-11-13) recordar que estaba abierta: si la orden se vuelve a dibujar al marcar, la lista nueva sigue abierta
+      if(o.clave){ if(si) window._nxMultiAbierta = { k: o.clave, t: Date.now() }; else if(window._nxMultiAbierta && window._nxMultiAbierta.k === o.clave) window._nxMultiAbierta = null; } }
     function pintar(){
       var its = o.items(), marc = its.filter(function(i){ return i.on; }), bloq = its.length && its.every(function(i){ return i.bloqueado; });
       caja.querySelector('.nx-m-txt').textContent = marc.length ? (marc.length === 1 ? marc[0].k : marc.length + ' ' + o.plural + ' seleccionados') : o.ph;
@@ -12948,9 +12950,10 @@ async function _mantCompartirAviso(equipoId){
       if(t.closest('.nx-m-btn')){ ev.preventDefault(); if(!t.closest('.nx-m-btn').disabled) abrir(lista.style.display === 'none'); return; }
       if(t.closest('.nx-m-listo')){ ev.preventDefault(); abrir(false); return; }
       var q = t.closest('[data-quitar]'); if(q){ ev.preventDefault(); o.tocar(q.getAttribute('data-quitar')); pintar(); return; }
-      var r = t.closest('[data-k]'); if(r){ ev.preventDefault(); o.tocar(r.getAttribute('data-k')); pintar(); }
+      var r = t.closest('[data-k]'); if(r){ ev.preventDefault(); if(o.clave) window._nxMultiAbierta = { k: o.clave, t: Date.now() }; o.tocar(r.getAttribute('data-k')); if(document.contains(caja)) pintar(); }
     });
     caja._pintar = pintar; caja._abrir = abrir;
+    var ab = window._nxMultiAbierta; if(o.clave && ab && ab.k === o.clave && Date.now() - ab.t < 15000) setTimeout(function(){ if(document.contains(caja)){ pintar(); abrir(true); } }, 0);
     return caja;
   }
   // cerrar listas abiertas al tocar fuera
@@ -12975,7 +12978,7 @@ async function _mantCompartirAviso(equipoId){
     sel._nxSis = true;
     var ops = [].slice.call(sel.options).map(function(o){ return o.value; }).filter(Boolean), cs = getComputedStyle(sel);
     var bloq = function(){ return sel.disabled || getComputedStyle(sel).pointerEvents === 'none'; };
-    var ui = crearUI({ ph: '-- Seleccionar sistema(s) --', plural: 'sistemas', estilo: { padding: cs.padding, fontSize: cs.fontSize, border: cs.border, borderRadius: cs.borderRadius },
+    var ui = crearUI({ clave: 'sis:' + (sel.id || ((sel.closest('[id]') || {}).id) || ''), ph: '-- Seleccionar sistema(s) --', plural: 'sistemas', estilo: { padding: cs.padding, fontSize: cs.fontSize, border: cs.border, borderRadius: cs.borderRadius },
       items: function(){ var m = window._sisLista(P.get.call(sel)), b = bloq(); return ops.map(function(s){ return { k: s, on: m.indexOf(s) >= 0, bloqueado: b }; }); },
       tocar: function(s){ var m = window._sisLista(P.get.call(sel)), i = m.indexOf(s); if(i >= 0) m.splice(i, 1); else m.push(s);
         m.sort(function(a, b){ var ia = ops.indexOf(a), ib = ops.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
@@ -12997,7 +13000,7 @@ async function _mantCompartirAviso(equipoId){
   function onDe(h){ return h.matches('.tec-btn') ? h.classList.contains('on') : !!h.querySelector('input[type=checkbox]').checked; }
   function mejorarTec(c){
     c._nxTec = true;
-    var ui = crearUI({ ph: '-- Seleccionar técnico(s) --', plural: 'técnicos',
+    var ui = crearUI({ clave: 'tec:' + (c.id || ((c.closest('[id]') || {}).id) || ''), ph: '-- Seleccionar técnico(s) --', plural: 'técnicos',
       items: function(){ return hijosTec(c).map(function(h){ var x = h.matches('.tec-btn') ? h : h.querySelector('input');
         return { k: nombreDe(h), on: onDe(h), bloqueado: x.disabled || getComputedStyle(h).pointerEvents === 'none' }; }); },
       tocar: function(n){ var h = hijosTec(c).find(function(x){ return nombreDe(x) === n; }); if(!h) return;
