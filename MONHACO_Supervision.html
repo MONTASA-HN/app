@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='5ac693ac6d8f';
+  var APP_VERSION='d1ec99b6aedb';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -14640,6 +14640,200 @@ window._nxExcelConLogo = function(wbX, archivo){
   function arrancar(){
     revisar(document.body);
     new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1) revisar(n); }); }); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+  if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
+})();
+
+// ══ TIEMPO EFECTIVO: PAUSAR / REANUDAR ÓRDENES (2026-11-13, pedido de Miguel) ══ Una orden que se detiene (repuestos, otro trabajo,
+// incapacidad…) se pausa; las horas de la orden (y la productividad) descuentan las pausas. En Gerencia, si el tiempo efectivo
+// pasa de 8 h se marca «Revisar horas» y Gerencia puede corregirlo (o.horasEfectivasMin, minutos).
+(function(){
+  var GERENCIA = false;
+  var PAUSA = ['En pausa', 'En espera de repuestos'];
+  function esPausa(e){ return PAUSA.indexOf(String(e || '')) >= 0; }
+  function esc(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  function buscar(id){
+    var p = (DB.preventivos || []).find(function(x){ return x && x.id === id; }); if(p) return { o: p, tipo: 'prev' };
+    var c = (DB.correctivos || []).find(function(x){ return x && x.id === id; }); if(c) return { o: c, tipo: 'corr' };
+    return null;
+  }
+  function parseD(s){
+    if(!s) return new Date(NaN);
+    if(typeof s === 'string'){ var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/); if(m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)); }
+    return new Date(s);
+  }
+  function fmt(m){ m = Math.round(m || 0); if(!m) return '0 min'; var h = Math.floor(m / 60), mn = m % 60; return h > 0 ? (h + 'h' + (mn ? ' ' + mn + 'min' : '')) : (mn + 'min'); }
+  function fF(iso){ var d = new Date(iso); if(isNaN(d)) return ''; return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function pausaAbierta(o){ var l = o && o.pausas; if(!Array.isArray(l) || !l.length) return null; var u = l[l.length - 1]; return (u && !u.fin) ? u : null; }
+  // minutos de jornada en pausa dentro de [ini, fin]; una pausa que quedó abierta en una orden terminada no se descuenta (se avisa)
+  function minsPausas(o, ini, fin){
+    var tot = 0;
+    (Array.isArray(o.pausas) ? o.pausas : []).forEach(function(p){
+      if(!p || !p.ini || !p.fin) return;
+      var a = new Date(p.ini), b = new Date(p.fin); if(isNaN(a) || isNaN(b)) return;
+      if(a < ini) a = ini; if(b > fin) b = fin;
+      if(b > a) tot += _calcMinsJornada(a, b, o.domingosTrabajados);
+    });
+    return tot;
+  }
+
+  // (2026-11-13) tiempo efectivo = suma de los TRAMOS trabajados (inicio→pausa, reanudar→pausa, …, reanudar→fin), cada uno con la
+  // jornada de 8 h; null si no hay pausas cerradas. Una pausa que quedó abierta en una orden terminada no se descuenta (se avisa).
+  function minsTrabajados(o, ini, fin){
+    var ps = (Array.isArray(o.pausas) ? o.pausas : []).filter(function(p){ return p && p.ini && p.fin; })
+      .map(function(p){ return [new Date(p.ini), new Date(p.fin)]; }).filter(function(p){ return !isNaN(p[0]) && !isNaN(p[1]) && p[1] > p[0]; })
+      .sort(function(a, b){ return a[0] - b[0]; });
+    if(!ps.length) return null;
+    var tot = 0, cur = ini;
+    ps.forEach(function(p){ var a = p[0] < ini ? ini : p[0], b = p[1] > fin ? fin : p[1]; if(b <= cur) return; if(a > cur) tot += _calcMinsJornada(cur, a > fin ? fin : a, o.domingosTrabajados); if(b > cur) cur = b; });
+    if(fin > cur) tot += _calcMinsJornada(cur, fin, o.domingosTrabajados);
+    return tot;
+  }
+  // ── Cálculo: las horas de la orden descuentan las pausas (o usan la corrección de Gerencia) ──
+  var _calc = window.calcTiemposOrden;
+  if(typeof _calc === 'function') window.calcTiemposOrden = function(o){
+    var t = _calc.apply(this, arguments);
+    try{
+      if(!o || !t || !t.hayRep) return t;
+      var ini = parseD(o.inicioTrabajo || o.fechaInicio || ''), fin = parseD(o.finTrabajo || o.fechaFin || '');
+      var bruto = t.minsReparacion, rep = bruto, pau = 0, corr = (o.horasEfectivasMin != null && o.horasEfectivasMin !== '' && !isNaN(+o.horasEfectivasMin));
+      if(corr) rep = Math.max(0, +o.horasEfectivasMin);
+      else { var tr = minsTrabajados(o, ini, fin); if(tr != null){ rep = tr; pau = Math.max(0, bruto - tr); } }
+      if(rep === bruto && !corr) return t;
+      var tras = t.minsTraslado || 0;
+      t.minsBruto = bruto; t.minsPausa = pau; t.corregido = corr;
+      t.minsReparacion = rep; t.minsTotal = rep + tras;
+      t.reparacion = rep ? fmt(rep) : '—'; t.total = t.minsTotal ? fmt(t.minsTotal) : '—';
+    }catch(e){}
+    return t;
+  };
+
+  // ── Cambios de estado: pasar a «En pausa»/«En espera de repuestos» abre una pausa; salir de ahí la cierra ──
+  var _aco = window.actualizarCampoOrden;
+  if(typeof _aco === 'function') window.actualizarCampoOrden = function(tipo, id, campo, valor){
+    var b = campo === 'estado' ? buscar(id) : null, antes = b ? (b.o.estado || 'Pendiente') : null;
+    var r = _aco.apply(this, arguments);
+    try{
+      if(b && b.o.estado === valor && antes !== valor){
+        var o = b.o, ahora = new Date().toISOString(), l = Array.isArray(o.pausas) ? o.pausas.slice() : [];
+        if(esPausa(valor) && !esPausa(antes)){ l.push({ ini: ahora, motivo: window._nxMotivoPausa || valor }); o.pausas = l; }
+        else if(!esPausa(valor) && esPausa(antes)){ var u = l[l.length - 1]; if(u && !u.fin){ l[l.length - 1] = Object.assign({}, u, { fin: ahora }); o.pausas = l; } }
+        window._nxMotivoPausa = null;
+        if(typeof saveDB === 'function') saveDB();
+        refrescar(id);
+      }
+    }catch(e){}
+    return r;
+  };
+
+  // ── Botones ──
+  window._nxPausar = function(id){
+    var b = buscar(id); if(!b) return;
+    var v = document.getElementById('nx-pausa-ov'); if(v) v.remove();
+    var ov = document.createElement('div'); ov.id = 'nx-pausa-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    var ops = [['🔩', 'Espera de repuestos'], ['🔧', 'Lo pusieron en otro trabajo'], ['🤒', 'Incapacidad / permiso'], ['📝', 'Otro motivo']];
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:18px">'
+      + '<div style="font-weight:800;color:#1f3864;font-size:16px">⏸ Pausar orden ' + esc(b.o.correlativo || '') + '</div>'
+      + '<div style="font-size:12.5px;color:#666;margin:4px 0 12px">El tiempo en pausa no cuenta como trabajado. ¿Por qué se detiene?</div>'
+      + ops.map(function(m){ return '<button type="button" data-m="' + esc(m[1]) + '" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border:1.5px solid #d6dbe6;border-radius:10px;background:#f7f9fc;font-size:14px;font-weight:600;cursor:pointer">' + m[0] + ' ' + esc(m[1]) + '</button>'; }).join('')
+      + '<button type="button" data-cerrar="1" style="width:100%;padding:10px;border:none;background:none;color:#888;font-size:13px;cursor:pointer">Cancelar</button></div>';
+    ov.addEventListener('click', function(ev){
+      if(ev.target === ov || ev.target.closest('[data-cerrar]')){ ov.remove(); return; }
+      var bt = ev.target.closest('[data-m]'); if(!bt) return;
+      var mot = bt.getAttribute('data-m');
+      if(mot === 'Otro motivo'){ var tx = prompt('Escribe el motivo de la pausa:'); if(!tx || !tx.trim()) return; mot = tx.trim(); }
+      ov.remove();
+      window._nxMotivoPausa = mot;
+      actualizarCampoOrden(b.tipo, id, 'estado', /repuesto/i.test(mot) ? 'En espera de repuestos' : 'En pausa');
+      try{ toast('⏸ Orden en pausa: ' + mot); }catch(e){}
+    });
+    document.body.appendChild(ov);
+  };
+  window._nxReanudar = function(id){
+    var b = buscar(id); if(!b) return;
+    actualizarCampoOrden(b.tipo, id, 'estado', 'En proceso');
+    try{ toast('▶ Orden reanudada'); }catch(e){}
+  };
+  window._nxCorregirHoras = function(id){
+    if(!GERENCIA) return;
+    var b = buscar(id); if(!b) return;
+    var hacer = function(){
+      var t = calcTiemposOrden(b.o);
+      var actual = (t.minsReparacion || 0) / 60;
+      var v = prompt('Horas efectivas trabajadas en ' + (b.o.correlativo || 'la orden') + ' (ej: 3.5).\nCalculado: ' + fmt(t.minsReparacion) + '. Deja vacío para volver al cálculo automático.', actual ? String(Math.round(actual * 10) / 10) : '');
+      if(v === null) return;
+      v = String(v).trim().replace(',', '.');
+      if(v === ''){ delete b.o.horasEfectivasMin; delete b.o.horasEfectivasNota; }
+      else { var h = parseFloat(v); if(isNaN(h) || h < 0 || h > 400){ alert('Escribe un número de horas válido (ej: 3.5).'); return; }
+        b.o.horasEfectivasMin = Math.round(h * 60); b.o.horasEfectivasNota = 'Corregido por Gerencia ' + fF(new Date().toISOString()); }
+      var cer = (DB.ordenesCerradas || []).find(function(x){ return x && x.id === id; });
+      if(cer){ if(b.o.horasEfectivasMin == null){ delete cer.horasEfectivasMin; delete cer.horasEfectivasNota; } else { cer.horasEfectivasMin = b.o.horasEfectivasMin; cer.horasEfectivasNota = b.o.horasEfectivasNota; } }
+      if(typeof saveDB === 'function') saveDB();
+      refrescar(id);
+      try{ toast('⏱ Horas de ' + (b.o.correlativo || 'la orden') + ': ' + fmt(calcTiemposOrden(b.o).minsReparacion)); }catch(e){}
+    };
+    if(typeof solicitarPINAccion === 'function') solicitarPINAccion(hacer, '⏱ Corregir horas efectivas', 'Ingresa tu PIN para corregir las horas de esta orden');
+    else hacer();
+  };
+
+  // ── Barra en la orden ──
+  function terminada(o){ return !!(o.completado || o.estado === 'Completado'); }
+  window._nxBarraPausa = function(id){
+    var b = buscar(id); if(!b) return '';
+    var o = b.o, est = o.estado || 'Pendiente', ab = pausaAbierta(o), np = (Array.isArray(o.pausas) ? o.pausas : []).length, h = '';
+    if(est === 'Cancelado') return '';
+    if(!terminada(o)){
+      if(esPausa(est)){
+        h += '<div style="flex:1;min-width:0;font-size:12.5px;color:#6b21a8;font-weight:700">⏸ ' + esc(est) + (ab ? ' desde ' + fF(ab.ini) + (ab.motivo && ab.motivo !== est && !(/repuesto/i.test(ab.motivo) && /repuesto/i.test(est)) ? ' — ' + esc(ab.motivo) : '') : '') + '</div>'
+          + '<button type="button" onclick="event.stopPropagation();_nxReanudar(\'' + esc(id) + '\')" style="padding:8px 14px;border:none;border-radius:999px;background:#1a7f37;color:#fff;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap">▶ Reanudar</button>';
+      } else if(est === 'En proceso'){
+        h += '<div style="flex:1;min-width:0;font-size:12px;color:#666">' + (np ? '⏱ ' + np + ' pausa' + (np === 1 ? '' : 's') + ' registrada' + (np === 1 ? '' : 's') : '¿Se detiene el trabajo? Páusala para no contar ese tiempo.') + '</div>'
+          + '<button type="button" onclick="event.stopPropagation();_nxPausar(\'' + esc(id) + '\')" style="padding:8px 14px;border:1.5px solid #6b21a8;border-radius:999px;background:#fff;color:#6b21a8;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap">⏸ Pausar</button>';
+      } else return '';
+    } else {
+      var t = calcTiemposOrden(o); if(!t || !t.hayRep) return '';
+      var revisar = !t.corregido && (t.minsReparacion || 0) > 480;
+      h += '<div style="flex:1;min-width:0;font-size:12.5px;color:#333"><b>⏱ Tiempo efectivo: ' + fmt(t.minsReparacion) + '</b>'
+        + (t.corregido ? ' <span style="color:#1a7f37">(' + esc(o.horasEfectivasNota || 'corregido por Gerencia') + ')</span>'
+           : (t.minsPausa ? ' <span style="color:#666">(' + fmt(t.minsPausa) + ' en pausa descontadas)</span>' : ''))
+        + (ab ? '<div style="color:#b45309;font-size:11.5px">⚠️ Quedó en pausa sin reanudar: esa pausa no se descontó.</div>' : '')
+        + (revisar ? '<div style="color:#b91c1c;font-size:11.5px;font-weight:700">⚠️ Más de 1 día de trabajo: revisar horas</div>' : '') + '</div>'
+        + (GERENCIA ? '<button type="button" onclick="event.stopPropagation();_nxCorregirHoras(\'' + esc(id) + '\')" style="padding:7px 12px;border:1.5px solid #1f3864;border-radius:999px;background:' + (revisar ? '#1f3864;color:#fff' : '#fff;color:#1f3864') + ';font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">✏️ Corregir horas</button>' : '');
+    }
+    return '<div class="nx-pausa-bar" data-id="' + esc(id) + '" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 4px;padding:9px 11px;border-radius:10px;background:#f6f3fb;border:1px solid #e4dcf1">' + h + '</div>';
+  };
+  function refrescar(id){
+    [].forEach.call(document.querySelectorAll('.nx-pausa-bar[data-id="' + id + '"]'), function(el){
+      var h = window._nxBarraPausa(id); if(!h){ el.remove(); return; }
+      var t = document.createElement('div'); t.innerHTML = h; el.replaceWith(t.firstChild);
+    });
+    var cb = document.getElementById('cb-' + id); if(cb && !cb.querySelector('.nx-pausa-bar')) poner(cb);
+  }
+  // tarjetas de las carpetas de mantenimiento (Gerencia/Supervisión): barra al final de la tarjeta
+  ['_buildCardP', '_buildCardC'].forEach(function(fn){
+    var orig = window[fn]; if(typeof orig !== 'function') return;
+    window[fn] = function(x){
+      var html = orig.apply(this, arguments);
+      try{ if(x && x.id && buscar(x.id)){ var bar = window._nxBarraPausa(x.id); if(bar){ var k = html.lastIndexOf('</div>'); html = html.slice(0, k) + bar + html.slice(k); } } }catch(e){}
+      return html;
+    };
+  });
+  // tarjetas abiertas de órdenes (Técnicos y formulario de Gerencia): barra arriba del cuerpo
+  function poner(cb){
+    var id = cb.id.slice(3); if(!buscar(id) || cb.querySelector('.nx-pausa-bar')) return;
+    var h = window._nxBarraPausa(id); if(!h) return;
+    cb.insertAdjacentHTML('afterbegin', h);
+  }
+  function revisar(raiz){
+    if(!raiz || !raiz.querySelectorAll) return;
+    if(raiz.id && raiz.id.indexOf('cb-') === 0) poner(raiz);
+    [].forEach.call(raiz.querySelectorAll('[id^="cb-"]'), poner);
+  }
+  function arrancar(){
+    revisar(document.body);
+    new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1 && !(n.classList && n.classList.contains('nx-pausa-bar'))) revisar(n); }); }); })
       .observe(document.body, { childList: true, subtree: true });
   }
   if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
