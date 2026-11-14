@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='66acd996cf31';
+  var APP_VERSION='595c4430a395';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2558,13 +2558,9 @@ function _construirCamposOrden(tipo, o, eq){
     const t = calcTiemposOrden(o);
     campos.push(['Servicio', o.servicio||'—']);
     campos.push(['Técnico(s)', o.tecnico||'—']);
-    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
     campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
     campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
-    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
-    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
-    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
-    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
+    campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
     campos.push(['Trabajo realizado', o.notas||'—']);
     if(o.sugerencias) campos.push(['Sugerencias', o.sugerencias]);
@@ -2575,13 +2571,9 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Técnico(s)', o.tecnico||'—']);
     campos.push(['Falla reportada', o.falla||'—']);
     campos.push(['Diagnóstico', o.diagnostico||'—']);
-    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
     campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
     campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
-    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
-    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
-    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
-    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
+    campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
   } else if(tipo==='revision'){
     campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
@@ -3183,6 +3175,15 @@ function _detalleOrdenCom(x, tipo, est){
   // En color para que se distinga (pedido de Miguel): verde 100% funcional, naranja fuerte parcial, rojo inhabilitado
   function quedoHtml(o){ var t = quedoDe(o); if(!t) return ''; var c = ({'100% funcional':'#15803d', 'Parcialmente funcional':'#ea580c', 'Inhabilitado':'#b91c1c'})[t]; return '<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:'+c+';color:#fff;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+esc(t)+'</span>'; }
   function tecnicosDe(o){ return (Array.isArray(o.tecnicos) && o.tecnicos.filter(Boolean).length) ? o.tecnicos.filter(Boolean).join(', ') : (o.tecnico||''); }
+  // (2026-11-14, Miguel) Reporte de mantenimiento: solo inicio/fin del trabajo y «Horas de mano de obra» (sin traslado, pausas descontadas)
+  function tiemposMO(o){
+    var ini = o.inicioTrabajo || o.fechaInicio, fin = o.finTrabajo || o.fechaFin; if(vacio(ini) && vacio(fin)) return '';
+    var t = (typeof calcTiemposOrden === 'function') ? calcTiemposOrden(o) : null;
+    var h = '<table class="op-tt"><tr><th>Evento</th><th>Fecha</th><th>Hora</th></tr>';
+    [['Inicio del trabajo', ini], ['Fin del trabajo', fin]].forEach(function(e){ if(!vacio(e[1])) h += '<tr><td>' + e[0] + '</td><td class="op-mono">' + fF(e[1]) + '</td><td class="op-mono">' + (fH(e[1]) || '—') + '</td></tr>'; });
+    h += '<tr class="tot"><td colspan="2">Horas de mano de obra</td><td class="r op-mono">' + ((t && t.hayRep) ? t.reparacion : '—') + '</td></tr>';
+    return h + '</table>';
+  }
   function eventosMant(o){
     return [['Salida del plantel', o.salidaPlantel], ['Inicio del trabajo', o.inicioTrabajo||o.fechaInicio, o.salidaPlantel?'Traslado':''],
             ['Fin del trabajo', o.finTrabajo||o.fechaFin, 'Trabajo'], ['Retorno al plantel', o.retornoPlantel, 'Traslado']];
@@ -3211,12 +3212,12 @@ function _detalleOrdenCom(x, tipo, est){
       S('Detalle del servicio', kv([['Servicio', esc(o.servicio||'')], ['Técnico(s)', esc(tecnicosDe(o))], ['Estado del equipo tras el servicio', quedoHtml(o)]]) + txt('Trabajo realizado', o.notas) + txt('Sugerencias', o.sugerencias));
       S('Próximo mantenimiento', kv([['Próximo servicio', esc(o.proximoMant||'')]]));
       S('Repuestos utilizados', repuestosDe(o));
-      S('Tiempos de la orden', tiempos(eventosMant(o)));
+      S('Tiempos de la orden', tiemposMO(o));   // (2026-11-14) sin traslado
     } else if(tipo==='correctivo'){
       S('Datos del equipo', datosEquipo(o, eq));
       S('Detalle del servicio', kv([['Sistema afectado', esc(o.sistema||'')], ['Técnico(s)', esc(tecnicosDe(o))], ['Estado del equipo tras el servicio', quedoHtml(o)]]) + txt('Falla reportada', o.falla) + txt('Diagnóstico / Trabajo realizado', o.diagnostico) + txt('Observaciones', o.notas));
       S('Repuestos utilizados', repuestosDe(o));
-      S('Tiempos de la orden', tiempos(eventosMant(o)));
+      S('Tiempos de la orden', tiemposMO(o));   // (2026-11-14) sin traslado
     } else if(tipo==='evaluacion'){
       d.meta = [['Fecha', fF(o.fecha)||'—'], ['Horario', esc((o.horaIni||'—')+' – '+(o.horaFin||'—'))], ['Lugar del servicio', lugarMant(o)]];
       S('Datos del equipo evaluado', kv([['Marca', esc(o.marca||'')], ['Modelo', esc(o.modelo||'')], ['Serie', mono(esc(o.serie||''))], ['Horómetro', mono(num(o.horometro,' hrs'))],
@@ -3909,6 +3910,62 @@ function _detalleOrdenCom(x, tipo, est){
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ mostrado = false; setTimeout(revisar, 800); } });
   function iniciar(){ setTimeout(revisar, 2500); escuchar(); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+
+// ══ TIEMPO EFECTIVO EN COMERCIAL (2026-11-14) ══ Los reportes usan las horas efectivas (pausas descontadas o las que corrigió Gerencia), igual que Gerencia.
+(function(){
+  function fmt(m){ m = Math.round(m || 0); if(!m) return '0 min'; var h = Math.floor(m / 60), mn = m % 60; return h > 0 ? (h + 'h' + (mn ? ' ' + mn + 'min' : '')) : (mn + 'min'); }
+  function parseD(s){
+    if(!s) return new Date(NaN);
+    if(typeof s === 'string'){ var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/); if(m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)); }
+    return new Date(s);
+  }
+  function fmt(m){ m = Math.round(m || 0); if(!m) return '0 min'; var h = Math.floor(m / 60), mn = m % 60; return h > 0 ? (h + 'h' + (mn ? ' ' + mn + 'min' : '')) : (mn + 'min'); }
+  function fF(iso){ var d = new Date(iso); if(isNaN(d)) return ''; return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function pausaAbierta(o){ var l = o && o.pausas; if(!Array.isArray(l) || !l.length) return null; var u = l[l.length - 1]; return (u && !u.fin) ? u : null; }
+  // minutos de jornada en pausa dentro de [ini, fin]; una pausa que quedó abierta en una orden terminada no se descuenta (se avisa)
+  function minsPausas(o, ini, fin){
+    var tot = 0;
+    (Array.isArray(o.pausas) ? o.pausas : []).forEach(function(p){
+      if(!p || !p.ini || !p.fin) return;
+      var a = new Date(p.ini), b = new Date(p.fin); if(isNaN(a) || isNaN(b)) return;
+      if(a < ini) a = ini; if(b > fin) b = fin;
+      if(b > a) tot += _calcMinsJornada(a, b, o.domingosTrabajados);
+    });
+    return tot;
+  }
+
+  // (2026-11-13) tiempo efectivo = suma de los TRAMOS trabajados (inicio→pausa, reanudar→pausa, …, reanudar→fin), cada uno con la
+  // jornada de 8 h; null si no hay pausas cerradas. Una pausa que quedó abierta en una orden terminada no se descuenta (se avisa).
+  function minsTrabajados(o, ini, fin){
+    var ps = (Array.isArray(o.pausas) ? o.pausas : []).filter(function(p){ return p && p.ini && p.fin; })
+      .map(function(p){ return [new Date(p.ini), new Date(p.fin)]; }).filter(function(p){ return !isNaN(p[0]) && !isNaN(p[1]) && p[1] > p[0]; })
+      .sort(function(a, b){ return a[0] - b[0]; });
+    if(!ps.length) return null;
+    var tot = 0, cur = ini;
+    ps.forEach(function(p){ var a = p[0] < ini ? ini : p[0], b = p[1] > fin ? fin : p[1]; if(b <= cur) return; if(a > cur) tot += _calcMinsJornada(cur, a > fin ? fin : a, o.domingosTrabajados); if(b > cur) cur = b; });
+    if(fin > cur) tot += _calcMinsJornada(cur, fin, o.domingosTrabajados);
+    return tot;
+  }
+  // ── Cálculo: las horas de la orden descuentan las pausas (o usan la corrección de Gerencia) ──
+  var _calc = window.calcTiemposOrden;
+  if(typeof _calc === 'function') window.calcTiemposOrden = function(o){
+    var t = _calc.apply(this, arguments);
+    try{
+      if(!o || !t || !t.hayRep) return t;
+      var ini = parseD(o.inicioTrabajo || o.fechaInicio || ''), fin = parseD(o.finTrabajo || o.fechaFin || '');
+      var bruto = t.minsReparacion, rep = bruto, pau = 0, corr = (o.horasEfectivasMin != null && o.horasEfectivasMin !== '' && !isNaN(+o.horasEfectivasMin));
+      if(corr) rep = Math.max(0, +o.horasEfectivasMin);
+      else { var tr = minsTrabajados(o, ini, fin); if(tr != null){ rep = tr; pau = Math.max(0, bruto - tr); } }
+      if(rep === bruto && !corr) return t;
+      var tras = t.minsTraslado || 0;
+      t.minsBruto = bruto; t.minsPausa = pau; t.corregido = corr;
+      t.minsReparacion = rep; t.minsTotal = rep + tras;
+      t.reparacion = rep ? fmt(rep) : '—'; t.total = t.minsTotal ? fmt(t.minsTotal) : '—';
+    }catch(e){}
+    return t;
+  };
+
 })();
 </script>
 </body>

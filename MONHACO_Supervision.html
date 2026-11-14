@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d1ec99b6aedb';
+  var APP_VERSION='1cb74c59e0c7';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2767,13 +2767,9 @@ function _construirCamposOrden(tipo, o, eq){
     const t = calcTiemposOrden(o);
     campos.push(['Servicio', o.servicio||'—']);
     campos.push(['Técnico(s)', o.tecnico||'—']);
-    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
     campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
     campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
-    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
-    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
-    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
-    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
+    campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
     campos.push(['Trabajo realizado', o.notas||'—']);
     if(o.sugerencias) campos.push(['Sugerencias', o.sugerencias]);
@@ -2783,13 +2779,9 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Técnico(s)', o.tecnico||'—']);
     campos.push(['Falla reportada', o.falla||'—']);
     campos.push(['Diagnóstico', o.diagnostico||'—']);
-    if(o.salidaPlantel) campos.push(['🚗 Salida del plantel', fmtDT(o.salidaPlantel)]);
     campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
     campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
-    if(o.retornoPlantel) campos.push(['🏭 Retorno al plantel', fmtDT(o.retornoPlantel)]);
-    if(t.hayRep) campos.push(['⏱ Tiempo de reparación', t.reparacion]);
-    if(t.hayTraslado) campos.push(['🚗 Tiempo de traslado', t.traslado]);
-    campos.push(['🕐 Tiempo total', t.total !== '—' ? t.total : (calcHoras(o.fechaInicio,o.fechaFin)||'—')]);
+    campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
   } else if(tipo==='revision'){
     campos.push(['Técnico(s)', (o.tecnicos||[]).filter(Boolean).join(', ')||'—']);
@@ -8105,12 +8097,12 @@ function exportarExcel(){
     ]),'Resumen');
 
     // Sheet 2: Órdenes cerradas (main log)
-    const headers = ['Correlativo','Tipo','Equipo','Serie','Cliente','Servicio / Falla','Sistema','Prioridad','Horómetro','Fecha Inicio','Fecha Fin','Horas Trabajadas','Técnico','Trabajo Realizado','Diagnóstico','Sugerencias','Fecha Cierre'];
+    const headers = ['Correlativo','Tipo','Equipo','Serie','Cliente','Servicio / Falla','Sistema','Prioridad','Horómetro','Fecha Inicio','Fecha Fin','Horas de mano de obra','Técnico','Trabajo Realizado','Diagnóstico','Sugerencias','Fecha Cierre'];
     const rows = (DB.ordenesCerradas||[]).map(o=>[
       o.correlativo, o.tipo, o.equipo, o.serie||'', o.cliente||'',
       o.servicio||o.falla||'', o.sistema||'', o.prioridad||'',
       o.horometro||'', o.fechaInicio||'', o.fechaFin||'',
-      o.horasTrab||'', o.tecnico||'', o.trabajo||'',
+      (function(){ const s=[].concat(DB.preventivos||[],DB.correctivos||[]).find(x=>x&&x.id===o.id); const t=s&&calcTiemposOrden(s); return (t&&t.hayRep)?t.reparacion:(o.horasTrab||''); })(), o.tecnico||'', o.trabajo||'',   // (2026-11-14) sin traslado
       o.diagnostico||'', o.sugerencias||'', o.fechaCierre||''
     ]);
     XLSX.utils.book_append_sheet(wb, mkSheet([headers,...rows]), 'Órdenes Cerradas');
@@ -8123,14 +8115,14 @@ function exportarExcel(){
 
     // Sheet 4: Preventivos activos
     XLSX.utils.book_append_sheet(wb,mkSheet([
-      ['Correlativo','N° Equipo','Marca','Servicio','Fecha Inicio','Fecha Fin','Horas','Horómetro','Técnico','Estado','Trabajo Realizado','Sugerencias'],
-      ...DB.preventivos.map(p=>{const eq=getEq(p.equipoId);return[p.correlativo||'',eq.codigo,eq.marca,p.servicio,fmtDT(p.fechaInicio||p.fecha),fmtDT(p.fechaFin||''),calcHoras(p.fechaInicio,p.fechaFin),p.horometro||'',p.tecnico||'',estadoPrev(p),p.notas||'',p.sugerencias||''];})
+      ['Correlativo','N° Equipo','Marca','Servicio','Fecha Inicio','Fecha Fin','Horas de mano de obra','Horómetro','Técnico','Estado','Trabajo Realizado','Sugerencias'],
+      ...DB.preventivos.map(p=>{const eq=getEq(p.equipoId);return[p.correlativo||'',eq.codigo,eq.marca,p.servicio,fmtDT(p.fechaInicio||p.fecha),fmtDT(p.fechaFin||''),(calcTiemposOrden(p).hayRep?calcTiemposOrden(p).reparacion:'—'),p.horometro||'',p.tecnico||'',estadoPrev(p),p.notas||'',p.sugerencias||''];})
     ]),'Preventivos');
 
     // Sheet 5: Correctivos activos
     XLSX.utils.book_append_sheet(wb,mkSheet([
-      ['Correlativo','N° Equipo','Marca','Sistema','Falla','Prioridad','Fecha Inicio','Fecha Fin','Horas','Técnico','Diagnóstico','Estado','Fecha Cierre'],
-      ...DB.correctivos.map(c=>{const eq=getEq(c.equipoId);return[c.correlativo||'',eq.codigo,eq.marca,c.sistema||'',c.falla,c.prioridad,fmtDT(c.fechaInicio||c.fecha),fmtDT(c.fechaFin||''),calcHoras(c.fechaInicio,c.fechaFin),c.tecnico||'',c.diagnostico||'',c.estado,c.fechaCierre||''];})
+      ['Correlativo','N° Equipo','Marca','Sistema','Falla','Prioridad','Fecha Inicio','Fecha Fin','Horas de mano de obra','Técnico','Diagnóstico','Estado','Fecha Cierre'],
+      ...DB.correctivos.map(c=>{const eq=getEq(c.equipoId);return[c.correlativo||'',eq.codigo,eq.marca,c.sistema||'',c.falla,c.prioridad,fmtDT(c.fechaInicio||c.fecha),fmtDT(c.fechaFin||''),(calcTiemposOrden(c).hayRep?calcTiemposOrden(c).reparacion:'—'),c.tecnico||'',c.diagnostico||'',c.estado,c.fechaCierre||''];})
     ]),'Correctivos');
 
     // (2026-11-11) con el logo de MONTASA arriba de cada hoja; si ExcelJS no carga, el Excel de antes (sin logo)
@@ -12191,6 +12183,15 @@ function _cliOrdenAlCerrar(o){
   // En color para que se distinga (pedido de Miguel): verde 100% funcional, naranja fuerte parcial, rojo inhabilitado
   function quedoHtml(o){ var t = quedoDe(o); if(!t) return ''; var c = ({'100% funcional':'#15803d', 'Parcialmente funcional':'#ea580c', 'Inhabilitado':'#b91c1c'})[t]; return '<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:'+c+';color:#fff;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+esc(t)+'</span>'; }
   function tecnicosDe(o){ return (Array.isArray(o.tecnicos) && o.tecnicos.filter(Boolean).length) ? o.tecnicos.filter(Boolean).join(', ') : (o.tecnico||''); }
+  // (2026-11-14, Miguel) Reporte de mantenimiento: solo inicio/fin del trabajo y «Horas de mano de obra» (sin traslado, pausas descontadas)
+  function tiemposMO(o){
+    var ini = o.inicioTrabajo || o.fechaInicio, fin = o.finTrabajo || o.fechaFin; if(vacio(ini) && vacio(fin)) return '';
+    var t = (typeof calcTiemposOrden === 'function') ? calcTiemposOrden(o) : null;
+    var h = '<table class="op-tt"><tr><th>Evento</th><th>Fecha</th><th>Hora</th></tr>';
+    [['Inicio del trabajo', ini], ['Fin del trabajo', fin]].forEach(function(e){ if(!vacio(e[1])) h += '<tr><td>' + e[0] + '</td><td class="op-mono">' + fF(e[1]) + '</td><td class="op-mono">' + (fH(e[1]) || '—') + '</td></tr>'; });
+    h += '<tr class="tot"><td colspan="2">Horas de mano de obra</td><td class="r op-mono">' + ((t && t.hayRep) ? t.reparacion : '—') + '</td></tr>';
+    return h + '</table>';
+  }
   function eventosMant(o){
     return [['Salida del plantel', o.salidaPlantel], ['Inicio del trabajo', o.inicioTrabajo||o.fechaInicio, o.salidaPlantel?'Traslado':''],
             ['Fin del trabajo', o.finTrabajo||o.fechaFin, 'Trabajo'], ['Retorno al plantel', o.retornoPlantel, 'Traslado']];
@@ -12219,12 +12220,12 @@ function _cliOrdenAlCerrar(o){
       S('Detalle del servicio', kv([['Servicio', esc(o.servicio||'')], ['Técnico(s)', esc(tecnicosDe(o))], ['Estado del equipo tras el servicio', quedoHtml(o)]]) + txt('Trabajo realizado', o.notas) + txt('Sugerencias', o.sugerencias));
       S('Próximo mantenimiento', kv([['Próximo servicio', esc(o.proximoMant||'')]]));
       S('Repuestos utilizados', repuestosDe(o));
-      S('Tiempos de la orden', tiempos(eventosMant(o)));
+      S('Tiempos de la orden', tiemposMO(o));   // (2026-11-14) sin traslado
     } else if(tipo==='correctivo'){
       S('Datos del equipo', datosEquipo(o, eq));
       S('Detalle del servicio', kv([['Sistema afectado', esc(o.sistema||'')], ['Técnico(s)', esc(tecnicosDe(o))], ['Estado del equipo tras el servicio', quedoHtml(o)]]) + txt('Falla reportada', o.falla) + txt('Diagnóstico / Trabajo realizado', o.diagnostico) + txt('Observaciones', o.notas));
       S('Repuestos utilizados', repuestosDe(o));
-      S('Tiempos de la orden', tiempos(eventosMant(o)));
+      S('Tiempos de la orden', tiemposMO(o));   // (2026-11-14) sin traslado
     } else if(tipo==='evaluacion'){
       d.meta = [['Fecha', fF(o.fecha)||'—'], ['Horario', esc((o.horaIni||'—')+' – '+(o.horaFin||'—'))], ['Lugar del servicio', lugarMant(o)]];
       S('Datos del equipo evaluado', kv([['Marca', esc(o.marca||'')], ['Modelo', esc(o.modelo||'')], ['Serie', mono(esc(o.serie||''))], ['Horómetro', mono(num(o.horometro,' hrs'))],
