@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='95c723f57179';
+  var APP_VERSION='83bfb1d1cd57';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -17672,6 +17672,157 @@ window._nxExcelConLogo = function(wbX, archivo){
   function arrancar(){
     revisar(document.body);
     new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1 && !(n.classList && n.classList.contains('nx-pausa-bar'))) revisar(n); }); }); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+  if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
+})();
+
+// ══ FOTOGRAFÍAS EN PREVENTIVOS Y CORRECTIVOS (2026-11-14, pedido de Miguel) ══ Agregar (cámara/galería), ver y quitar fotos en
+// toda orden de preventivo/correctivo. Máx. 10, comprimidas, van en el PDF al cliente; se guardan en fotosOrden_monhaco/<id> sumando a lo que ya hay.
+(function(){
+  var RAIZ = 'fotosOrden_monhaco', MAX = 10;
+  window._fotosOrdenCache = window._fotosOrdenCache || {};
+  function buscar(id){
+    var o = (DB.preventivos || []).find(function(x){ return x && x.id === id; }) || (DB.correctivos || []).find(function(x){ return x && x.id === id; });
+    return o || null;
+  }
+  function nF(o){ var a = (o.fotos || []).filter(Boolean).length; return Math.max(a, +o.nFotos || 0); }
+  function aplicar(id, fin){
+    window._fotosOrdenCache[id] = fin.slice();
+    var o = buscar(id); if(o){ o.fotos = fin.slice(); o.nFotos = fin.length; }
+    var c = (DB.ordenesCerradas || []).find(function(x){ return x && x.id === id; }); if(c){ c.nFotos = fin.length; }
+    try{ saveDB(); }catch(e){}
+    refrescar(id);
+  }
+  function guardar(o, opc){
+    if(!o || !o.id || !window._fbDB) return Promise.reject(new Error('sin conexión'));
+    var id = o.id, quitar = opc && opc.quitar, local = (o.fotos || []).filter(Boolean);
+    return window._fbDB.ref(RAIZ + '/' + id).transaction(function(cur){
+      var srv = (cur && Array.isArray(cur.fotos)) ? cur.fotos.filter(Boolean) : (Array.isArray(cur) ? cur.filter(Boolean) : []);
+      var fin = srv.slice(); if(!quitar) local.forEach(function(f){ if(fin.indexOf(f) < 0) fin.push(f); });
+      if(quitar) fin = fin.filter(function(f){ return f !== quitar; });
+      return { fotos: fin.slice(0, MAX) };
+    }).then(function(r){
+      var v = r && r.snapshot && r.snapshot.val();
+      aplicar(id, (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : local);
+    });
+  }
+  function comprimir(file){
+    return new Promise(function(ok){
+      var rd = new FileReader();
+      rd.onerror = function(){ ok(null); };
+      rd.onload = function(e){
+        var img = new Image();
+        img.onerror = function(){ ok(null); };
+        img.onload = function(){
+          try{
+            var w = img.width, h = img.height, M = 1024;
+            if(w > M){ h = Math.round(h * M / w); w = M; } if(h > M){ w = Math.round(w * M / h); h = M; }
+            var cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h);
+            ok(cv.toDataURL('image/jpeg', 0.7));
+          }catch(err){ ok(null); }
+        };
+        img.src = e.target.result;
+      };
+      rd.readAsDataURL(file);
+    });
+  }
+  window._nxFotosAgregar = function(id, input){
+    var o = buscar(id); if(!o) return;
+    var archivos = Array.from(input.files || []); input.value = '';
+    var espacio = MAX - nF(o);
+    if(espacio <= 0){ toast('Límite de ' + MAX + ' fotos alcanzado', true); return; }
+    var proc = archivos.slice(0, espacio);
+    if(archivos.length > espacio) toast('Solo se agregarán ' + espacio + ' de ' + archivos.length + ' (límite ' + MAX + ')', true);
+    toast('📷 Subiendo ' + proc.length + ' foto' + (proc.length === 1 ? '' : 's') + '…');
+    Promise.all(proc.map(comprimir)).then(function(lst){
+      var nuevas = lst.filter(Boolean); if(!nuevas.length){ toast('No se pudo procesar ninguna foto', true); return; }
+      var ya = (window._fotosOrdenCache[id] || o.fotos || []).filter(Boolean);
+      o.fotos = ya.concat(nuevas);
+      return guardar(o).then(function(){ toast(nuevas.length + ' foto' + (nuevas.length === 1 ? '' : 's') + ' agregada' + (nuevas.length === 1 ? '' : 's') + ' ✓'); });
+    }).catch(function(e){ toast('⚠️ Las fotos no se pudieron guardar. Revisa tu conexión e inténtalo de nuevo.', true); });
+  };
+  function conFotos(o, cb){
+    var c = window._fotosOrdenCache[o.id];
+    if(c && c.length){ o.fotos = c.slice(); cb(); return; }
+    if((o.fotos || []).filter(Boolean).length || !(+o.nFotos > 0) || !window._fbDB){ cb(); return; }
+    window._fbDB.ref(RAIZ + '/' + o.id).once('value').then(function(s){
+      var v = s.val(), a = (v && Array.isArray(v.fotos)) ? v.fotos.filter(Boolean) : (Array.isArray(v) ? v.filter(Boolean) : []);
+      window._fotosOrdenCache[o.id] = a; o.fotos = a.slice(); cb();
+    }).catch(function(){ cb(); });
+  }
+  window._nxFotosQuitar = function(id){
+    var o = buscar(id); if(!o) return;
+    conFotos(o, function(){
+      var fotos = (o.fotos || []).filter(Boolean); if(!fotos.length){ toast('Esta orden no tiene fotos'); return; }
+      var v = document.getElementById('nx-fotos-ov'); if(v) v.remove();
+      var ov = document.createElement('div'); ov.id = 'nx-fotos-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;max-height:85vh;overflow:auto;padding:16px">'
+        + '<div style="font-weight:800;color:#1f3864;font-size:15px;margin-bottom:4px">🗑 Quitar fotos — ' + (o.correlativo || '') + '</div>'
+        + '<div style="font-size:12px;color:#666;margin-bottom:10px">Toca la ✕ de la foto que quieres quitar.</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + fotos.map(function(f, i){
+            return '<div style="position:relative;width:90px;height:90px;border-radius:8px;overflow:hidden"><img src="' + f + '" style="width:100%;height:100%;object-fit:cover">'
+              + '<button type="button" data-i="' + i + '" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:13px;cursor:pointer">✕</button></div>'; }).join('')
+        + '</div><button type="button" data-cerrar="1" style="margin-top:12px;width:100%;padding:10px;border:none;border-radius:8px;background:#eef1f6;color:#333;font-weight:700;cursor:pointer">Cerrar</button></div>';
+      ov.addEventListener('click', function(ev){
+        if(ev.target === ov || ev.target.closest('[data-cerrar]')){ ov.remove(); return; }
+        var b = ev.target.closest('[data-i]'); if(!b) return;
+        if(!confirm('¿Quitar esta foto de la orden?')) return;
+        var f = fotos[+b.getAttribute('data-i')]; ov.remove();
+        o.fotos = fotos.filter(function(x){ return x !== f; });
+        guardar(o, { quitar: f }).then(function(){ toast('Foto quitada'); }).catch(function(){ toast('⚠️ No se pudo quitar la foto. Revisa tu conexión.', true); });
+      });
+      document.body.appendChild(ov);
+    });
+  };
+  window._nxFotosBarra = function(id){
+    var o = buscar(id); if(!o || o.estado === 'Cancelado') return '';
+    var n = nF(o), lleno = n >= MAX;
+    var inp = function(cam){ return '<input type="file" accept="image/*"' + (cam ? ' capture="environment"' : '') + ' multiple style="display:none" onchange="event.stopPropagation();_nxFotosAgregar(\'' + id + '\',this)">'; };
+    var bt = 'flex:1;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:9px;border:1.5px dashed #9fb3cf;border-radius:8px;font-size:13px;color:#1f5488;font-weight:700;background:#fff;margin:0';
+    return '<div class="nx-fotos-bar" data-id="' + id + '" onclick="event.stopPropagation()" style="margin:10px 0 6px;padding:9px 11px;border-radius:10px;background:#f4f7fb;border:1px solid #dde5f0">'
+      + '<div style="font-size:11px;font-weight:800;color:#1f3864;text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px">📷 Fotografías de la orden (' + n + '/' + MAX + ') <span style="font-weight:500;text-transform:none;color:#888">— van en el reporte que se comparte al cliente</span></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + (lleno ? '<div style="flex:1;font-size:12px;color:#888;padding:6px 0">Límite de ' + MAX + ' fotos alcanzado</div>'
+               : '<label style="' + bt + '">' + inp(true) + '📷 Cámara</label><label style="' + bt + '">' + inp(false) + '🖼️ Galería</label>')
+      + (n ? '<button type="button" onclick="event.stopPropagation();_nxFotosQuitar(\'' + id + '\')" style="padding:9px 12px;border:1.5px solid #e2c4c4;border-radius:8px;background:#fff;color:#a32d2d;font-size:13px;font-weight:700;cursor:pointer">🗑 Quitar</button>' : '')
+      + '</div></div>';
+  };
+  function refrescar(id){
+    [].forEach.call(document.querySelectorAll('.nx-fotos-bar[data-id="' + id + '"]'), function(el){
+      var h = window._nxFotosBarra(id); var t = document.createElement('div'); t.innerHTML = h; if(t.firstChild) el.replaceWith(t.firstChild); else el.remove();
+    });
+    try{ if(typeof _refrescarVistasFotos === 'function') _refrescarVistasFotos(); }catch(e){}
+    setTimeout(function(){ try{ if(typeof renderHistorial === 'function') renderHistorial(); }catch(e){} }, 200);
+  }
+  // tarjetas de las carpetas de mantenimiento (Gerencia/Supervisión): en el detalle abierto
+  ['_buildCardP', '_buildCardC'].forEach(function(fn){
+    var orig = window[fn]; if(typeof orig !== 'function') return;
+    window[fn] = function(x){
+      var html = orig.apply(this, arguments);
+      try{
+        if(x && x.id && buscar(x.id) && typeof openHistGer !== 'undefined' && openHistGer.has(x.id)){
+          var bar = window._nxFotosBarra(x.id); if(bar){ var k = html.lastIndexOf('</div>'); html = html.slice(0, k) + bar + html.slice(k); }
+        }
+      }catch(e){}
+      return html;
+    };
+  });
+  // órdenes abiertas como tarjeta (#cb-<id>): al final del cuerpo, si esa tarjeta no tiene ya su propio botón de fotos
+  function poner(cb){
+    var id = cb.id.slice(3); if(!buscar(id) || cb.querySelector('.nx-fotos-bar')) return;
+    if(cb.querySelector('input[type=file][onchange*="agregarFotosOrden"]')) return;
+    var h = window._nxFotosBarra(id); if(h) cb.insertAdjacentHTML('beforeend', h);
+  }
+  function revisar(raiz){
+    if(!raiz || !raiz.querySelectorAll) return;
+    if(raiz.id && raiz.id.indexOf('cb-') === 0) poner(raiz);
+    [].forEach.call(raiz.querySelectorAll('[id^="cb-"]'), poner);
+  }
+  function arrancar(){
+    revisar(document.body);
+    new MutationObserver(function(ms){ ms.forEach(function(m){ [].forEach.call(m.addedNodes, function(n){ if(n.nodeType === 1 && !(n.classList && n.classList.contains('nx-fotos-bar'))) revisar(n); }); }); })
       .observe(document.body, { childList: true, subtree: true });
   }
   if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
