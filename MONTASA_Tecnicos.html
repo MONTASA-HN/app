@@ -199,7 +199,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='d2f277d35aa3';
+  var APP_VERSION='e1b9bd914f03';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2923,6 +2923,9 @@ function _srBuscarOrdenPorCorr(txt){
   return null;
 }
 function _srDatosOrden(o){
+  if(o && /^SP-/.test(String(o.correlativo||'')) && !(DB.equipos||[]).some(function(e){ return e && e.id===o.equipoId; })){   // (2026-11-16) S/P sin equipo de la flota
+    return { esCliente:false, equipoTxt:o.equipoTxt||'Sin equipo', marca:'', modelo:'', serie:'', tecnico:String((o.tecnicos&&o.tecnicos[0])||o.tecnico||'').split(',')[0].trim() };
+  }
   if(o && /^EV-/.test(String(o.correlativo||'')) && !o.equipoId){   // (2026-10-16) evaluación de equipo
     return { esCliente:true, equipoTxt:(o.clienteOrden||o.cliente||'Equipo de cliente')+(o.tipoEquipo?' · '+o.tipoEquipo:''), marca:o.marca||'', modelo:o.modelo||'', serie:o.serie||'',
       tecnico:String((o.tecnicos&&o.tecnicos[0])||o.tecnico||'').trim() };
@@ -3030,6 +3033,7 @@ function _srOrdenesActivas(){
     });
   };
   add(DB.preventivos,'prev'); add(DB.correctivos,'corr');
+  add(Array.isArray(DB.soldaduras) ? DB.soldaduras : Object.values(DB.soldaduras||{}), 'sp');   // (2026-11-16) soldadura / pintura
   // (2026-10-16) evaluaciones: abiertas y completadas de los últimos 60 días (para cotizar al cliente lo diagnosticado)
   (DB.evaluaciones||[]).forEach(function(o){
     if(!o || o.estado==='Cancelado') return;
@@ -3061,7 +3065,7 @@ function _srBuscar(){
     const d=_srDatosOrden(r.o);
     const ya=_srDeOrden(r.o.id);
     return '<div onclick="_srElegir(\''+r.tipo+'\',\''+_idS(r.o.id)+'\')" style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--border2);cursor:pointer">'
-      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':r.tipo==='ev'?'Evaluación':'Correctivo')+'</span></div>'
+      +'<div style="min-width:0"><div style="font-weight:800;color:#1f3864;font-size:13px">'+esc(r.o.correlativo||'—')+' <span style="font-weight:600;font-size:11px;color:var(--text3)">'+(r.tipo==='prev'?'Preventivo':r.tipo==='ev'?'Evaluación':r.tipo==='sp'?'Soldadura / Pintura':'Correctivo')+'</span></div>'
       +'<div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(d.esCliente?'👤 ':'🔧 ')+esc(d.equipoTxt)+(d.marca?' · '+esc(d.marca):'')+'</div>'
       +(ya.length?'<div style="font-size:11px;color:#8a6d00;font-weight:700">🔩 Ya tiene: '+ya.map(function(x){return esc(x.correlativo);}).join(', ')+'</div>':'')
       +'</div>'
@@ -3070,7 +3074,7 @@ function _srBuscar(){
   }).join('');
 }
 function _srElegir(tipo, oid){
-  const arr = tipo==='prev' ? (DB.preventivos||[]) : tipo==='ev' ? (DB.evaluaciones||[]) : (DB.correctivos||[]);
+  const arr = tipo==='prev' ? (DB.preventivos||[]) : tipo==='ev' ? (DB.evaluaciones||[]) : tipo==='sp' ? (Array.isArray(DB.soldaduras) ? DB.soldaduras : Object.values(DB.soldaduras||{})) : (DB.correctivos||[]);
   const o = arr.find(function(x){ return x && x.id===oid; });
   if(!o) return;
   const esc0=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
@@ -3107,7 +3111,7 @@ function _srElegir(tipo, oid){
   const esc=function(t){ return String(t==null?'':t).replace(/[<>]/g,''); };
   const info=document.getElementById('sr-info');
   info.style.display='block';
-  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(o.correlativo)+' — '+(tipo==='prev'?'Preventivo':tipo==='ev'?'Evaluación':'Correctivo')+'</div>'
+  info.innerHTML='<div style="font-weight:800;color:#1f3864;margin-bottom:4px">'+esc(o.correlativo)+' — '+(tipo==='prev'?'Preventivo':tipo==='ev'?'Evaluación':tipo==='sp'?'Soldadura / Pintura':'Correctivo')+'</div>'
     +'<div><b>'+(d.esCliente?'Cliente':'Equipo')+':</b> '+esc(d.equipoTxt)+'</div>'
     +(d.marca?'<div><b>Marca:</b> '+esc(d.marca)+'</div>':'')
     +(d.modelo?'<div><b>Modelo:</b> '+esc(d.modelo)+'</div>':'')
@@ -3169,7 +3173,7 @@ function _srGuardar(){
       if(!o.solRepuestos) o.solRepuestos=[];
       if(o.solRepuestos.indexOf(sr.correlativo)<0) o.solRepuestos.push(sr.correlativo);
       saveDB();
-      if(_srOrdenSel.tipo==='ev'){ try{ if(window._fbDB && window._fbReady && typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){} }   // (2026-10-16) evaluación
+      if(_srOrdenSel.tipo==='ev' || _srOrdenSel.tipo==='sp'){ try{ if(window._fbDB && window._fbReady && typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){} }   // (2026-10-16) evaluación
       else if(typeof _guardarOrdenMantResiliente==='function') _guardarOrdenMantResiliente(_srOrdenSel.tipo==='prev'?'prev':'corr', o);
     }catch(e){}
     _srExtraOK = null;   // el PIN vale para UNA solicitud: la siguiente lo vuelve a pedir
