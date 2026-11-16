@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='90f32f14c430';
+  var APP_VERSION='67571284f8e5';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -11207,7 +11207,7 @@ function _cliOrdenAlCerrar(o){
   + '.op-txt .t{background:#f3f5f8;padding:3px 9px;border-bottom:1px solid #d9dfe6}.op-txt .c{padding:5px 9px;white-space:pre-wrap;word-break:break-word}'
   + '.op-tt th{background:#1f3864;color:#fff;font-size:9.2px;font-weight:700;letter-spacing:0.9px;text-transform:uppercase;text-align:left;padding:4px 9px}'
   + '.op-tt td{border:1px solid #d9dfe6;padding:3.5px 9px}.op-tt tr.tot td{background:#f3f5f8;font-weight:700;color:#1f3864}.op-tt .r{text-align:right}'
-  + '.op-firma{margin-top:auto;padding-top:18px;display:flex;justify-content:center}'
+  + '.op-firma{margin-top:22px;padding-top:6px;display:flex;justify-content:center}'   // (2026-11-16) sigue al contenido (antes pegada al fondo de la hoja)
   + '.op-firma>div{width:307px;text-align:center}'
   + '.op-firma .z{height:56px;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid #1c2330;margin-bottom:6px}'
   + '.op-firma .z img{max-height:54px;max-width:280px;display:block}'
@@ -11473,9 +11473,15 @@ function _cliOrdenAlCerrar(o){
     meter(p, f);
     if(!cabe(p)){ f.remove(); p = nueva(hdr2('Continuación de la orden')); meter(p, f); }
     if(d.fotos.length){
-      p = nueva(hdr2('Anexo fotográfico'));
-      meter(p, el('<div class="op-intro">Registro fotográfico tomado durante la ejecución de la orden. Total de fotografías: <b>'+d.fotos.length+'</b>.</div>'));
+      // (2026-11-16, Miguel) Las fotos siguen en la MISMA hoja si caben (antes siempre abrían una hoja nueva)
+      var intro = el('<div class="op-sec" style="margin-top:18px"><h2><i>📷</i>Anexo fotográfico</h2><div class="op-intro">Registro fotográfico tomado durante la ejecución de la orden. Total de fotografías: <b>'+d.fotos.length+'</b>.</div></div>');
+      meter(p, intro);
       var g = el('<div class="op-fotos"></div>'); meter(p, g);
+      g.appendChild(el('<div class="op-foto"><div class="img"></div><div class="cap">.</div></div>'));
+      if(!cabe(p)){ intro.remove(); g.remove(); p = nueva(hdr2('Anexo fotográfico'));
+        meter(p, el('<div class="op-intro">Registro fotográfico tomado durante la ejecución de la orden. Total de fotografías: <b>'+d.fotos.length+'</b>.</div>'));
+        g = el('<div class="op-fotos"></div>'); meter(p, g); }
+      else g.innerHTML = '';
       d.fotos.forEach(function(src, i){
         var ft = el('<div class="op-foto"><div class="img"><img src="'+src+'"></div><div class="cap"><b>Fotografía '+(i+1)+'</b> de '+d.fotos.length+'</div></div>');
         g.appendChild(ft);
