@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='650e6c92c046';
+  var APP_VERSION='b1b8e0303160';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8635,7 +8635,11 @@ function _rentaVencimientos(){
     const retirado = (DB.logistica||[]).some(function(r){
       if(!r || r.tipoLogistica!=='retiro' || r.estado==='Cancelado' || !r.equipoId || r.equipoId!==o.equipoId) return false;
       const fr = _fechaLocalNR(r.fechaCierre) || _fechaLocalNR(r.fechaInicio) || _fechaLocalNR(r.fecha);
-      return !fr || !ini || fr >= ini;
+      // (2026-11-16) Solo un retiro creado DESPUÉS de esta entrega (número de orden mayor). Antes bastaba la fecha (>= inicio) y el retiro
+      // de la renta ANTERIOR cerrado el mismo día de la nueva entrega callaba el aviso (LGMT-0312 tapada por LGMT-0308, E-33).
+      const _nO = parseInt(String(o.correlativo||'').split('-').pop(), 10), _nR = parseInt(String(r.correlativo||'').split('-').pop(), 10);
+      if(!isNaN(_nO) && !isNaN(_nR)) return _nR > _nO;
+      return !fr || !ini || fr > ini;
     });
     if(retirado) return;
     // Días hábiles (sin sáb/dom) desde mañana hasta la fecha de vencimiento
