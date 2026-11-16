@@ -109,7 +109,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0a3d2631a174';
+  var APP_VERSION='a2cf6b19d225';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -497,10 +497,24 @@ function _horMeses(){
   set.add(horMesActual());
   return Array.from(set).sort();
 }
+// (2026-11-16, Miguel) En las tomas de horómetros de MONHACO solo van estos clientes
+const HOR_CLIENTES_TOMA = ['ELCATEX', '5 STAR APPAREL', 'GENESIS APPAREL', 'SAINT JOHN APPAREL', 'SUYAPA APPAREL', 'SAN JUAN TEXTILES', 'FRANCIS APPAREL'];
+function _horClientePermitido(c){ return HOR_CLIENTES_TOMA.indexOf(String(c || '').toUpperCase().replace(/\s+/g, ' ').trim()) >= 0; }
+// Horas trabajadas en el periodo (lectura − anterior); null si falta alguna
+function _horDif(lect, ant){ var a = parseFloat(lect), b = parseFloat(ant); return (isNaN(a) || isNaN(b)) ? null : Math.round((a - b) * 100) / 100; }
+function _horDifTxt(d){ return d == null ? '—' : d.toLocaleString('en-US'); }
+function _horPintarTotales(){
+  document.querySelectorAll('td[id^="hor-tot-"]').forEach(function(td){
+    var tb = td.closest('table'); if(!tb) return; var s = 0, n = 0;
+    tb.querySelectorAll('td[id^="hor-dif-"]').forEach(function(c){ var v = parseFloat(c.getAttribute('data-v')); if(!isNaN(v)){ s += v; n++; } });
+    td.textContent = n ? (Math.round(s * 100) / 100).toLocaleString('en-US') + ' hrs' : '—';
+  });
+}
 function _horEquipos(){
   return (DB.equipos||[]).filter(function(e){
     if(!e || e.esGenerico || e.esVehiculo || e.esEquipoCliente) return false;
     if(/USO INTERNO/i.test(String(e.cliente||''))) return false;   // (2026-11-12, Miguel) los de USO INTERNO no van en la toma de horómetros
+    if(!_horClientePermitido(e.cliente)) return false;   // (2026-11-16) solo los 7 clientes de la toma
     // (2026-11-11) también los nombres de MT Rental (equipos trasladados): sin tildes y «Plataforma aérea» = ELEVADORA
     var _tp = String(e.tipo||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim(); if(_tp === 'PLATAFORMA AEREA') _tp = 'ELEVADORA';
     if(!HOR_TIPOS.includes(_tp)) return false;
@@ -517,6 +531,9 @@ function _horClientesPendientes(mes){
   return Object.keys(grupos).sort().filter(function(c){ return !_horCierreCli(mes, _horCliKey(c)); });
 }
 function _horAnteriorReg(eq, mes){
+  // (2026-11-16) La lectura del mes guarda su «anterior» (inicio) al capturarla: así el inicio no cambia aunque la ficha se actualice
+  const _cur = (((DB.horometros||{})[mes])||{})[eq && eq.id];
+  if(_cur && _cur.anterior != null && _cur.anterior !== '' && !isNaN(parseFloat(_cur.anterior))) return { lectura: parseFloat(_cur.anterior), ts: _cur.anteriorTs || null };
   // Última lectura registrada en un mes ANTERIOR (con su fecha) — aplica igual
   // para equipos de flota y externos (así el sistema "recuerda" su horómetro).
   const meses = Object.keys(DB.horometros||{}).filter(function(m){ return m < mes; }).sort().reverse();
@@ -524,6 +541,9 @@ function _horAnteriorReg(eq, mes){
     const l = (DB.horometros[meses[i]]||{})[eq.id];
     if(l && l.lectura!=null && l.lectura!=='') return { lectura: parseFloat(l.lectura), ts: l.ts||null };
   }
+  // (2026-11-16) Ya tomado este mes sin «anterior» guardado y sin mes previo (ej. octubre 2026, la PRIMERA toma): la ficha ya cambió
+  // con esta misma toma, así que no hay inicio confiable → sin inicio (no se calculan horas trabajadas)
+  if(_cur && _horTiene(_cur) && !(eq && eq._eqManual)) return null;
   // Sin lecturas previas: externos usan el "anterior" registrado; flota, su horómetro de ficha
   const h = parseFloat(eq && eq._eqManual ? eq.anterior : (eq||{}).horometro);
   return isNaN(h) ? null : { lectura: h, ts: null };
@@ -546,7 +566,7 @@ function _horExtAPseudo(k, m){
 function _horEquiposVista(mes){
   // Flota MONHACO + equipos externos recordados (ej. de MT Rental rentados a clientes MONHACO)
   const ext = _horExternos();
-  const extra = Object.keys(ext).map(function(k){ return _horExtAPseudo(k, ext[k]); }).filter(function(e){ return !/USO INTERNO/i.test(String(e.cliente||'')); });   // (2026-11-12) sin USO INTERNO
+  const extra = Object.keys(ext).map(function(k){ return _horExtAPseudo(k, ext[k]); }).filter(function(e){ return !/USO INTERNO/i.test(String(e.cliente||'')) && _horClientePermitido(e.cliente); });   // (2026-11-12) sin USO INTERNO; (2026-11-16) solo los 7 clientes
   return _horEquipos().concat(extra).sort(function(a,b){ return String(a.codigo||'').localeCompare(String(b.codigo||''), undefined, {numeric:true}); });
 }
 function _horEqDe(mes, eqId){
@@ -619,6 +639,8 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
       + '<td id="hor-hasta-'+e.id+'" style="'+td+';text-align:center">'+((tiene&&cierre)?_horFechaTs(cierre.ts):'—')+'</td>'
       + '<td style="'+td+';text-align:right">'+(antR?antR.lectura.toLocaleString('en-US'):'—')+'</td>'
       + celFinal
+      + (function(){ var d = (tiene && antR) ? _horDif(l.lectura, antR.lectura) : null;   // (2026-11-16) horas trabajadas en el mes
+          return '<td id="hor-dif-'+e.id+'" data-v="'+(d==null?'':d)+'" data-ant="'+(antR?antR.lectura:'')+'" style="'+td+';text-align:right;font-weight:800;color:'+(d!=null&&d<0?'#c00':'#1f3864')+';background:#f4f8fd">'+_horDifTxt(d)+'</td>'; })()
       + '</tr>';
   });
   const colFinal = editable
@@ -671,9 +693,13 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
     + '<th colspan="2" style="'+th+'">FECHA</th>'
     + '<th rowspan="2" style="'+th+'">HOROMETRAJE<br>INICIO</th>'
     + colFinal
+    + '<th rowspan="2" style="'+th+'">HORAS<br>TRABAJADAS</th>'   // (2026-11-16)
     + '</tr>'
     + '<tr><th style="'+th+'">DESDE</th><th style="'+th+'">HASTA</th></tr>'
     + filas
+    + (function(){ var s = 0, n = 0; grupo.forEach(function(e){ var l = lecturas[e.id], a = _horAnteriorReg(e, mes); var d = (_horTiene(l) && a) ? _horDif(l.lectura, a.lectura) : null; if(d != null){ s += d; n++; } });   // (2026-11-16) total del cliente
+        return '<tr><td colspan="'+(editable?8:7)+'" style="'+td+';text-align:right;font-weight:800;color:#1f3864;background:#dce6f1">TOTAL HORAS TRABAJADAS — '+_hcEsc(planta)+'</td>'
+          + '<td id="hor-tot-'+_hcEsc(ckTop)+'" style="'+td+';text-align:right;font-weight:800;color:#1f3864;background:#dce6f1">'+(n?(Math.round(s*100)/100).toLocaleString('en-US')+' hrs':'—')+'</td></tr>'; })()
     + '</table></div>'
     + firmas;
 }
@@ -798,7 +824,8 @@ function horGuardar(eqId){
   if(ant!=null && lectura < ant){
     if(!confirm('⚠️ La lectura ('+lectura.toLocaleString('en-US')+') es MENOR que la anterior ('+ant.toLocaleString('en-US')+' hrs).\n¿Guardarla de todas formas? (ej. cambio de reloj)')) { inp.value=''; return; }
   }
-  const reg = { lectura: lectura, ts: _horAhora(mes), codigo: eq.codigo||'' };
+  const _antR = _horAnteriorReg(eq, mes);   // (2026-11-16) se guarda el inicio junto a la lectura
+  const reg = { lectura: lectura, ts: _horAhora(mes), codigo: eq.codigo||'', anterior: _antR ? _antR.lectura : null, anteriorTs: _antR ? (_antR.ts || null) : null };
   if(!DB.horometros) DB.horometros = {};
   if(!DB.horometros[mes]) DB.horometros[mes] = {};
   DB.horometros[mes][eqId] = reg;
@@ -816,6 +843,8 @@ function _horPintarFila(eqId){
   const del = document.getElementById('hor-del-'+eqId);
   if(inp){ inp.style.borderColor = tiene ? '#18A303' : '#ccc'; }
   if(del){ del.style.display = tiene ? 'inline-block' : 'none'; }
+  const dc = document.getElementById('hor-dif-'+eqId);   // (2026-11-16) horas trabajadas y total al momento
+  if(dc){ const d = tiene ? _horDif(l.lectura, dc.getAttribute('data-ant')) : null; dc.setAttribute('data-v', d==null?'':d); dc.textContent = _horDifTxt(d); dc.style.color = (d!=null&&d<0)?'#c00':'#1f3864'; _horPintarTotales(); }
 }
 function _horPintarAvance(){
   const mes = _horMesVista || horMesActual();
@@ -1339,13 +1368,14 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
 
     // Columnas (ancho total = W - 2M = 191.9)
     const cols = [
-      { t:'EQUIPO', w:32, a:'left' },
-      { t:'CAPACIDAD', w:27, a:'center' },
-      { t:'MES', w:30, a:'center' },
-      { t:'DESDE', w:24, a:'center' },
-      { t:'HASTA', w:24, a:'center' },
-      { t:'HOROMETRAJE\nINICIO', w:27.45, a:'right' },
-      { t:'HOROMETRAJE\nFINAL', w:27.45, a:'right' },
+      { t:'EQUIPO', w:27, a:'left' },
+      { t:'CAPACIDAD', w:22, a:'center' },
+      { t:'MES', w:26, a:'center' },
+      { t:'DESDE', w:21, a:'center' },
+      { t:'HASTA', w:21, a:'center' },
+      { t:'HOROMETRAJE\nINICIO', w:24.6, a:'right' },
+      { t:'HOROMETRAJE\nFINAL', w:24.6, a:'right' },
+      { t:'HORAS\nTRABAJADAS', w:25.7, a:'right' },   // (2026-11-16)
     ];
     const FILA = 7.4, HDR = 11;
     // (2026-11-11, Miguel) logo de MONTASA en todo documento de Nexo: arriba a la izquierda de cada página
@@ -1359,7 +1389,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
       pdf.setFont('helvetica','bold'); pdf.setFontSize(7.4); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
       // FECHA agrupa DESDE/HASTA
       cols.forEach(function(c, i){
-        if(i===3){ pdf.text('FECHA', x + 24, y + 3.6, {align:'center'}); }
+        if(i===3){ pdf.text('FECHA', x + cols[3].w, y + 3.6, {align:'center'}); }
         const lineas = c.t.split('\n');
         lineas.forEach(function(tx, li){
           const ty = (i===3||i===4) ? y + 8.6 : (lineas.length>1 ? y + 4.6 + li*3.4 : y + 6.8);
@@ -1372,7 +1402,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
       });
       pdf.line(x, y, x, y+HDR);
       // línea que separa FECHA de DESDE/HASTA
-      pdf.line(M+cols[0].w+cols[1].w+cols[2].w, y+5.4, M+cols[0].w+cols[1].w+cols[2].w+48, y+5.4);
+      pdf.line(M+cols[0].w+cols[1].w+cols[2].w, y+5.4, M+cols[0].w+cols[1].w+cols[2].w+cols[3].w+cols[4].w, y+5.4);
       return y + HDR;
     }
 
@@ -1398,6 +1428,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
       y += 8;
       y = encabezadoTabla(y);
       pdf.setFont('helvetica','normal'); pdf.setFontSize(8.2);
+      let _totCli = 0, _nCli = 0;   // (2026-11-16) total de horas trabajadas del cliente
       grupo.forEach(function(e){
         y = nuevaPagSi(y, FILA);
         if(y === M + 4){ y = encabezadoTabla(y); pdf.setFont('helvetica','normal'); pdf.setFontSize(8.2); }
@@ -1412,7 +1443,9 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
           (tiene&&cierre)?_horFechaTs(cierre.ts):'\u2014',
           antR ? antR.lectura.toLocaleString('en-US') : '\u2014',
           tiene ? parseFloat(l.lectura).toLocaleString('en-US') : 'SIN TOMA',
+          _horDifTxt((tiene && antR) ? _horDif(l.lectura, antR.lectura) : null),
         ];
+        { const _d = (tiene && antR) ? _horDif(l.lectura, antR.lectura) : null; if(_d != null){ _totCli += _d; _nCli++; } }
         let x = M;
         pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]);
         pdf.rect(M, y, W-2*M, FILA);
@@ -1429,6 +1462,14 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
         pdf.line(x, y, x, y+FILA);
         y += FILA;
       });
+      // (2026-11-16) fila TOTAL HORAS TRABAJADAS del cliente
+      y = nuevaPagSi(y, FILA);
+      pdf.setFillColor(RELL[0],RELL[1],RELL[2]); pdf.setDrawColor(GRIS[0],GRIS[1],GRIS[2]); pdf.rect(M, y, W-2*M, FILA, 'FD');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(8.2); pdf.setTextColor(AZUL[0],AZUL[1],AZUL[2]);
+      pdf.text('TOTAL HORAS TRABAJADAS — ' + cli, W - M - cols[7].w - 2, y + 5, {align:'right'});
+      pdf.text(_nCli ? (Math.round(_totCli*100)/100).toLocaleString('en-US') + ' hrs' : '\u2014', W - M - 2, y + 5, {align:'right'});
+      pdf.line(W - M - cols[7].w, y, W - M - cols[7].w, y + FILA);
+      y += FILA;
       // Firmas (digitales si existen)
       const regs = firmas[_horCliKey(cli)] || {};
       const ALTO_F = 30;
@@ -3228,10 +3269,11 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
     var sel = ov.querySelector('#horp-cli');
     sel.onchange = function(){
       var g = grupos[sel.value] || [];
-      ov.querySelector('#horp-eqs').innerHTML = g.length ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="background:#dce6f1;color:#1f3864"><th style="padding:6px;text-align:left">Equipo</th><th style="padding:6px;text-align:right">Última en ficha</th><th style="padding:6px">Lectura hoy</th></tr>'
+      ov.querySelector('#horp-eqs').innerHTML = g.length ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="background:#dce6f1;color:#1f3864"><th style="padding:6px;text-align:left">Equipo</th><th style="padding:6px;text-align:right">Última en ficha</th><th style="padding:6px">Lectura hoy</th><th style="padding:6px;text-align:right">Diferencial</th></tr>'
         + g.map(function(e){ var a = num(e.horometro); return '<tr style="border-bottom:1px solid #eee"><td style="padding:6px;font-weight:800;color:#1f3864">' + esc(e.codigo) + '<div style="font-size:10.5px;color:#888;font-weight:400">' + esc(e.ubicacion || '') + '</div></td>'
           + '<td style="padding:6px;text-align:right">' + (a != null ? fmt(a) : '—') + '</td>'
-          + '<td style="padding:4px;text-align:center"><input type="number" inputmode="decimal" data-eq="' + esc(e.id) + '" placeholder="hrs" style="width:96px;padding:8px;border:1.5px solid #ccc;border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td></tr>'; }).join('')
+          + '<td style="padding:4px;text-align:center"><input type="number" inputmode="decimal" data-eq="' + esc(e.id) + '" data-ant="' + (a != null ? a : '') + '" oninput="var d=_horDif(this.value,this.dataset.ant),c=this.closest(\'tr\').querySelector(\'.horp-dif\');c.textContent=(this.value.trim()===\'\')?\'—\':_horDifTxt(d);c.style.color=(d!=null&&d<0)?\'#c00\':\'#1f3864\'" placeholder="hrs" style="width:96px;padding:8px;border:1.5px solid #ccc;border-radius:6px;font-size:14px;font-weight:700;text-align:right"></td>'
+          + '<td class="horp-dif" style="padding:6px;text-align:right;font-weight:800;color:#1f3864">—</td></tr>'; }).join('')
         + '</table><div style="font-size:11px;color:#888;margin-top:6px">Deja vacío el equipo que no se tomó.</div>' : '';
     };
     ov.addEventListener('click', function(ev){
@@ -3274,7 +3316,9 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
         + '<div onclick="_horParcVer(\'' + esc(p.id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center">'
         + '<div><div style="font-weight:800;color:#1f3864;font-size:13px">' + esc(p.cliente) + '</div><div style="font-size:11px;color:#667">' + fechaHora(p.ts) + ' · ' + ids.length + ' equipo(s)</div></div><span style="color:#888">⌄</span></div>'
         + '<div id="horp-det-' + esc(p.id) + '" style="display:none;margin-top:8px">'
-        + ids.map(function(k){ var l = p.lecturas[k]; return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-top:1px solid #eee"><b>' + esc(l.codigo || k) + '</b><span>' + (l.anterior != null ? fmt(l.anterior) + ' → ' : '') + '<b>' + fmt(l.lectura) + ' hrs</b></span></div>'; }).join('')
+        + ids.map(function(k){ var l = p.lecturas[k], d = _horDif(l.lectura, l.anterior); return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-top:1px solid #eee"><b>' + esc(l.codigo || k) + '</b><span>' + (l.anterior != null ? fmt(l.anterior) + ' → ' : '') + '<b>' + fmt(l.lectura) + ' hrs</b>'
+          + ' <span style="display:inline-block;min-width:74px;text-align:right;font-weight:800;color:' + (d != null && d < 0 ? '#c00' : '#1f3864') + '">' + (d != null ? (d >= 0 ? '+' : '') + _horDifTxt(d) + ' h' : '—') + '</span></span></div>'; }).join('')   // (2026-11-16) diferencial
+        + (function(){ var s = 0, n = 0; ids.forEach(function(k){ var d = _horDif(p.lecturas[k].lectura, p.lecturas[k].anterior); if(d != null){ s += d; n++; } }); return '<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0 0;border-top:2px solid #c9d9ef;font-weight:800;color:#1f3864"><span>Total diferencial</span><span>' + (n ? (Math.round(s * 100) / 100).toLocaleString('en-US') + ' h' : '—') + '</span></div>'; })()
         + (GER ? '<button onclick="horElimParcial(\'' + esc(p.id) + '\')" style="width:100%;margin-top:8px;padding:8px;background:#fdeaea;color:#c00;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12.5px">🗑 Eliminar toma parcial (PIN)</button>' : '')
         + '</div></div>';
     });
