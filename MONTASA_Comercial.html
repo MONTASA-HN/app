@@ -78,7 +78,7 @@ window._nxSpecFuera = function(spec){
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='595c4430a395';
+  var APP_VERSION='66839556ae3e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2558,8 +2558,6 @@ function _construirCamposOrden(tipo, o, eq){
     const t = calcTiemposOrden(o);
     campos.push(['Servicio', o.servicio||'—']);
     campos.push(['Técnico(s)', o.tecnico||'—']);
-    campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
-    campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
     campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
     campos.push(['Trabajo realizado', o.notas||'—']);
@@ -2571,8 +2569,6 @@ function _construirCamposOrden(tipo, o, eq){
     campos.push(['Técnico(s)', o.tecnico||'—']);
     campos.push(['Falla reportada', o.falla||'—']);
     campos.push(['Diagnóstico', o.diagnostico||'—']);
-    campos.push(['🔧 Inicio de trabajo', fmtDT(o.inicioTrabajo||o.fechaInicio)||'—']);
-    campos.push(['✅ Fin de trabajo', fmtDT(o.finTrabajo||o.fechaFin)||'—']);
     campos.push(['🔧 Horas de mano de obra', t.hayRep ? t.reparacion : '—']);   // (2026-11-14) solo trabajo efectivo, sin traslado
     campos.push(['Horómetro', o.horometro?o.horometro+' hrs':'—']);
   } else if(tipo==='revision'){
@@ -3179,10 +3175,8 @@ function _detalleOrdenCom(x, tipo, est){
   function tiemposMO(o){
     var ini = o.inicioTrabajo || o.fechaInicio, fin = o.finTrabajo || o.fechaFin; if(vacio(ini) && vacio(fin)) return '';
     var t = (typeof calcTiemposOrden === 'function') ? calcTiemposOrden(o) : null;
-    var h = '<table class="op-tt"><tr><th>Evento</th><th>Fecha</th><th>Hora</th></tr>';
-    [['Inicio del trabajo', ini], ['Fin del trabajo', fin]].forEach(function(e){ if(!vacio(e[1])) h += '<tr><td>' + e[0] + '</td><td class="op-mono">' + fF(e[1]) + '</td><td class="op-mono">' + (fH(e[1]) || '—') + '</td></tr>'; });
-    h += '<tr class="tot"><td colspan="2">Horas de mano de obra</td><td class="r op-mono">' + ((t && t.hayRep) ? t.reparacion : '—') + '</td></tr>';
-    return h + '</table>';
+    // (2026-11-16, Miguel) sin hora de inicio ni de fin: solo el total de mano de obra (tiempo efectivo)
+    return '<table class="op-tt"><tr class="tot"><td>Horas de mano de obra (tiempo efectivo de trabajo)</td><td class="r op-mono">' + ((t && t.hayRep) ? t.reparacion : '—') + '</td></tr></table>';
   }
   function eventosMant(o){
     return [['Salida del plantel', o.salidaPlantel], ['Inicio del trabajo', o.inicioTrabajo||o.fechaInicio, o.salidaPlantel?'Traslado':''],
