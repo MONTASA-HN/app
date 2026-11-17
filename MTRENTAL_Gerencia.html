@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9732bb927851';
+  var APP_VERSION='57eb8eea8191';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -15233,6 +15233,11 @@ function _cliOrdenAlCerrar(o){
     Object.keys(ks).forEach(function(k){ if(JSON.stringify(valor[k]) !== JSON.stringify(antes[k])) u[k] = valor[k] === undefined ? null : valor[k]; });
     return Object.keys(u).length ? ref.update(u) : Promise.resolve();
   }
+  // (2026-11-17) Gerencia ve solo su personal: sin departamento (los de siempre) o Mantenimiento / Logística / Taller.
+  // El resto (almacén, compras, finanzas…) lo maneja Recursos Humanos en Nexo RRHH.
+  function _deptoMio(d){ d = String(d || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return !d.trim() || /MANTENIMIENTO|LOGISTICA|TALLER/.test(d); }
+  function _esMio(e){ return !!e && _deptoMio(e.departamento); }
+  function _colMio(c){ if(!c) return false; var e = c.empleadoId && datos.empleados[c.empleadoId]; return e ? _esMio(e) : _deptoMio(c.departamento); }
   function pin(cb, titulo){ if(typeof solicitarPINAccion === 'function') solicitarPINAccion(cb, titulo || '🔒 Personal', 'Ingresa tu PIN de Gerencia'); else cb(); }
   function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
   // Personal y Accesos solo se leen con sesión de un equipo aprobado como Gerencia (reglas de la base)
@@ -15250,7 +15255,13 @@ function _cliOrdenAlCerrar(o){
     if(escuchando || !window._fbDB) return;
     if(!miUid()){ setTimeout(escuchar, 1500); return; }   // esperar la sesión del equipo
     escuchando = true;
-    window._fbDB.ref('rrhh/' + R).on('value', function(s){ var v = s.val() || {}; datos.colaboradores = v.colaboradores || {}; datos.acciones = v.acciones || {}; datos.empleados = v.empleados || {}; datos._cargado = true; datos._sinPermiso = false; publicarPlantilla(); cerrarPeriodosVencidos(); if(document.getElementById('vac-ov')) pintar(); }, sinPermiso);
+    // (2026-11-17) Por secciones: rrhh/<raíz>/priv y /docs (salarios y expedientes) son solo de Recursos Humanos
+    var _secc = { empleados: 0, colaboradores: 0, acciones: 0 };
+    Object.keys(_secc).forEach(function(k){
+      window._fbDB.ref('rrhh/' + R + '/' + k).on('value', function(s){ datos[k] = s.val() || {}; _secc[k] = 1;
+        if(_secc.empleados && _secc.colaboradores && _secc.acciones){ datos._cargado = true; datos._sinPermiso = false; publicarPlantilla(); cerrarPeriodosVencidos(); }
+        if(document.getElementById('vac-ov')) pintar(); }, sinPermiso);
+    });
     window._fbDB.ref(R + '/rrhh/plantilla').on('value', function(s){ datos.plantilla = s.val() || null; datos._plantCargada = true; publicarPlantilla(); });
   }
   // ── Pantalla ─────────────────────────────────────────────────────────────
@@ -15313,7 +15324,7 @@ function _cliOrdenAlCerrar(o){
   function pintarLista(){
     var el = document.getElementById('vac-lista'); if(!el) return;
     var q = filtroTxt.trim().toUpperCase();
-    var cols = lista(datos.colaboradores).filter(function(c){ return c.activo !== false && (!q || (c.nombres + ' ' + c.apellidos + ' ' + c.posicion).toUpperCase().indexOf(q) >= 0); })
+    var cols = lista(datos.colaboradores).filter(function(c){ return c.activo !== false && _colMio(c) && (!q || (c.nombres + ' ' + c.apellidos + ' ' + c.posicion).toUpperCase().indexOf(q) >= 0); })
       .sort(function(a, b){ return (a.nombres + a.apellidos).localeCompare(b.nombres + b.apellidos); });
     if(!cols.length){ el.innerHTML = '<div class="card" style="text-align:center;color:#667085">' + (q ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay colaboradores registrados en ' + EMPRESA + '.') + '</div>' + listaBajas(); return; }
     el.innerHTML = cols.map(function(c){
@@ -15332,7 +15343,7 @@ function _cliOrdenAlCerrar(o){
   }
   // Personas dadas de baja (ya no trabajan en la empresa): se guardan con su historial y se pueden reincorporar
   function listaBajas(){
-    var b = lista(datos.colaboradores).filter(function(c){ return c.activo === false; }).sort(function(x, y){ return String(y.fechaBaja || '').localeCompare(String(x.fechaBaja || '')); });
+    var b = lista(datos.colaboradores).filter(function(c){ return c.activo === false && _colMio(c); }).sort(function(x, y){ return String(y.fechaBaja || '').localeCompare(String(x.fechaBaja || '')); });
     if(!b.length) return '';
     return '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Dados de baja (' + b.length + ')</summary>'
       + b.map(function(c){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #e4e7ec;padding:8px 0;margin-top:8px"><div><div style="font-weight:700">' + esc(c.nombres + ' ' + c.apellidos) + '</div>'
@@ -15414,7 +15425,7 @@ function _cliOrdenAlCerrar(o){
   }
   function pintarListaEmp(){
     var el = document.getElementById('emp-lista'); if(!el) return;
-    var todos = lista(datos.empleados), act = todos.filter(function(e){ return e.activo !== false; });
+    var todos = lista(datos.empleados).filter(_esMio), act = todos.filter(function(e){ return e.activo !== false; });
     var q = filtroEmp.trim().toUpperCase(), qd = soloDigitos(filtroEmp);
     var vis = act.filter(function(e){ return !q || (String(e.nombreCompleto || '') + ' ' + String(e.cargo || '')).toUpperCase().indexOf(q) >= 0 || (qd && (soloDigitos(e.identidad).indexOf(qd) >= 0 || soloDigitos(e.telefono).indexOf(qd) >= 0)); })
       .sort(function(a, b){ return String(a.nombreCompleto || '').localeCompare(String(b.nombreCompleto || '')); });
@@ -15579,7 +15590,7 @@ function _cliOrdenAlCerrar(o){
   }
   function publicarPlantilla(){
     if(!window._fbDB || !datos._cargado || !datos._plantCargada) return;   // esperar a tener Personal y la plantilla
-    var nueva = {}; lista(datos.empleados).filter(function(e){ return e.activo !== false && e.id; }).forEach(function(e){ nueva[e.id] = entradaPlantilla(e); });
+    var nueva = {}; lista(datos.empleados).filter(function(e){ return e.activo !== false && e.id && _esMio(e); }).forEach(function(e){ nueva[e.id] = entradaPlantilla(e); });
     if(!Object.keys(nueva).length){ if(datos.plantilla) return; nueva = null; }   // nunca vaciar la lista de las órdenes por sí sola
     publicarMT(nueva);
     if(canon(nueva) === canon(datos.plantilla || null)) return;
@@ -15784,17 +15795,17 @@ function _cliOrdenAlCerrar(o){
     // ¿Esta persona ya tiene otro dispositivo de Gerencia? (por el empleado enlazado o por el mismo nombre registrado)
     var gerOtro = function(empId){ return listaAccesos().some(function(x){ return x.uid !== uid && x.estado === 'aprobado' && x.rol === 'gerencia'
       && ((empId && x.empleadoId === empId) || normNombre((x.nombre || '') + ' ' + (x.apellido || '')) === nom); }); };
-    var rolDef = (a.estado === 'aprobado' && a.rol) ? a.rol : (gerOtro(sug) ? 'gerencia' : (!sug && /Comercial/i.test(a.app || '')) ? 'consulta' : 'campo');
+    var rolDef = (a.estado === 'aprobado' && a.rol) ? a.rol : (gerOtro(sug) ? 'gerencia' : (/RRHH/i.test(a.app || '')) ? 'rrhh' : (!sug && /Comercial/i.test(a.app || '')) ? 'consulta' : 'campo');
     var AVISO_GER = 'ℹ️ Esta persona ya tiene otro dispositivo con permiso de Gerencia.';
     var w = ventana('✅ Aprobar acceso de ' + esc((a.nombre || '') + ' ' + (a.apellido || '')),
       '<div class="sub" style="margin-bottom:4px">📱 ' + esc(a.dispositivo || '') + ' · ' + esc(String(a.app || '').replace('.html', '')) + '</div>'
       + '<label>¿Quién es en Personal? <span style="font-weight:400;color:#667085">(cuenta el nombre de la ficha, no el que escribió)</span></label>'
       + '<select id="acc-emp"><option value="">— Elegir empleado —</option>' + gente.map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === sug ? ' selected' : '') + '>' + esc(p.n) + ' — ' + esc(p.c) + ' (' + EMP_NOMBRE[p.empresa] + ')</option>'; }).join('') + '</select>'
       + '<label>Área o empresa <span style="font-weight:400;color:#667085">(opcional, para quien no es empleado)</span></label><input id="acc-area" placeholder="Ej: Ventas" value="' + esc(a.area || '') + '" autocomplete="off">'
-      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef === 'campo' ? ' selected' : '') + '>Campo (técnicos, operadores)</option><option value="supervision"' + (rolDef === 'supervision' ? ' selected' : '') + '>Supervisión (reabrir, editar y borrar órdenes, SR extra, viáticos, vales y equipos)</option><option value="consulta"' + (rolDef === 'consulta' ? ' selected' : '') + '>Consulta (solo ver y descargar reportes, p. ej. Comercial)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option></select>',
+      + '<label>Permiso</label><select id="acc-rol"><option value="campo"' + (rolDef === 'campo' ? ' selected' : '') + '>Campo (técnicos, operadores)</option><option value="supervision"' + (rolDef === 'supervision' ? ' selected' : '') + '>Supervisión (reabrir, editar y borrar órdenes, SR extra, viáticos, vales y equipos)</option><option value="consulta"' + (rolDef === 'consulta' ? ' selected' : '') + '>Consulta (solo ver y descargar reportes, p. ej. Comercial)</option><option value="gerencia"' + (rolDef === 'gerencia' ? ' selected' : '') + '>Gerencia (puede aprobar teléfonos)</option><option value="rrhh"' + (rolDef === 'rrhh' ? ' selected' : '') + '>Recursos Humanos (Nexo RRHH: personal, salarios, expedientes)</option><option value="planilla"' + (rolDef === 'planilla' ? ' selected' : '') + '>Planilla — solo ver y descargar (Nexo RRHH)</option></select>',
       function(w){
         var emp = val(w, 'acc-emp'), rol = val(w, 'acc-rol');
-        if(!emp && rol !== 'consulta'){ alert('Elige a qué empleado de Personal corresponde este teléfono.\n\nSi no es empleado (por ejemplo, alguien de Comercial que solo ve reportes), elige el permiso «Consulta».'); return; }
+        if(!emp && rol !== 'consulta' && rol !== 'rrhh' && rol !== 'planilla'){ alert('Elige a qué empleado de Personal corresponde este teléfono.\n\nSi no es empleado (por ejemplo, alguien de Comercial que solo ve reportes), elige el permiso «Consulta».'); return; }
         var p = gente.find(function(x){ return x.id === emp; });
         pin(function(){
           var cambios = { estado: 'aprobado', rol: rol, empleadoId: emp || '', empleadoEmpresa: p ? p.empresa : '', area: val(w, 'acc-area'), aprobadoPor: (window._nxAcceso || {}).uid || '', aprobadoEn: Date.now() };
