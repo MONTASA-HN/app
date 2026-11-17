@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='67571284f8e5';
+  var APP_VERSION='3430b8647bca';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5554,7 +5554,7 @@ function _renderOrdenesMantSup(el, tipo){
     'EV': {icon:'📄', label:'Evaluación de Equipo',     color:'#E8811A'},
     'SP': {icon:'🔥', label:'Soldadura / Pintura',      color:'#7c3aed'},
   };
-  const info = tipo==='EST' ? {icon:'🔎', label:'Órdenes «' + _estadoMant + '»', color:'#1f3864'} : INFO[tipo];
+  const info = tipo==='EST' ? {icon:'🔎', label:(window._nxBusq ? 'Resultados de la búsqueda' : 'Órdenes «' + _estadoMant + '»'), color:'#1f3864'} : INFO[tipo];
 
   const ESTADOS_COLOR = {
     'Pendiente':               {bg:'#fff0f0',border:'#c00',txt:'#c00'},
@@ -5585,7 +5585,7 @@ function _renderOrdenesMantSup(el, tipo){
   );
 
   if(tipo==='EST'){   // (2026-10-15) buscar por estado: todas las carpetas, agrupadas por tipo
-    all = all.filter(x=>_mantEstado(x)===_estadoMant).sort((a,b)=>_EST_ORDEN.indexOf(a._t)-_EST_ORDEN.indexOf(b._t));
+    all = all.filter(x=>window._nxBusq ? _nxBusqOk(x) : _mantEstado(x)===_estadoMant).sort((a,b)=>_EST_ORDEN.indexOf(a._t)-_EST_ORDEN.indexOf(b._t));
     info.label += ' · ' + all.length;
   }
   const backBtn = `<div class="carpeta-back" onclick="_cerrarCarpetaMantSup()">
@@ -13390,6 +13390,118 @@ async function _mantCompartirAviso(equipoId){
       .observe(document.body, { childList: true, subtree: true });
   }
   if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
+})();
+
+// ══ BUSCADOR DE ÓRDENES DE TRABAJO (2026-11-17, pedido de Miguel) ══ Fecha de la orden (desde/hasta), cliente, equipo, serie y estado,
+// combinables. Muestra las mismas tarjetas de siempre (carpeta «EST» con window._nxBusq activo).
+(function(){
+  var ABRIR = '_abrirCarpetaMantSup', CERRAR = '_cerrarCarpetaMantSup', CON_LOG = false;
+  var V = window._nxBusqVals = { desde: '', hasta: '', cliente: '', equipo: '', serie: '', estado: '' };
+  function nrm(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function fl(s){ if(!s) return null; if(typeof s === 'number') { var d0 = new Date(s); d0.setHours(0,0,0,0); return d0; } var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return new Date(+m[1], m[2] - 1, +m[3]);
+    m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? new Date(+m[3], m[2] - 1, +m[1]) : null; }
+  function eqDe(x){ return (DB.equipos || []).find(function(e){ return e && e.id === x.equipoId; }) || null; }
+  function esLog(x){ return !!(x && x.tipoLogistica); }
+  function estadoDe(x){
+    if(esLog(x)){ if(x.estado === 'Cancelado') return 'Cancelado'; if(x.cerrado) return 'Completado'; return x.estado || 'Pendiente'; }
+    return (typeof _mantEstado === 'function') ? _mantEstado(x) : (x.estado || 'Pendiente');
+  }
+  // ¿La orden cumple TODOS los criterios llenos?
+  window._nxBusqOk = function(x){
+    if(!x) return false;
+    var eq = eqDe(x);
+    if(V.desde || V.hasta){
+      var f = fl(x.fecha) || fl(x.fechaInicio) || fl(x.creado) || fl(x.fechaCompletado) || fl(x.fechaCierre); if(!f) return false;
+      if(V.desde && f < fl(V.desde)) return false;
+      if(V.hasta && f > fl(V.hasta)) return false;
+    }
+    if(V.cliente){ var c = nrm([x.clienteOrden, x.cliente, x.clienteNombre, eq && (eq.clienteNombre || eq.cliente)].filter(Boolean).join(' | ')); if(c.indexOf(nrm(V.cliente)) < 0) return false; }
+    if(V.equipo){ var e = nrm([eq && eq.codigo, x.equipoTxt, x.equipoCompra, x.vehiculo, x.equipo, x.codigo, eq && eq.desc].filter(Boolean).join(' | ')); if(e.indexOf(nrm(V.equipo)) < 0) return false; }
+    if(V.serie){ var s = nrm([eq && eq.serie, x.clienteSerie, x.serie].filter(Boolean).join(' | ')); if(s.indexOf(nrm(V.serie)) < 0) return false; }
+    if(V.estado && estadoDe(x) !== V.estado) return false;
+    return true;
+  };
+  function hay(){ return !!(V.desde || V.hasta || V.cliente || V.equipo || V.serie || V.estado); }
+  function lista(){ var a = []; ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'cortinas'].forEach(function(k){ var l = DB[k]; (Array.isArray(l) ? l : Object.values(l || {})).forEach(function(x){ if(x) a.push(x); }); }); return a; }
+  function cuenta(){
+    var m = lista().filter(window._nxBusqOk).length, l = CON_LOG ? (DB.logistica || []).filter(function(o){ return o && window._nxBusqOk(o); }).length : 0;
+    return { m: m, l: l };
+  }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function opcionesDl(){
+    var cli = {}, eqs = {};
+    lista().concat(DB.logistica || []).forEach(function(x){ if(!x) return; [x.clienteOrden, x.cliente, x.clienteNombre].forEach(function(c){ c = String(c || '').trim(); if(c) cli[c.toUpperCase()] = 1; }); });
+    (DB.equipos || []).forEach(function(e){ if(!e) return; if(e.codigo) eqs[e.codigo] = 1; var c = String(e.clienteNombre || e.cliente || '').trim(); if(c) cli[c.toUpperCase()] = 1; });
+    return { cli: Object.keys(cli).sort(), eqs: Object.keys(eqs).sort(function(a, b){ return a.localeCompare(b, undefined, { numeric: true }); }) };
+  }
+  function panel(donde){
+    var o = opcionesDl(), inp = 'width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #c9d1dc;border-radius:8px;font-size:13.5px;background:#fff';
+    var lab = 'display:block;font-size:11px;font-weight:700;color:#55607a;text-transform:uppercase;letter-spacing:.3px;margin:0 0 3px';
+    var c = cuenta(), res = hay() ? ('<div style="margin-top:10px;font-size:12.5px;color:#1f3864;font-weight:700">Coinciden: ' + c.m + ' de mantenimiento' + (CON_LOG ? ' · ' + c.l + ' de logística' : '')
+      + (CON_LOG ? ' <button type="button" data-ir="' + (donde === 'log' ? 'mant' : 'log') + '" style="margin-left:6px;padding:5px 10px;border:1px solid #1f3864;border-radius:999px;background:#fff;color:#1f3864;font-weight:700;font-size:12px;cursor:pointer">Ver ' + (donde === 'log' ? 'mantenimiento' : 'logística') + ' →</button>' : '') + '</div>') : '';
+    return '<details class="nx-busq" data-donde="' + donde + '"' + (hay() ? ' open' : '') + ' style="background:#fff;border:1px solid #d6dde8;border-radius:12px;padding:10px 12px;margin-bottom:12px">'
+      + '<summary style="cursor:pointer;font-weight:800;color:#1f3864;font-size:14px">🔎 Buscar órdenes de trabajo' + (hay() ? ' <span style="font-size:11.5px;font-weight:700;color:#b45309">(filtro activo)</span>' : '') + '</summary>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px">'
+      + '<div><label style="' + lab + '">📅 Desde</label><input type="date" data-k="desde" value="' + esc(V.desde) + '" style="' + inp + '"></div>'
+      + '<div><label style="' + lab + '">📅 Hasta</label><input type="date" data-k="hasta" value="' + esc(V.hasta) + '" style="' + inp + '"></div>'
+      + '<div><label style="' + lab + '">🏢 Cliente</label><input data-k="cliente" list="nx-busq-cli-' + donde + '" value="' + esc(V.cliente) + '" placeholder="Escribe el cliente" style="' + inp + '"><datalist id="nx-busq-cli-' + donde + '">' + o.cli.map(function(x){ return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></div>'
+      + '<div><label style="' + lab + '">🚜 Equipo</label><input data-k="equipo" list="nx-busq-eq-' + donde + '" value="' + esc(V.equipo) + '" placeholder="Ej: MT-130" style="' + inp + '"><datalist id="nx-busq-eq-' + donde + '">' + o.eqs.map(function(x){ return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></div>'
+      + '<div><label style="' + lab + '">🔢 N.º de serie</label><input data-k="serie" value="' + esc(V.serie) + '" placeholder="Serie o parte de ella" style="' + inp + '"></div>'
+      + '<div><label style="' + lab + '">📌 Estado</label><select data-k="estado" style="' + inp + '"><option value="">Todos</option>'
+      + ['Pendiente', 'En proceso', 'En pausa', 'En espera de repuestos', 'Completado', 'Cancelado'].map(function(e){ return '<option' + (V.estado === e ? ' selected' : '') + '>' + e + '</option>'; }).join('') + '</select></div>'
+      + '</div><div style="display:flex;gap:8px;margin-top:10px"><button type="button" data-buscar="1" style="flex:2;padding:10px;border:none;border-radius:8px;background:#1f3864;color:#fff;font-weight:800;cursor:pointer">🔎 Buscar</button>'
+      + '<button type="button" data-limpiar="1" style="flex:1;padding:10px;border:1px solid #c9d1dc;border-radius:8px;background:#fff;color:#333;font-weight:700;cursor:pointer">Limpiar</button></div>'
+      + '<div style="font-size:11px;color:#888;margin-top:6px">Llena uno o varios campos. La fecha es la fecha de la orden.</div>' + res + '</details>';
+  }
+  function pintar(){
+    [['mant', 'historial-list'], ['log', 'logistica-list'], ['ini', 'sup-dashboard-content']].forEach(function(p){   // ini = inicio de Supervisión
+      if(p[0] === 'log' && !CON_LOG) return;
+      var lista = document.getElementById(p[1]); if(!lista) return;
+      var viejo = document.querySelector('.nx-busq[data-donde="' + p[0] + '"]');
+      var abierto = viejo ? viejo.open : hay();
+      var t = document.createElement('div'); t.innerHTML = panel(p[0]); var nuevo = t.firstChild; nuevo.open = abierto || hay();
+      if(viejo) viejo.replaceWith(nuevo); else lista.parentNode.insertBefore(nuevo, lista);
+    });
+  }
+  function leer(caja){ caja.querySelectorAll('[data-k]').forEach(function(i){ V[i.getAttribute('data-k')] = i.value.trim(); }); }
+  function irHistorial(){   // (Supervisión) del inicio a la lista de órdenes
+    try{ var nb = Array.prototype.find.call(document.querySelectorAll('.nav-btn'), function(b){ return /historial/.test(b.getAttribute('onclick') || ''); }) || document.querySelector('.nav-btn');
+      if(typeof supShowTab === 'function') supShowTab('historial', nb); else if(typeof showTab === 'function') showTab('historial', nb); }catch(e){}
+  }
+  function abrirMant(){ if(typeof window[ABRIR] === 'function'){ _estadoMant = '(búsqueda)'; window._nxBusq = true; window[ABRIR]('EST'); } }
+  function abrirLog(){ if(CON_LOG && typeof _abrirCarpetaLog === 'function'){ _estadoLog = '(búsqueda)'; window._nxBusq = true; _abrirCarpetaLog('EST'); } }
+  document.addEventListener('click', function(ev){
+    var caja = ev.target.closest && ev.target.closest('.nx-busq'); if(!caja) return;
+    var donde = caja.getAttribute('data-donde');
+    if(ev.target.closest('[data-buscar]')){
+      leer(caja);
+      if(V.desde && V.hasta && V.desde > V.hasta){ alert('La fecha «Desde» es posterior a «Hasta».'); return; }
+      if(!hay()){ alert('Llena al menos un campo para buscar.'); return; }
+      if(donde === 'log') abrirLog();
+      else { if(donde === 'ini') irHistorial(); abrirMant(); }
+      pintar(); return;
+    }
+    if(ev.target.closest('[data-limpiar]')){
+      Object.keys(V).forEach(function(k){ V[k] = ''; }); window._nxBusq = false;
+      if(donde === 'log'){ if(typeof _cerrarCarpetaLog === 'function') _cerrarCarpetaLog(); } else if(typeof window[CERRAR] === 'function') window[CERRAR]();
+      pintar(); return;
+    }
+    var ir = ev.target.closest('[data-ir]');
+    if(ir){
+      if(ir.getAttribute('data-ir') === 'log'){ var b = document.querySelector('[onclick^="showTab(\'logistica\'"]'); if(b) b.click(); abrirLog(); }
+      else { var b2 = document.querySelector('[onclick^="showTab(\'historial\'"]'); if(b2) b2.click(); abrirMant(); }
+      pintar();
+    }
+  });
+  // al volver a las carpetas, la búsqueda se apaga (el filtro queda escrito por si se quiere repetir)
+  [CERRAR, '_cerrarCarpetaLog'].forEach(function(fn){
+    var o = window[fn]; if(typeof o !== 'function') return;
+    window[fn] = function(){ window._nxBusq = false; var r = o.apply(this, arguments); setTimeout(pintar, 0); return r; };
+  });
+  // la búsqueda por estado de siempre no usa estos filtros
+  ['_estBuscarMant', '_estBuscarLog'].forEach(function(fn){ var o = window[fn]; if(typeof o !== 'function') return; window[fn] = function(){ window._nxBusq = false; return o.apply(this, arguments); }; });
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(pintar, 500); }); else setTimeout(pintar, 500);
+  setInterval(function(){ if(!document.querySelector('.nx-busq')) pintar(); }, 3000);
 })();
 </script>
 </body>
