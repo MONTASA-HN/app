@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e89517de7ebf';
+  var APP_VERSION='6f74b5cb1f2a';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -326,7 +326,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
     EMPRESAS.forEach(function(E){
-      ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos'].forEach(function(k){
+      ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config'].forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
           function(err){ console.warn('rrhh', E.raiz, k, err && err.code);
             if(k === 'empleados'){ permiso = 'base'; pintar(); }
@@ -416,7 +416,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div class="sub">' + nomEmp(raiz) + (e.codigo ? ' · Código <b>' + esc(e.codigo) + '</b>' : '') + (ing ? ' · Ingreso ' + fmt(ing) + ' (' + antig(ing) + ')' : '') + '</div>'
       + '<div>' + (e.activo === false ? '<span class="tag r">Dado de baja el ' + fmt(e.fechaBaja) + '</span>' : '<span class="tag v">Activo</span>')
       + otras.map(function(o){ return '<span class="tag" style="cursor:pointer" data-a="abrir" data-r="' + o.raiz + '" data-id="' + esc(o.e.id) + '">↗ También en ' + nomEmp(o.raiz) + (o.e.activo === false ? ' (baja)' : '') + '</span>'; }).join('') + '</div></div></div>'
-      + '<div class="acc"><button class="bt bp" data-a="editar">✏️ Editar ficha</button><button class="bt" data-a="foto">📷 Foto</button><button class="bt" data-a="salario">💵 Salario</button>'
+      + '<div class="acc"><button class="bt bp" data-a="editar">✏️ Editar ficha</button><button class="bt" data-a="foto">📷 Foto</button><button class="bt" data-a="salario">💵 Salario</button><button class="bt" data-a="constancia">📄 Constancias</button>'
       + (e.activo === false ? '<button class="bt bv" data-a="reingreso">↩️ Reingreso</button>' : '<button class="bt" data-a="otra">➕ Agregar en otra empresa</button><button class="bt br" data-a="salida">🚪 Registrar salida</button>') + '</div></div>';
     h += '<div class="card"><h3 style="margin-top:0">Datos personales</h3><div class="kv">'
       + kv('Identidad', esc(e.identidad)) + kv('Fecha de nacimiento', e.fechaNacimiento ? fmt(e.fechaNacimiento) + ' (' + aniosEntre(aF(e.fechaNacimiento), new Date()) + ' años)' : '') + kv('Estado civil', esc(e.estadoCivil)) + kv('Hijos', e.hijos === 'si' ? 'Sí' : e.hijos === 'no' ? 'No' : '')
@@ -428,6 +428,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
     // historial
     var hist = lista(e.historial).map(function(x){ return { f: x.fecha, t: x.texto }; })
+      .concat(lista(p.constancias).map(function(x){ return { f: x.fecha, t: '📄 ' + (TIPOS_C[x.tipo] || 'Constancia') + ' generada' + (x.dirigido ? ' — ' + esc(x.dirigido) : '') }; }))
       .concat(lista(p.historial).map(function(x){ return { f: x.vigencia, t: '💵 Salario ' + (x.anterior != null ? lps(x.anterior) + ' → ' : '') + '<b>' + lps(x.nuevo) + '</b> (vigente desde ' + fmt(x.vigencia) + ')' + (x.nota ? ' — ' + esc(x.nota) : '') }; }))
       .sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
     h += '<div class="card"><h3 style="margin-top:0">🗂 Historial</h3>' + (hist.length ? hist.map(function(x){ return '<div class="sub" style="padding:6px 0;border-bottom:1px solid #f0f2f5;color:#1d2433"><b style="color:#1f3864">' + fmt(x.f) + '</b> · ' + x.t + '</div>'; }).join('') : '<div class="sub">Sin cambios registrados todavía.</div>') + '</div>';
@@ -477,6 +478,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         + '<div class="kv" style="margin-top:6px"><div><span>Colaboradores activos</span><b style="font-size:20px">' + act.length + '</b></div><div><span>Salidas en ' + anio + '</span><b style="font-size:20px">' + bajas.length + '</b></div>'
         + '<div><span>Índice de rotación ' + anio + ' (meta ≤ 5%)</span><b style="font-size:20px;color:' + (rot <= 5 ? '#1a7f37' : '#b42318') + '">' + rot + '%</b></div>'
         + '<div><span>Expedientes completos (meta 100%)</span><b style="font-size:20px;color:' + (comp === act.length ? '#1a7f37' : '#b45309') + '">' + (act.length ? Math.round(comp / act.length * 100) : 0) + '%</b> <span style="display:inline;text-transform:none">(' + comp + ' de ' + act.length + ')</span></div></div>'
+        + '<div class="acc"><button class="bt" data-a="ajustes" data-r="' + r + '">⚙️ Datos para constancias</button></div>'
         + '<h3>Por departamento</h3>' + Object.keys(porD).sort().map(function(d){ return '<div class="sub" style="display:flex;justify-content:space-between;border-bottom:1px solid #f0f2f5;padding:5px 0;color:#1d2433"><span>' + esc(d) + '</span><b>' + porD[d] + '</b></div>'; }).join('') + '</div>';
     });
     h += '</div><div class="sub">Los demás indicadores (ausentismo, puntualidad, capacitación, evaluaciones, vacantes, bienestar) se agregan con los módulos de las siguientes fases.</div>';
@@ -503,6 +505,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<label>Nombre completo *</label><input id="f-nom" value="' + esc(b.nombreCompleto) + '">'
       + '<div class="g2"><div><label>Identidad *</label><input id="f-id" inputmode="numeric" placeholder="0000-0000-00000" value="' + esc(b.identidad) + '"></div><div><label>Fecha de nacimiento</label><input id="f-fn" type="date" value="' + esc(b.fechaNacimiento) + '"></div></div>'
       + '<div class="g2"><div><label>Estado civil</label><select id="f-ec">' + opts(['Soltero(a)', 'Casado(a)', 'Unión libre', 'Divorciado(a)', 'Viudo(a)'], b.estadoCivil, '—') + '</select></div><div><label>¿Tiene hijos?</label><select id="f-hij"><option value="">—</option><option value="si"' + (b.hijos === 'si' ? ' selected' : '') + '>Sí</option><option value="no"' + (b.hijos === 'no' ? ' selected' : '') + '>No</option></select></div></div>'
+      + '<div class="g2"><div><label>Sexo</label><select id="f-sexo"><option value="">—</option><option value="o"' + (b.trato === 'o' ? ' selected' : '') + '>Masculino</option><option value="a"' + (b.trato === 'a' ? ' selected' : '') + '>Femenino</option></select></div><div></div></div>'
       + '<div class="g2"><div><label>Teléfono</label><input id="f-tel" type="tel" value="' + esc(b.telefono) + '"></div><div><label>Correo</label><input id="f-mail" type="email" value="' + esc(b.correo) + '"></div></div>'
       + '<label>Dirección / ubicación</label><textarea id="f-dir" rows="2">' + esc(b.direccion) + '</textarea>'
       + '<div class="g2"><div><label>Nivel educativo</label><select id="f-niv">' + opts(['Primaria', 'Secundaria / bachillerato', 'Técnico', 'Universitario', 'Postgrado'], b.nivelEducativo, '—') + '</select></div><div><label>Título</label><input id="f-tit" value="' + esc(b.titulo) + '"></div></div>'
@@ -522,7 +525,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         telefono: fmtTel(v(w, 'f-tel')), correo: v(w, 'f-mail'), direccion: v(w, 'f-dir'), nivelEducativo: v(w, 'f-niv'), titulo: v(w, 'f-tit'),
         contactoEmergencia: { nombre: v(w, 'f-cn'), parentesco: v(w, 'f-cp'), telefono: fmtTel(v(w, 'f-ct')) },
         codigo: v(w, 'f-cod'), fechaIngreso: v(w, 'f-ing'), cargo: v(w, 'f-cargo'), departamento: v(w, 'f-dep'), horario: v(w, 'f-hor'),
-        contrato: { tipo: v(w, 'f-ctt'), vence: v(w, 'f-ctv') }, formaPago: v(w, 'f-fp'), banco: v(w, 'f-ban'), tipoCuenta: v(w, 'f-tc'), cuentaBancaria: soloDig(v(w, 'f-cta')) };
+        contrato: { tipo: v(w, 'f-ctt'), vence: v(w, 'f-ctv') }, formaPago: v(w, 'f-fp'), banco: v(w, 'f-ban'), tipoCuenta: v(w, 'f-tc'), cuentaBancaria: soloDig(v(w, 'f-cta')), trato: v(w, 'f-sexo') };
       var falta = [];
       if(!d.nombreCompleto) falta.push('nombre completo');
       if(soloDig(d.identidad).length !== 13) falta.push('identidad (13 dígitos)');
@@ -584,7 +587,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var cambios = {}; cambios['rrhh/' + raiz + '/empleados/' + e.id] = reg;
       var col = colDe(raiz, e); if(col && col.activo !== false) cambios['rrhh/' + raiz + '/colaboradores/' + col.id] = Object.assign({}, col, { activo: false, fechaBaja: f, motivoBaja: reg.motivoBaja, actualizado: Date.now() });
       var salAct = salarioDe(raiz, e.id); if(salAct != null) cambios['rrhh/' + raiz + '/priv/' + e.id + '/salarioSalida'] = salAct;
-      db().ref().update(cambios).then(function(){ w.remove(); aviso('Salida registrada ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      db().ref().update(cambios).then(function(){ w.remove(); aviso('Salida registrada ✓');
+        if(confirm('¿Generar ahora la constancia de finalización de relación laboral de ' + e.nombreCompleto + '?')) setTimeout(function(){ var e2 = D[raiz].empleados[e.id] || reg; formConstancia(raiz, e2, 'finalizacion'); }, 600); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '🚪 Registrar salida');
   }
   function reingreso(raiz, e){
@@ -680,6 +684,132 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     }).catch(function(er){ aviso('No se pudo exportar: ' + er.message, true); });
   }
 
+  // ══ CONSTANCIAS AUTOMÁTICAS (2026-11-17, formatos de Elia) ══ Sencilla (IHSS), con deducciones y de finalización de relación laboral.
+  // PDF carta sobre el membrete de Montasa (img/membrete_montasa.jpg), texto igual a los formatos de RRHH, listo para firmar y sellar.
+  // Ajustes por empresa en rrhh/<raíz>/config (razón social, ciudad, firmante). Cada constancia queda anotada en priv/<id>/constancias.
+  var RAZON = { montasa: 'MT RENTAL & SERVICE S. DE R.L.', monhaco: 'MONHACO S.A. DE C.V.' };
+  var FIRMA = { nombre: 'Licda. Elia López', cargo: 'Gerente Administrativa', correo: 'desarrollo.organizacional@montasa.com' };
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  var TIPOS_C = { sencilla: 'Constancia sencilla (IHSS)', deducciones: 'Constancia con salario y deducciones', finalizacion: 'Constancia de finalización de relación laboral' };
+  function cfg(raiz){ var c = D[raiz].config || {}; return { razon: c.razon || RAZON[raiz], ciudad: c.ciudad || 'San Pedro Sula', firmaNombre: c.firmaNombre || FIRMA.nombre, firmaCargo: c.firmaCargo || FIRMA.cargo, firmaCorreo: c.firmaCorreo != null ? c.firmaCorreo : FIRMA.correo }; }
+  var UNI = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+    'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+  var DEC = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  var CEN = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+  function enLetras(n){
+    n = Math.floor(n); if(n === 0) return 'cero'; if(n === 100) return 'cien';
+    if(n >= 1000){ var m = Math.floor(n / 1000), r = n % 1000; return (m === 1 ? 'mil' : enLetras(m) + ' mil') + (r ? ' ' + enLetras(r) : ''); }
+    if(n >= 100){ var r2 = n % 100; return CEN[Math.floor(n / 100)] + (r2 ? ' ' + enLetras(r2) : ''); }
+    if(n < 30) return UNI[n];
+    return DEC[Math.floor(n / 10)] + (n % 10 ? ' y ' + UNI[n % 10] : '');
+  }
+  function diaLetras(d){ return d === 1 ? 'un' : d === 21 ? 'veintiún' : enLetras(d); }
+  function fLarga(s){ var d = aF(s); return d ? String(d.getDate()).padStart(2, '0') + ' de ' + MESES[d.getMonth()] + ' del ' + d.getFullYear() : '—'; }
+  function cargar(src, ok){ return new Promise(function(res, rej){ if(ok()) return res(); var s = document.createElement('script'); s.src = src; s.onload = function(){ res(); }; s.onerror = function(){ rej(new Error('sin conexión para generar el PDF')); }; document.head.appendChild(s); }); }
+  var _membrete = null;
+  function membrete(){
+    if(_membrete) return Promise.resolve(_membrete);
+    return fetch('img/membrete_montasa.jpg', { cache: 'force-cache' }).then(function(r){ if(!r.ok) throw new Error('no se encontró el membrete'); return r.blob(); })
+      .then(function(b){ return new Promise(function(ok){ var fr = new FileReader(); fr.onload = function(){ _membrete = fr.result; ok(_membrete); }; fr.readAsDataURL(b); }); });
+  }
+  // Párrafo con partes en negrita, justificado (la última línea a la izquierda). partes = [[texto, negrita], …]. Devuelve la y final.
+  function parrafo(pdf, partes, x, y, ancho, alto){
+    var pal = []; partes.forEach(function(p){ String(p[0]).split(/( +)/).forEach(function(t){ if(t === '') return; if(/^ +$/.test(t)){ if(pal.length) pal[pal.length - 1].esp = true; return; } pal.push({ t: t, b: !!p[1], esp: false }); }); });
+    function w(p){ pdf.setFont('times', p.b ? 'bold' : 'normal'); return pdf.getTextWidth(p.t); }
+    var esp = (function(){ pdf.setFont('times', 'normal'); return pdf.getTextWidth(' '); })();
+    var lineas = [], ac = [], an = 0;
+    pal.forEach(function(p){ var pw = w(p), extra = ac.length && ac[ac.length - 1].esp ? esp : 0;
+      if(ac.length && an + extra + pw > ancho){ lineas.push({ ps: ac, an: an }); ac = []; an = 0; extra = 0; }
+      ac.push(p); an += extra + pw; });
+    if(ac.length) lineas.push({ ps: ac, an: an, ultima: true });
+    lineas.forEach(function(L){
+      var huecos = L.ps.filter(function(p, i){ return p.esp && i < L.ps.length - 1; }).length, sobra = L.ultima ? 0 : (ancho - L.an), cx = x;
+      L.ps.forEach(function(p, i){ pdf.setFont('times', p.b ? 'bold' : 'normal'); pdf.text(p.t, cx, y); cx += pdf.getTextWidth(p.t); if(p.esp && i < L.ps.length - 1) cx += esp + (huecos ? sobra / huecos : 0); });
+      y += alto; });
+    return y;
+  }
+  function generarConstancia(raiz, e, o){
+    var c = cfg(raiz), f = aF(o.fecha) || new Date(), tr = o.trato || 'el señor', fem = /^la /.test(tr), inter = fem ? 'la interesada' : 'el interesado';
+    var ing = ingresoDe(raiz, e), ciudad = o.ciudad || c.ciudad;
+    return cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }).then(membrete).then(function(mb){
+      var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'letter' }), W = 215.9, H = 279.4, X = 35, AN = W - X - 25, LH = 7.2;
+      pdf.addImage(mb, 'JPEG', 0, 0, W, H);
+      pdf.setTextColor(20, 20, 20); pdf.setFont('times', 'bold'); pdf.setFontSize(17); pdf.text('CONSTANCIA', W / 2 + 6, 64, { align: 'center' });
+      pdf.setFontSize(11.5); var y = 80;
+      if(o.dirigido){ pdf.setFont('times', 'normal'); pdf.text(o.dirigido, X, y); y += LH * 1.6; }
+      var nom = String(e.nombreCompleto || '').toUpperCase(), cargo = e.cargo || '', depto = String(e.departamento || '').replace(/\s*\(.*\)$/, '');
+      var fecha = [[ciudad + ', a los '], [diaLetras(f.getDate()), true], [' días del mes de '], [MESES[f.getMonth()], true], [' del año '], [o.tipo === 'deducciones' ? enLetras(f.getFullYear()) : String(f.getFullYear()), true], ['.']];
+      if(o.tipo === 'sencilla'){
+        y = parrafo(pdf, [['Por este medio la empresa '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con número de identidad ' + (e.identidad || '') + ', labora para la empresa desde el '], [fLarga(ing), true],
+          [' hasta la actualidad, desempeñándose como '], [cargo, true], [', en el departamento de '], [depto, true], ['.']], X, y, AN, LH);
+        y += LH * 0.8;
+        y = parrafo(pdf, [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
+      } else if(o.tipo === 'deducciones'){
+        y = parrafo(pdf, [['Por este medio, la sociedad Mercantil denominada '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con DNI: ' + (e.identidad || '') + ', labora para esta empresa, desde el '], [fLarga(ing), true],
+          [', hasta la actualidad, desempeñándose con el cargo de '], [cargo, true], [', en el departamento de '], [depto, true], [', devengando un salario mensual de '], ['L. ' + Number(o.salario || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true], ['.']], X, y, AN, LH);
+        var ded = (o.deducciones || []).filter(function(d){ return d.concepto && parseFloat(d.monto) > 0; });
+        if(ded.length){ y += LH * 0.6; pdf.setFont('times', 'normal'); pdf.text('Aplicando las siguientes deducciones:', X, y); y += LH;
+          ded.forEach(function(d){ pdf.setFont('times', 'bold'); pdf.text(String(d.concepto) + ':', X + 4, y); pdf.text('L. ' + Number(d.monto).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), X + 70, y, { align: 'right' }); y += LH; }); }
+        y += LH * 0.6;
+        y = parrafo(pdf, [[(fem ? 'Y para los fines que a la interesada' : 'Y para los fines que al interesado') + ' convengan, se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
+      } else {
+        y = parrafo(pdf, [['Por este medio la empresa '], [c.razon, true], [' hace constar que ' + tr + ' '], [nom, true], [' con número de Identidad ' + (e.identidad || '') + ' laboró desde el '], [fLarga(ing), true], [' hasta el '], [fLarga(o.salida), true],
+          [', desempeñándose como '], [String(cargo).toUpperCase(), true], ['.']], X, y, AN, LH);
+        y += LH * 0.8;
+        y = parrafo(pdf, [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
+      }
+      y += LH * 1.4; pdf.setFont('times', 'normal'); pdf.text('Atentamente,', X, y);
+      var fy = Math.max(y + 34, 196); fy = Math.min(fy, 226);
+      pdf.setDrawColor(40, 40, 40); pdf.setLineWidth(0.3); pdf.line(X, fy, X + 62, fy);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.text(c.firmaNombre, X, fy + 5.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5); pdf.text(c.firmaCargo, X, fy + 10.5); if(c.firmaCorreo) pdf.text(c.firmaCorreo, X, fy + 15.5);
+      var nombre = 'Constancia_' + ({ sencilla: 'IHSS', deducciones: 'con_deducciones', finalizacion: 'finalizacion' })[o.tipo] + '_' + String(e.nombreCompleto || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]+/g, '_') + '_' + iso(f) + '.pdf';
+      pdf.save(nombre);
+      return db().ref('rrhh/' + raiz + '/priv/' + e.id + '/constancias/' + nuevoId('c_')).set({ tipo: o.tipo, fecha: iso(f), ts: Date.now(), dirigido: o.dirigido || '', salario: o.tipo === 'deducciones' ? (o.salario || null) : null, deducciones: o.tipo === 'deducciones' ? (o.deducciones || null) : null }).catch(function(){}).then(function(){ return nombre; });
+    });
+  }
+  function formConstancia(raiz, e, tipoIni){
+    var p = privDe(raiz, e.id), salAct = salarioDe(raiz, e.id), sal = e.salida || {}, ult = lista(p.constancias).filter(function(x){ return x.tipo === 'deducciones' && x.deducciones; }).sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); })[0];
+    var dedIni = (ult && ult.deducciones) || [{ concepto: 'IHSS', monto: '' }, { concepto: 'RAP', monto: '' }, { concepto: 'ISR', monto: '' }];
+    while(dedIni.length < 5) dedIni.push({ concepto: '', monto: '' });
+    var trIni = e.trato === 'a' ? 'la señora' : 'el señor';
+    var tipos = Object.keys(TIPOS_C).filter(function(t){ return t !== 'finalizacion' || e.salida || e.activo === false; });
+    if(tipos.indexOf(tipoIni) < 0) tipoIni = tipos[0];
+    var w = ventana('📄 Constancia de ' + esc(e.nombreCompleto), '<div class="sub" style="margin-top:6px">' + nomEmp(raiz) + ' · ' + esc(e.cargo || '') + ' · ingreso ' + fmt(ingresoDe(raiz, e)) + '</div>'
+      + '<label>Tipo de constancia</label><select id="k-t">' + tipos.map(function(t){ return '<option value="' + t + '"' + (t === tipoIni ? ' selected' : '') + '>' + TIPOS_C[t] + '</option>'; }).join('') + '</select>'
+      + '<div class="g2"><div><label>Trato</label><select id="k-tr">' + opts(['el señor', 'la señora', 'el joven', 'la joven', 'el Sr.', 'la Sra.'], trIni) + '</select></div><div><label>Fecha de la constancia</label><input id="k-f" type="date" value="' + hoy() + '"></div></div>'
+      + '<div class="g2"><div><label>Ciudad</label><input id="k-c" value="' + esc(cfg(raiz).ciudad) + '"></div><div id="k-dirw"><label>Dirigida a (opcional)</label><input id="k-dir" value=""></div></div>'
+      + '<div id="k-salw"><label>Fecha de salida</label><input id="k-sal" type="date" value="' + esc(sal.fecha || e.fechaBaja || '') + '"></div>'
+      + '<div id="k-dedw"><label>Salario mensual (L)</label><input id="k-s" type="number" step="0.01" value="' + (salAct != null ? salAct : '') + '">'
+      + '<label>Deducciones</label>' + dedIni.map(function(d, i){ return '<div class="g2" style="margin-bottom:6px"><input data-dc="' + i + '" placeholder="Concepto (ej. IHSS)" value="' + esc(d.concepto) + '"><input data-dm="' + i + '" type="number" step="0.01" placeholder="Monto L" value="' + esc(d.monto) + '"></div>'; }).join('')
+      + '<div class="sub">Solo salen las deducciones con concepto y monto.</div></div>', function(w){
+      var t = v(w, 'k-t'), o = { tipo: t, trato: v(w, 'k-tr'), fecha: v(w, 'k-f'), ciudad: v(w, 'k-c'), dirigido: v(w, 'k-dir') };
+      if(!aF(o.fecha)){ alert('Escribe la fecha de la constancia.'); return; }
+      if(!aF(ingresoDe(raiz, e))){ alert('La ficha no tiene fecha de ingreso. Complétala primero con «✏️ Editar ficha».'); return; }
+      if(soloDig(e.identidad).length !== 13){ alert('La ficha no tiene número de identidad completo.'); return; }
+      if(!e.cargo || !e.departamento){ alert('La ficha no tiene puesto o departamento. Complétala primero con «✏️ Editar ficha».'); return; }
+      if(t === 'finalizacion'){ o.salida = v(w, 'k-sal'); if(!aF(o.salida)){ alert('Escribe la fecha de salida.'); return; } }
+      if(t === 'deducciones'){ o.salario = parseFloat(v(w, 'k-s')); if(!(o.salario > 0)){ alert('Escribe el salario mensual.'); return; }
+        o.deducciones = [0, 1, 2, 3, 4].map(function(i){ return { concepto: String(w.querySelector('[data-dc="' + i + '"]').value || '').trim(), monto: String(w.querySelector('[data-dm="' + i + '"]').value || '').trim() }; }); }
+      var bt = w.querySelector('[data-ok]'); bt.disabled = true; bt.textContent = 'Generando…';
+      generarConstancia(raiz, e, o).then(function(n){ w.remove(); aviso('📄 Constancia descargada: ' + n); }).catch(function(er){ bt.disabled = false; bt.textContent = '📄 Generar PDF'; aviso('No se generó: ' + er.message, true); });
+    }, '📄 Generar PDF');
+    function mostrar(){ var t = v(w, 'k-t'); w.querySelector('#k-salw').style.display = t === 'finalizacion' ? '' : 'none'; w.querySelector('#k-dedw').style.display = t === 'deducciones' ? '' : 'none';
+      var d = w.querySelector('#k-dir'); if(t === 'sencilla' && !d._tocado) d.value = 'Estimados Sres. IHSS'; else if(!d._tocado) d.value = ''; }
+    w.querySelector('#k-dir').addEventListener('input', function(){ this._tocado = true; });
+    w.querySelector('#k-t').addEventListener('change', mostrar); mostrar();
+  }
+  function formAjustes(raiz){
+    var c = cfg(raiz);
+    ventana('⚙️ Datos para constancias · ' + nomEmp(raiz), '<label>Razón social (como sale en las constancias)</label><input id="a-r" value="' + esc(c.razon) + '">'
+      + '<label>Ciudad por defecto</label><input id="a-c" value="' + esc(c.ciudad) + '">'
+      + '<h4>Firma</h4><label>Nombre</label><input id="a-n" value="' + esc(c.firmaNombre) + '"><label>Cargo</label><input id="a-g" value="' + esc(c.firmaCargo) + '"><label>Correo</label><input id="a-m" value="' + esc(c.firmaCorreo) + '">', function(w){
+      var d = { razon: v(w, 'a-r'), ciudad: v(w, 'a-c'), firmaNombre: v(w, 'a-n'), firmaCargo: v(w, 'a-g'), firmaCorreo: v(w, 'a-m'), actualizado: Date.now() };
+      if(!d.razon || !d.firmaNombre){ alert('Escribe la razón social y el nombre de quien firma.'); return; }
+      db().ref('rrhh/' + raiz + '/config').update(d).then(function(){ w.remove(); aviso('Datos guardados ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+    });
+  }
+
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
@@ -691,10 +821,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'nuevo') return formEmpleado(ui.emp === 'todas' ? 'montasa' : ui.emp, null);
     if(a === 'excel') return excel();
     if(a === 'bajas'){ ui.bajas = !ui.bajas; pintar(); return; }
+    if(a === 'ajustes') return formAjustes(t.getAttribute('data-r'));
     var f = ui.ficha, e = f && D[f.raiz].empleados[f.id]; if(!e) return;
     if(a === 'editar') return formEmpleado(f.raiz, e);
     if(a === 'foto') return subirFoto(f.raiz, e);
     if(a === 'salario') return formSalario(f.raiz, e);
+    if(a === 'constancia') return formConstancia(f.raiz, e);
     if(a === 'salida') return formSalida(f.raiz, e);
     if(a === 'reingreso') return reingreso(f.raiz, e);
     if(a === 'otra') return otraEmpresa(f.raiz, e);
