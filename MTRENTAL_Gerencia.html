@@ -235,7 +235,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='62425c7c948e';
+  var APP_VERSION='3f9d799b5ea1';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -17956,6 +17956,64 @@ async function _mantCompartirAviso(equipoId){
       .observe(document.body, { childList: true, subtree: true });
   }
   if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
+})();
+
+// ══ RENTAS POR VENCER EN EL DASHBOARD (2026-11-17, pedido de Miguel) ══ Doble protección, INDEPENDIENTE de Notificaciones:
+// toda entrega/renta cerrada con días de renta que vence en los próximos 15 días (o ya venció) y que no tiene un retiro COMPLETADO
+// ni otra entrega/renta del mismo equipo DESPUÉS (número de orden mayor). No se oculta por retiros pendientes ni avisos cancelados:
+// se muestran con su nota.
+(function(){
+  function fl(s){ var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], m[2] - 1, +m[3]) : null; }
+  function num(c){ return parseInt(String(c || '').split('-').pop(), 10); }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function f2(d){ return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); }
+  window._dashRentasPorVencer = function(){
+    var L = (DB.logistica || []).filter(Boolean), hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    var lim = new Date(hoy); lim.setDate(lim.getDate() + 15);
+    var out = [];
+    L.forEach(function(o){
+      if(['entrega', 'renta'].indexOf(o.tipoLogistica) < 0 || !o.cerrado || o.estado === 'Cancelado') return;
+      var dias = parseInt(o.diasRenta) || 0, ini = fl(o.inicioRenta); if(!dias || !ini) return;
+      var v = new Date(ini); v.setDate(v.getDate() + dias); if(v > lim) return;
+      var n = num(o.correlativo);
+      var despues = L.filter(function(r){ return r.equipoId && r.equipoId === o.equipoId && r.estado !== 'Cancelado' && !isNaN(n) && num(r.correlativo) > n; });
+      if(despues.some(function(r){ return r.tipoLogistica === 'retiro' && (r.cerrado || r.estado === 'Completado'); })) return;
+      if(despues.some(function(r){ return r.tipoLogistica === 'entrega' || r.tipoLogistica === 'renta'; })) return;
+      var retP = despues.find(function(r){ return r.tipoLogistica === 'retiro'; });
+      var eq = (DB.equipos || []).find(function(e){ return e && e.id === o.equipoId; });
+      out.push({ o: o, eq: eq, vence: v, dias: Math.round((v - hoy) / 86400000), retP: retP });
+    });
+    return out.sort(function(a, b){ return a.vence - b.vence; });
+  };
+  window._dashRentasHTML = function(){
+    var L = window._dashRentasPorVencer();
+    var h = '<div style="background:var(--surface,#fff);border:1px solid var(--border2,#e2e0d8);border-left:5px solid #b45309;border-radius:12px;padding:14px 16px;margin-bottom:16px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><div style="font-weight:800;color:#1f3864;font-size:15px">🚚 Rentas por vencer — próximos 15 días</div>'
+      + '<div style="font-size:11.5px;color:#888">Revisión independiente de Notificaciones</div></div>';
+    if(!L.length) return h + '<div style="font-size:13px;color:#1a5c1a;font-weight:700;padding:6px 0">✅ Ninguna renta vence en los próximos 15 días.</div></div>';
+    h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px"><tr style="background:#f3f5f9;color:#1f3864;text-align:left">'
+      + '<th style="padding:7px 8px">Equipo</th><th style="padding:7px 8px">Cliente</th><th style="padding:7px 8px">Orden</th><th style="padding:7px 8px">Vence</th><th style="padding:7px 8px;text-align:center">Estado</th></tr>';
+    L.forEach(function(r){
+      var b = r.dias < 0 ? ['#fbe0e0', '#a32d2d', '⚠️ VENCIDA hace ' + Math.abs(r.dias) + ' día' + (Math.abs(r.dias) === 1 ? '' : 's')]
+            : r.dias === 0 ? ['#fbe0e0', '#a32d2d', '⚠️ Vence HOY']
+            : r.dias <= 3 ? ['#fdead9', '#8a4800', 'En ' + r.dias + ' día' + (r.dias === 1 ? '' : 's')]
+            : ['#e8f0fb', '#1f3864', 'En ' + r.dias + ' días'];
+      var nota = (r.retP ? '<div style="font-size:11px;color:#2d6a2d;font-weight:700">Retiro ' + esc(r.retP.correlativo || '') + ' pendiente</div>' : '')
+        + (r.o.retiroCancelado ? '<div style="font-size:11px;color:#a32d2d;font-weight:700">Aviso de retiro cancelado</div>' : '');
+      h += '<tr style="border-top:1px solid #eee"><td style="padding:7px 8px;font-weight:800;color:#1f3864">' + esc(r.eq ? r.eq.codigo : (r.o.equipoTxt || '—')) + '</td>'
+        + '<td style="padding:7px 8px">' + esc(r.o.cliente || r.o.clienteOrden || r.o.clienteNombre || (r.eq && (r.eq.cliente || r.eq.ubicacion)) || '—') + '</td>'
+        + '<td style="padding:7px 8px;font-family:DM Mono,monospace">' + esc(r.o.correlativo || '') + '<div style="font-size:10.5px;color:#888;font-family:inherit">' + (parseInt(r.o.diasRenta) || 0) + ' días · ' + (r.o.tipoLogistica === 'renta' ? 'renta' : 'entrega') + '</div></td>'
+        + '<td style="padding:7px 8px;white-space:nowrap">' + f2(r.vence) + '</td>'
+        + '<td style="padding:7px 8px;text-align:center"><span style="display:inline-block;padding:3px 9px;border-radius:999px;background:' + b[0] + ';color:' + b[1] + ';font-weight:800;font-size:11.5px;white-space:nowrap">' + b[2] + '</span>' + nota + '</td></tr>';
+    });
+    return h + '</table></div></div>';
+  };
+  var _rt = window.renderTableroGer;
+  if(typeof _rt === 'function') window.renderTableroGer = function(){
+    var r = _rt.apply(this, arguments);
+    try{ var c = document.getElementById('tablero-cont'); if(c){ var v = c.querySelector('.nx-dash-rentas'); if(v) v.remove(); var d = document.createElement('div'); d.className = 'nx-dash-rentas'; d.innerHTML = window._dashRentasHTML(); c.insertBefore(d, c.firstChild); } }catch(e){}
+    return r;
+  };
 })();
 </script>
 </body>
