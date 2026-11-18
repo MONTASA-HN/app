@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='71cd2cd294dd';
+  var APP_VERSION='43d47bc7124e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -889,7 +889,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
                   monhagro: ['dias', 'ordinario', 'productividad', 'horasExtras', 'bonificacion', 'comision', 'incapacidades', 'transporte', 'vacaciones', 'cesantia', 'otrosIngresos'],
                   seguridad: ['dias', 'ordinario', 'horasExtras', 'otrosIngresos'] };
   var COL_DED = { montasa: ['ihss', 'isr', 'rap', 'linea', 'uniforme', 'salutem', 'otrasDed'], monhaco: ['ihss', 'isr', 'linea', 'uniforme', 'salutem', 'otrasDed'], monhagro: ['ihss', 'isr', 'linea', 'uniforme', 'salutem', 'otrasDed'], seguridad: ['otrasDed'] };
-  var NOMCOL = { dias: 'Días trab.', ordinario: 'Ordinario', productividad: 'Productivi.', horasExtras: 'Horas extras', bonificacion: 'Bonificación', comision: 'Comisión', incapacidades: 'Incapacidades',
+  var NOMCOL = { decimo: 'Décimo', dias: 'Días trab.', ordinario: 'Ordinario', productividad: 'Productivi.', horasExtras: 'Horas extras', bonificacion: 'Bonificación', comision: 'Comisión', incapacidades: 'Incapacidades',
     transporte: 'Transporte', vacaciones: 'Vacaciones', cesantia: 'Cesantía', otrosIngresos: 'Otros ingresos', ihss: 'IHSS', isr: 'ISR', rap: 'AFP-RAP', linea: 'Línea telefónica', uniforme: 'Uniforme', salutem: 'Salutem', otrasDed: 'Otras deducc.' };
   // IHSS (2026-11-18, Miguel): 5 % del salario con techo mensual L 11,903.13, en dos quincenas iguales. Solo MONHACO (MT no deduce IHSS).
   var IHSS_DEF = { montasa: false, monhaco: true, monhagro: false, seguridad: false };   // MONHAGRO va en 0 en la planilla de Elia
@@ -897,11 +897,30 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function mon(n){ return (parseFloat(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function ihssCfg(raiz){ var c = D[raiz].config || {}; return { aplica: c.ihssAplica != null ? !!c.ihssAplica : IHSS_DEF[raiz], techo: parseFloat(c.ihssTecho) > 0 ? parseFloat(c.ihssTecho) : 11903.13, pct: parseFloat(c.ihssPct) > 0 ? parseFloat(c.ihssPct) : 5 }; }
   function ihssDe(raiz, sal){ var k = ihssCfg(raiz); sal = parseFloat(sal) || 0; return k.aplica && sal > 0 ? r2(Math.min(sal, k.techo) * k.pct / 100 / 2) : 0; }
-  function titPlan(p){ var a = String(p.periodo || '').split('-'), m = MESES[(+a[1] || 1) - 1], q = a[2] === '2'; var ult = new Date(+a[0], +a[1], 0).getDate();
+  var COL_DEC_ING = ['dias', 'decimo', 'otrosIngresos'], COL_DEC_DED = ['isr', 'otrasDed'];
+  function esDecimo(x){ return !!(x && (x.tipoPl || /-D1[34]$/.test(String(x.periodo || '')))); }
+  function colsI(raiz, x){ return esDecimo(x) ? COL_DEC_ING : COL_ING[raiz]; }
+  function colsD(raiz, x){ return esDecimo(x) ? COL_DEC_DED : COL_DED[raiz]; }
+  function rangoDecimo(per){ var a = String(per).split('-'), y = +a[0]; return a[2] === 'D13' ? { ini: y + '-01-01', fin: y + '-12-31' } : { ini: (y - 1) + '-07-01', fin: y + '-06-30' }; }
+  // días entre dos fechas en año comercial de 360 días (30 por mes), contando ambos extremos
+  function dias360(a, b){ var x = aF(a), y = aF(b); if(!x || !y || y < x) return 0; var d1 = Math.min(x.getDate(), 30), d2 = Math.min(y.getDate(), 30);
+    if(y.getMonth() === 1 && y.getDate() === new Date(y.getFullYear(), 2, 0).getDate()) d2 = 30;
+    return Math.min(360, (y.getFullYear() - x.getFullYear()) * 360 + (y.getMonth() - x.getMonth()) * 30 + (d2 - d1) + 1); }
+  function filaDecimo(raiz, e, rf, per){
+    var f = filaDe(raiz, e, rf), rg = rangoDecimo(per), ing = ingresoDe(rf, e), desde = ing && ing > rg.ini ? ing : rg.ini;
+    COL_ING[raiz].concat(COL_DED[raiz]).forEach(function(k){ delete f[k]; });
+    f.tipoPl = /D13$/.test(per) ? 'd13' : 'd14'; f.dias = dias360(desde, rg.fin); f.decimo = r2((parseFloat(f.salario) || 0) * f.dias / 360);
+    f.otrosIngresos = 0; f.isr = 0; f.otrasDed = 0; f.ingreso = ing || '';
+    if(!ing) f.notasAuto = ['Sin fecha de ingreso en la ficha: se tomó el período completo (360 días). Revísalo.'];
+    else if(ing > rg.ini) f.notasAuto = ['Proporcional: ingresó el ' + fmt(ing) + ' (' + f.dias + ' de 360 días)'];
+    return f;
+  }
+  function titPlan(p){ var a0 = String(p.periodo || '').split('-'); if(a0[2] === 'D13') return 'DÉCIMO TERCER MES ' + a0[0]; if(a0[2] === 'D14') return 'DÉCIMO CUARTO MES ' + a0[0];
+    var a = a0, m = MESES[(+a[1] || 1) - 1], q = a[2] === '2'; var ult = new Date(+a[0], +a[1], 0).getDate();
     return 'PLANILLA DEL ' + (q ? '16 AL ' + ult : '1 AL 15') + ' DE ' + String(m).toUpperCase() + ' ' + a[0]; }
   function planillas(raiz){ return lista(D[raiz].planillas).sort(function(a, b){ return String(b.periodo).localeCompare(String(a.periodo)); }); }
-  function totFila(raiz, f){ var dev = COL_ING[raiz].filter(function(k){ return k !== 'dias'; }).reduce(function(s, k){ return s + (parseFloat(f[k]) || 0); }, 0);
-    var ded = COL_DED[raiz].reduce(function(s, k){ return s + (parseFloat(f[k]) || 0); }, 0); return { dev: r2(dev), ded: r2(ded), neto: r2(dev - ded) }; }
+  function totFila(raiz, f){ var dev = colsI(raiz, f).filter(function(k){ return k !== 'dias'; }).reduce(function(s, k){ return s + (parseFloat(f[k]) || 0); }, 0);
+    var ded = colsD(raiz, f).reduce(function(s, k){ return s + (parseFloat(f[k]) || 0); }, 0); return { dev: r2(dev), ded: r2(ded), neto: r2(dev - ded) }; }
   function filasOrden(p){ return lista(p.filas).sort(function(a, b){ return String(a.depto || 'zz').localeCompare(String(b.depto || 'zz'), 'es') || String(a.nombre).localeCompare(String(b.nombre), 'es'); }); }
   function resumenPlan(raiz, p){ var r = { n: 0, dev: 0, ded: 0, neto: 0, he: 0, bon: 0, com: 0 };
     filasOrden(p).forEach(function(f){ var t = totFila(raiz, f); r.n++; r.dev += t.dev; r.ded += t.ded; r.neto += t.neto; r.he += parseFloat(f.horasExtras) || 0; r.bon += parseFloat(f.bonificacion) || 0; r.com += parseFloat(f.comision) || 0; });
@@ -919,17 +938,24 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   function nuevaPlanilla(raiz){
     var hoyD = new Date(), q = hoyD.getDate() <= 15 ? 1 : 2;
-    var w = ventana('💵 Nueva planilla quincenal', '<label>Empresa</label><select id="pl-r">' + EMPRESAS.map(function(E){ return '<option value="' + E.raiz + '"' + (E.raiz === raiz ? ' selected' : '') + '>' + E.nombre + '</option>'; }).join('') + '</select>'
-      + '<div class="g2"><div><label>Mes</label><input id="pl-m" type="month" value="' + hoyD.getFullYear() + '-' + String(hoyD.getMonth() + 1).padStart(2, '0') + '"></div><div><label>Quincena</label><select id="pl-q"><option value="1"' + (q === 1 ? ' selected' : '') + '>Del 1 al 15</option><option value="2"' + (q === 2 ? ' selected' : '') + '>Del 16 al fin de mes</option></select></div></div>'
+    var w = ventana('💵 Nueva planilla', '<label>Tipo</label><select id="pl-tipo"><option value="q">Quincena</option><option value="D13">Décimo tercer mes (diciembre)</option><option value="D14">Décimo cuarto mes (junio)</option></select><label>Empresa</label><select id="pl-r">' + EMPRESAS.map(function(E){ return '<option value="' + E.raiz + '"' + (E.raiz === raiz ? ' selected' : '') + '>' + E.nombre + '</option>'; }).join('') + '</select>'
+      + '<div id="pl-anio" style="display:none"><label>Año</label><input id="pl-y" type="number" value="' + hoyD.getFullYear() + '"><div class="sub" style="margin-top:4px" id="pl-rg"></div></div>'
+      + '<div class="g2" id="pl-qq"><div><label>Mes</label><input id="pl-m" type="month" value="' + hoyD.getFullYear() + '-' + String(hoyD.getMonth() + 1).padStart(2, '0') + '"></div><div><label>Quincena</label><select id="pl-q"><option value="1"' + (q === 1 ? ' selected' : '') + '>Del 1 al 15</option><option value="2"' + (q === 2 ? ' selected' : '') + '>Del 16 al fin de mes</option></select></div></div>'
       + '<div class="sub" style="margin-top:8px">Se llena con el personal activo de la empresa: ordinario = salario ÷ 2 (15 días) e IHSS de la quincena. Lo demás (horas extra, comisiones, ISR, línea, etc.) se escribe en la tabla.</div>', function(w){
-      var r = v(w, 'pl-r'), m = v(w, 'pl-m'), qq = v(w, 'pl-q'); if(!/^\d{4}-\d{2}$/.test(m)){ alert('Elige el mes.'); return; }
-      var per = m + '-' + qq, ya = planillas(r).find(function(p){ return p.periodo === per; });
+      var r = v(w, 'pl-r'), m = v(w, 'pl-m'), qq = v(w, 'pl-q'), tipo = v(w, 'pl-tipo'), y = parseInt(v(w, 'pl-y'), 10);
+      if(tipo !== 'q' && !(y > 2000)){ alert('Escribe el año.'); return; }
+      if(tipo === 'q' && !/^\d{4}-\d{2}$/.test(m)){ alert('Elige el mes.'); return; }
+      var per = tipo === 'q' ? m + '-' + qq : y + (tipo === 'D13' ? '-12-D13' : '-06-D14'), ya = planillas(r).find(function(p){ return p.periodo === per; });
       if(ya){ alert('Ya existe esa planilla en ' + nomEmp(r) + '. Ábrela desde la lista.'); return; }
       var id = 'pl_' + per.replace(/-/g, '') , filas = {};
-      personalPlanilla(r).forEach(function(x){ filas[x.e.id] = filaDe(r, x.e, x.rf); });
-      var p = { id: id, periodo: per, estado: 'borrador', filas: filas, notas: '', firmas: { elaborado: cfg(r).firmaNombre, revisado: '', aprobado: '' }, creado: Date.now() }; p.titulo = titPlan(p);
+      personalPlanilla(r).forEach(function(x){ filas[x.e.id] = tipo === 'q' ? filaDe(r, x.e, x.rf) : filaDecimo(r, x.e, x.rf, per); });
+      var p = { id: id, periodo: per, estado: 'borrador', filas: filas, notas: '', firmas: { elaborado: cfg(r).firmaNombre, revisado: '', aprobado: '' }, creado: Date.now() }; if(tipo !== 'q') p.tipoPl = tipo === 'D13' ? 'd13' : 'd14'; p.titulo = titPlan(p);
       db().ref('rrhh/' + r + '/planillas/' + id).set(p).then(function(){ w.remove(); ui.plan = { raiz: r, id: id }; pintar(); aviso('Planilla creada ✓'); }).catch(function(er){ aviso('No se creó: ' + er.message, true); });
     }, '💵 Crear planilla');
+    var cambiaTipo = function(){ var t = w.querySelector('#pl-tipo').value, y = parseInt(w.querySelector('#pl-y').value, 10) || new Date().getFullYear();
+      w.querySelector('#pl-qq').style.display = t === 'q' ? '' : 'none'; w.querySelector('#pl-anio').style.display = t === 'q' ? 'none' : '';
+      if(t !== 'q'){ var rg = rangoDecimo(y + (t === 'D13' ? '-12-D13' : '-06-D14')); w.querySelector('#pl-rg').textContent = 'Período: ' + fmt(rg.ini) + ' al ' + fmt(rg.fin) + ' · salario vigente × días ÷ 360. Proporcional a quien ingresó dentro del período.'; } };
+    w.querySelector('#pl-tipo').addEventListener('change', cambiaTipo); w.querySelector('#pl-y').addEventListener('input', cambiaTipo);
   }
   function pintarPlanillas(c){
     if(raices().every(function(r){ return (D[r]._sinAcceso || {}).planillas; })){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:34px">🔒</div><div class="nm">Planillas: solo Recursos Humanos</div><div class="sub">Este equipo no tiene permiso para ver las planillas.</div></div>'; return; }
@@ -941,13 +967,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(!ks.length) h += '<div class="card" style="text-align:center;color:#667085">Todavía no hay planillas.' + (soloVer ? '' : ' Crea la primera con «➕ Nueva quincena».') + '</div>';
     h += ks.map(function(k){ return '<div class="card"><div class="nm">' + titPlan({ periodo: k }) + '</div>' + periodos[k].map(function(x){ var rs = resumenPlan(x.r, x.p);
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding:8px 0;cursor:pointer" data-a="pl-abrir" data-r="' + x.r + '" data-id="' + esc(x.p.id) + '">'
-          + '<div><b>' + nomEmp(x.r) + '</b> <span class="tag ' + (x.p.estado === 'cerrada' ? 'v' : 'n') + '">' + (x.p.estado === 'cerrada' ? '✓ Cerrada' : 'Borrador') + '</span><div class="sub">' + rs.n + ' colaboradores · Total a pagar <b>L ' + mon(rs.neto) + '</b></div></div><span class="bt">Abrir →</span></div>'; }).join('') + bloqueArchivos(k) + '</div>'; }).join('');
+          + '<div><b>' + nomEmp(x.r) + '</b> <span class="tag ' + (x.p.estado === 'cerrada' ? 'v' : 'n') + '">' + (x.p.estado === 'cerrada' ? '✓ Cerrada' : 'Borrador') + '</span><div class="sub">' + rs.n + ' colaboradores · Total a pagar <b>L ' + mon(rs.neto) + '</b></div></div><span class="bt">Abrir →</span></div>'; }).join('') + (/-D1[34]$/.test(k) ? '' : bloqueArchivos(k)) + '</div>'; }).join('');
     c.innerHTML = h;
   }
   function pintarPlanilla(c){
     var raiz = ui.plan.raiz, p = D[raiz].planillas[ui.plan.id];
     if(!p){ c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div><div class="card" style="text-align:center;color:#667085">⏳ Abriendo la planilla…</div>'; return; }   // recién creada: llega en un momento
-    var ed = p.estado !== 'cerrada' && permisoRol !== 'planilla', ci = COL_ING[raiz], cd = COL_DED[raiz], filas = filasOrden(p), rs = resumenPlan(raiz, p);
+    var ed = p.estado !== 'cerrada' && permisoRol !== 'planilla', ci = colsI(raiz, p), cd = colsD(raiz, p), filas = filasOrden(p), rs = resumenPlan(raiz, p);
     var th = 'padding:6px 5px;background:#dce6f1;color:#1f3864;font-size:11px;border:1px solid #c5d2e3;white-space:nowrap;position:sticky;top:0';
     var td = 'padding:2px 3px;border:1px solid #e1e6ee;font-size:12px;white-space:nowrap';
     var inp = function(f, k){ var val = f[k] == null ? 0 : f[k];
@@ -971,11 +997,11 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var fir = p.firmas || {};
     c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>'
       + '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
-      + '<div class="acc" style="margin:0">' + (ed ? '<button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button><button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
+      + '<div class="acc" style="margin:0">' + (ed && !esDecimo(p) ? '<button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button><button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
       + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar comprobantes</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
       + '<div class="kv" style="margin-top:8px"><div><span>Colaboradores</span><b>' + rs.n + '</b></div><div><span>Planilla</span><b>L ' + mon(rs.planilla) + '</b></div><div><span>Comisiones</span><b>L ' + mon(rs.com) + '</b></div><div><span>Bonos</span><b>L ' + mon(rs.bon) + '</b></div><div><span>Horas extras</span><b>L ' + mon(rs.he) + '</b></div><div><span>Total a pagar</span><b style="font-size:17px">L ' + mon(rs.neto) + '</b></div></div></div>'
-      + '<div class="card" style="padding:4px 14px">' + bloqueArchivos(p.periodo) + '</div>'
+      + (esDecimo(p) ? '<div class="card sub" style="padding:8px 14px">Décimo = salario mensual vigente × días del período ÷ 360 (' + fmt(rangoDecimo(p.periodo).ini) + ' al ' + fmt(rangoDecimo(p.periodo).fin) + '). Si cambias los días, se recalcula solo.</div>' : '<div class="card" style="padding:4px 14px">' + bloqueArchivos(p.periodo) + '</div>')
       + '<div class="card pl-tabla" style="padding:0;overflow:auto;max-height:70vh"><table style="border-collapse:collapse;width:max-content;min-width:100%">' + cab + cuerpo + '</table></div>'
       + '<div class="card"><h3 style="margin-top:0">Notas de la quincena</h3>' + (ed ? '<textarea id="pl-notas" rows="5" placeholder="1- Se pagan las horas extras de la segunda quincena de…">' + esc(p.notas || '') + '</textarea>' : '<div class="sub" style="white-space:pre-wrap;color:#1d2433">' + esc(p.notas || '—') + '</div>')
       + '<h3>Firmas</h3><div class="g2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' + [['elaborado', 'Elaborado por'], ['revisado', 'Revisado por'], ['aprobado', 'Aprobado por']].map(function(x){
@@ -987,8 +1013,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var x = el.getAttribute('data-pc').split('|'), emp = x[0], k = x[1], val = r2(el.value); var f = (p.filas || {})[emp]; if(!f) return;
     if(r2(f[k]) === val) return;
     f[k] = val;
-    if(k === 'dias'){ f.ordinario = r2((parseFloat(f.salario) || 0) / 30 * val); var o = document.querySelector('[data-pc="' + emp + '|ordinario"]'); if(o) o.value = f.ordinario; }
-    var up = {}; up[k] = val; if(k === 'dias') up.ordinario = f.ordinario;
+    var up = {}; up[k] = val;
+    if(k === 'dias' && esDecimo(f)){ if(val > 360){ val = 360; f.dias = 360; up.dias = 360; } f.decimo = r2((parseFloat(f.salario) || 0) * val / 360); up.decimo = f.decimo; var od = document.querySelector('[data-pc="' + emp + '|decimo"]'); if(od) od.value = f.decimo; }
+    else if(k === 'dias'){ f.ordinario = r2((parseFloat(f.salario) || 0) / 30 * val); var o = document.querySelector('[data-pc="' + emp + '|ordinario"]'); if(o) o.value = f.ordinario; up.ordinario = f.ordinario; }
     db().ref('rrhh/' + raiz + '/planillas/' + p.id + '/filas/' + emp).update(up).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     var t = totFila(raiz, f); ['_dev', '_ded', '_neto'].forEach(function(c){ var td = document.querySelector('[data-pt="' + emp + '|' + c + '"]'); if(td) td.textContent = mon(c === '_dev' ? t.dev : c === '_ded' ? t.ded : t.neto); });
     clearTimeout(guardarCelda._t); guardarCelda._t = setTimeout(pintar, 1500);   // subtotales y totales
@@ -1005,10 +1032,11 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-agregar'){ var fuera = personalPlanilla(raiz).filter(function(x){ return !(p.filas || {})[x.e.id]; });
       if(!fuera.length){ alert('Todo el personal activo de ' + nomEmp(raiz) + ' ya está en la planilla.'); return; }
       ventana('➕ Agregar a la planilla', '<label>Empleado</label><select id="pa-e">' + fuera.map(function(x){ return '<option value="' + esc(x.rf + '|' + x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + esc(x.e.departamento || '') + (x.rf !== raiz ? ' (ficha en ' + nomEmp(x.rf) + ')' : '') + '</option>'; }).join('') + '</select>', function(w){
-        var sel = v(w, 'pa-e').split('|'), e = D[sel[0]].empleados[sel[1]]; ref.child('filas/' + e.id).set(filaDe(raiz, e, sel[0])).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
+        var sel = v(w, 'pa-e').split('|'), e = D[sel[0]].empleados[sel[1]]; ref.child('filas/' + e.id).set(esDecimo(p) ? filaDecimo(raiz, e, sel[0], p.periodo) : filaDe(raiz, e, sel[0])).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
     if(a === 'pl-refrescar'){ if(!confirm('¿Actualizar nombre, código, departamento, cuenta y salario de cada fila con los datos actuales de las fichas?\n\nTambién recalcula el IHSS (techo y %) y, si cambió el salario, el ordinario y las horas extra cargadas del Excel. Los demás montos escritos no cambian.')) return;
       var up2 = {}; lista(p.filas).forEach(function(f){ var rf = f.raizFicha || raiz, e = D[rf].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e, rf); up2['filas/' + f.empId + '/raizFicha'] = rf;
         ['codigo', 'nombre', 'depto', 'cargo', 'identidad', 'cuenta', 'banco', 'tipoCuenta', 'direccion', 'telefono', 'correo', 'salario'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nf[k]; });
+        if(esDecimo(f)){ up2['filas/' + f.empId + '/decimo'] = r2(nf.salario * (parseFloat(f.dias) || 0) / 360); return; }
         up2['filas/' + f.empId + '/ihss'] = ihssDe(raiz, nf.salario);
         if(r2(nf.salario) !== r2(f.salario)){ up2['filas/' + f.empId + '/ordinario'] = r2(nf.salario / 30 * (parseFloat(f.dias) || 0)); if(f.heHoras) up2['filas/' + f.empId + '/horasExtras'] = heMonto(raiz, nf.salario, f.heHoras); } });
       ref.update(up2).then(function(){ aviso('Datos actualizados ✓'); }); return; }
@@ -1027,7 +1055,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var wb = XLSX.utils.book_new(), resumen = [['Resumen de planillas'], [lst[0] ? titPlan(lst[0].p).replace('PLANILLA', 'Quincena') : ''], [], ['Empresa', '# Colaboradores', 'Planilla', 'Comisiones', 'Bonos', 'Horas Extras', 'Total a Pagar']];
       var T = [0, 0, 0, 0, 0, 0];
       lst.forEach(function(x){
-        var raiz = x.r, p = x.p, cols = COL_ING[raiz].concat(['_dev'], COL_DED[raiz], ['_ded', '_neto']), nomC = function(k){ return { _dev: 'Total Devengado', _ded: 'Total Deducciones', _neto: 'Neto a Pagar' }[k] || NOMCOL[k]; };
+        var raiz = x.r, p = x.p, cols = colsI(raiz, p).concat(['_dev'], colsD(raiz, p), ['_ded', '_neto']), nomC = function(k){ return { _dev: 'Total Devengado', _ded: 'Total Deducciones', _neto: 'Neto a Pagar' }[k] || NOMCOL[k]; };
         var A = [[p.titulo || titPlan(p)], [cfg(raiz).razon], [], ['Código', 'Nombres'].concat(cols.map(nomC), ['Comentarios'])], dep = null, sub = null;
         var valor = function(f, k){ var t = totFila(raiz, f); return k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : r2(f[k]); };
         var cerrar = function(){ if(sub){ A.push(['', 'Subtotal ' + (dep || 'Sin departamento')].concat(cols.map(function(k){ return k === 'dias' ? '' : r2(sub[k]); }))); } };
@@ -1085,8 +1113,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var dato = function(l, v2, xx, yy){ pdf.setFont('helvetica', 'bold'); pdf.text(l, xx, yy); var an = pdf.getTextWidth(l); pdf.setFont('helvetica', 'normal'); pdf.text(String(v2 == null || v2 === '' ? '—' : v2), xx + an + 2, yy); };
     dato('Colaborador:', f.nombre, x, y0 + 30); dato('Código:', f.codigo, 150, y0 + 30);
     dato('Puesto:', f.cargo, x, y0 + 36); dato('Departamento:', f.depto, 110, y0 + 36);
-    dato('Días trabajados:', f.dias, x, y0 + 42); dato('Salario mensual:', 'L ' + mon(f.salario), 110, y0 + 42);
-    var ing = COL_ING[raiz].filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = COL_DED[raiz].filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
+    dato(esDecimo(f) ? 'Días en el período:' : 'Días trabajados:', f.dias + (esDecimo(f) ? ' de 360' : ''), x, y0 + 42); dato('Salario mensual:', 'L ' + mon(f.salario), 110, y0 + 42);
+    var ing = colsI(raiz, f).filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = colsD(raiz, f).filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
     var heL = f.heHoras && (parseFloat(f.horasExtras) || 0) ? HE_REC.filter(function(r){ return (parseFloat(f.heHoras[r[0]]) || 0) > 0; }) : [];
     var yy = y0 + 51; pdf.setFillColor(220, 230, 241); pdf.rect(x, yy - 4.5, 92, 6.5, 'F'); pdf.rect(110, yy - 4.5, 92, 6.5, 'F');
     pdf.setFont('helvetica', 'bold'); pdf.setTextColor(31, 56, 100); pdf.text('INGRESOS', x + 2, yy); pdf.text('DEDUCCIONES', 112, yy); pdf.setTextColor(25, 25, 25);
