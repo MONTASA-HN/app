@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6f74b5cb1f2a';
+  var APP_VERSION='1a39684cc1e4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -428,7 +428,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
     // historial
     var hist = lista(e.historial).map(function(x){ return { f: x.fecha, t: x.texto }; })
-      .concat(lista(p.constancias).map(function(x){ return { f: x.fecha, t: '📄 ' + (TIPOS_C[x.tipo] || 'Constancia') + ' generada' + (x.dirigido ? ' — ' + esc(x.dirigido) : '') }; }))
+      .concat(lista(p.constancias).map(function(x){ return { f: x.fecha, t: (x.modo === 'impresa' ? '🖨 ' : '📄 ') + (TIPOS_C[x.tipo] || 'Constancia') + (x.modo === 'impresa' ? ' impresa' : ' generada') + (x.dirigido ? ' — ' + esc(x.dirigido) : '') }; }))
       .concat(lista(p.historial).map(function(x){ return { f: x.vigencia, t: '💵 Salario ' + (x.anterior != null ? lps(x.anterior) + ' → ' : '') + '<b>' + lps(x.nuevo) + '</b> (vigente desde ' + fmt(x.vigencia) + ')' + (x.nota ? ' — ' + esc(x.nota) : '') }; }))
       .sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
     h += '<div class="card"><h3 style="margin-top:0">🗂 Historial</h3>' + (hist.length ? hist.map(function(x){ return '<div class="sub" style="padding:6px 0;border-bottom:1px solid #f0f2f5;color:#1d2433"><b style="color:#1f3864">' + fmt(x.f) + '</b> · ' + x.t + '</div>'; }).join('') : '<div class="sub">Sin cambios registrados todavía.</div>') + '</div>';
@@ -728,44 +728,86 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       y += alto; });
     return y;
   }
-  function generarConstancia(raiz, e, o){
+  // Contenido de la constancia (igual para PDF e impresión): título, dirigido, bloques y firma
+  function modeloConstancia(raiz, e, o){
     var c = cfg(raiz), f = aF(o.fecha) || new Date(), tr = o.trato || 'el señor', fem = /^la /.test(tr), inter = fem ? 'la interesada' : 'el interesado';
     var ing = ingresoDe(raiz, e), ciudad = o.ciudad || c.ciudad;
-    return cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }).then(membrete).then(function(mb){
-      var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'letter' }), W = 215.9, H = 279.4, X = 35, AN = W - X - 25, LH = 7.2;
-      pdf.addImage(mb, 'JPEG', 0, 0, W, H);
-      pdf.setTextColor(20, 20, 20); pdf.setFont('times', 'bold'); pdf.setFontSize(17); pdf.text('CONSTANCIA', W / 2 + 6, 64, { align: 'center' });
-      pdf.setFontSize(11.5); var y = 80;
-      if(o.dirigido){ pdf.setFont('times', 'normal'); pdf.text(o.dirigido, X, y); y += LH * 1.6; }
-      var nom = String(e.nombreCompleto || '').toUpperCase(), cargo = e.cargo || '', depto = String(e.departamento || '').replace(/\s*\(.*\)$/, '');
-      var fecha = [[ciudad + ', a los '], [diaLetras(f.getDate()), true], [' días del mes de '], [MESES[f.getMonth()], true], [' del año '], [o.tipo === 'deducciones' ? enLetras(f.getFullYear()) : String(f.getFullYear()), true], ['.']];
-      if(o.tipo === 'sencilla'){
-        y = parrafo(pdf, [['Por este medio la empresa '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con número de identidad ' + (e.identidad || '') + ', labora para la empresa desde el '], [fLarga(ing), true],
-          [' hasta la actualidad, desempeñándose como '], [cargo, true], [', en el departamento de '], [depto, true], ['.']], X, y, AN, LH);
-        y += LH * 0.8;
-        y = parrafo(pdf, [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
-      } else if(o.tipo === 'deducciones'){
-        y = parrafo(pdf, [['Por este medio, la sociedad Mercantil denominada '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con DNI: ' + (e.identidad || '') + ', labora para esta empresa, desde el '], [fLarga(ing), true],
-          [', hasta la actualidad, desempeñándose con el cargo de '], [cargo, true], [', en el departamento de '], [depto, true], [', devengando un salario mensual de '], ['L. ' + Number(o.salario || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), true], ['.']], X, y, AN, LH);
-        var ded = (o.deducciones || []).filter(function(d){ return d.concepto && parseFloat(d.monto) > 0; });
-        if(ded.length){ y += LH * 0.6; pdf.setFont('times', 'normal'); pdf.text('Aplicando las siguientes deducciones:', X, y); y += LH;
-          ded.forEach(function(d){ pdf.setFont('times', 'bold'); pdf.text(String(d.concepto) + ':', X + 4, y); pdf.text('L. ' + Number(d.monto).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), X + 70, y, { align: 'right' }); y += LH; }); }
-        y += LH * 0.6;
-        y = parrafo(pdf, [[(fem ? 'Y para los fines que a la interesada' : 'Y para los fines que al interesado') + ' convengan, se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
-      } else {
-        y = parrafo(pdf, [['Por este medio la empresa '], [c.razon, true], [' hace constar que ' + tr + ' '], [nom, true], [' con número de Identidad ' + (e.identidad || '') + ' laboró desde el '], [fLarga(ing), true], [' hasta el '], [fLarga(o.salida), true],
-          [', desempeñándose como '], [String(cargo).toUpperCase(), true], ['.']], X, y, AN, LH);
-        y += LH * 0.8;
-        y = parrafo(pdf, [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha), X, y, AN, LH);
-      }
-      y += LH * 1.4; pdf.setFont('times', 'normal'); pdf.text('Atentamente,', X, y);
-      var fy = Math.max(y + 34, 196); fy = Math.min(fy, 226);
-      pdf.setDrawColor(40, 40, 40); pdf.setLineWidth(0.3); pdf.line(X, fy, X + 62, fy);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.text(c.firmaNombre, X, fy + 5.5);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5); pdf.text(c.firmaCargo, X, fy + 10.5); if(c.firmaCorreo) pdf.text(c.firmaCorreo, X, fy + 15.5);
-      var nombre = 'Constancia_' + ({ sencilla: 'IHSS', deducciones: 'con_deducciones', finalizacion: 'finalizacion' })[o.tipo] + '_' + String(e.nombreCompleto || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]+/g, '_') + '_' + iso(f) + '.pdf';
-      pdf.save(nombre);
-      return db().ref('rrhh/' + raiz + '/priv/' + e.id + '/constancias/' + nuevoId('c_')).set({ tipo: o.tipo, fecha: iso(f), ts: Date.now(), dirigido: o.dirigido || '', salario: o.tipo === 'deducciones' ? (o.salario || null) : null, deducciones: o.tipo === 'deducciones' ? (o.deducciones || null) : null }).catch(function(){}).then(function(){ return nombre; });
+    var nom = String(e.nombreCompleto || '').toUpperCase(), cargo = e.cargo || '', depto = String(e.departamento || '').replace(/\s*\(.*\)$/, '');
+    var dinero = function(n){ return 'L. ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var fecha = [[ciudad + ', a los '], [diaLetras(f.getDate()), true], [' días del mes de '], [MESES[f.getMonth()], true], [' del año '], [o.tipo === 'deducciones' ? enLetras(f.getFullYear()) : String(f.getFullYear()), true], ['.']];
+    var B = [];
+    if(o.tipo === 'sencilla'){
+      B.push({ p: [['Por este medio la empresa '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con número de identidad ' + (e.identidad || '') + ', labora para la empresa desde el '], [fLarga(ing), true],
+        [' hasta la actualidad, desempeñándose como '], [cargo, true], [', en el departamento de '], [depto, true], ['.']] });
+      B.push({ p: [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha) });
+    } else if(o.tipo === 'deducciones'){
+      B.push({ p: [['Por este medio, la sociedad Mercantil denominada '], [c.razon, true], [', hace constar que ' + tr + ' '], [nom + ',', true], [' con DNI: ' + (e.identidad || '') + ', labora para esta empresa, desde el '], [fLarga(ing), true],
+        [', hasta la actualidad, desempeñándose con el cargo de '], [cargo, true], [', en el departamento de '], [depto, true], [', devengando un salario mensual de '], [dinero(o.salario), true], ['.']] });
+      var ded = (o.deducciones || []).filter(function(d){ return d.concepto && parseFloat(d.monto) > 0; });
+      if(ded.length) B.push({ ded: ded.map(function(d){ return [String(d.concepto), dinero(d.monto)]; }) });
+      B.push({ p: [[(fem ? 'Y para los fines que a la interesada' : 'Y para los fines que al interesado') + ' convengan, se extiende la presente constancia en la ciudad de ']].concat(fecha) });
+    } else {
+      B.push({ p: [['Por este medio la empresa '], [c.razon, true], [' hace constar que ' + tr + ' '], [nom, true], [' con número de Identidad ' + (e.identidad || '') + ' laboró desde el '], [fLarga(ing), true], [' hasta el '], [fLarga(o.salida), true],
+        [', desempeñándose como '], [String(cargo).toUpperCase(), true], ['.']] });
+      B.push({ p: [['Y para los fines que ' + inter + ' estime convenientes se extiende la presente constancia en la ciudad de ']].concat(fecha) });
+    }
+    return { dirigido: o.dirigido || '', bloques: B, firma: c, fecha: f,
+      archivo: 'Constancia_' + ({ sencilla: 'IHSS', deducciones: 'con_deducciones', finalizacion: 'finalizacion' })[o.tipo] + '_' + String(e.nombreCompleto || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]+/g, '_') + '_' + iso(f) };
+  }
+  function pdfConstancia(m, mb){
+    var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'letter' }), W = 215.9, H = 279.4, X = 35, AN = W - X - 25, LH = 7.2;
+    pdf.addImage(mb, 'JPEG', 0, 0, W, H);
+    pdf.setTextColor(20, 20, 20); pdf.setFont('times', 'bold'); pdf.setFontSize(17); pdf.text('CONSTANCIA', W / 2 + 6, 64, { align: 'center' });
+    pdf.setFontSize(11.5); var y = 80;
+    if(m.dirigido){ pdf.setFont('times', 'normal'); pdf.text(m.dirigido, X, y); y += LH * 1.6; }
+    m.bloques.forEach(function(b, i){
+      if(b.p){ if(i) y += LH * 0.7; y = parrafo(pdf, b.p, X, y, AN, LH); }
+      else if(b.ded){ y += LH * 0.6; pdf.setFont('times', 'normal'); pdf.text('Aplicando las siguientes deducciones:', X, y); y += LH;
+        b.ded.forEach(function(d){ pdf.setFont('times', 'bold'); pdf.text(d[0] + ':', X + 4, y); pdf.text(d[1], X + 70, y, { align: 'right' }); y += LH; }); }
+    });
+    y += LH * 1.4; pdf.setFont('times', 'normal'); pdf.text('Atentamente,', X, y);
+    var fy = Math.min(Math.max(y + 34, 196), 226), c = m.firma;
+    pdf.setDrawColor(40, 40, 40); pdf.setLineWidth(0.3); pdf.line(X, fy, X + 62, fy);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.text(c.firmaNombre, X, fy + 5.5);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5); pdf.text(c.firmaCargo, X, fy + 10.5); if(c.firmaCorreo) pdf.text(c.firmaCorreo, X, fy + 15.5);
+    return pdf;
+  }
+  // Misma hoja en HTML para imprimir (como en Gerencia: hoja carta, colores exactos, marco oculto)
+  function htmlConstancia(m, mb){
+    var c = m.firma, partes = function(p){ return p.map(function(x){ var t = esc(x[0]).replace(/ /g, '&nbsp;'); return x[1] ? '<b>' + t + '</b>' : t; }).join(''); };
+    var cuerpo = (m.dirigido ? '<p class="dir">' + esc(m.dirigido) + '</p>' : '') + m.bloques.map(function(b){
+      if(b.p) return '<p>' + partes(b.p) + '</p>';
+      return '<p class="ded1">Aplicando las siguientes deducciones:</p><table class="ded">' + b.ded.map(function(d){ return '<tr><td>' + esc(d[0]) + ':</td><td>' + esc(d[1]).replace(/ /g, '&nbsp;') + '</td></tr>'; }).join('') + '</table>';
+    }).join('') + '<p class="at">Atentamente,</p>';
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(m.archivo) + '</title><style>'
+      + '@page{size:letter;margin:0}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}}'
+      + 'html,body{margin:0;padding:0;background:#fff}.hoja{position:relative;width:215.9mm;height:279.4mm;overflow:hidden;page-break-after:avoid}'
+      + '.mb{position:absolute;inset:0;width:215.9mm;height:279.4mm}'
+      + '.tx{position:absolute;left:35mm;width:155.9mm;top:57mm;font-family:"Times New Roman",Times,serif;font-size:11.5pt;line-height:7.2mm;color:#141414}'
+      + 'h1{font-size:17pt;text-align:center;margin:0 0 9mm 6mm;letter-spacing:.3px}p{margin:0 0 5mm;text-align:justify}.dir{margin-bottom:6mm;text-align:left}'
+      + '.ded1{margin:0}.ded{border-collapse:collapse;margin:0 0 5mm 4mm}.ded td{font-weight:bold;padding:0;line-height:7.2mm}.ded td+td{text-align:right;width:44mm}'
+      + '.at{margin-top:8mm;text-align:left}.fi{position:absolute;left:35mm;font-family:Arial,Helvetica,sans-serif;color:#141414}.fi .ln{width:62mm;border-top:.3mm solid #282828;margin-bottom:1.6mm}'
+      + '.fi b{font-size:10.5pt}.fi div{font-size:9.5pt;line-height:5mm}'
+      + '</style></head><body><div class="hoja"><img class="mb" src="' + mb + '"><div class="tx" id="tx"><h1>CONSTANCIA</h1>' + cuerpo + '</div>'
+      + '<div class="fi" id="fi"><div class="ln"></div><b>' + esc(c.firmaNombre) + '</b><div>' + esc(c.firmaCargo) + '</div>' + (c.firmaCorreo ? '<div>' + esc(c.firmaCorreo) + '</div>' : '') + '</div></div>'
+      // la firma va debajo de «Atentamente» con el mismo espacio que el PDF (entre 196 y 226 mm desde arriba)
+      + '<script>(function(){var t=document.getElementById("tx"),f=document.getElementById("fi"),mm=96/25.4,y=(t.offsetTop+t.offsetHeight)/mm;f.style.top=Math.min(Math.max(y+28,196),226)+"mm";})();<\/script></body></html>';
+  }
+  function imprimirHTML(html){
+    var fr = document.getElementById('rh-print'); if(fr) fr.remove();
+    fr = document.createElement('iframe'); fr.id = 'rh-print'; fr.style.cssText = 'position:fixed;width:0;height:0;border:0;left:-9999px;top:-9999px';
+    document.body.appendChild(fr);
+    var d = fr.contentWindow.document; d.open(); d.write(html); d.close();
+    var listo = function(){ setTimeout(function(){ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ aviso('No se pudo abrir la impresión: ' + e.message, true); } }, 300); };
+    var im = d.querySelector('img'); if(im && !im.complete){ im.onload = listo; im.onerror = listo; } else listo();
+  }
+  function generarConstancia(raiz, e, o){
+    var m = modeloConstancia(raiz, e, o), imprimir = o.modo === 'imprimir';
+    var libs = imprimir ? Promise.resolve() : cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); });
+    return libs.then(membrete).then(function(mb){
+      if(imprimir) imprimirHTML(htmlConstancia(m, mb)); else pdfConstancia(m, mb).save(m.archivo + '.pdf');
+      return db().ref('rrhh/' + raiz + '/priv/' + e.id + '/constancias/' + nuevoId('c_')).set({ tipo: o.tipo, modo: imprimir ? 'impresa' : 'pdf', fecha: iso(m.fecha), ts: Date.now(), dirigido: o.dirigido || '',
+        salario: o.tipo === 'deducciones' ? (o.salario || null) : null, deducciones: o.tipo === 'deducciones' ? (o.deducciones || null) : null }).catch(function(){}).then(function(){ return m.archivo; });
     });
   }
   function formConstancia(raiz, e, tipoIni){
@@ -775,6 +817,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var trIni = e.trato === 'a' ? 'la señora' : 'el señor';
     var tipos = Object.keys(TIPOS_C).filter(function(t){ return t !== 'finalizacion' || e.salida || e.activo === false; });
     if(tipos.indexOf(tipoIni) < 0) tipoIni = tipos[0];
+    var modo = 'pdf';
     var w = ventana('📄 Constancia de ' + esc(e.nombreCompleto), '<div class="sub" style="margin-top:6px">' + nomEmp(raiz) + ' · ' + esc(e.cargo || '') + ' · ingreso ' + fmt(ingresoDe(raiz, e)) + '</div>'
       + '<label>Tipo de constancia</label><select id="k-t">' + tipos.map(function(t){ return '<option value="' + t + '"' + (t === tipoIni ? ' selected' : '') + '>' + TIPOS_C[t] + '</option>'; }).join('') + '</select>'
       + '<div class="g2"><div><label>Trato</label><select id="k-tr">' + opts(['el señor', 'la señora', 'el joven', 'la joven', 'el Sr.', 'la Sra.'], trIni) + '</select></div><div><label>Fecha de la constancia</label><input id="k-f" type="date" value="' + hoy() + '"></div></div>'
@@ -783,7 +826,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div id="k-dedw"><label>Salario mensual (L)</label><input id="k-s" type="number" step="0.01" value="' + (salAct != null ? salAct : '') + '">'
       + '<label>Deducciones</label>' + dedIni.map(function(d, i){ return '<div class="g2" style="margin-bottom:6px"><input data-dc="' + i + '" placeholder="Concepto (ej. IHSS)" value="' + esc(d.concepto) + '"><input data-dm="' + i + '" type="number" step="0.01" placeholder="Monto L" value="' + esc(d.monto) + '"></div>'; }).join('')
       + '<div class="sub">Solo salen las deducciones con concepto y monto.</div></div>', function(w){
-      var t = v(w, 'k-t'), o = { tipo: t, trato: v(w, 'k-tr'), fecha: v(w, 'k-f'), ciudad: v(w, 'k-c'), dirigido: v(w, 'k-dir') };
+      var t = v(w, 'k-t'), o = { tipo: t, modo: modo, trato: v(w, 'k-tr'), fecha: v(w, 'k-f'), ciudad: v(w, 'k-c'), dirigido: v(w, 'k-dir') };
       if(!aF(o.fecha)){ alert('Escribe la fecha de la constancia.'); return; }
       if(!aF(ingresoDe(raiz, e))){ alert('La ficha no tiene fecha de ingreso. Complétala primero con «✏️ Editar ficha».'); return; }
       if(soloDig(e.identidad).length !== 13){ alert('La ficha no tiene número de identidad completo.'); return; }
@@ -791,9 +834,16 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       if(t === 'finalizacion'){ o.salida = v(w, 'k-sal'); if(!aF(o.salida)){ alert('Escribe la fecha de salida.'); return; } }
       if(t === 'deducciones'){ o.salario = parseFloat(v(w, 'k-s')); if(!(o.salario > 0)){ alert('Escribe el salario mensual.'); return; }
         o.deducciones = [0, 1, 2, 3, 4].map(function(i){ return { concepto: String(w.querySelector('[data-dc="' + i + '"]').value || '').trim(), monto: String(w.querySelector('[data-dm="' + i + '"]').value || '').trim() }; }); }
-      var bt = w.querySelector('[data-ok]'); bt.disabled = true; bt.textContent = 'Generando…';
-      generarConstancia(raiz, e, o).then(function(n){ w.remove(); aviso('📄 Constancia descargada: ' + n); }).catch(function(er){ bt.disabled = false; bt.textContent = '📄 Generar PDF'; aviso('No se generó: ' + er.message, true); });
-    }, '📄 Generar PDF');
+      var bt = w.querySelector(modo === 'imprimir' ? '[data-imp]' : '[data-ok]'), txt = bt.textContent; bt.disabled = true; bt.textContent = 'Generando…';
+      generarConstancia(raiz, e, o).then(function(n){ w.remove(); aviso(o.modo === 'imprimir' ? '🖨 Constancia lista para imprimir' : '📥 PDF descargado: ' + n + '.pdf'); }).catch(function(er){ bt.disabled = false; bt.textContent = txt; aviso('No se generó: ' + er.message, true); });
+    }, '📥 Descargar PDF');
+    // (2026-11-18) Elia decide: descargar el PDF o imprimir directo (como «🖨 Imprimir» en Gerencia)
+    var okB = w.querySelector('[data-ok]'), impB = document.createElement('button');
+    impB.type = 'button'; impB.setAttribute('data-imp', '1'); impB.textContent = '🖨 Imprimir';
+    impB.style.cssText = 'flex:2;padding:12px;border:1.5px solid #1f3864;background:#fff;color:#1f3864;border-radius:10px;font-weight:800;cursor:pointer';
+    okB.parentNode.insertBefore(impB, okB);
+    impB.addEventListener('click', function(){ modo = 'imprimir'; okB.click(); });
+    okB.addEventListener('click', function(){ setTimeout(function(){ modo = 'pdf'; }, 0); });
     function mostrar(){ var t = v(w, 'k-t'); w.querySelector('#k-salw').style.display = t === 'finalizacion' ? '' : 'none'; w.querySelector('#k-dedw').style.display = t === 'deducciones' ? '' : 'none';
       var d = w.querySelector('#k-dir'); if(t === 'sencilla' && !d._tocado) d.value = 'Estimados Sres. IHSS'; else if(!d._tocado) d.value = ''; }
     w.querySelector('#k-dir').addEventListener('input', function(){ this._tocado = true; });
