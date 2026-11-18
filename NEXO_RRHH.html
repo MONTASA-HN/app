@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='aaa90af8f37e';
+  var APP_VERSION='5772b89160c1';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1061,46 +1061,61 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       if(sinCta.length) alert('⚠️ Sin número de cuenta en la ficha:\n• ' + sinCta.join('\n• ') + '\n\nComplétalas y usa «🔄 Actualizar datos de fichas».');
     }).catch(function(er){ aviso('No se pudo generar: ' + er.message, true); });
   }
-  // Comprobante de pago: media hoja carta por empleado (dos por hoja), con el logo, ingresos, deducciones y neto
+  // Comprobante de pago (2026-11-18, Miguel: «los necesito individuales»): un PDF por empleado, en media carta horizontal.
+  // Uno → se descarga el PDF. Varios → un .zip con un PDF por persona (Comprobante_<código>_<nombre>_<período>.pdf).
+  var JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', JSZIP_SRI = 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG';
+  function cargarZip(){ return window.JSZip ? Promise.resolve() : new Promise(function(ok, mal){ var s = document.createElement('script'); s.src = JSZIP_URL; s.integrity = JSZIP_SRI; s.crossOrigin = 'anonymous'; s.onload = ok; s.onerror = function(){ mal(new Error('sin conexión para armar el .zip')); }; document.head.appendChild(s); }); }
+  function nomArchivoComp(f, p){ return ('Comprobante_' + (f.codigo ? f.codigo + '_' : '') + String(f.nombre).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]+/g, '_') + '_' + p.periodo + '.pdf').replace(/_+/g, '_'); }
+  function pdfComprobante(raiz, p, f){
+    var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: [139.7, 215.9], orientation: 'landscape' }), W = 215.9, logo = logoComp._jpg || '', c = cfg(raiz);
+    var y0 = 0, t = totFila(raiz, f), x = 14;
+    if(logo) try{ pdf.addImage(logo, 'JPEG', x, y0 + 8, 38, 11.8, 'logoNexo'); }catch(e){}
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12.5); pdf.setTextColor(31, 56, 100); pdf.text('COMPROBANTE DE PAGO', W - 14, y0 + 13, { align: 'right' });
+    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(60, 60, 60); pdf.text(c.razon + ' · ' + (p.titulo || titPlan(p)), W - 14, y0 + 18.5, { align: 'right' });
+    pdf.setDrawColor(31, 56, 100); pdf.setLineWidth(0.6); pdf.line(x, y0 + 23, W - 14, y0 + 23);
+    pdf.setTextColor(25, 25, 25); pdf.setFontSize(10);
+    var dato = function(l, v2, xx, yy){ pdf.setFont('helvetica', 'bold'); pdf.text(l, xx, yy); var an = pdf.getTextWidth(l); pdf.setFont('helvetica', 'normal'); pdf.text(String(v2 == null || v2 === '' ? '—' : v2), xx + an + 2, yy); };
+    dato('Colaborador:', f.nombre, x, y0 + 30); dato('Código:', f.codigo, 150, y0 + 30);
+    dato('Puesto:', f.cargo, x, y0 + 36); dato('Departamento:', f.depto, 110, y0 + 36);
+    dato('Días trabajados:', f.dias, x, y0 + 42); dato('Salario mensual:', 'L ' + mon(f.salario), 110, y0 + 42);
+    var ing = COL_ING[raiz].filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = COL_DED[raiz].filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
+    var heL = f.heHoras && (parseFloat(f.horasExtras) || 0) ? HE_REC.filter(function(r){ return (parseFloat(f.heHoras[r[0]]) || 0) > 0; }) : [];
+    var yy = y0 + 51; pdf.setFillColor(220, 230, 241); pdf.rect(x, yy - 4.5, 92, 6.5, 'F'); pdf.rect(110, yy - 4.5, 92, 6.5, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setTextColor(31, 56, 100); pdf.text('INGRESOS', x + 2, yy); pdf.text('DEDUCCIONES', 112, yy); pdf.setTextColor(25, 25, 25);
+    var fil = function(arr, xx){ var y = yy + 7, salto = false; arr.forEach(function(k){
+        if(arr === ing && !salto && ing.indexOf('horasExtras') >= 0 && ing.indexOf(k) > ing.indexOf('horasExtras')){ y += heL.length * 4.2; salto = true; }
+        pdf.setFont('helvetica', 'normal'); pdf.text(NOMCOL[k] + (k === 'horasExtras' && heL.length ? ' (' + heTotH(f.heHoras) + ' h)' : ''), xx + 2, y); pdf.text('L ' + mon(f[k]), xx + 90, y, { align: 'right' }); y += 5.6; });
+      if(!arr.length){ pdf.setTextColor(140, 140, 140); pdf.text('—', xx + 2, y); pdf.setTextColor(25, 25, 25); } };
+    fil(ing, x); fil(ded, 110);
+    if(heL.length){ var yh = yy + 7 + ing.indexOf('horasExtras') * 5.6 + 4.4; pdf.setFontSize(8.5); pdf.setTextColor(90, 90, 90);
+      heL.forEach(function(r){ pdf.text('• ' + r2(f.heHoras[r[0]]) + ' h al ' + r[2], x + 7, yh); yh += 4.2; });
+      pdf.setFontSize(10); pdf.setTextColor(25, 25, 25); }
+    var yt = y0 + 51 + 7 + Math.max(ing.length * 5.6 + heL.length * 4.2, ded.length * 5.6, 5.6) + 2;
+    pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.3); pdf.line(x, yt - 3, W - 14, yt - 3);
+    pdf.setFont('helvetica', 'bold'); pdf.text('Total devengado', x + 2, yt + 1); pdf.text('L ' + mon(t.dev), x + 90, yt + 1, { align: 'right' });
+    pdf.text('Total deducciones', 112, yt + 1); pdf.text('L ' + mon(t.ded), 200, yt + 1, { align: 'right' });
+    pdf.setFillColor(31, 56, 100); pdf.rect(110, yt + 5, 92, 9, 'F'); pdf.setTextColor(255, 255, 255); pdf.setFontSize(11.5); pdf.text('NETO A PAGAR', 113, yt + 11); pdf.text('L ' + mon(t.neto), 199, yt + 11, { align: 'right' });
+    pdf.setTextColor(25, 25, 25); pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
+    var yf = Math.min(yt + 30, y0 + 128); pdf.line(x, yf, x + 70, yf); pdf.text('Recibí conforme: ' + f.nombre, x, yf + 4.5);
+    pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 150); pdf.text('Documento generado desde NEXO RRHH — ' + fmt(hoy()), W - 14, y0 + 134, { align: 'right' });
+    return pdf;
+  }
+  // logo en JPEG liviano (el PNG sin comprimir dejaba cada PDF en ~600 KB; así queda en ~40 KB, bueno para correo o WhatsApp)
+  function logoComp(){ if(logoComp._jpg !== undefined || typeof _LOGO_MONTASA_B64 === 'undefined') return Promise.resolve(); return new Promise(function(ok){ var im = new Image(); im.onload = function(){ try{ var cv = document.createElement('canvas'); cv.width = im.naturalWidth; cv.height = im.naturalHeight; var x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0); logoComp._jpg = cv.toDataURL('image/jpeg', 0.9); }catch(e){ logoComp._jpg = ''; } ok(); }; im.onerror = function(){ logoComp._jpg = ''; ok(); }; im.src = _LOGO_MONTASA_B64; }); }
+  function cargarPDF(){ return logoComp().then(function(){ return cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }); }); }
   function comprobantes(raiz, p, filas){
     if(!filas.length) return;
-    cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){ return !!(window.jspdf && window.jspdf.jsPDF); }).then(function(){
-      var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'letter' }), W = 215.9, logo = (typeof _LOGO_MONTASA_B64 !== 'undefined') ? _LOGO_MONTASA_B64 : '', c = cfg(raiz);
-      filas.forEach(function(f, i){
-        if(i && i % 2 === 0) pdf.addPage();
-        var y0 = (i % 2) * 139.7, t = totFila(raiz, f), x = 14;
-        if(logo) try{ pdf.addImage(logo, 'PNG', x, y0 + 8, 38, 11.8, 'logoNexo'); }catch(e){}   // alias: el logo se guarda una sola vez en el PDF
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12.5); pdf.setTextColor(31, 56, 100); pdf.text('COMPROBANTE DE PAGO', W - 14, y0 + 13, { align: 'right' });
-        pdf.setFontSize(9); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(60, 60, 60); pdf.text(c.razon + ' · ' + (p.titulo || titPlan(p)), W - 14, y0 + 18.5, { align: 'right' });
-        pdf.setDrawColor(31, 56, 100); pdf.setLineWidth(0.6); pdf.line(x, y0 + 23, W - 14, y0 + 23);
-        pdf.setTextColor(25, 25, 25); pdf.setFontSize(10);
-        var dato = function(l, v2, xx, yy){ pdf.setFont('helvetica', 'bold'); pdf.text(l, xx, yy); var an = pdf.getTextWidth(l); pdf.setFont('helvetica', 'normal'); pdf.text(String(v2 == null || v2 === '' ? '—' : v2), xx + an + 2, yy); };
-        dato('Colaborador:', f.nombre, x, y0 + 30); dato('Código:', f.codigo, 150, y0 + 30);
-        dato('Puesto:', f.cargo, x, y0 + 36); dato('Departamento:', f.depto, 110, y0 + 36);
-        dato('Días trabajados:', f.dias, x, y0 + 42); dato('Salario mensual:', 'L ' + mon(f.salario), 110, y0 + 42);
-        var ing = COL_ING[raiz].filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = COL_DED[raiz].filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
-        var yy = y0 + 51; pdf.setFillColor(220, 230, 241); pdf.rect(x, yy - 4.5, 92, 6.5, 'F'); pdf.rect(110, yy - 4.5, 92, 6.5, 'F');
-        pdf.setFont('helvetica', 'bold'); pdf.setTextColor(31, 56, 100); pdf.text('INGRESOS', x + 2, yy); pdf.text('DEDUCCIONES', 112, yy); pdf.setTextColor(25, 25, 25);
-        var fil = function(arr, xx){ var y = yy + 7; arr.forEach(function(k){ if(arr === ing && k !== 'horasExtras' && ing.indexOf('horasExtras') >= 0 && ing.indexOf(k) > ing.indexOf('horasExtras') && !fil._b){ y += heL.length * 4.2; fil._b = 1; } pdf.setFont('helvetica', 'normal'); pdf.text(NOMCOL[k] + (k === 'horasExtras' && heL.length ? ' (' + heTotH(f.heHoras) + ' h)' : ''), xx + 2, y); pdf.text('L ' + mon(f[k]), xx + 90, y, { align: 'right' }); y += 5.6; }); if(!arr.length){ pdf.setTextColor(140, 140, 140); pdf.text('—', xx + 2, y); pdf.setTextColor(25, 25, 25); } };
-        // (2026-11-18, Miguel) debajo de «Horas extras»: las horas pagadas por cada porcentaje
-        var heL = f.heHoras && (parseFloat(f.horasExtras) || 0) ? HE_REC.filter(function(r){ return (parseFloat(f.heHoras[r[0]]) || 0) > 0; }) : [];
-        fil(ing, x); fil(ded, 110);
-        if(heL.length){ var yh = yy + 7 + ing.indexOf('horasExtras') * 5.6 + 4.4; pdf.setFontSize(8.5); pdf.setTextColor(90, 90, 90);
-          heL.forEach(function(r){ pdf.text('• ' + r2(f.heHoras[r[0]]) + ' h al ' + r[2], x + 7, yh); yh += 4.2; });
-          pdf.setFontSize(10); pdf.setTextColor(25, 25, 25); }
-        var yt = y0 + 51 + 7 + Math.max(ing.length * 5.6 + heL.length * 4.2, ded.length * 5.6, 5.6) + 2;
-        pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.3); pdf.line(x, yt - 3, W - 14, yt - 3);
-        pdf.setFont('helvetica', 'bold'); pdf.text('Total devengado', x + 2, yt + 1); pdf.text('L ' + mon(t.dev), x + 90, yt + 1, { align: 'right' });
-        pdf.text('Total deducciones', 112, yt + 1); pdf.text('L ' + mon(t.ded), 200, yt + 1, { align: 'right' });
-        pdf.setFillColor(31, 56, 100); pdf.rect(110, yt + 5, 92, 9, 'F'); pdf.setTextColor(255, 255, 255); pdf.setFontSize(11.5); pdf.text('NETO A PAGAR', 113, yt + 11); pdf.text('L ' + mon(t.neto), 199, yt + 11, { align: 'right' });
-        pdf.setTextColor(25, 25, 25); pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
-        var yf = Math.min(yt + 30, y0 + 128); pdf.line(x, yf, x + 70, yf); pdf.text('Recibí conforme: ' + f.nombre, x, yf + 4.5);
-        pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 150); pdf.text('Documento generado desde NEXO RRHH — ' + fmt(hoy()), W - 14, y0 + 134, { align: 'right' });
-        if(i % 2 === 0 && i < filas.length - 1){ pdf.setLineDashPattern([2, 2], 0); pdf.setDrawColor(160, 160, 160); pdf.line(8, 139.7, W - 8, 139.7); pdf.setLineDashPattern([], 0); }
-      });
-      var nom = filas.length === 1 ? 'Comprobante_' + String(filas[0].nombre).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]+/g, '_') : 'Comprobantes_' + nomEmp(raiz).replace(/\s+/g, '_');
-      pdf.save(nom + '_' + p.periodo + '.pdf');
-    }).catch(function(er){ aviso('No se generó: ' + er.message, true); });
+    if(filas.length === 1) return cargarPDF().then(function(){ pdfComprobante(raiz, p, filas[0]).save(nomArchivoComp(filas[0], p)); }).catch(function(er){ aviso('No se generó: ' + er.message, true); });
+    aviso('Armando ' + filas.length + ' comprobantes…');
+    Promise.all([cargarPDF(), cargarZip()]).then(function(){
+      var zip = new window.JSZip();
+      filas.forEach(function(f){ zip.file(nomArchivoComp(f, p), pdfComprobante(raiz, p, f).output('arraybuffer')); });
+      return zip.generateAsync({ type: 'blob' });
+    }).then(function(b){
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = ('Comprobantes_' + nomEmp(raiz) + '_' + (p.titulo || p.periodo)).replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_') + '.zip';
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      aviso('📄 ' + filas.length + ' comprobantes listos (.zip, uno por persona)');
+    }).catch(function(er){ aviso('No se generaron: ' + er.message, true); });
   }
 
   // ══ HORAS EXTRA DESDE EXCEL (2026-11-18, «FORMATO DE HORAS EXTRAS.xlsx», hoja RESUMEN) ══════════════════════════
