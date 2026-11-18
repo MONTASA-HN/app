@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a06d82378cd4';
+  var APP_VERSION='55f10d0911e3';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -315,7 +315,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function ingresoDe(raiz, e){ if(e.fechaIngreso) return e.fechaIngreso; var c = colDe(raiz, e); return c ? c.fechaIngreso : ''; }
   function privDe(raiz, id){ return D[raiz].priv[id] || {}; }
   function salarioDe(raiz, id){
-    var p = privDe(raiz, id), h = lista(p.historial).filter(function(x){ return x.vigencia <= hoy(); }).sort(function(a, b){ return String(b.vigencia).localeCompare(a.vigencia) || (b.ts || 0) - (a.ts || 0); });
+    var p = privDe(raiz, id), h = lista(p.historial).filter(function(x){ return !x.anulada && x.vigencia <= hoy(); }).sort(function(a, b){ return String(b.vigencia).localeCompare(a.vigencia) || (b.ts || 0) - (a.ts || 0); });
     return h.length ? h[0].nuevo : (p.salario != null ? p.salario : null);
   }
   function docsDe(raiz, id){ return lista(D[raiz].docsIdx[id]).sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); }); }
@@ -453,11 +453,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + kv('Horario de trabajo', esc(e.horario)) + kv('Tipo de contrato', esc(ct.tipo)) + kv('Contrato vence', ct.vence ? fmt(ct.vence) : (ct.tipo ? 'Sin fecha de fin' : '')) + '</div>'
       + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + (e.empresaPlanilla && e.empresaPlanilla !== raiz ? kv('Se paga en la planilla de', '<b>' + nomEmp(e.empresaPlanilla) + '</b>') : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
     // historial
-    var hist = lista(e.historial).map(function(x){ return { f: x.fecha, t: x.texto }; })
+    var puedeEd = !(D[raiz]._sinAcceso || {}).priv && permisoRol !== 'gerencia';
+    var hist = Object.keys(e.historial || {}).filter(function(k){ return e.historial[k] && !e.historial[k].anulada; }).map(function(k){ var x = e.historial[k]; return { f: x.fecha, t: x.texto + (x.editado ? ' <span class="tag">corregido</span>' : ''), ed: puedeEd ? 'hh|' + k : '' }; })
       .concat(lista(p.constancias).map(function(x){ return { f: x.fecha, t: (x.modo === 'impresa' ? '🖨 ' : '📄 ') + (TIPOS_C[x.tipo] || 'Constancia') + (x.modo === 'impresa' ? ' impresa' : ' generada') + (x.dirigido ? ' — ' + esc(x.dirigido) : '') }; }))
-      .concat(lista(p.historial).map(function(x){ return { f: x.vigencia, t: '💵 Salario ' + (x.anterior != null ? lps(x.anterior) + ' → ' : '') + '<b>' + lps(x.nuevo) + '</b> (vigente desde ' + fmt(x.vigencia) + ')' + (x.nota ? ' — ' + esc(x.nota) : '') }; }))
+      .concat(Object.keys(p.historial || {}).filter(function(k){ return p.historial[k] && !p.historial[k].anulada; }).map(function(k){ var x = p.historial[k]; return { f: x.vigencia, t: '💵 Salario ' + (x.anterior != null ? lps(x.anterior) + ' → ' : '') + '<b>' + lps(x.nuevo) + '</b> (vigente desde ' + fmt(x.vigencia) + ')' + (x.nota ? ' — ' + esc(x.nota) : '') + (x.editado ? ' <span class="tag">corregido</span>' : ''), ed: puedeEd ? 'hs|' + k : '' }; }))
       .sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
-    h += '<div class="card"><h3 style="margin-top:0">🗂 Historial</h3>' + (hist.length ? hist.map(function(x){ return '<div class="sub" style="padding:6px 0;border-bottom:1px solid #f0f2f5;color:#1d2433"><b style="color:#1f3864">' + fmt(x.f) + '</b> · ' + x.t + '</div>'; }).join('') : '<div class="sub">Sin cambios registrados todavía.</div>') + '</div>';
+    h += '<div class="card"><h3 style="margin-top:0">🗂 Historial</h3>' + (hist.length ? hist.map(function(x){ return '<div class="sub" style="padding:6px 0;border-bottom:1px solid #f0f2f5;color:#1d2433;display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><b style="color:#1f3864">' + fmt(x.f) + '</b> · ' + x.t + '</div>'
+      + (x.ed ? '<button class="bt" data-a="hist-ed" data-k="' + esc(x.ed) + '" title="Corregir" style="padding:3px 8px">✏️</button><button class="bt br" data-a="hist-an" data-k="' + esc(x.ed) + '" title="Anular" style="padding:3px 8px">🗑</button>' : '') + '</div>'; }).join('') : '<div class="sub">Sin cambios registrados todavía.</div>') + '</div>';
     if(e.salida){ var s = e.salida;
       h += '<div class="card" style="border-color:#f1b5b3"><h3 style="margin-top:0;color:#b42318">🚪 Salida de la empresa</h3><div class="kv">' + kv('Fecha de ingreso', fmt(s.ingreso || ing)) + kv('Fecha de salida', fmt(s.fecha)) + kv('Motivo', esc(s.motivo)) + kv('Detalle', esc(s.detalle))
         + kv('Puesto', esc(s.cargo)) + kv('Departamento', esc(s.departamento)) + kv('Finiquito', s.finiquito ? 'Registrado' : 'No') + kv('Recontratable', s.recontratable === 'si' ? 'Sí' : s.recontratable === 'no' ? 'No' : '') + '</div>'
@@ -920,7 +922,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     return Math.min(360, (y.getFullYear() - x.getFullYear()) * 360 + (y.getMonth() - x.getMonth()) * 30 + (d2 - d1) + 1); }
   // salario que tenía la persona en una fecha, según el historial salarial de la ficha
   function salarioEn(rf, id, fecha){
-    var pv = privDe(rf, id), h = lista(pv.historial).filter(function(x){ return x.vigencia && parseFloat(x.nuevo) > 0; }).sort(function(a, b){ return String(a.vigencia).localeCompare(b.vigencia) || (a.ts || 0) - (b.ts || 0); });
+    var pv = privDe(rf, id), h = lista(pv.historial).filter(function(x){ return !x.anulada && x.vigencia && parseFloat(x.nuevo) > 0; }).sort(function(a, b){ return String(a.vigencia).localeCompare(b.vigencia) || (a.ts || 0) - (b.ts || 0); });
     var antes = h.filter(function(x){ return x.vigencia <= fecha; });
     if(antes.length) return parseFloat(antes[antes.length - 1].nuevo);
     if(h.length) return parseFloat(h[0].anterior) > 0 ? parseFloat(h[0].anterior) : parseFloat(h[0].nuevo);   // antes del primer cambio: el salario «anterior»
@@ -929,7 +931,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function sumarDia(s2, n){ var d = aF(s2); return iso(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)); }
   // tramos del período con su salario (los cambios de salario dentro del período parten el cálculo)
   function tramosDecimo(rf, id, desde, fin){
-    var cortes = lista(privDe(rf, id).historial).map(function(x){ return x.vigencia; }).filter(function(v2){ return v2 && v2 > desde && v2 <= fin; }).sort();
+    var cortes = lista(privDe(rf, id).historial).filter(function(x){ return !x.anulada; }).map(function(x){ return x.vigencia; }).filter(function(v2){ return v2 && v2 > desde && v2 <= fin; }).sort();
     cortes = cortes.filter(function(v2, i){ return cortes.indexOf(v2) === i; });
     var T = [], ini = desde;
     cortes.concat([null]).forEach(function(c){ var hasta = c ? sumarDia(c, -1) : fin; if(hasta >= ini){ T.push({ desde: ini, hasta: hasta, salario: salarioEn(rf, id, ini), dias: dias360(ini, hasta) }); } if(c) ini = c; });
@@ -1559,6 +1561,45 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + (soloVer ? '' : '<button class="bt bp" data-a="pl-he-per" data-p="' + esc(per) + '">📥 Subir horas extra (MT y MH)</button>') + '</div>';
   }
 
+  // ── corrección del historial (auditable) ──
+  function salarioVigenteCon(h){ var L = Object.keys(h || {}).map(function(k){ return h[k]; }).filter(function(x){ return x && !x.anulada && x.vigencia <= hoy(); }).sort(function(a, b){ return String(b.vigencia).localeCompare(a.vigencia) || (b.ts || 0) - (a.ts || 0); }); return L.length ? L[0].nuevo : null; }
+  function guardarSalarioHist(raiz, e, k, nuevoReg, motivo, txtOk){
+    var pv = privDe(raiz, e.id), h = JSON.parse(JSON.stringify(pv.historial || {})), antes = h[k] || {};
+    var reg = Object.assign({}, antes, nuevoReg); var ed = {}; ed['e' + Date.now()] = { ts: Date.now(), motivo: motivo, antes: { vigencia: antes.vigencia || null, nuevo: antes.nuevo != null ? antes.nuevo : null, anterior: antes.anterior != null ? antes.anterior : null, nota: antes.nota || '' } };
+    reg.ediciones = Object.assign({}, antes.ediciones || {}, ed); reg.editado = Date.now(); h[k] = reg;
+    var up = {}; up['historial/' + k] = reg; var sv = salarioVigenteCon(h); if(sv != null) up.salario = sv;
+    return db().ref('rrhh/' + raiz + '/priv/' + e.id).update(up).then(function(){ aviso(txtOk); });
+  }
+  function corregirSalario(raiz, e, k){
+    var x = (privDe(raiz, e.id).historial || {})[k]; if(!x) return;
+    ventana('✏️ Corregir salario del historial', '<div class="sub" style="margin-top:6px">' + esc(e.nombreCompleto) + '. La corrección queda registrada (cómo estaba y por qué se cambió). Los décimos usan estas fechas y montos.</div>'
+      + '<div class="g2"><div><label>Vigente desde *</label><input id="hs-v" type="date" value="' + esc(x.vigencia || '') + '"></div><div><label>Salario (mensual, L) *</label><input id="hs-n" type="number" step="0.01" value="' + esc(x.nuevo != null ? x.nuevo : '') + '"></div></div>'
+      + '<div class="g2"><div><label>Salario anterior (L)</label><input id="hs-a" type="number" step="0.01" value="' + esc(x.anterior != null ? x.anterior : '') + '" placeholder="vacío = salario inicial"></div><div><label>Nota</label><input id="hs-t" value="' + esc(x.nota || '') + '"></div></div>'
+      + '<label>Motivo de la corrección *</label><input id="hs-m" placeholder="Ej: el salario de ingreso venía mal en el Excel">', function(w){
+        var vig = v(w, 'hs-v'), n = parseFloat(v(w, 'hs-n')), an = v(w, 'hs-a'), m = v(w, 'hs-m');
+        if(!aF(vig) || !(n > 0)){ alert('Revisa la fecha y el salario.'); return; } if(!m){ alert('Escribe el motivo de la corrección.'); return; }
+        guardarSalarioHist(raiz, e, k, { vigencia: vig, nuevo: n, anterior: an === '' ? null : parseFloat(an), nota: v(w, 'hs-t') }, m, 'Salario corregido ✓').then(function(){ w.remove(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      }, '💾 Guardar corrección');
+  }
+  function anularSalario(raiz, e, k){
+    var x = (privDe(raiz, e.id).historial || {})[k]; if(!x) return;
+    var m = prompt('¿Anular este registro de salario (' + lps(x.nuevo) + ' desde ' + fmt(x.vigencia) + ')?\n\nQueda guardado como anulado. Motivo:', ''); if(m === null || !m.trim()) return;
+    guardarSalarioHist(raiz, e, k, { anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }, 'Anulado: ' + m.trim(), 'Registro anulado ✓').catch(function(er){ aviso('No se anuló: ' + er.message, true); });
+  }
+  function corregirNota(raiz, e, k){
+    var x = (e.historial || {})[k]; if(!x) return; var plano = String(x.texto || '').replace(/<[^>]+>/g, '');
+    ventana('✏️ Corregir anotación del historial', '<div class="sub" style="margin-top:6px">' + esc(e.nombreCompleto) + '. La corrección queda registrada.</div>'
+      + '<label>Fecha *</label><input id="hh-f" type="date" value="' + esc(x.fecha || '') + '"><label>Texto *</label><textarea id="hh-t" rows="3">' + esc(plano) + '</textarea>'
+      + '<label>Motivo de la corrección *</label><input id="hh-m">', function(w){
+        var fch = v(w, 'hh-f'), tx = v(w, 'hh-t'), m = v(w, 'hh-m'); if(!aF(fch) || !tx){ alert('Revisa la fecha y el texto.'); return; } if(!m){ alert('Escribe el motivo.'); return; }
+        var reg = Object.assign({}, x, { fecha: fch, texto: tx === plano ? x.texto : esc(tx), editado: Date.now() }); reg.ediciones = Object.assign({}, x.ediciones || {}); reg.ediciones['e' + Date.now()] = { ts: Date.now(), motivo: m, antes: { fecha: x.fecha || '', texto: x.texto || '' } };
+        db().ref('rrhh/' + raiz + '/empleados/' + e.id + '/historial/' + k).set(reg).then(function(){ w.remove(); aviso('Anotación corregida ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      }, '💾 Guardar corrección');
+  }
+  function anularNota(raiz, e, k){
+    var x = (e.historial || {})[k]; if(!x) return; var m = prompt('¿Anular esta anotación del historial?\n\nQueda guardada como anulada. Motivo:', ''); if(m === null || !m.trim()) return;
+    db().ref('rrhh/' + raiz + '/empleados/' + e.id + '/historial/' + k).update({ anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }).then(function(){ aviso('Anotación anulada ✓'); }).catch(function(er){ aviso('No se anuló: ' + er.message, true); });
+  }
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
@@ -1590,6 +1631,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'reingreso') return reingreso(f.raiz, e);
     if(a === 'otra') return otraEmpresa(f.raiz, e);
     if(a === 'incap') return formIncapacidad(f.raiz, e);
+    if(a === 'hist-ed' || a === 'hist-an'){ var hk = t.getAttribute('data-k').split('|'); return hk[0] === 'hs' ? (a === 'hist-ed' ? corregirSalario(f.raiz, e, hk[1]) : anularSalario(f.raiz, e, hk[1])) : (a === 'hist-ed' ? corregirNota(f.raiz, e, hk[1]) : anularNota(f.raiz, e, hk[1])); }
     if(a === 'doc-subir') return subirDoc(f.raiz, e);
     if(a === 'doc-ver') return verDoc(f.raiz, e, t.getAttribute('data-d'));
     if(a === 'doc-borrar') return borrarDoc(f.raiz, e, t.getAttribute('data-d'));
