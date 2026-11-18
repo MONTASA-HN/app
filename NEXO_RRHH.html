@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='ef0461991e8b';
+  var APP_VERSION='a06d82378cd4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -918,13 +918,38 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function dias360(a, b){ var x = aF(a), y = aF(b); if(!x || !y || y < x) return 0; var d1 = Math.min(x.getDate(), 30), d2 = Math.min(y.getDate(), 30);
     if(y.getMonth() === 1 && y.getDate() === new Date(y.getFullYear(), 2, 0).getDate()) d2 = 30;
     return Math.min(360, (y.getFullYear() - x.getFullYear()) * 360 + (y.getMonth() - x.getMonth()) * 30 + (d2 - d1) + 1); }
+  // salario que tenía la persona en una fecha, según el historial salarial de la ficha
+  function salarioEn(rf, id, fecha){
+    var pv = privDe(rf, id), h = lista(pv.historial).filter(function(x){ return x.vigencia && parseFloat(x.nuevo) > 0; }).sort(function(a, b){ return String(a.vigencia).localeCompare(b.vigencia) || (a.ts || 0) - (b.ts || 0); });
+    var antes = h.filter(function(x){ return x.vigencia <= fecha; });
+    if(antes.length) return parseFloat(antes[antes.length - 1].nuevo);
+    if(h.length) return parseFloat(h[0].anterior) > 0 ? parseFloat(h[0].anterior) : parseFloat(h[0].nuevo);   // antes del primer cambio: el salario «anterior»
+    return parseFloat(pv.salario) || 0;
+  }
+  function sumarDia(s2, n){ var d = aF(s2); return iso(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)); }
+  // tramos del período con su salario (los cambios de salario dentro del período parten el cálculo)
+  function tramosDecimo(rf, id, desde, fin){
+    var cortes = lista(privDe(rf, id).historial).map(function(x){ return x.vigencia; }).filter(function(v2){ return v2 && v2 > desde && v2 <= fin; }).sort();
+    cortes = cortes.filter(function(v2, i){ return cortes.indexOf(v2) === i; });
+    var T = [], ini = desde;
+    cortes.concat([null]).forEach(function(c){ var hasta = c ? sumarDia(c, -1) : fin; if(hasta >= ini){ T.push({ desde: ini, hasta: hasta, salario: salarioEn(rf, id, ini), dias: dias360(ini, hasta) }); } if(c) ini = c; });
+    T = T.reduce(function(acc, t){ var u = acc[acc.length - 1]; if(u && r2(u.salario) === r2(t.salario)){ u.hasta = t.hasta; u.dias += t.dias; } else acc.push(t); return acc; }, []);   // mismo salario seguido = un solo tramo
+    var tot = dias360(desde, fin), suma = T.reduce(function(a, t){ return a + t.dias; }, 0);
+    if(T.length && suma !== tot) T[T.length - 1].dias += tot - suma;   // ajuste de fin de mes del año de 360 días
+    return T;
+  }
   function filaDecimo(raiz, e, rf, per){
     var f = filaDe(raiz, e, rf), rg = rangoDecimo(per), ing = ingresoDe(rf, e), desde = ing && ing > rg.ini ? ing : rg.ini;
     COL_ING[raiz].concat(COL_DED[raiz]).forEach(function(k){ delete f[k]; });
-    f.tipoPl = /D13$/.test(per) ? 'd13' : 'd14'; f.dias = dias360(desde, rg.fin); f.decimo = r2((parseFloat(f.salario) || 0) * f.dias / 360);
-    f.otrosIngresos = 0; f.isr = 0; f.otrasDed = 0; f.ingreso = ing || '';
-    if(!ing) f.notasAuto = ['Sin fecha de ingreso en la ficha: se tomó el período completo (360 días). Revísalo.'];
-    else if(ing > rg.ini) f.notasAuto = ['Proporcional: ingresó el ' + fmt(ing) + ' (' + f.dias + ' de 360 días)'];
+    f.tipoPl = /D13$/.test(per) ? 'd13' : 'd14'; f.ingreso = ing || '';
+    var T = tramosDecimo(rf, e.id, desde, rg.fin), dias = T.reduce(function(a, t){ return a + t.dias; }, 0), monto = T.reduce(function(a, t){ return a + t.salario * t.dias / 360; }, 0);
+    f.dias = dias; f.decimo = r2(monto); f.tramos = T; f.salarioPromedio = dias ? r2(monto * 360 / dias) : (parseFloat(f.salario) || 0);
+    f.otrosIngresos = 0; f.isr = 0; f.otrasDed = 0;
+    var nt = [];
+    if(!ing) nt.push('Sin fecha de ingreso en la ficha: se tomó el período completo (360 días). Revísalo.');
+    else if(ing > rg.ini) nt.push('Proporcional: ingresó el ' + fmt(ing) + ' (' + dias + ' de 360 días)');
+    if(T.length > 1) nt.push('Con aumentos: ' + T.map(function(t){ return 'L ' + mon(t.salario) + ' × ' + t.dias + ' d (' + fmt(t.desde) + '–' + fmt(t.hasta) + ')'; }).join(' + '));
+    if(nt.length) f.notasAuto = nt;
     return f;
   }
   function titPlan(p){ var a0 = String(p.periodo || '').split('-'); if(a0[2] === 'D13') return 'DÉCIMO TERCER MES ' + a0[0]; if(a0[2] === 'D14') return 'DÉCIMO CUARTO MES ' + a0[0];
@@ -1026,7 +1051,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(r2(f[k]) === val) return;
     f[k] = val;
     var up = {}; up[k] = val;
-    if(k === 'dias' && esDecimo(f)){ if(val > 360){ val = 360; f.dias = 360; up.dias = 360; } f.decimo = r2((parseFloat(f.salario) || 0) * val / 360); up.decimo = f.decimo; var od = document.querySelector('[data-pc="' + emp + '|decimo"]'); if(od) od.value = f.decimo; }
+    if(k === 'dias' && esDecimo(f)){ if(val > 360){ val = 360; f.dias = 360; up.dias = 360; } f.decimo = r2((parseFloat(f.salarioPromedio || f.salario) || 0) * val / 360); up.decimo = f.decimo; var od = document.querySelector('[data-pc="' + emp + '|decimo"]'); if(od) od.value = f.decimo; }
     else if(k === 'dias'){ f.ordinario = r2((parseFloat(f.salario) || 0) / 30 * val); var o = document.querySelector('[data-pc="' + emp + '|ordinario"]'); if(o) o.value = f.ordinario; up.ordinario = f.ordinario; }
     db().ref('rrhh/' + raiz + '/planillas/' + p.id + '/filas/' + emp).update(up).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     var t = totFila(raiz, f); ['_dev', '_ded', '_neto'].forEach(function(c){ var td = document.querySelector('[data-pt="' + emp + '|' + c + '"]'); if(td) td.textContent = mon(c === '_dev' ? t.dev : c === '_ded' ? t.ded : t.neto); });
@@ -1048,7 +1073,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-refrescar'){ if(!confirm('¿Actualizar nombre, código, departamento, cuenta y salario de cada fila con los datos actuales de las fichas?\n\nTambién recalcula el IHSS (techo y %) y, si cambió el salario, el ordinario y las horas extra cargadas del Excel. Los demás montos escritos no cambian.')) return;
       var up2 = {}; lista(p.filas).forEach(function(f){ var rf = f.raizFicha || raiz, e = D[rf].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e, rf); up2['filas/' + f.empId + '/raizFicha'] = rf;
         ['codigo', 'nombre', 'depto', 'cargo', 'identidad', 'cuenta', 'banco', 'tipoCuenta', 'direccion', 'telefono', 'correo', 'salario'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nf[k]; });
-        if(esDecimo(f)){ up2['filas/' + f.empId + '/decimo'] = r2(nf.salario * (parseFloat(f.dias) || 0) / 360); return; }
+        if(esDecimo(f)){ var nd = filaDecimo(raiz, e, rf, p.periodo); ['decimo', 'dias', 'tramos', 'salarioPromedio', 'notasAuto', 'ingreso'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nd[k] === undefined ? null : nd[k]; }); return; }
         up2['filas/' + f.empId + '/ihss'] = ihssDe(raiz, nf.salario);
         if(r2(nf.salario) !== r2(f.salario)){ up2['filas/' + f.empId + '/ordinario'] = r2(nf.salario / 30 * (parseFloat(f.dias) || 0)); if(f.heHoras) up2['filas/' + f.empId + '/horasExtras'] = heMonto(raiz, nf.salario, f.heHoras); } });
       ref.update(up2).then(function(){ aviso('Datos actualizados ✓'); }); return; }
@@ -1125,7 +1150,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var dato = function(l, v2, xx, yy){ pdf.setFont('helvetica', 'bold'); pdf.text(l, xx, yy); var an = pdf.getTextWidth(l); pdf.setFont('helvetica', 'normal'); pdf.text(String(v2 == null || v2 === '' ? '—' : v2), xx + an + 2, yy); };
     dato('Colaborador:', f.nombre, x, y0 + 30); dato('Código:', f.codigo, 150, y0 + 30);
     dato('Puesto:', f.cargo, x, y0 + 36); dato('Departamento:', f.depto, 110, y0 + 36);
-    dato(esDecimo(f) ? 'Días en el período:' : 'Días trabajados:', f.dias + (esDecimo(f) ? ' de 360' : ''), x, y0 + 42); dato('Salario mensual:', 'L ' + mon(f.salario), 110, y0 + 42);
+    dato(esDecimo(f) ? 'Días en el período:' : 'Días trabajados:', f.dias + (esDecimo(f) ? ' de 360' : ''), x, y0 + 42); dato(esDecimo(f) && (f.tramos || []).length > 1 ? 'Salario promedio:' : 'Salario mensual:', 'L ' + mon(esDecimo(f) && f.salarioPromedio ? f.salarioPromedio : f.salario), 110, y0 + 42);
     var ing = colsI(raiz, f).filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = colsD(raiz, f).filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
     var heL = f.heHoras && (parseFloat(f.horasExtras) || 0) ? HE_REC.filter(function(r){ return (parseFloat(f.heHoras[r[0]]) || 0) > 0; }) : [];
     var yy = y0 + 51; pdf.setFillColor(220, 230, 241); pdf.rect(x, yy - 4.5, 92, 6.5, 'F'); pdf.rect(110, yy - 4.5, 92, 6.5, 'F');
