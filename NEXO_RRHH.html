@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='55f10d0911e3';
+  var APP_VERSION='88b86754c108';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -329,7 +329,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(escuchando) return;
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
-    escucharArchivos();
+    try{ escucharArchivos(); escucharConfig(); }catch(e){ console.warn('rrhh config', e); }
     EMPRESAS.forEach(function(E){
       (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas', 'incapacidades', 'acciones']).forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
@@ -383,6 +383,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function raices(){ return ui.emp === 'todas' ? EMPRESAS.map(function(e){ return e.raiz; }) : [ui.emp]; }
   function pintar(){
     var root = $('#rh'); if(!root) return;
+    aplicarConfig();   // listas, columnas y reglas según «⚙️ Configuración»
     root.querySelectorAll('.emp button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-emp') === ui.emp); });
     root.querySelectorAll('.nav button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v') === ui.vista); });
     var c = $('#rh-c');
@@ -399,6 +400,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var nu = kk && c.querySelector(kk); if(nu){ nu.value = vv; nu.focus(); try{ nu.setSelectionRange(ss, ss); }catch(e){} }
     }
     else if(ui.vista === 'incap') pintarIncapacidades(c);
+    else if(ui.vista === 'config') pintarConfig(c);
     else if(ui.vista === 'alertas') pintarAlertas(c);
     else if(ui.vista === 'resumen') pintarResumen(c);
     else pintarLista(c);
@@ -913,8 +915,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function ihssDe(raiz, sal){ var k = ihssCfg(raiz); sal = parseFloat(sal) || 0; return k.aplica && sal > 0 ? r2(Math.min(sal, k.techo) * k.pct / 100 / 2) : 0; }
   var COL_DEC_ING = ['dias', 'decimo', 'otrosIngresos'], COL_DEC_DED = ['isr', 'otrasDed'];
   function esDecimo(x){ return !!(x && (x.tipoPl || /-D1[34]$/.test(String(x.periodo || '')))); }
-  function colsI(raiz, x){ return esDecimo(x) ? COL_DEC_ING : COL_ING[raiz]; }
-  function colsD(raiz, x){ return esDecimo(x) ? COL_DEC_DED : COL_DED[raiz]; }
+  function colsI(raiz, x){ return esDecimo(x) ? COL_DEC_ING : (x && x.colsI) || BASE.COL_ING[raiz]; }
+  function colsD(raiz, x){ return esDecimo(x) ? COL_DEC_DED : (x && x.colsD) || BASE.COL_DED[raiz]; }
   function rangoDecimo(per){ var a = String(per).split('-'), y = +a[0]; return a[2] === 'D13' ? { ini: y + '-01-01', fin: y + '-12-31' } : { ini: (y - 1) + '-07-01', fin: y + '-06-30' }; }
   // días entre dos fechas en año comercial de 360 días (30 por mes), contando ambos extremos
   function dias360(a, b){ var x = aF(a), y = aF(b); if(!x || !y || y < x) return 0; var d1 = Math.min(x.getDate(), 30), d2 = Math.min(y.getDate(), 30);
@@ -971,7 +973,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     rf = rf || raiz;
     var sal = salarioDe(rf, e.id), f = { empId: e.id, raizFicha: rf, codigo: e.codigo || '', nombre: e.nombreCompleto || '', depto: e.departamento || '', cargo: e.cargo || '', identidad: e.identidad || '',
       cuenta: e.cuentaBancaria || '', banco: e.banco || '', tipoCuenta: e.tipoCuenta || 'Ahorros', direccion: e.direccion || '', telefono: e.telefono || '', correo: e.correo || '', salario: sal != null ? sal : 0 };
-    COL_ING[raiz].concat(COL_DED[raiz]).forEach(function(k){ f[k] = 0; });
+    COL_ING[raiz].concat(COL_DED[raiz]).forEach(function(k){ f[k] = 0; }); f.colsI = COL_ING[raiz].slice(); f.colsD = COL_DED[raiz].slice();
     f.dias = 15; f.ordinario = r2((sal || 0) / 30 * 15); f.ihss = ihssDe(raiz, sal);
     return f;
   }
@@ -988,7 +990,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       if(ya){ alert('Ya existe esa planilla en ' + nomEmp(r) + '. Ábrela desde la lista.'); return; }
       var id = 'pl_' + per.replace(/-/g, '') , filas = {};
       personalPlanilla(r).forEach(function(x){ filas[x.e.id] = tipo === 'q' ? filaDe(r, x.e, x.rf) : filaDecimo(r, x.e, x.rf, per); });
-      var p = { id: id, periodo: per, estado: 'borrador', filas: filas, notas: '', firmas: { elaborado: cfg(r).firmaNombre, revisado: '', aprobado: '' }, creado: Date.now() }; if(tipo !== 'q') p.tipoPl = tipo === 'D13' ? 'd13' : 'd14'; p.titulo = titPlan(p);
+      var p = { id: id, periodo: per, estado: 'borrador', filas: filas, notas: '', firmas: { elaborado: cfg(r).firmaNombre, revisado: '', aprobado: '' }, creado: Date.now() }; if(tipo === 'q'){ p.colsI = COL_ING[r].slice(); p.colsD = COL_DED[r].slice(); } if(tipo !== 'q') p.tipoPl = tipo === 'D13' ? 'd13' : 'd14'; p.titulo = titPlan(p);
       db().ref('rrhh/' + r + '/planillas/' + id).set(p).then(function(){ w.remove(); ui.plan = { raiz: r, id: id }; pintar(); aviso('Planilla creada ✓'); }).catch(function(er){ aviso('No se creó: ' + er.message, true); });
     }, '💵 Crear planilla');
     var cambiaTipo = function(){ var t = w.querySelector('#pl-tipo').value, y = parseInt(w.querySelector('#pl-y').value, 10) || new Date().getFullYear();
@@ -1071,7 +1073,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-agregar'){ var fuera = personalPlanilla(raiz).filter(function(x){ return !(p.filas || {})[x.e.id]; });
       if(!fuera.length){ alert('Todo el personal activo de ' + nomEmp(raiz) + ' ya está en la planilla.'); return; }
       ventana('➕ Agregar a la planilla', '<label>Empleado</label><select id="pa-e">' + fuera.map(function(x){ return '<option value="' + esc(x.rf + '|' + x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + esc(x.e.departamento || '') + (x.rf !== raiz ? ' (ficha en ' + nomEmp(x.rf) + ')' : '') + '</option>'; }).join('') + '</select>', function(w){
-        var sel = v(w, 'pa-e').split('|'), e = D[sel[0]].empleados[sel[1]]; ref.child('filas/' + e.id).set(esDecimo(p) ? filaDecimo(raiz, e, sel[0], p.periodo) : filaDe(raiz, e, sel[0])).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
+        var sel = v(w, 'pa-e').split('|'), e = D[sel[0]].empleados[sel[1]]; ref.child('filas/' + e.id).set(esDecimo(p) ? filaDecimo(raiz, e, sel[0], p.periodo) : (function(nf){ if(p.colsI){ nf.colsI = p.colsI; nf.colsD = p.colsD; } else { delete nf.colsI; delete nf.colsD; } return nf; })(filaDe(raiz, e, sel[0]))).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
     if(a === 'pl-refrescar'){ if(!confirm('¿Actualizar nombre, código, departamento, cuenta y salario de cada fila con los datos actuales de las fichas?\n\nTambién recalcula el IHSS (techo y %) y, si cambió el salario, el ordinario y las horas extra cargadas del Excel. Los demás montos escritos no cambian.')) return;
       var up2 = {}; lista(p.filas).forEach(function(f){ var rf = f.raizFicha || raiz, e = D[rf].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e, rf); up2['filas/' + f.empId + '/raizFicha'] = rf;
         ['codigo', 'nombre', 'depto', 'cargo', 'identidad', 'cuenta', 'banco', 'tipoCuenta', 'direccion', 'telefono', 'correo', 'salario'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nf[k]; });
@@ -1206,6 +1208,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function correoDe(raiz, f){ var rf = f.raizFicha || raiz, e = (D[rf] && D[rf].empleados[f.empId]) || {}; return String(e.correo || f.correo || '').trim(); }
   function textosComp(raiz, p, f){
     var c = cfg(raiz), t = totFila(raiz, f), tit = p.titulo || titPlan(p), per = tit.replace(/^PLANILLA /i, '').toLowerCase();
+    var tpl = (CFGG.datos || {}).correo; if(tpl && tpl.cuerpo){ var rp = function(x){ return String(x).replace(/\{nombre\}/g, f.nombre).replace(/\{periodo\}/g, per).replace(/\{empresa\}/g, c.razon.replace(/\.$/, '')).replace(/\{neto\}/g, mon(t.neto))
+        .replace(/\{firma\}/g, c.firmaNombre + '\n' + c.firmaCargo + '\n' + c.razon + (c.firmaCorreo ? '\n' + c.firmaCorreo : '')); }; return { asunto: rp(tpl.asunto || CORREO_BASE.asunto), cuerpo: rp(tpl.cuerpo).replace(/\r?\n/g, '\r\n') + '\r\n' }; }
     return { asunto: 'Comprobante de pago - Planilla ' + per + ' - ' + c.razon,
       cuerpo: 'Estimado(a) ' + f.nombre + ':\r\n\r\nAdjunto encontrará su comprobante de pago de la planilla ' + per + ' de ' + c.razon.replace(/\.$/, '') + '.\r\n\r\n'
         + 'Neto a pagar: L ' + mon(t.neto) + '\r\n\r\nCualquier consulta, con gusto la atendemos.\r\n\r\nSaludos cordiales,\r\n\r\n' + c.firmaNombre + '\r\n' + c.firmaCargo + '\r\n' + c.razon + (c.firmaCorreo ? '\r\n' + c.firmaCorreo : '') + '\r\n' };
@@ -1387,12 +1391,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // cálculo de una incapacidad dentro de la quincena (tabla de la guía)
   function calcIncap(planRaiz, f, inc, rq, rf){
     var sal = parseFloat(f.salario) || 0, diario = sal / 30, k = ihssCfg(planRaiz), subsidia = k.aplica && inc.cotiza !== 'no';
-    var subD = Math.min(sal, k.techo) * 0.66 / 30, off = diasPrevios(rf, inc), d0 = aF(inc.desde);
+    var subD = Math.min(sal, k.techo) * (INC_REGLAS.pct / 100) / 30, off = diasPrevios(rf, inc), d0 = aF(inc.desde);
     var r = { tipo: inc.tipo, desde: inc.desde, hasta: inc.hasta, dias: 0, empresaDias: 0, ihssDias: 0, salarioDiario: r2(diario), subsidio: 0, complemento: 0, empresa: 0, revisar: '' };
     var ini = new Date(Math.max(aF(inc.desde), aF(rq.ini))), fin = Math.min(aF(inc.hasta), aF(rq.fin));
     for(var d = ini; d <= fin; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)){
       var n = off + Math.round((d - d0) / 864e5) + 1; r.dias++;
-      if(n <= 3 || !subsidia){ r.empresaDias++; r.empresa += diario; } else { r.ihssDias++; r.subsidio += subD; r.complemento += Math.max(0, diario - subD); }
+      if(n <= INC_REGLAS.dias || !subsidia){ r.empresaDias++; r.empresa += diario; } else { r.ihssDias++; r.subsidio += subD; r.complemento += Math.max(0, diario - subD); }
     }
     r.empresa = r2(r.empresa); r.subsidio = r2(r.subsidio); r.complemento = r2(r.complemento); r.total = r2(r.empresa + r.complemento);
     if(!INC_AUTO[inc.tipo]) r.revisar = TIPOS_INC[inc.tipo] + ': no se calcula solo, revísala a mano';
@@ -1600,6 +1604,126 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var x = (e.historial || {})[k]; if(!x) return; var m = prompt('¿Anular esta anotación del historial?\n\nQueda guardada como anulada. Motivo:', ''); if(m === null || !m.trim()) return;
     db().ref('rrhh/' + raiz + '/empleados/' + e.id + '/historial/' + k).update({ anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }).then(function(){ aviso('Anotación anulada ✓'); }).catch(function(er){ aviso('No se anuló: ' + er.message, true); });
   }
+  // ══ ⚙️ CONFIGURACIÓN DE NEXO RRHH (2026-11-18, Miguel: «que Elia lo haga sola») ══════════════════════════════════════
+  //   rrhh/configuracion/general   listas, recargos de horas extra, reglas de incapacidad, texto del correo (solo RRHH)
+  //   rrhh/configuracion/bitacora  quién cambió qué, cuándo y cómo estaba
+  //   rrhh/<raíz>/config           razón social, firma, IHSS, divisor de horas extra, columnas de planilla y sus nombres
+  //                                (por empresa: «Planilla — solo ver» también lo lee)
+  // Las planillas nuevas guardan sus columnas al crearse: cambiar columnas no altera las planillas ya hechas.
+  var BASE = { DEPTOS: JSON.parse(JSON.stringify(DEPTOS)), DOCS: DOCS.slice(), REQ: REQ.slice(), MOTIVOS_SALIDA: MOTIVOS_SALIDA.slice(), BANCOS: BANCOS.slice(),
+    TIPOS_INC: Object.assign({}, TIPOS_INC), COL_ING: JSON.parse(JSON.stringify(COL_ING)), COL_DED: JSON.parse(JSON.stringify(COL_DED)), NOMCOL: Object.assign({}, NOMCOL) };
+  var INC_REGLAS = { dias: 3, pct: 66 };
+  var CORREO_BASE = { asunto: 'Comprobante de pago - Planilla {periodo} - {empresa}',
+    cuerpo: 'Estimado(a) {nombre}:\n\nAdjunto encontrará su comprobante de pago de la planilla {periodo} de {empresa}.\n\nNeto a pagar: L {neto}\n\nCualquier consulta, con gusto la atendemos.\n\nSaludos cordiales,\n\n{firma}' };
+  var CFGG = { datos: {}, bitacora: {}, ok: false };
+  function escucharConfig(){ if(permisoRol === 'planilla' || !db()) return;
+    db().ref('rrhh/configuracion/general').on('value', function(s){ CFGG.datos = s.val() || {}; CFGG.ok = true; aplicarConfig(); pintar(); }, function(){ CFGG.ok = true; });
+    var rb = db().ref('rrhh/configuracion/bitacora'); if(rb.limitToLast) rb = rb.limitToLast(80);
+    rb.on('value', function(s){ CFGG.bitacora = s.val() || {}; if(ui.vista === 'config') pintar(); }, function(){}); }
+  function lineas(t){ var vistos = {}; return String(t || '').split(/\r?\n/).map(function(x){ return x.trim(); }).filter(function(x){ if(!x || vistos[norm(x)]) return false; vistos[norm(x)] = 1; return true; }); }
+  function aplicarConfig(){
+    var g = CFGG.datos || {};
+    EMPRESAS.forEach(function(E){ var r = E.raiz, c = (D[r] && D[r].config) || {};
+      DEPTOS[r] = (g.deptos && g.deptos[r] && g.deptos[r].length) ? g.deptos[r] : BASE.DEPTOS[r];
+      var col = c.columnas || {}; COL_ING[r] = (col.ing && col.ing.length) ? col.ing : BASE.COL_ING[r]; COL_DED[r] = (col.ded && col.ded.length) ? col.ded : BASE.COL_DED[r]; });
+    DOCS = (g.docs && g.docs.length) ? g.docs : BASE.DOCS; REQ = (g.req && g.req.length) ? g.req : BASE.REQ;
+    MOTIVOS_SALIDA = (g.motivos && g.motivos.length) ? g.motivos : BASE.MOTIVOS_SALIDA; BANCOS = (g.bancos && g.bancos.length) ? g.bancos : BASE.BANCOS;
+    TIPOS_INC = Object.assign({}, BASE.TIPOS_INC, g.tiposInc || {});
+    var nc = Object.assign({}, BASE.NOMCOL); EMPRESAS.forEach(function(E){ Object.assign(nc, ((D[E.raiz] && D[E.raiz].config) || {}).nombresCol || {}); }); NOMCOL = nc;
+    var rec = g.heRec; if(rec && rec.length === 4) HE_REC = ['h25', 'h50', 'h75', 'h100'].map(function(k, i){ var pc = parseFloat(rec[i]) || 0; return [k, 1 + pc / 100, pc + '%']; });
+    INC_REGLAS = { dias: parseInt(g.incDias, 10) >= 0 ? parseInt(g.incDias, 10) : 3, pct: parseFloat(g.incPct) > 0 ? parseFloat(g.incPct) : 66 };
+  }
+  function quien(){ var r = (window._nxAcceso || {}).registro || {}; return (r.nombre ? r.nombre + (r.apellido ? ' ' + r.apellido : '') : '') || r.dispositivo || ((window.firebase && firebase.auth && firebase.auth().currentUser) || {}).uid || 'RRHH'; }
+  // guarda un ajuste y lo anota en la bitácora (antes / después)
+  function guardarAjuste(ruta, valor, que, antes){
+    var up = {}, k = nuevoId('b_'); up[ruta] = valor;
+    up['rrhh/configuracion/bitacora/' + k] = { ts: Date.now(), que: que, quien: quien(), antes: JSON.stringify(antes === undefined ? null : antes).slice(0, 1500), despues: JSON.stringify(valor === undefined ? null : valor).slice(0, 1500) };
+    return db().ref().update(up).then(function(){ aviso('Guardado ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); throw er; });
+  }
+  function pintarConfig(c){
+    if(permisoRol !== 'rrhh'){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:34px">🔒</div><div class="nm">Configuración: solo Recursos Humanos</div></div>'; return; }
+    var g = CFGG.datos || {}, ta = function(id, arr, filas){ return '<textarea id="' + id + '" rows="' + (filas || 6) + '" style="font-size:13px">' + esc((arr || []).join('\n')) + '</textarea>'; };
+    var bt = function(a, t, extra){ return '<button class="bt bp" data-a="' + a + '"' + (extra || '') + '>' + (t || '💾 Guardar') + '</button>'; };
+    var bit = lista(CFGG.bitacora).sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); });
+    c.innerHTML = '<div class="nm" style="margin-bottom:6px">⚙️ Configuración de Nexo RRHH</div><div class="sub" style="margin-bottom:10px">Todo lo que se cambia aquí queda anotado en la bitácora (abajo) con la fecha y cómo estaba antes.</div>'
+      // empresas
+      + '<div class="card"><h3 style="margin-top:0">🏢 Empresas</h3><div class="sub">Razón social, firma de constancias, IHSS (afiliación, techo y %) y divisor de horas extra.</div>'
+      + EMPRESAS.map(function(E){ var k = cfg(E.raiz), ih = ihssCfg(E.raiz); return '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid #f0f2f5;padding:8px 0"><div><b>' + E.nombre + '</b><div class="sub">' + esc(k.razon) + ' · IHSS ' + (ih.aplica ? ih.pct + ' % (techo L ' + mon(ih.techo) + ')' : 'no afiliada') + ' · hora extra = salario ÷ ' + heDivisor(E.raiz) + '</div></div>'
+        + '<div class="acc" style="margin:0"><button class="bt" data-a="ajustes" data-r="' + E.raiz + '">✏️ Datos</button><button class="bt" data-a="cf-cols" data-r="' + E.raiz + '">🧮 Columnas de planilla</button></div></div>'; }).join('') + '</div>'
+      // listas
+      + '<div class="card"><h3 style="margin-top:0">🗂 Departamentos</h3><div class="sub">Uno por línea. Gerencia sigue viendo a quien esté en Mantenimiento, Logística, Taller o Flota.</div>'
+      + '<div class="grid" style="margin-top:8px">' + EMPRESAS.map(function(E){ return '<div><label style="font-size:11.5px;font-weight:700;color:#475467">' + E.nombre + '</label>' + ta('cf-dep-' + E.raiz, DEPTOS[E.raiz], 7) + '</div>'; }).join('') + '</div><div class="acc">' + bt('cf-g-deptos') + '</div></div>'
+      + '<div class="card"><h3 style="margin-top:0">📋 Listas</h3><div class="grid">'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">BANCOS</label>' + ta('cf-bancos', BANCOS) + '<div class="acc">' + bt('cf-g-bancos') + '</div></div>'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">MOTIVOS DE SALIDA</label>' + ta('cf-motivos', MOTIVOS_SALIDA) + '<div class="acc">' + bt('cf-g-motivos') + '</div></div>'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">TIPOS DE DOCUMENTO DEL EXPEDIENTE</label>' + ta('cf-docs', DOCS, 10) + '<div class="acc">' + bt('cf-g-docs') + '</div></div>'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">DOCUMENTOS OBLIGATORIOS (expediente completo)</label>' + ta('cf-req', REQ, 10) + '<div class="sub">Deben estar también en «Tipos de documento».</div><div class="acc">' + bt('cf-g-req') + '</div></div>'
+      + '</div></div>'
+      // planilla: horas extra e incapacidades
+      + '<div class="card"><h3 style="margin-top:0">⏱ Horas extra</h3><div class="sub">Recargo de cada columna del Excel (RESUMEN). El monto = salario ÷ divisor × horas × (1 + recargo).</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">' + HE_REC.map(function(x, i){ return '<div><label style="font-size:11.5px;font-weight:700;color:#475467">COLUMNA ' + (i + 1) + ' (%)</label><input id="cf-he-' + i + '" type="number" step="0.01" value="' + r2((x[1] - 1) * 100) + '"></div>'; }).join('') + '</div>'
+      + '<div class="acc">' + bt('cf-g-he') + '</div></div>'
+      + '<div class="card"><h3 style="margin-top:0">🩺 Incapacidades</h3><div class="g2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">DÍAS A CARGO DE LA EMPRESA</label><input id="cf-inc-d" type="number" min="0" value="' + INC_REGLAS.dias + '"></div>'
+      + '<div><label style="font-size:11.5px;font-weight:700;color:#475467">SUBSIDIO IHSS (% del salario)</label><input id="cf-inc-p" type="number" step="0.01" value="' + INC_REGLAS.pct + '"></div></div>'
+      + '<label style="font-size:11.5px;font-weight:700;color:#475467;display:block;margin-top:8px">NOMBRES DE LOS TIPOS (los nuevos se revisan a mano)</label>'
+      + Object.keys(TIPOS_INC).map(function(k){ return '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><input data-ti="' + esc(k) + '" value="' + esc(TIPOS_INC[k]) + '">' + (INC_AUTO[k] ? '<span class="tag v" title="Se calcula solo">auto</span>' : '<span class="tag n">manual</span>') + '</div>'; }).join('')
+      + '<div style="display:flex;gap:6px;margin-top:6px"><input id="cf-ti-nuevo" placeholder="Agregar tipo, ej: Cuarentena"></div>'
+      + '<div class="acc">' + bt('cf-g-inc') + '</div></div>'
+      // correo
+      + '<div class="card"><h3 style="margin-top:0">✉️ Correo de los comprobantes</h3><div class="sub">Puedes usar: {nombre} {periodo} {empresa} {neto} {firma}</div>'
+      + '<label style="font-size:11.5px;font-weight:700;color:#475467;display:block;margin-top:6px">ASUNTO</label><input id="cf-c-asunto" value="' + esc((g.correo || {}).asunto || CORREO_BASE.asunto) + '">'
+      + '<label style="font-size:11.5px;font-weight:700;color:#475467;display:block;margin-top:6px">MENSAJE</label><textarea id="cf-c-cuerpo" rows="9">' + esc((g.correo || {}).cuerpo || CORREO_BASE.cuerpo) + '</textarea>'
+      + '<div class="acc">' + bt('cf-g-correo') + '<button class="bt" data-a="cf-g-correo-base">Volver al texto original</button></div></div>'
+      // bitácora
+      + '<div class="card"><h3 style="margin-top:0">📜 Bitácora de cambios</h3>' + (bit.length ? bit.slice(0, 60).map(function(b){ return '<div class="sub" style="padding:5px 0;border-bottom:1px solid #f0f2f5;color:#1d2433"><b>' + fmt(iso(new Date(b.ts))) + ' ' + new Date(b.ts).toTimeString().slice(0, 5) + '</b> · ' + esc(b.que) + ' <span style="color:#7a8394">· ' + esc(b.quien || '') + '</span></div>'; }).join('') : '<div class="sub">Sin cambios todavía.</div>') + '</div>';
+  }
+  function accionConfig(a, t){
+    var g = CFGG.datos || {}, val = function(id){ var x = document.getElementById(id); return x ? x.value : ''; }, G = 'rrhh/configuracion/general/';
+    if(a === 'cf-g-deptos'){ var dd = {}; EMPRESAS.forEach(function(E){ dd[E.raiz] = lineas(val('cf-dep-' + E.raiz)); });
+      if(EMPRESAS.some(function(E){ return !dd[E.raiz].length; })){ alert('Cada empresa necesita al menos un departamento.'); return; }
+      return guardarAjuste(G + 'deptos', dd, 'Departamentos', EMPRESAS.reduce(function(o, E){ o[E.raiz] = DEPTOS[E.raiz]; return o; }, {})); }
+    var listas = { 'cf-g-bancos': ['bancos', 'cf-bancos', 'Bancos', BANCOS], 'cf-g-motivos': ['motivos', 'cf-motivos', 'Motivos de salida', MOTIVOS_SALIDA], 'cf-g-docs': ['docs', 'cf-docs', 'Tipos de documento', DOCS], 'cf-g-req': ['req', 'cf-req', 'Documentos obligatorios', REQ] };
+    if(listas[a]){ var L = lineas(val(listas[a][1])); if(!L.length){ alert('La lista no puede quedar vacía.'); return; }
+      if(a === 'cf-g-req'){ var tipos = lineas(val('cf-docs')).map(norm), fuera = L.filter(function(x){ return tipos.indexOf(norm(x)) < 0; }); if(fuera.length){ alert('Estos no están en «Tipos de documento»:\n• ' + fuera.join('\n• ') + '\n\nAgrégalos allá primero.'); return; } }
+      return guardarAjuste(G + listas[a][0], L, listas[a][2], listas[a][3]); }
+    if(a === 'cf-g-he'){ var rec = [0, 1, 2, 3].map(function(i){ return r2(val('cf-he-' + i)); }); if(rec.some(function(x){ return !(x >= 0); })){ alert('Revisa los recargos.'); return; }
+      return guardarAjuste(G + 'heRec', rec, 'Recargos de horas extra (%)', HE_REC.map(function(x){ return r2((x[1] - 1) * 100); })); }
+    if(a === 'cf-g-inc'){ var d = parseInt(val('cf-inc-d'), 10), pc = parseFloat(val('cf-inc-p')); if(!(d >= 0) || !(pc > 0 && pc <= 100)){ alert('Revisa los días y el porcentaje.'); return; }
+      var ti = {}; document.querySelectorAll('[data-ti]').forEach(function(el){ var k = el.getAttribute('data-ti'), v2 = el.value.trim(); if(v2) ti[k] = v2; });
+      var nu = val('cf-ti-nuevo').trim(); if(nu) ti['x' + Date.now().toString(36)] = nu;
+      return Promise.all([guardarAjuste(G + 'incDias', d, 'Incapacidad: días a cargo de la empresa', INC_REGLAS.dias), guardarAjuste(G + 'incPct', pc, 'Incapacidad: % del subsidio IHSS', INC_REGLAS.pct), guardarAjuste(G + 'tiposInc', ti, 'Tipos de incapacidad', TIPOS_INC)]); }
+    if(a === 'cf-g-correo') return guardarAjuste(G + 'correo', { asunto: val('cf-c-asunto').trim() || CORREO_BASE.asunto, cuerpo: val('cf-c-cuerpo').trim() || CORREO_BASE.cuerpo }, 'Texto del correo de comprobantes', g.correo || CORREO_BASE);
+    if(a === 'cf-g-correo-base'){ if(!confirm('¿Volver al texto original del correo?')) return; return guardarAjuste(G + 'correo', null, 'Texto del correo: vuelve al original', g.correo || null); }
+    if(a === 'cf-cols') return formColumnas(t.getAttribute('data-r'));
+  }
+  // columnas de la planilla de una empresa (solo planillas nuevas)
+  function formColumnas(raiz){
+    var FIJAS = { dias: 1, ordinario: 1 }, ing = COL_ING[raiz].slice(), ded = COL_DED[raiz].slice(), nom = {}; ing.concat(ded).forEach(function(k){ nom[k] = NOMCOL[k] || k; });
+    var w = ventana('🧮 Columnas de planilla · ' + nomEmp(raiz), '<div class="sub" style="margin-top:6px">Cambia nombres, orden, agrega o quita columnas. <b>Aplica a las planillas que se creen desde ahora</b>; las ya creadas se quedan como están.</div><div id="cc-x"></div>', function(w){
+      var leer = function(lst){ return lst.filter(function(k){ return nom[k] && String(nom[k]).trim(); }); }; ing = leer(ing); ded = leer(ded);
+      if(ing.indexOf('dias') < 0 || ing.indexOf('ordinario') < 0){ alert('«Días trab.» y «Ordinario» son obligatorias.'); return; }
+      var c0 = (D[raiz].config || {}), nc = {}; ing.concat(ded).forEach(function(k){ nc[k] = String(nom[k]).trim(); });
+      Promise.all([guardarAjuste('rrhh/' + raiz + '/config/columnas', { ing: ing, ded: ded }, 'Columnas de planilla de ' + nomEmp(raiz), c0.columnas || { ing: BASE.COL_ING[raiz], ded: BASE.COL_DED[raiz] }),
+        guardarAjuste('rrhh/' + raiz + '/config/nombresCol', nc, 'Nombres de columnas de ' + nomEmp(raiz), c0.nombresCol || null)]).then(function(){ w.remove(); });
+    }, '💾 Guardar columnas');
+    w.querySelector('.rh-w').style.maxWidth = '720px';
+    var fila = function(k, grupo, i, n){ return '<div style="display:flex;gap:6px;align-items:center;margin-top:4px"><input data-cn="' + grupo + '|' + i + '" value="' + esc(nom[k]) + '"' + (FIJAS[k] ? ' title="Obligatoria"' : '') + '>'
+      + '<button class="bt" data-cm="' + grupo + '|' + i + '|-1"' + (i ? '' : ' disabled') + '>↑</button><button class="bt" data-cm="' + grupo + '|' + i + '|1"' + (i < n - 1 ? '' : ' disabled') + '>↓</button>'
+      + (FIJAS[k] ? '<span class="tag">fija</span>' : '<button class="bt br" data-cq="' + grupo + '|' + i + '">✕</button>') + '</div>'; };
+    var pintarC = function(){ w.querySelector('#cc-x').innerHTML = '<h4>Ingresos</h4>' + ing.map(function(k, i){ return fila(k, 'ing', i, ing.length); }).join('')
+      + '<div style="display:flex;gap:6px;margin-top:6px"><input id="cc-ni" placeholder="Nueva columna de ingreso"><button class="bt" data-cadd="ing">➕</button></div>'
+      + '<h4>Deducciones</h4>' + ded.map(function(k, i){ return fila(k, 'ded', i, ded.length); }).join('')
+      + '<div style="display:flex;gap:6px;margin-top:6px"><input id="cc-nd" placeholder="Nueva deducción, ej: Préstamo Banpaís"><button class="bt" data-cadd="ded">➕</button></div>'; };
+    pintarC();
+    w.addEventListener('input', function(ev){ var x = ev.target.getAttribute('data-cn'); if(!x) return; var q = x.split('|'), arr = q[0] === 'ing' ? ing : ded; nom[arr[+q[1]]] = ev.target.value; });
+    w.addEventListener('click', function(ev){ var b = ev.target.closest('[data-cm],[data-cq],[data-cadd]'); if(!b || b.disabled) return;
+      if(b.hasAttribute('data-cm')){ var q = b.getAttribute('data-cm').split('|'), arr = q[0] === 'ing' ? ing : ded, i = +q[1], j = i + (+q[2]); var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; }
+      else if(b.hasAttribute('data-cq')){ var q2 = b.getAttribute('data-cq').split('|'), arr2 = q2[0] === 'ing' ? ing : ded; if(!confirm('¿Quitar la columna «' + nom[arr2[+q2[1]]] + '» de las planillas nuevas?')) return; arr2.splice(+q2[1], 1); }
+      else { var gr = b.getAttribute('data-cadd'), inp = w.querySelector(gr === 'ing' ? '#cc-ni' : '#cc-nd'), t2 = inp.value.trim(); if(!t2) return; var k = 'x' + Date.now().toString(36); nom[k] = t2; (gr === 'ing' ? ing : ded).push(k); }
+      pintarC(); });
+  }
+
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
@@ -1613,6 +1737,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'bajas'){ ui.bajas = !ui.bajas; pintar(); return; }
     if(a === 'ajustes') return formAjustes(t.getAttribute('data-r'));
     if(a === 'inc-nueva') return elegirEmpleadoIncap();
+    if(/^cf-/.test(a)) return accionConfig(a, t);
     if(a === 'inc-doc'){ var dr = t.getAttribute('data-r'), de = D[dr].empleados[t.getAttribute('data-e')]; if(de) verDoc(dr, de, t.getAttribute('data-d')); return; }
     if(a === 'inc-ed' || a === 'inc-an'){ var ir = t.getAttribute('data-r'), ie = D[ir].empleados[t.getAttribute('data-e')], ii = (D[ir].incapacidades || {})[t.getAttribute('data-i')]; if(!ie || !ii) return; return a === 'inc-ed' ? formIncapacidad(ir, ie, ii) : anularIncapacidad(ir, ii); }
     if(a === 'pl-nueva') return nuevaPlanilla(ui.emp === 'todas' ? 'montasa' : ui.emp);
@@ -1642,7 +1767,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var root = document.createElement('div'); root.id = 'rh';
     root.innerHTML = '<div class="top">' + (logo ? '<img src="' + logo + '" alt="">' : '') + '<div><b>Nexo RRHH</b><small>Recursos Humanos · MT RENTAL · MONHACO · MONHAGRO · SEGURIDAD</small></div></div>'
       + '<div class="emp"><button data-emp="todas">Todas</button>' + EMPRESAS.map(function(E){ return '<button data-emp="' + E.raiz + '">' + E.nombre + '</button>'; }).join('') + '</div>'
-      + '<div class="nav"><button data-v="emp"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Empleados</span></button><button data-v="alertas"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alertas</span></button><button data-v="resumen"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Resumen</span></button><button data-v="planillas"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg><span>Planillas</span></button><button data-v="incap"><svg viewBox="0 0 24 24"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg><span>Incapacidades</span></button></div>'
+      + '<div class="nav"><button data-v="emp"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Empleados</span></button><button data-v="alertas"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alertas</span></button><button data-v="resumen"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Resumen</span></button><button data-v="planillas"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg><span>Planillas</span></button><button data-v="incap"><svg viewBox="0 0 24 24"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg><span>Incapacidades</span></button><button data-v="config"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Configuración</span></button></div>'
       + '<button id="rh-fab" aria-label="Menú"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button><div id="rh-mov"></div><div id="rh-mpan"></div>'
       + '<div class="c" id="rh-c"></div>';
     root.addEventListener('click', clic);
@@ -1672,7 +1797,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(!r) return;
     if(r.estado === 'aprobado' && r.rol !== 'rrhh' && r.rol !== 'gerencia' && r.rol !== 'planilla'){ permiso = 'no'; pintar(); return; }
     if(r.estado === 'aprobado' && permisoRol !== r.rol){ permisoRol = r.rol; var nv = document.querySelector('#rh .nav'), em = document.querySelector('#rh .emp');
-      if(nv) nv.querySelectorAll('button').forEach(function(b){ b.style.display = r.rol === 'planilla' && b.getAttribute('data-v') !== 'planillas' ? 'none' : ''; }); }
+      if(nv) nv.querySelectorAll('button').forEach(function(b){ b.style.display = (r.rol === 'planilla' && b.getAttribute('data-v') !== 'planillas') || (b.getAttribute('data-v') === 'config' && r.rol !== 'rrhh') ? 'none' : ''; }); }
     if(r.estado === 'aprobado' && permiso === null){ escuchar(); }
   }
   document.addEventListener('nx-acceso', revisarPermiso);
