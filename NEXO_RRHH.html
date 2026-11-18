@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='727675037f08';
+  var APP_VERSION='1b1e9a5f44b1';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1225,36 +1225,21 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // El destinatario no se puede llenar solo: Nexo copia el correo de la persona para pegarlo en «Para».
   var ES_TEL = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
   function puedeCompartir(){ try{ return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); }catch(e){ return false; } }
-  function telDe(raiz, f){ var rf = f.raizFicha || raiz, e = (D[rf] && D[rf].empleados[f.empId]) || {}; var d = soloDig(e.telefono || f.telefono || '');
-    if(d.length === 8) return '504' + d; if(d.length === 11 && d.slice(0, 3) === '504') return d; return ''; }
-  function textoWhatsApp(raiz, p, f){
-    var c = cfg(raiz), t = totFila(raiz, f), tit = p.titulo || titPlan(p);
-    var ing = colsI(raiz, f).filter(function(k){ return k !== 'dias' && (parseFloat(f[k]) || 0) !== 0; }), ded = colsD(raiz, f).filter(function(k){ return (parseFloat(f[k]) || 0) !== 0; });
-    var he = f.heHoras && (parseFloat(f.horasExtras) || 0) ? HE_REC.filter(function(r){ return (parseFloat(f.heHoras[r[0]]) || 0) > 0; }).map(function(r){ return r2(f.heHoras[r[0]]) + ' h al ' + r[2]; }).join(', ') : '';
-    var L = ['*COMPROBANTE DE PAGO*', c.razon, tit, '', 'Colaborador: ' + f.nombre + (f.codigo ? ' (' + f.codigo + ')' : ''), (esDecimo(f) ? 'Días en el período: ' + f.dias + ' de 360' : 'Días trabajados: ' + f.dias), '', '*Ingresos*']
-      .concat(ing.map(function(k){ return '• ' + NOMCOL[k] + (k === 'horasExtras' && he ? ' (' + he + ')' : '') + ': L ' + mon(f[k]); }))
-      .concat(['Total devengado: L ' + mon(t.dev), '', '*Deducciones*']).concat(ded.length ? ded.map(function(k){ return '• ' + NOMCOL[k] + ': L ' + mon(f[k]); }) : ['• Ninguna'])
-      .concat(['Total deducciones: L ' + mon(t.ded), '', '*NETO A PAGAR: L ' + mon(t.neto) + '*', '', c.firmaNombre + ' · ' + c.firmaCargo]);
-    return L.join('\n');
-  }
   function enviarCorreos(raiz, p){
     var filas = filasOrden(p), compartir = puedeCompartir(), eml = !ES_TEL;
-    var estado = function(env){ return env ? '<span style="color:#1a7f37;font-weight:700">✓ ' + (env.modo === 'compartido' ? 'Compartido' : env.modo === 'whatsapp' ? 'WhatsApp abierto' : 'Preparado') + ' ' + fmt(iso(new Date(env.ts))) + '</span>' : '<span style="color:#98a2b3">Pendiente</span>'; };
+    var estado = function(env){ return env ? '<span style="color:#1a7f37;font-weight:700">✓ ' + (env.modo === 'compartido' ? 'Compartido' : 'Preparado') + ' ' + fmt(iso(new Date(env.ts))) + '</span>' : '<span style="color:#98a2b3">Pendiente</span>'; };
     var btn = 'padding:7px 10px;border-radius:8px;border:1px solid #1f3864;background:#fff;color:#1f3864;font-weight:800;cursor:pointer;margin:2px 0 2px 4px';
     var fila = function(f){ var cr = correoDe(raiz, f), ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cr), t = totFila(raiz, f);
       return '<tr style="border-top:1px solid #eef1f6"><td style="padding:6px 4px"><b style="color:#1f3864">' + esc(f.nombre) + '</b><div style="font-size:11.5px;color:' + (ok ? '#5b6472' : '#b42318') + '">' + (ok ? esc(cr) : '⚠️ Sin correo en la ficha') + '</div>'
         + '<div style="font-size:11.5px;margin-top:2px">L ' + mon(t.neto) + ' · <span data-est="' + esc(f.empId) + '">' + estado((p.envios || {})[f.empId]) + '</span></div>'
-        + (telDe(raiz, f) ? '<div style="font-size:11.5px;color:#5b6472">📱 ' + esc(String(telDe(raiz, f)).slice(3, 7) + '-' + String(telDe(raiz, f)).slice(7)) + '</div>' : '<div style="font-size:11.5px;color:#b42318">⚠️ Sin teléfono en la ficha</div>')
-        + (ES_TEL ? '<button data-wa="' + esc(f.empId) + '"' + (telDe(raiz, f) ? '' : ' disabled') + ' style="' + btn + ';display:block;width:100%;margin:6px 0 2px;padding:10px;background:#25d366;border-color:#25d366;color:#fff' + (telDe(raiz, f) ? '' : ';opacity:.4') + '">💬 WhatsApp a ' + esc(String(f.nombre).split(' ')[0]) + '</button>' : '')
-        + (ES_TEL && compartir ? '<button data-share="' + esc(f.empId) + '" style="' + btn + ';display:block;width:100%;margin:6px 0 2px;padding:10px;background:#1f3864;color:#fff">📤 Compartir PDF</button>' : '') + '</td>'
+        + (ES_TEL && compartir ? '<button data-share="' + esc(f.empId) + '" style="' + btn + ';display:block;width:100%;margin:6px 0 2px;padding:10px;background:#1f3864;color:#fff">📤 Compartir comprobante</button>' : '') + '</td>'
         + '<td style="padding:6px 4px;text-align:right;white-space:nowrap">'
-        + (!ES_TEL ? '<button data-wa="' + esc(f.empId) + '"' + (telDe(raiz, f) ? '' : ' disabled') + ' style="' + btn + ';border-color:#25d366;color:#128c4a' + (telDe(raiz, f) ? '' : ';opacity:.4;cursor:not-allowed') + '">💬 WhatsApp</button>' : '')
         + (compartir && !ES_TEL ? '<button data-share="' + esc(f.empId) + '" style="' + btn + '">📤 Compartir</button>' : '')
         + (eml ? '<button data-mail="' + esc(f.empId) + '"' + (ok ? '' : ' disabled') + ' style="' + btn + (ok ? '' : ';opacity:.4;cursor:not-allowed') + '">✉️ Correo</button>' : '') + '</td></tr>'; };
     var pend = function(){ return filas.filter(function(f){ return !(p.envios || {})[f.empId]; }).length; };
     var ayuda = ES_TEL
-      ? '<b>💬 WhatsApp</b> abre el chat de la persona con su comprobante escrito: solo toca Enviar. ' + (compartir ? 'Para mandar además el PDF: <b>📤 Compartir PDF</b>. ' : '') + (compartir ? '<br>Por correo: toca <b>📤 Compartir PDF</b> en cada persona: se abre el menú del teléfono con su PDF y el mensaje. Elige Outlook, Gmail o WhatsApp; el correo de la persona ya queda copiado: pégalo en <b>Para</b> y toca <b>Enviar</b>.' : 'Este teléfono no permite compartir archivos desde el navegador. Usa Chrome (Android) o Safari (iPhone) actualizados, o la computadora.')
-      : '<b>💬 WhatsApp</b> abre el chat de la persona (WhatsApp Web o de escritorio) con su comprobante escrito. Toca <b>✉️ Correo</b> en cada persona: se descarga el correo ya armado (para, asunto, mensaje y el PDF adjunto). Ábrelo y en Outlook toca <b>Enviar</b>.' + (compartir ? ' <b>📤 Compartir</b> abre el menú de Windows con el PDF.' : '');
+      ? (compartir ? 'Toca <b>📤 Compartir</b> en cada persona: se abre el menú del teléfono con su PDF y el mensaje. Elige Outlook, Gmail o WhatsApp; el correo de la persona ya queda copiado: pégalo en <b>Para</b> y toca <b>Enviar</b>.' : 'Este teléfono no permite compartir archivos desde el navegador. Usa Chrome (Android) o Safari (iPhone) actualizados, o la computadora.')
+      : 'Toca <b>✉️ Correo</b> en cada persona: se descarga el correo ya armado (para, asunto, mensaje y el PDF adjunto). Ábrelo y en Outlook toca <b>Enviar</b>.' + (compartir ? ' <b>📤 Compartir</b> abre el menú de Windows con el PDF.' : '');
     var w = ventana('✉️ Enviar comprobantes · ' + nomEmp(raiz),
       '<div class="sub" style="margin-top:6px">' + esc(p.titulo || titPlan(p)) + '. ' + ayuda + '</div>'
       + '<div class="sub" id="ce-res" style="margin-top:6px;font-weight:700"></div>'
@@ -1270,10 +1255,6 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     // la librería del PDF se carga al abrir la lista: el teléfono solo deja «Compartir» justo después del toque, sin esperas
     var listo = false; cargarPDF().then(function(){ listo = true; }).catch(function(){});
     w.addEventListener('click', function(ev){
-      var bw = ev.target.closest('[data-wa]');
-      if(bw){ if(bw.disabled) return; var fw = (p.filas || {})[bw.getAttribute('data-wa')], tl = fw && telDe(raiz, fw); if(!tl) return;
-        window.open('https://wa.me/' + tl + '?text=' + encodeURIComponent(textoWhatsApp(raiz, p, fw)), '_blank');
-        marcar(fw, 'whatsapp', ''); return; }
       var bs = ev.target.closest('[data-share]');
       if(bs){ var fs = (p.filas || {})[bs.getAttribute('data-share')]; if(!fs) return;
         if(!listo){ aviso('Un momento: preparando… vuelve a tocar en 2 segundos.'); return; }
