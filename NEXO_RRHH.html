@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='88b86754c108';
+  var APP_VERSION='a52c56c449fd';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1067,7 +1067,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-nota-x'){ var pn = raiz && D[raiz].planillas[ui.plan.id]; if(pn && pn.estado !== 'cerrada') db().ref('rrhh/' + raiz + '/planillas/' + pn.id + '/filas/' + t.getAttribute('data-e') + '/notasAuto').remove(); return; }
     if(!p) return;
     if(a === 'pl-cerrar'){ if(!confirm('¿Cerrar la ' + (p.titulo || '') + ' de ' + nomEmp(raiz) + '?\n\nYa no se podrá modificar (solo reabrir).')) return; ref.update({ estado: 'cerrada', cerradaEn: Date.now() }).then(function(){ aviso('Planilla cerrada ✓'); }); return; }
-    if(a === 'pl-reabrir'){ var m = prompt('Reabrir la planilla para corregirla. Motivo:', ''); if(m === null || !m.trim()) return; var k = nuevoId('r_'), up = { estado: 'borrador' }; up['reaperturas/' + k] = { ts: Date.now(), motivo: m.trim() }; ref.update(up).then(function(){ aviso('Planilla reabierta'); }); return; }
+    if(a === 'pl-reabrir'){ pedirMotivo('🔓 Reabrir planilla', 'Reabrir la ' + esc(p.titulo || titPlan(p)) + ' de ' + nomEmp(raiz) + ' para corregirla.', '🔓 Reabrir', function(m){ var k = nuevoId('r_'), up = { estado: 'borrador' }; up['reaperturas/' + k] = { ts: Date.now(), motivo: m }; return ref.update(up).then(function(){ aviso('Planilla reabierta'); }); }); return; }
     if(a === 'pl-borrar'){ if(!confirm('¿Eliminar la planilla ' + (p.titulo || '') + ' de ' + nomEmp(raiz) + ' (borrador)?\n\nNo se puede deshacer.')) return; ref.remove().then(function(){ ui.plan = null; pintar(); aviso('Planilla eliminada'); }); return; }
     if(a === 'pl-quitar'){ var e1 = t.getAttribute('data-e'), f1 = (p.filas || {})[e1]; if(!f1 || !confirm('¿Quitar a ' + f1.nombre + ' de esta planilla?')) return; ref.child('filas/' + e1).remove(); return; }
     if(a === 'pl-agregar'){ var fuera = personalPlanilla(raiz).filter(function(x){ return !(p.filas || {})[x.e.id]; });
@@ -1449,8 +1449,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var w = w0, cnt = function(){ var n = diasEntre(v(w, 'i-d'), v(w, 'i-h')); w.querySelector('#i-n').textContent = n > 0 ? n + ' día(s) calendario' : ''; };
     w.querySelector('#i-d').addEventListener('change', cnt); w.querySelector('#i-h').addEventListener('change', cnt); cnt();
   }
-  function anularIncapacidad(rf, inc){ var m = prompt('¿Anular esta incapacidad (' + fmt(inc.desde) + ' al ' + fmt(inc.hasta) + ')? Motivo:', ''); if(m === null || !m.trim()) return;
-    db().ref('rrhh/' + rf + '/incapacidades/' + inc.id).update({ anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }).then(function(){ aviso('Incapacidad anulada'); }); }
+  function anularIncapacidad(rf, inc){ pedirMotivo('🗑 Anular incapacidad', '¿Anular la incapacidad del ' + fmt(inc.desde) + ' al ' + fmt(inc.hasta) + '? Queda guardada como anulada.', '🗑 Anular', function(m){
+    return db().ref('rrhh/' + rf + '/incapacidades/' + inc.id).update({ anulada: true, motivoAnula: m, anuladaEn: Date.now() }).then(function(){ aviso('Incapacidad anulada ✓'); }); }); }
   function filaIncap(rf, e, i, conNombre){ var act = i.desde <= hoy() && i.hasta >= hoy();
     return '<div style="border-top:1px solid #f0f2f5;padding:8px 0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div>'
       + (conNombre ? '<b style="color:#1f3864">' + esc(e.nombreCompleto) + '</b> <span class="tag">' + nomEmp(rf) + '</span><br>' : '')
@@ -1587,8 +1587,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   function anularSalario(raiz, e, k){
     var x = (privDe(raiz, e.id).historial || {})[k]; if(!x) return;
-    var m = prompt('¿Anular este registro de salario (' + lps(x.nuevo) + ' desde ' + fmt(x.vigencia) + ')?\n\nQueda guardado como anulado. Motivo:', ''); if(m === null || !m.trim()) return;
-    guardarSalarioHist(raiz, e, k, { anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }, 'Anulado: ' + m.trim(), 'Registro anulado ✓').catch(function(er){ aviso('No se anuló: ' + er.message, true); });
+    pedirMotivo('🗑 Anular registro de salario', '¿Anular el salario de ' + lps(x.nuevo) + ' vigente desde ' + fmt(x.vigencia) + '? Queda guardado como anulado y ya no cuenta para el salario actual ni para los décimos.', '🗑 Anular', function(m){
+      return guardarSalarioHist(raiz, e, k, { anulada: true, motivoAnula: m, anuladaEn: Date.now() }, 'Anulado: ' + m, 'Registro anulado ✓'); });
   }
   function corregirNota(raiz, e, k){
     var x = (e.historial || {})[k]; if(!x) return; var plano = String(x.texto || '').replace(/<[^>]+>/g, '');
@@ -1601,8 +1601,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       }, '💾 Guardar corrección');
   }
   function anularNota(raiz, e, k){
-    var x = (e.historial || {})[k]; if(!x) return; var m = prompt('¿Anular esta anotación del historial?\n\nQueda guardada como anulada. Motivo:', ''); if(m === null || !m.trim()) return;
-    db().ref('rrhh/' + raiz + '/empleados/' + e.id + '/historial/' + k).update({ anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }).then(function(){ aviso('Anotación anulada ✓'); }).catch(function(er){ aviso('No se anuló: ' + er.message, true); });
+    var x = (e.historial || {})[k]; if(!x) return;
+    pedirMotivo('🗑 Anular anotación', '¿Anular «' + esc(String(x.texto || '').replace(/<[^>]+>/g, '')) + '» (' + fmt(x.fecha) + ')? Queda guardada como anulada.', '🗑 Anular', function(m){
+      return db().ref('rrhh/' + raiz + '/empleados/' + e.id + '/historial/' + k).update({ anulada: true, motivoAnula: m, anuladaEn: Date.now() }).then(function(){ aviso('Anotación anulada ✓'); }); });
   }
   // ══ ⚙️ CONFIGURACIÓN DE NEXO RRHH (2026-11-18, Miguel: «que Elia lo haga sola») ══════════════════════════════════════
   //   rrhh/configuracion/general   listas, recargos de horas extra, reglas de incapacidad, texto del correo (solo RRHH)
@@ -1724,6 +1725,18 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       pintarC(); });
   }
 
+  // ventana para pedir un motivo obligatorio (reemplaza a prompt())
+  function pedirMotivo(titulo, texto, txtOk, accion){
+    var w = ventana(titulo, '<div class="sub" style="margin-top:6px;color:#1d2433">' + texto + '</div><label>Motivo *</label><input id="pm-m" placeholder="Escribe el motivo">'
+      + '<div class="sub" id="pm-err" style="color:#b42318;font-weight:700;margin-top:4px"></div>', function(w){
+      var m = v(w, 'pm-m'); if(!m){ w.querySelector('#pm-err').textContent = 'Escribe el motivo para continuar.'; w.querySelector('#pm-m').focus(); return; }
+      var bt = w.querySelector('[data-ok]'); bt.disabled = true; bt.textContent = 'Guardando…';
+      Promise.resolve().then(function(){ return accion(m); }).then(function(){ w.remove(); }).catch(function(er){ bt.disabled = false; bt.textContent = txtOk; w.querySelector('#pm-err').textContent = 'No se pudo: ' + (er && er.message || er); });
+    }, txtOk);
+    var i = w.querySelector('#pm-m'); setTimeout(function(){ try{ i.focus(); }catch(e){} }, 50);
+    i.addEventListener('keydown', function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); w.querySelector('[data-ok]').click(); } });
+    return w;
+  }
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
