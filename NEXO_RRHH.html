@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2583d4e77101';
+  var APP_VERSION='85f527fead65';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -410,7 +410,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         + '<div class="sub"><b>' + esc(e.cargo || 'Sin cargo') + '</b> · ' + esc(e.departamento || 'Sin departamento') + '</div>'
         + '<div class="sub">' + nomEmp(x.raiz) + (e.codigo ? ' · Código ' + esc(e.codigo) : '') + ' · ' + (ingresoDe(x.raiz, e) ? antig(ingresoDe(x.raiz, e)) : 'sin fecha de ingreso') + '</div></div></div>'
         + '<div><span class="tag ' + (ex.ok === ex.total ? 'v' : 'n') + '">📁 Expediente ' + ex.ok + '/' + ex.total + '</span>' + (otras.length ? '<span class="tag">También en ' + otras.map(function(o){ return nomEmp(o.raiz); }).join(', ') + '</span>' : '')
-        + (!e.departamento ? '<span class="tag n">Falta departamento</span>' : '') + (e.activo === false ? '<span class="tag r">Baja ' + fmt(e.fechaBaja) + '</span>' : '') + '</div></div>';
+        + (!e.departamento ? '<span class="tag n">Falta departamento</span>' : '') + (e.empresaPlanilla && e.empresaPlanilla !== x.raiz ? '<span class="tag">💵 Planilla ' + nomEmp(e.empresaPlanilla) + '</span>' : '') + (e.activo === false ? '<span class="tag r">Baja ' + fmt(e.fechaBaja) + '</span>' : '') + '</div></div>';
     }).join('') + '</div>';
     c.innerHTML = h;
   }
@@ -434,7 +434,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<h3>Contacto de emergencia</h3><div class="kv">' + kv('Nombre', esc(ce.nombre)) + kv('Parentesco', esc(ce.parentesco)) + kv('Teléfono', ce.telefono ? '<a href="tel:' + soloDig(ce.telefono) + '">' + esc(ce.telefono) + '</a>' : '') + '</div>'
       + '<h3>Datos laborales</h3><div class="kv">' + kv('Empresa', nomEmp(raiz)) + kv('Código', esc(e.codigo)) + kv('Puesto', esc(e.cargo)) + kv('Departamento', esc(e.departamento)) + kv('Fecha de ingreso', ing ? fmt(ing) : '') + kv('Antigüedad', ing ? antig(ing) : '')
       + kv('Horario de trabajo', esc(e.horario)) + kv('Tipo de contrato', esc(ct.tipo)) + kv('Contrato vence', ct.vence ? fmt(ct.vence) : (ct.tipo ? 'Sin fecha de fin' : '')) + '</div>'
-      + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
+      + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + (e.empresaPlanilla && e.empresaPlanilla !== raiz ? kv('Se paga en la planilla de', '<b>' + nomEmp(e.empresaPlanilla) + '</b>') : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
     // historial
     var hist = lista(e.historial).map(function(x){ return { f: x.fecha, t: x.texto }; })
       .concat(lista(p.constancias).map(function(x){ return { f: x.fecha, t: (x.modo === 'impresa' ? '🖨 ' : '📄 ') + (TIPOS_C[x.tipo] || 'Constancia') + (x.modo === 'impresa' ? ' impresa' : ' generada') + (x.dirigido ? ' — ' + esc(x.dirigido) : '') }; }))
@@ -525,6 +525,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<label>Horario de trabajo</label><input id="f-hor" placeholder="Ej: Lunes a viernes 7:00 a 16:00, sábado 7:00 a 11:00" value="' + esc(e.horario) + '">'
       + '<div class="g2"><div><label>Tipo de contrato</label><select id="f-ctt">' + opts(['Permanente', 'Temporal', 'Por obra', 'Por servicios'], ct.tipo, '—') + '</select></div><div><label>Contrato vence (si aplica)</label><input id="f-ctv" type="date" value="' + esc(ct.vence) + '"></div></div>'
       + '<h4>Pago</h4>'
+      + '<label>Se paga en la planilla de</label><select id="f-ep"><option value="">La misma empresa de la ficha</option>' + EMPRESAS.map(function(E){ return '<option value="' + E.raiz + '"' + (e.empresaPlanilla === E.raiz ? ' selected' : '') + '>' + E.nombre + '</option>'; }).join('') + '</select>'
       + '<div class="g2"><div><label>Forma de pago</label><select id="f-fp">' + opts(['Transferencia', 'Cheque', 'Efectivo'], e.formaPago || (nuevo ? 'Transferencia' : ''), '—') + '</select></div><div><label>Banco</label><select id="f-ban">' + opts(BANCOS, b.banco, '—') + '</select></div></div>'
       + '<div class="g2"><div><label>Tipo de cuenta</label><select id="f-tc">' + opts(['Ahorros', 'Cheques'], b.tipoCuenta || (nuevo ? 'Ahorros' : ''), '—') + '</select></div><div><label>Número de cuenta</label><input id="f-cta" inputmode="numeric" value="' + esc(b.cuentaBancaria) + '"></div></div>'
       + (nuevo ? '<div class="g2"><div><label>Salario mensual (L)</label><input id="f-sal" type="number" step="0.01" inputmode="decimal"></div><div></div></div>' : '<div class="sub" style="margin-top:6px">El salario se cambia con el botón «💵 Salario» de la ficha (guarda el historial).</div>');
@@ -534,7 +535,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         telefono: fmtTel(v(w, 'f-tel')), correo: v(w, 'f-mail'), direccion: v(w, 'f-dir'), nivelEducativo: v(w, 'f-niv'), titulo: v(w, 'f-tit'),
         contactoEmergencia: { nombre: v(w, 'f-cn'), parentesco: v(w, 'f-cp'), telefono: fmtTel(v(w, 'f-ct')) },
         codigo: v(w, 'f-cod'), fechaIngreso: v(w, 'f-ing'), cargo: v(w, 'f-cargo'), departamento: v(w, 'f-dep'), horario: v(w, 'f-hor'),
-        contrato: { tipo: v(w, 'f-ctt'), vence: v(w, 'f-ctv') }, formaPago: v(w, 'f-fp'), banco: v(w, 'f-ban'), tipoCuenta: v(w, 'f-tc'), cuentaBancaria: soloDig(v(w, 'f-cta')), trato: v(w, 'f-sexo') };
+        contrato: { tipo: v(w, 'f-ctt'), vence: v(w, 'f-ctv') }, formaPago: v(w, 'f-fp'), banco: v(w, 'f-ban'), tipoCuenta: v(w, 'f-tc'), cuentaBancaria: soloDig(v(w, 'f-cta')), trato: v(w, 'f-sexo'), empresaPlanilla: '' };
+      d.empresaPlanilla = v(w, 'f-ep'); if(d.empresaPlanilla === (nuevo ? v(w, 'f-raiz') : raiz)) d.empresaPlanilla = '';
       var falta = [];
       if(!d.nombreCompleto) falta.push('nombre completo');
       if(soloDig(d.identidad).length !== 13) falta.push('identidad (13 dígitos)');
@@ -897,8 +899,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function resumenPlan(raiz, p){ var r = { n: 0, dev: 0, ded: 0, neto: 0, he: 0, bon: 0, com: 0 };
     filasOrden(p).forEach(function(f){ var t = totFila(raiz, f); r.n++; r.dev += t.dev; r.ded += t.ded; r.neto += t.neto; r.he += parseFloat(f.horasExtras) || 0; r.bon += parseFloat(f.bonificacion) || 0; r.com += parseFloat(f.comision) || 0; });
     Object.keys(r).forEach(function(k){ r[k] = r2(r[k]); }); r.planilla = r2(r.neto - r.he - r.bon - r.com); return r; }
-  function filaDe(raiz, e, previa){
-    var sal = salarioDe(raiz, e.id), f = { empId: e.id, codigo: e.codigo || '', nombre: e.nombreCompleto || '', depto: e.departamento || '', cargo: e.cargo || '', identidad: e.identidad || '',
+  function plEmpresa(rf, e){ return e && e.empresaPlanilla && D[e.empresaPlanilla] ? e.empresaPlanilla : rf; }
+  // personal que se paga en la planilla de «r» (de su propia empresa o de la otra con «Se paga en la planilla de r»)
+  function personalPlanilla(r){ var out = []; EMPRESAS.forEach(function(E){ lista(D[E.raiz].empleados).forEach(function(e){ if(e.activo !== false && plEmpresa(E.raiz, e) === r) out.push({ rf: E.raiz, e: e }); }); }); return out; }
+  function filaDe(raiz, e, rf){
+    rf = rf || raiz;
+    var sal = salarioDe(rf, e.id), f = { empId: e.id, raizFicha: rf, codigo: e.codigo || '', nombre: e.nombreCompleto || '', depto: e.departamento || '', cargo: e.cargo || '', identidad: e.identidad || '',
       cuenta: e.cuentaBancaria || '', banco: e.banco || '', tipoCuenta: e.tipoCuenta || 'Ahorros', direccion: e.direccion || '', telefono: e.telefono || '', correo: e.correo || '', salario: sal != null ? sal : 0 };
     COL_ING[raiz].concat(COL_DED[raiz]).forEach(function(k){ f[k] = 0; });
     f.dias = 15; f.ordinario = r2((sal || 0) / 30 * 15); f.ihss = ihssDe(raiz, sal);
@@ -913,7 +919,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var per = m + '-' + qq, ya = planillas(r).find(function(p){ return p.periodo === per; });
       if(ya){ alert('Ya existe esa planilla en ' + nomEmp(r) + '. Ábrela desde la lista.'); return; }
       var id = 'pl_' + per.replace(/-/g, '') , filas = {};
-      lista(D[r].empleados).filter(function(e){ return e.activo !== false; }).forEach(function(e){ filas[e.id] = filaDe(r, e); });
+      personalPlanilla(r).forEach(function(x){ filas[x.e.id] = filaDe(r, x.e, x.rf); });
       var p = { id: id, periodo: per, estado: 'borrador', filas: filas, notas: '', firmas: { elaborado: cfg(r).firmaNombre, revisado: '', aprobado: '' }, creado: Date.now() }; p.titulo = titPlan(p);
       db().ref('rrhh/' + r + '/planillas/' + id).set(p).then(function(){ w.remove(); ui.plan = { raiz: r, id: id }; pintar(); aviso('Planilla creada ✓'); }).catch(function(er){ aviso('No se creó: ' + er.message, true); });
     }, '💵 Crear planilla');
@@ -985,12 +991,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-reabrir'){ var m = prompt('Reabrir la planilla para corregirla. Motivo:', ''); if(m === null || !m.trim()) return; var k = nuevoId('r_'), up = { estado: 'borrador' }; up['reaperturas/' + k] = { ts: Date.now(), motivo: m.trim() }; ref.update(up).then(function(){ aviso('Planilla reabierta'); }); return; }
     if(a === 'pl-borrar'){ if(!confirm('¿Eliminar la planilla ' + (p.titulo || '') + ' de ' + nomEmp(raiz) + ' (borrador)?\n\nNo se puede deshacer.')) return; ref.remove().then(function(){ ui.plan = null; pintar(); aviso('Planilla eliminada'); }); return; }
     if(a === 'pl-quitar'){ var e1 = t.getAttribute('data-e'), f1 = (p.filas || {})[e1]; if(!f1 || !confirm('¿Quitar a ' + f1.nombre + ' de esta planilla?')) return; ref.child('filas/' + e1).remove(); return; }
-    if(a === 'pl-agregar'){ var fuera = lista(D[raiz].empleados).filter(function(e){ return e.activo !== false && !(p.filas || {})[e.id]; });
+    if(a === 'pl-agregar'){ var fuera = personalPlanilla(raiz).filter(function(x){ return !(p.filas || {})[x.e.id]; });
       if(!fuera.length){ alert('Todo el personal activo de ' + nomEmp(raiz) + ' ya está en la planilla.'); return; }
-      ventana('➕ Agregar a la planilla', '<label>Empleado</label><select id="pa-e">' + fuera.map(function(e){ return '<option value="' + esc(e.id) + '">' + esc(e.nombreCompleto) + ' — ' + esc(e.departamento || '') + '</option>'; }).join('') + '</select>', function(w){
-        var e = D[raiz].empleados[v(w, 'pa-e')]; ref.child('filas/' + e.id).set(filaDe(raiz, e)).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
+      ventana('➕ Agregar a la planilla', '<label>Empleado</label><select id="pa-e">' + fuera.map(function(x){ return '<option value="' + esc(x.rf + '|' + x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + esc(x.e.departamento || '') + (x.rf !== raiz ? ' (ficha en ' + nomEmp(x.rf) + ')' : '') + '</option>'; }).join('') + '</select>', function(w){
+        var sel = v(w, 'pa-e').split('|'), e = D[sel[0]].empleados[sel[1]]; ref.child('filas/' + e.id).set(filaDe(raiz, e, sel[0])).then(function(){ w.remove(); }); }, '➕ Agregar'); return; }
     if(a === 'pl-refrescar'){ if(!confirm('¿Actualizar nombre, código, departamento, cuenta y salario de cada fila con los datos actuales de las fichas?\n\nTambién recalcula el IHSS (techo y %) y, si cambió el salario, el ordinario y las horas extra cargadas del Excel. Los demás montos escritos no cambian.')) return;
-      var up2 = {}; lista(p.filas).forEach(function(f){ var e = D[raiz].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e);
+      var up2 = {}; lista(p.filas).forEach(function(f){ var rf = f.raizFicha || raiz, e = D[rf].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e, rf); up2['filas/' + f.empId + '/raizFicha'] = rf;
         ['codigo', 'nombre', 'depto', 'cargo', 'identidad', 'cuenta', 'banco', 'tipoCuenta', 'direccion', 'telefono', 'correo', 'salario'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nf[k]; });
         up2['filas/' + f.empId + '/ihss'] = ihssDe(raiz, nf.salario);
         if(r2(nf.salario) !== r2(f.salario)){ up2['filas/' + f.empId + '/ordinario'] = r2(nf.salario / 30 * (parseFloat(f.dias) || 0)); if(f.heHoras) up2['filas/' + f.empId + '/horasExtras'] = heMonto(raiz, nf.salario, f.heHoras); } });
