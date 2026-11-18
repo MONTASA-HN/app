@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='0d647cfde5c2';
+  var APP_VERSION='5e6f7aa89414';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -272,7 +272,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   var REQ = ['Contrato', 'Identidad', 'Hoja de vida', 'Solicitud de empleo', 'Antecedentes', 'Cuenta bancaria'];
   var MOTIVOS_SALIDA = ['Renuncia', 'Despido', 'Abandono de trabajo', 'Fin de contrato', 'Acuerdo mutuo', 'Cambio de empresa'];
   var BANCOS = ['Banco Atlántida', 'Banco del País', 'BAC Honduras', 'Otro'];
-  var D = {}; EMPRESAS.forEach(function(e){ D[e.raiz] = { empleados: {}, colaboradores: {}, priv: {}, docsIdx: {}, fotos: {}, planillas: {}, _ok: {} }; });
+  var D = {}; EMPRESAS.forEach(function(e){ D[e.raiz] = { empleados: {}, colaboradores: {}, priv: {}, docsIdx: {}, fotos: {}, planillas: {}, incapacidades: {}, acciones: {}, _ok: {} }; });
   var ui = { emp: 'todas', vista: 'emp', q: '', depto: '', bajas: false, ficha: null, plan: null };   // ficha = { raiz, id } · plan = { raiz, id }
   var permisoRol = null;   // rol del acceso: rrhh · gerencia · planilla (solo ver planillas)
   var permiso = null;   // null = revisando · 'ok' · 'no' · 'base' (la base aún no da permiso a RRHH)
@@ -330,7 +330,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
     EMPRESAS.forEach(function(E){
-      (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas']).forEach(function(k){
+      (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas', 'incapacidades', 'acciones']).forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
           function(err){ console.warn('rrhh', E.raiz, k, err && err.code);
             if(k === 'empleados' || (k === 'planillas' && permisoRol === 'planilla')){ permiso = 'base'; pintar(); }
@@ -379,12 +379,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(ui.ficha){ pintarFicha(c); return; }
     if(permisoRol === 'planilla') ui.vista = 'planillas';
     if(ui.vista === 'planillas'){   // al refrescar (la base avisa cada cambio) se conserva la celda donde se escribe y el desplazamiento de la tabla
-      var act = document.activeElement, kk = act && c.contains(act) ? (act.getAttribute('data-pc') ? '[data-pc="' + act.getAttribute('data-pc') + '"]' : act.getAttribute('data-pf') ? '[data-pf="' + act.getAttribute('data-pf') + '"]' : act.id ? '#' + act.id : null) : null;
+      var act = document.activeElement, kk = act && c.contains(act) ? (act.getAttribute('data-pc') ? '[data-pc="' + act.getAttribute('data-pc') + '"]' : act.getAttribute('data-pcom') ? '[data-pcom="' + act.getAttribute('data-pcom') + '"]' : act.getAttribute('data-pf') ? '[data-pf="' + act.getAttribute('data-pf') + '"]' : act.id ? '#' + act.id : null) : null;
       var vv = kk ? act.value : null, ss = kk && act.selectionStart, bx = c.querySelector('.pl-tabla'), sl = bx ? bx.scrollLeft : 0, stp = bx ? bx.scrollTop : 0;
       pintarPlanillas(c);
       var bx2 = c.querySelector('.pl-tabla'); if(bx2){ bx2.scrollLeft = sl; bx2.scrollTop = stp; }
       var nu = kk && c.querySelector(kk); if(nu){ nu.value = vv; nu.focus(); try{ nu.setSelectionRange(ss, ss); }catch(e){} }
     }
+    else if(ui.vista === 'incap') pintarIncapacidades(c);
     else if(ui.vista === 'alertas') pintarAlertas(c);
     else if(ui.vista === 'resumen') pintarResumen(c);
     else pintarLista(c);
@@ -428,7 +429,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div class="sub">' + nomEmp(raiz) + (e.codigo ? ' · Código <b>' + esc(e.codigo) + '</b>' : '') + (ing ? ' · Ingreso ' + fmt(ing) + ' (' + antig(ing) + ')' : '') + '</div>'
       + '<div>' + (e.activo === false ? '<span class="tag r">Dado de baja el ' + fmt(e.fechaBaja) + '</span>' : '<span class="tag v">Activo</span>')
       + otras.map(function(o){ return '<span class="tag" style="cursor:pointer" data-a="abrir" data-r="' + o.raiz + '" data-id="' + esc(o.e.id) + '">↗ También en ' + nomEmp(o.raiz) + (o.e.activo === false ? ' (baja)' : '') + '</span>'; }).join('') + '</div></div></div>'
-      + '<div class="acc"><button class="bt bp" data-a="editar">✏️ Editar ficha</button><button class="bt" data-a="foto">📷 Foto</button><button class="bt" data-a="salario">💵 Salario</button><button class="bt" data-a="constancia">📄 Constancias</button>'
+      + '<div class="acc"><button class="bt bp" data-a="editar">✏️ Editar ficha</button><button class="bt" data-a="foto">📷 Foto</button><button class="bt" data-a="salario">💵 Salario</button><button class="bt" data-a="constancia">📄 Constancias</button><button class="bt" data-a="incap">🩺 Incapacidad</button>'
       + (e.activo === false ? '<button class="bt bv" data-a="reingreso">↩️ Reingreso</button>' : '<button class="bt" data-a="otra">➕ Agregar en otra empresa</button><button class="bt br" data-a="salida">🚪 Registrar salida</button>') + '</div></div>';
     h += '<div class="card"><h3 style="margin-top:0">Datos personales</h3><div class="kv">'
       + kv('Identidad', esc(e.identidad)) + kv('Fecha de nacimiento', e.fechaNacimiento ? fmt(e.fechaNacimiento) + ' (' + aniosEntre(aF(e.fechaNacimiento), new Date()) + ' años)' : '') + kv('Estado civil', esc(e.estadoCivil)) + kv('Hijos', e.hijos === 'si' ? 'Sí' : e.hijos === 'no' ? 'No' : '')
@@ -951,23 +952,25 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var inp = function(f, k){ var val = f[k] == null ? 0 : f[k];
       return ed ? '<input data-pc="' + esc(f.empId) + '|' + k + '" type="number" step="0.01" value="' + val + '" style="width:' + (k === 'dias' ? 52 : 86) + 'px;padding:5px 4px;border:1px solid #d6dde8;border-radius:5px;font-size:12px;text-align:right">' : '<div style="text-align:right;padding:4px">' + (k === 'dias' ? val : mon(val)) + '</div>'; };
     var cols = ci.concat(['_dev'], cd, ['_ded', '_neto']);
-    var cab = '<tr><th style="' + th + '">Código</th><th style="' + th + ';text-align:left">Nombre</th>' + cols.map(function(k){ return '<th style="' + th + (k[0] === '_' ? ';background:#1f3864;color:#fff' : '') + '">' + ({ _dev: 'Total devengado', _ded: 'Total deducciones', _neto: 'Neto a pagar' }[k] || NOMCOL[k]) + '</th>'; }).join('') + (ed ? '<th style="' + th + '"></th>' : '<th style="' + th + '"></th>') + '</tr>';
+    var cab = '<tr><th style="' + th + '">Código</th><th style="' + th + ';text-align:left">Nombre</th>' + cols.map(function(k){ return '<th style="' + th + (k[0] === '_' ? ';background:#1f3864;color:#fff' : '') + '">' + ({ _dev: 'Total devengado', _ded: 'Total deducciones', _neto: 'Neto a pagar' }[k] || NOMCOL[k]) + '</th>'; }).join('') + '<th style="' + th + ';text-align:left;min-width:230px">Comentarios</th>' + (ed ? '<th style="' + th + '"></th>' : '<th style="' + th + '"></th>') + '</tr>';
     var cuerpo = '', depAct = null, sub = null;
-    var cierraSub = function(){ if(!sub) return ''; return '<tr style="background:#f4f7fb;font-weight:800"><td style="' + td + '" colspan="2">Subtotal ' + esc(depAct || 'Sin departamento') + '</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right">' + (k === 'dias' ? '' : mon(sub[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td></tr>'; };
+    var cierraSub = function(){ if(!sub) return ''; return '<tr style="background:#f4f7fb;font-weight:800"><td style="' + td + '" colspan="2">Subtotal ' + esc(depAct || 'Sin departamento') + '</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right">' + (k === 'dias' ? '' : mon(sub[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td><td style="' + td + '"></td></tr>'; };
     filas.forEach(function(f){
-      if(f.depto !== depAct || sub === null){ cuerpo += cierraSub(); depAct = f.depto; sub = {}; cols.forEach(function(k){ sub[k] = 0; }); cuerpo += '<tr><td colspan="' + (cols.length + 3) + '" style="padding:8px 6px 4px;font-weight:800;color:#1f3864;font-size:12.5px">' + esc(f.depto || 'Sin departamento') + '</td></tr>'; }
+      if(f.depto !== depAct || sub === null){ cuerpo += cierraSub(); depAct = f.depto; sub = {}; cols.forEach(function(k){ sub[k] = 0; }); cuerpo += '<tr><td colspan="' + (cols.length + 4) + '" style="padding:8px 6px 4px;font-weight:800;color:#1f3864;font-size:12.5px">' + esc(f.depto || 'Sin departamento') + '</td></tr>'; }
       var t = totFila(raiz, f); cols.forEach(function(k){ sub[k] += k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : (parseFloat(f[k]) || 0); });
       cuerpo += '<tr><td style="' + td + '">' + esc(f.codigo) + '</td><td style="' + td + ';font-weight:700;color:#1f3864;white-space:normal;min-width:170px">' + esc(f.nombre) + '</td>'
         + cols.map(function(k){ return '<td style="' + td + (k[0] === '_' ? ';text-align:right;font-weight:800;background:#f8fafd' : '') + '" ' + (k[0] === '_' ? 'data-pt="' + esc(f.empId) + '|' + k + '"' : '') + '>' + (k === '_dev' ? mon(t.dev) : k === '_ded' ? mon(t.ded) : k === '_neto' ? mon(t.neto) : inp(f, k)) + '</td>'; }).join('')
+        + '<td style="' + td + ';white-space:normal;min-width:230px">' + (ed ? '<input data-pcom="' + esc(f.empId) + '" value="' + esc(f.comentario || '') + '" placeholder="Comentario…" style="width:100%;box-sizing:border-box;padding:5px 6px;border:1px solid #d6dde8;border-radius:5px;font-size:12px">' : esc(f.comentario || ''))
+          + ((f.notasAuto || []).length ? '<div style="font-size:11px;color:#5b6472;margin-top:2px">' + f.notasAuto.map(esc).join('<br>') + (ed ? ' <a href="#" data-a="pl-nota-x" data-e="' + esc(f.empId) + '" style="color:#b42318">quitar</a>' : '') + '</div>' : '') + '</td>'
         + '<td style="' + td + '"><button class="bt" data-a="pl-comp" data-e="' + esc(f.empId) + '" title="Comprobante de pago" style="padding:4px 7px">📄</button>' + (ed ? '<button class="bt br" data-a="pl-quitar" data-e="' + esc(f.empId) + '" title="Quitar de esta planilla" style="padding:4px 7px;margin-left:3px">✕</button>' : '') + '</td></tr>';
     });
     cuerpo += cierraSub();
     var tot = {}; cols.forEach(function(k){ tot[k] = 0; }); filas.forEach(function(f){ var t = totFila(raiz, f); cols.forEach(function(k){ tot[k] += k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : (parseFloat(f[k]) || 0); }); });
-    cuerpo += '<tr style="background:#1f3864;color:#fff;font-weight:800"><td style="' + td + ';color:#fff" colspan="2">TOTAL GENERAL · ' + filas.length + ' colaboradores</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right;color:#fff">' + (k === 'dias' ? '' : mon(tot[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td></tr>';
+    cuerpo += '<tr style="background:#1f3864;color:#fff;font-weight:800"><td style="' + td + ';color:#fff" colspan="2">TOTAL GENERAL · ' + filas.length + ' colaboradores</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right;color:#fff">' + (k === 'dias' ? '' : mon(tot[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td><td style="' + td + '"></td></tr>';
     var fir = p.firmas || {};
     c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>'
       + '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
-      + '<div class="acc" style="margin:0">' + (ed ? '<button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button><button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
+      + '<div class="acc" style="margin:0">' + (ed ? '<button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button><button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
       + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar comprobantes</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
       + '<div class="kv" style="margin-top:8px"><div><span>Colaboradores</span><b>' + rs.n + '</b></div><div><span>Planilla</span><b>L ' + mon(rs.planilla) + '</b></div><div><span>Comisiones</span><b>L ' + mon(rs.com) + '</b></div><div><span>Bonos</span><b>L ' + mon(rs.bon) + '</b></div><div><span>Horas extras</span><b>L ' + mon(rs.he) + '</b></div><div><span>Total a pagar</span><b style="font-size:17px">L ' + mon(rs.neto) + '</b></div></div></div>'
@@ -991,6 +994,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function planAccion(a, t){
     var raiz = ui.plan && ui.plan.raiz, p = raiz && D[raiz].planillas[ui.plan.id], ref = p && db().ref('rrhh/' + raiz + '/planillas/' + p.id);
     if(a === 'pl-volver'){ ui.plan = null; pintar(); return; }
+    if(a === 'pl-nota-x'){ var pn = raiz && D[raiz].planillas[ui.plan.id]; if(pn && pn.estado !== 'cerrada') db().ref('rrhh/' + raiz + '/planillas/' + pn.id + '/filas/' + t.getAttribute('data-e') + '/notasAuto').remove(); return; }
     if(!p) return;
     if(a === 'pl-cerrar'){ if(!confirm('¿Cerrar la ' + (p.titulo || '') + ' de ' + nomEmp(raiz) + '?\n\nYa no se podrá modificar (solo reabrir).')) return; ref.update({ estado: 'cerrada', cerradaEn: Date.now() }).then(function(){ aviso('Planilla cerrada ✓'); }); return; }
     if(a === 'pl-reabrir'){ var m = prompt('Reabrir la planilla para corregirla. Motivo:', ''); if(m === null || !m.trim()) return; var k = nuevoId('r_'), up = { estado: 'borrador' }; up['reaperturas/' + k] = { ts: Date.now(), motivo: m.trim() }; ref.update(up).then(function(){ aviso('Planilla reabierta'); }); return; }
@@ -1007,6 +1011,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         if(r2(nf.salario) !== r2(f.salario)){ up2['filas/' + f.empId + '/ordinario'] = r2(nf.salario / 30 * (parseFloat(f.dias) || 0)); if(f.heHoras) up2['filas/' + f.empId + '/horasExtras'] = heMonto(raiz, nf.salario, f.heHoras); } });
       ref.update(up2).then(function(){ aviso('Datos actualizados ✓'); }); return; }
     if(a === 'pl-he') return subirHorasExtra();
+    if(a === 'pl-nov') return novedadesPlanilla(raiz, p);
     if(a === 'pl-excel') return excelPlanilla([{ r: raiz, p: p }], (p.titulo || 'Planilla') + ' ' + nomEmp(raiz));
     if(a === 'pl-banco') return archivoBanco(raiz, p);
     if(a === 'pl-comp'){ var fe = (p.filas || {})[t.getAttribute('data-e')]; return comprobantes(raiz, p, fe ? [fe] : []); }
@@ -1021,11 +1026,11 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var T = [0, 0, 0, 0, 0, 0];
       lst.forEach(function(x){
         var raiz = x.r, p = x.p, cols = COL_ING[raiz].concat(['_dev'], COL_DED[raiz], ['_ded', '_neto']), nomC = function(k){ return { _dev: 'Total Devengado', _ded: 'Total Deducciones', _neto: 'Neto a Pagar' }[k] || NOMCOL[k]; };
-        var A = [[p.titulo || titPlan(p)], [cfg(raiz).razon], [], ['Código', 'Nombres'].concat(cols.map(nomC))], dep = null, sub = null;
+        var A = [[p.titulo || titPlan(p)], [cfg(raiz).razon], [], ['Código', 'Nombres'].concat(cols.map(nomC), ['Comentarios'])], dep = null, sub = null;
         var valor = function(f, k){ var t = totFila(raiz, f); return k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : r2(f[k]); };
         var cerrar = function(){ if(sub){ A.push(['', 'Subtotal ' + (dep || 'Sin departamento')].concat(cols.map(function(k){ return k === 'dias' ? '' : r2(sub[k]); }))); } };
         filasOrden(p).forEach(function(f){ if(sub === null || f.depto !== dep){ cerrar(); dep = f.depto; sub = {}; cols.forEach(function(k){ sub[k] = 0; }); A.push(['', dep || 'Sin departamento']); }
-          A.push([f.codigo, f.nombre].concat(cols.map(function(k){ var vv = valor(f, k); sub[k] += k === 'dias' ? 0 : vv; return vv; }))); });
+          A.push([f.codigo, f.nombre].concat(cols.map(function(k){ var vv = valor(f, k); sub[k] += k === 'dias' ? 0 : vv; return vv; }), [comentariosFila(f)])); });
         cerrar(); var rs = resumenPlan(raiz, p);
         A.push([]); A.push(['', 'Total General · ' + rs.n].concat(cols.map(function(k){ return k === 'dias' ? '' : r2(filasOrden(p).reduce(function(s, f){ return s + valor(f, k); }, 0)); })));
         var fi = p.firmas || {}; A.push([]); A.push(['Elaborado por:', fi.elaborado || '']); A.push(['Revisado por:', fi.revisado || '']); A.push(['Aprobado por:', fi.aprobado || '']); A.push([]); A.push(['NOTAS']);
@@ -1085,7 +1090,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     pdf.setFont('helvetica', 'bold'); pdf.setTextColor(31, 56, 100); pdf.text('INGRESOS', x + 2, yy); pdf.text('DEDUCCIONES', 112, yy); pdf.setTextColor(25, 25, 25);
     var fil = function(arr, xx){ var y = yy + 7, salto = false; arr.forEach(function(k){
         if(arr === ing && !salto && ing.indexOf('horasExtras') >= 0 && ing.indexOf(k) > ing.indexOf('horasExtras')){ y += heL.length * 4.2; salto = true; }
-        pdf.setFont('helvetica', 'normal'); pdf.text(NOMCOL[k] + (k === 'horasExtras' && heL.length ? ' (' + heTotH(f.heHoras) + ' h)' : ''), xx + 2, y); pdf.text('L ' + mon(f[k]), xx + 90, y, { align: 'right' }); y += 5.6; });
+        pdf.setFont('helvetica', 'normal'); pdf.text(NOMCOL[k] + (k === 'horasExtras' && heL.length ? ' (' + heTotH(f.heHoras) + ' h)' : '') + (k === 'incapacidades' && (f.incapDet || []).length ? ' (' + f.incapDet.reduce(function(s2, r){ return s2 + r.dias; }, 0) + ' días)' : ''), xx + 2, y); pdf.text('L ' + mon(f[k]), xx + 90, y, { align: 'right' }); y += 5.6; });
       if(!arr.length){ pdf.setTextColor(140, 140, 140); pdf.text('—', xx + 2, y); pdf.setTextColor(25, 25, 25); } };
     fil(ing, x); fil(ded, 110);
     if(heL.length){ var yh = yy + 7 + ing.indexOf('horasExtras') * 5.6 + 4.4; pdf.setFontSize(8.5); pdf.setTextColor(90, 90, 90);
@@ -1097,6 +1102,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     pdf.text('Total deducciones', 112, yt + 1); pdf.text('L ' + mon(t.ded), 200, yt + 1, { align: 'right' });
     pdf.setFillColor(31, 56, 100); pdf.rect(110, yt + 5, 92, 9, 'F'); pdf.setTextColor(255, 255, 255); pdf.setFontSize(11.5); pdf.text('NETO A PAGAR', 113, yt + 11); pdf.text('L ' + mon(t.neto), 199, yt + 11, { align: 'right' });
     pdf.setTextColor(25, 25, 25); pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
+    var subT = (f.incapDet || []).reduce(function(s2, r){ return s2 + (r.subsidio || 0); }, 0);
+    if(subT > 0){ pdf.setFontSize(8); pdf.setTextColor(90, 90, 90); pdf.text('Subsidio IHSS estimado (lo cobra directamente en el IHSS): L ' + mon(subT), 110, yt + 19); pdf.setFontSize(9.5); pdf.setTextColor(25, 25, 25); }
     var yf = Math.min(yt + 30, y0 + 128); pdf.line(x, yf, x + 70, yf); pdf.text('Recibí conforme: ' + f.nombre, x, yf + 4.5);
     pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 150); pdf.text('Documento generado desde NEXO RRHH — ' + fmt(hoy()), W - 14, y0 + 134, { align: 'right' });
     return pdf;
@@ -1287,6 +1294,143 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     calc();
   }
 
+  // ══ INCAPACIDADES Y NOVEDADES DE LA QUINCENA (2026-11-18, Miguel/Elia; guía «Prompt_incapacidades_planilla_Honduras.pdf») ══════════
+  // rrhh/<raízFicha>/incapacidades/<id>: { id, empId, desde, hasta, tipo, constancia, refrendo, prorrogaDe, cotiza, nota, ts, anulada }
+  // Reglas (Miguel 18/11: el subsidio lo cobra el EMPLEADO en el IHSS; solo MONHACO está afiliada):
+  //  · días 1-3 de la incapacidad (contando prórrogas): la empresa paga el 100 % del salario diario.
+  //  · desde el 4.º día: el IHSS paga 66 % de min(salario, techo) ÷ 30 por día (lo cobra el empleado); la empresa paga en planilla
+  //    el COMPLEMENTO hasta el salario diario (art. 73).
+  //  · empresa no afiliada / sin cotización mínima: sin subsidio → la empresa paga todos los días (marcado «validar»).
+  //  · maternidad, accidente de trabajo y enfermedad profesional: NO se calculan solos (revisión de RRHH).
+  // En la planilla nada se aplica solo: «🧾 Novedades de la quincena» muestra el cálculo y Elia confirma.
+  var TIPOS_INC = { comun: 'Enfermedad común', accidente: 'Accidente común', maternidad: 'Maternidad', trabajo: 'Accidente de trabajo', profesional: 'Enfermedad profesional', otro: 'Otro' };
+  var INC_AUTO = { comun: 1, accidente: 1 };
+  function diasEntre(a, b){ var x = aF(a), y = aF(b); return x && y ? Math.round((y - x) / 864e5) + 1 : 0; }
+  function fCorta(s){ var d = aF(s); return d ? d.getDate() + ' ' + MESES[d.getMonth()].slice(0, 3) : '—'; }
+  function incapsDe(rf, empId){ return lista((D[rf] || {}).incapacidades).filter(function(i){ return i.empId === empId && !i.anulada; }).sort(function(a, b){ return String(b.desde).localeCompare(a.desde); }); }
+  function diasPrevios(rf, inc){ var vis = {}, cur = inc, off = 0; while(cur && cur.prorrogaDe && !vis[cur.id]){ vis[cur.id] = 1; var prev = ((D[rf] || {}).incapacidades || {})[cur.prorrogaDe]; if(!prev || prev.anulada) break; off += diasEntre(prev.desde, prev.hasta); cur = prev; } return off; }
+  function rangoQuincena(p){ var a = String(p.periodo).split('-'), y = +a[0], m = +a[1], q = a[2];
+    return { ini: iso(new Date(y, m - 1, q === '1' ? 1 : 16)), fin: iso(q === '1' ? new Date(y, m - 1, 15) : new Date(y, m, 0)) }; }
+  function solapa(a1, a2, b1, b2){ var i = Math.max(aF(a1), aF(b1)), f = Math.min(aF(a2 || a1), aF(b2)); return i <= f ? Math.round((f - i) / 864e5) + 1 : 0; }
+  // cálculo de una incapacidad dentro de la quincena (tabla de la guía)
+  function calcIncap(planRaiz, f, inc, rq, rf){
+    var sal = parseFloat(f.salario) || 0, diario = sal / 30, k = ihssCfg(planRaiz), subsidia = k.aplica && inc.cotiza !== 'no';
+    var subD = Math.min(sal, k.techo) * 0.66 / 30, off = diasPrevios(rf, inc), d0 = aF(inc.desde);
+    var r = { tipo: inc.tipo, desde: inc.desde, hasta: inc.hasta, dias: 0, empresaDias: 0, ihssDias: 0, salarioDiario: r2(diario), subsidio: 0, complemento: 0, empresa: 0, revisar: '' };
+    var ini = new Date(Math.max(aF(inc.desde), aF(rq.ini))), fin = Math.min(aF(inc.hasta), aF(rq.fin));
+    for(var d = ini; d <= fin; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)){
+      var n = off + Math.round((d - d0) / 864e5) + 1; r.dias++;
+      if(n <= 3 || !subsidia){ r.empresaDias++; r.empresa += diario; } else { r.ihssDias++; r.subsidio += subD; r.complemento += Math.max(0, diario - subD); }
+    }
+    r.empresa = r2(r.empresa); r.subsidio = r2(r.subsidio); r.complemento = r2(r.complemento); r.total = r2(r.empresa + r.complemento);
+    if(!INC_AUTO[inc.tipo]) r.revisar = TIPOS_INC[inc.tipo] + ': no se calcula solo, revísala a mano';
+    else if(!k.aplica) r.revisar = nomEmp(planRaiz) + ' no está afiliada al IHSS: sin subsidio, la empresa paga todos los días (validar)';
+    else if(inc.cotiza === 'no') r.revisar = 'No cumple la cotización mínima: sin subsidio, la empresa paga todos los días (validar)';
+    else if(inc.refrendo === 'pendiente') r.revisar = 'Falta el refrendo de la constancia';
+    return r;
+  }
+  // acciones de personal (módulo de Gerencia: vacaciones y permisos) del empleado dentro de la quincena
+  function accionesQuincena(rf, empId, rq){
+    var cols = lista((D[rf] || {}).colaboradores).filter(function(c){ return c.empleadoId === empId; }).map(function(c){ return c.id; });
+    return lista((D[rf] || {}).acciones).filter(function(a){ return cols.indexOf(a.colaboradorId) >= 0 && !a.anulada && a.desde && solapa(a.desde, a.hasta, rq.ini, rq.fin) > 0; })
+      .map(function(a){ var tot = diasEntre(a.desde, a.hasta || a.desde), so = solapa(a.desde, a.hasta, rq.ini, rq.fin), dias = parseFloat(a.dias) || 0;
+        return { a: a, dias: r2(tot && dias ? dias * so / tot : so), vac: /VACACION/i.test(a.motivo || '') || !!a.descuentaVacaciones, sinGoce: a.goce === 'sin' }; });
+  }
+  // ── registrar / editar una incapacidad ──
+  function formIncapacidad(rf, e, inc){
+    inc = inc || {}; var previas = incapsDe(rf, e.id).filter(function(i){ return i.id !== inc.id; });
+    var w0 = ventana('🩺 Incapacidad de ' + esc(e.nombreCompleto),
+      '<div class="sub" style="margin-top:6px">' + nomEmp(rf) + ' · ' + esc(e.cargo || '') + '</div>'
+      + '<div class="g2"><div><label>Desde *</label><input id="i-d" type="date" value="' + esc(inc.desde || hoy()) + '"></div><div><label>Hasta *</label><input id="i-h" type="date" value="' + esc(inc.hasta || '') + '"></div></div>'
+      + '<div class="sub" id="i-n" style="margin-top:4px"></div>'
+      + '<label>Tipo *</label><select id="i-t">' + Object.keys(TIPOS_INC).map(function(k){ return '<option value="' + k + '"' + (inc.tipo === k ? ' selected' : '') + '>' + TIPOS_INC[k] + '</option>'; }).join('') + '</select>'
+      + '<div class="g2"><div><label>N.º de constancia (IHSS / médico)</label><input id="i-c" value="' + esc(inc.constancia || '') + '"></div><div><label>Refrendo</label><select id="i-r">'
+      + [['no', 'No requiere'], ['pendiente', 'Pendiente de refrendo'], ['si', 'Refrendada']].map(function(x){ return '<option value="' + x[0] + '"' + ((inc.refrendo || 'no') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div></div>'
+      + '<div class="g2"><div><label>¿Cumple la cotización mínima del IHSS?</label><select id="i-co"><option value="si"' + (inc.cotiza !== 'no' ? ' selected' : '') + '>Sí</option><option value="no"' + (inc.cotiza === 'no' ? ' selected' : '') + '>No</option></select></div>'
+      + '<div><label>¿Es prórroga de otra?</label><select id="i-p"><option value="">No, es nueva</option>' + previas.map(function(i){ return '<option value="' + esc(i.id) + '"' + (inc.prorrogaDe === i.id ? ' selected' : '') + '>' + fmt(i.desde) + ' al ' + fmt(i.hasta) + ' · ' + TIPOS_INC[i.tipo] + '</option>'; }).join('') + '</select></div></div>'
+      + '<label>Nota</label><input id="i-x" value="' + esc(inc.nota || '') + '" placeholder="Ej: diagnóstico general, clínica, observaciones">'
+      + '<div class="sub" style="margin-top:8px">La constancia escaneada se sube en el expediente (📁) como «Constancias». La planilla toma la incapacidad con «🧾 Novedades de la quincena».</div>',
+      function(w){
+        var d = { desde: v(w, 'i-d'), hasta: v(w, 'i-h'), tipo: v(w, 'i-t'), constancia: v(w, 'i-c'), refrendo: v(w, 'i-r'), cotiza: v(w, 'i-co'), prorrogaDe: v(w, 'i-p'), nota: v(w, 'i-x') };
+        if(!aF(d.desde) || !aF(d.hasta) || d.hasta < d.desde){ alert('Revisa las fechas (desde y hasta).'); return; }
+        var id = inc.id || nuevoId('inc_'), reg = Object.assign({}, inc, d, { id: id, empId: e.id, dias: diasEntre(d.desde, d.hasta), ts: inc.ts || Date.now(), actualizado: Date.now() });
+        db().ref('rrhh/' + rf + '/incapacidades/' + id).set(reg).then(function(){ w.remove(); aviso('Incapacidad guardada ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      }, inc.id ? '💾 Guardar' : '🩺 Registrar');
+    var w = w0, cnt = function(){ var n = diasEntre(v(w, 'i-d'), v(w, 'i-h')); w.querySelector('#i-n').textContent = n > 0 ? n + ' día(s) calendario' : ''; };
+    w.querySelector('#i-d').addEventListener('change', cnt); w.querySelector('#i-h').addEventListener('change', cnt); cnt();
+  }
+  function anularIncapacidad(rf, inc){ var m = prompt('¿Anular esta incapacidad (' + fmt(inc.desde) + ' al ' + fmt(inc.hasta) + ')? Motivo:', ''); if(m === null || !m.trim()) return;
+    db().ref('rrhh/' + rf + '/incapacidades/' + inc.id).update({ anulada: true, motivoAnula: m.trim(), anuladaEn: Date.now() }).then(function(){ aviso('Incapacidad anulada'); }); }
+  function filaIncap(rf, e, i, conNombre){ var act = i.desde <= hoy() && i.hasta >= hoy();
+    return '<div style="border-top:1px solid #f0f2f5;padding:8px 0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div>'
+      + (conNombre ? '<b style="color:#1f3864">' + esc(e.nombreCompleto) + '</b> <span class="tag">' + nomEmp(rf) + '</span><br>' : '')
+      + '<b>' + fmt(i.desde) + ' al ' + fmt(i.hasta) + '</b> · ' + diasEntre(i.desde, i.hasta) + ' días · ' + TIPOS_INC[i.tipo] + (act ? ' <span class="tag n">En curso</span>' : '')
+      + (i.prorrogaDe ? ' <span class="tag">Prórroga</span>' : '') + (i.refrendo === 'pendiente' ? ' <span class="tag r">Falta refrendo</span>' : '') + (!INC_AUTO[i.tipo] ? ' <span class="tag r">Revisión manual</span>' : '')
+      + '<div class="sub">' + (i.constancia ? 'Constancia ' + esc(i.constancia) + ' · ' : '') + esc(i.nota || '') + '</div></div>'
+      + '<div class="acc" style="margin:0"><button class="bt" data-a="inc-ed" data-r="' + rf + '" data-e="' + esc(e.id) + '" data-i="' + esc(i.id) + '">✏️</button><button class="bt br" data-a="inc-an" data-r="' + rf + '" data-e="' + esc(e.id) + '" data-i="' + esc(i.id) + '">Anular</button></div></div>';
+  }
+  function pintarIncapacidades(c){
+    var L = []; raices().forEach(function(r){ lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada) L.push({ r: r, e: e, i: i }); }); });
+    L.sort(function(a, b){ return String(b.i.desde).localeCompare(a.i.desde); });
+    var act = L.filter(function(x){ return x.i.hasta >= hoy() && x.i.desde <= hoy(); }), resto = L.filter(function(x){ return act.indexOf(x) < 0; });
+    var anio = String(new Date().getFullYear()), porEmp = {}; L.forEach(function(x){ if(String(x.i.desde).slice(0, 4) === anio){ var k = x.r + '|' + x.e.id; porEmp[k] = porEmp[k] || { x: x, d: 0 }; porEmp[k].d += solapa(x.i.desde, x.i.hasta, anio + '-01-01', anio + '-12-31'); } });
+    c.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><div class="nm" style="flex:1">🩺 Incapacidades</div><button class="bt bp" data-a="inc-nueva">➕ Registrar incapacidad</button></div>'
+      + '<div class="card"><h3 style="margin-top:0">En curso hoy (' + act.length + ')</h3>' + (act.length ? act.map(function(x){ return filaIncap(x.r, x.e, x.i, true); }).join('') : '<div class="sub">Nadie incapacitado hoy.</div>') + '</div>'
+      + '<div class="card"><h3 style="margin-top:0">Días de incapacidad en ' + anio + '</h3>' + (Object.keys(porEmp).length ? Object.keys(porEmp).map(function(k){ return porEmp[k]; }).sort(function(a, b){ return b.d - a.d; }).map(function(y){ return '<div class="sub" style="color:#1d2433;padding:3px 0">' + esc(y.x.e.nombreCompleto) + ' · <b>' + y.d + ' días</b> <span class="tag">' + nomEmp(y.x.r) + '</span></div>'; }).join('') : '<div class="sub">Sin incapacidades este año.</div>') + '</div>'
+      + '<div class="card"><h3 style="margin-top:0">Historial</h3>' + (resto.length ? resto.slice(0, 80).map(function(x){ return filaIncap(x.r, x.e, x.i, true); }).join('') : '<div class="sub">—</div>') + '</div>';
+  }
+  function elegirEmpleadoIncap(){
+    var L = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.raiz) >= 0; }).sort(function(a, b){ return String(a.e.nombreCompleto).localeCompare(b.e.nombreCompleto, 'es'); });
+    ventana('🩺 Registrar incapacidad', '<label>Empleado</label><select id="ie-e">' + L.map(function(x){ return '<option value="' + x.raiz + '|' + esc(x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + nomEmp(x.raiz) + '</option>'; }).join('') + '</select>', function(w){
+      var s = v(w, 'ie-e').split('|'); w.remove(); formIncapacidad(s[0], D[s[0]].empleados[s[1]]); }, 'Siguiente →');
+  }
+  // ── 🧾 Novedades de la quincena: incapacidades + vacaciones/permisos de Gerencia → propuesta para confirmar ──
+  function novedadesPlanilla(raiz, p){
+    var rq = rangoQuincena(p), props = [];
+    filasOrden(p).forEach(function(f){
+      var rf = f.raizFicha || raiz, base = 15, incs = incapsDe(rf, f.empId).filter(function(i){ return solapa(i.desde, i.hasta, rq.ini, rq.fin) > 0; });
+      var calc = incs.map(function(i){ return calcIncap(raiz, f, i, rq, rf); }), acc = accionesQuincena(rf, f.empId, rq);
+      if(!calc.length && !acc.length) return;
+      var autoInc = calc.filter(function(r){ return INC_AUTO[r.tipo]; }), dInc = autoInc.reduce(function(s, r){ return s + r.dias; }, 0), monto = r2(autoInc.reduce(function(s, r){ return s + r.total; }, 0));
+      var sinG = acc.filter(function(x){ return x.sinGoce && !x.vac; }), dSin = r2(sinG.reduce(function(s, x){ return s + x.dias; }, 0));
+      var notas = calc.map(function(r){ return 'Incapacidad ' + fCorta(r.desde) + '–' + fCorta(r.hasta) + ' (' + TIPOS_INC[r.tipo] + ', ' + r.dias + ' d en esta quincena: ' + r.empresaDias + ' empresa' + (r.ihssDias ? ', ' + r.ihssDias + ' subsidio IHSS' : '') + ')'; })
+        .concat(acc.map(function(x){ return (x.vac ? 'Vacaciones ' : (x.sinGoce ? 'Permiso SIN goce ' : 'Permiso con goce ') + '(' + String(x.a.motivo || '').toLowerCase() + ') ') + fCorta(x.a.desde) + (x.a.hasta && x.a.hasta !== x.a.desde ? '–' + fCorta(x.a.hasta) : '') + ' (' + x.dias + ' d)'; }));
+      props.push({ f: f, rf: rf, calc: calc, dInc: dInc, monto: monto, dSin: dSin, notas: notas, aplicaInc: autoInc.length > 0, aplicaSin: false });
+    });
+    if(!props.length){ alert('No hay incapacidades, vacaciones ni permisos registrados en ' + titPlan(p).toLowerCase() + ' para esta planilla.'); return; }
+    var tabla = function(r){ return '<table style="border-collapse:collapse;font-size:12px;margin:4px 0 2px;width:100%">' + [['Salario diario', 'L ' + mon(r.salarioDiario)], ['Días de incapacidad (esta quincena)', r.dias], ['Días a cargo de la empresa', r.empresaDias], ['Días subsidiables por IHSS', r.ihssDias],
+        ['Subsidio estimado IHSS (lo cobra el empleado)', 'L ' + mon(r.subsidio)], ['Pago de la empresa (días 1–3 / sin subsidio)', 'L ' + mon(r.empresa)], ['Complemento patronal', 'L ' + mon(r.complemento)], ['Deducción salarial aplicable', 'L 0.00'], ['<b>Total a reflejar en planilla</b>', '<b>L ' + mon(r.total) + '</b>']]
+        .map(function(x){ return '<tr><td style="padding:2px 6px;border-bottom:1px solid #f0f2f5">' + x[0] + '</td><td style="padding:2px 6px;text-align:right;border-bottom:1px solid #f0f2f5;white-space:nowrap">' + x[1] + '</td></tr>'; }).join('') + '</table>'; };
+    var h = '<div class="sub" style="margin-top:6px">' + esc(titPlan(p)) + ' (' + fmt(rq.ini) + ' al ' + fmt(rq.fin) + '). Revisa y marca lo que se aplica. <b>Nada se descuenta sin tu visto bueno.</b></div>'
+      + props.map(function(x, i){ return '<div class="card" style="margin-top:8px"><b style="color:#1f3864">' + esc(x.f.nombre) + '</b><div class="sub">' + x.notas.map(esc).join('<br>') + '</div>'
+        + x.calc.map(function(r){ return '<div style="margin-top:6px"><div class="sub"><b>' + TIPOS_INC[r.tipo] + ' ' + fmt(r.desde) + ' al ' + fmt(r.hasta) + '</b></div>' + (INC_AUTO[r.tipo] ? tabla(r) : '') + (r.revisar ? '<div class="sub" style="color:#b45309">⚠️ ' + esc(r.revisar) + '</div>' : '') + '</div>'; }).join('')
+        + (x.aplicaInc ? '<label style="display:flex;gap:8px;align-items:center;text-transform:none;font-weight:600;color:#1d2433"><input type="checkbox" data-nv="inc" data-i="' + i + '" checked style="width:auto"> Aplicar incapacidad: días trabajados −' + x.dInc + ', «Incapacidades» L ' + mon(x.monto) + '</label>' : '')
+        + (x.dSin ? '<label style="display:flex;gap:8px;align-items:center;text-transform:none;font-weight:600;color:#b42318"><input type="checkbox" data-nv="sin" data-i="' + i + '" style="width:auto"> Descontar permiso sin goce: días trabajados −' + x.dSin + ' (deducción; confirma que procede)</label>' : '')
+        + '<label style="display:flex;gap:8px;align-items:center;text-transform:none;font-weight:600;color:#1d2433"><input type="checkbox" data-nv="nota" data-i="' + i + '" checked style="width:auto"> Poner el detalle en los comentarios de la fila</label></div>'; }).join('');
+    var w = ventana('🧾 Novedades de la quincena · ' + nomEmp(raiz), h, function(w){
+      var up = {}, n = 0, chk = function(t, i){ var el = w.querySelector('[data-nv="' + t + '"][data-i="' + i + '"]'); return !!(el && el.checked); };
+      props.forEach(function(x, i){
+        var b = 'filas/' + x.f.empId + '/', inc = chk('inc', i), sin = chk('sin', i), nota = chk('nota', i);
+        if(!inc && !sin && !nota) return;
+        var dias = r2(Math.max(0, 15 - (inc ? x.dInc : 0) - (sin ? x.dSin : 0)));
+        if(inc || sin){ up[b + 'dias'] = dias; up[b + 'ordinario'] = r2((parseFloat(x.f.salario) || 0) / 30 * dias); }
+        if(inc){ up[b + 'incapacidades'] = x.monto; up[b + 'incapDet'] = x.calc.filter(function(r){ return INC_AUTO[r.tipo]; }); }
+        if(nota) up[b + 'notasAuto'] = x.notas;
+        n++;
+      });
+      if(!n){ alert('No marcaste nada para aplicar.'); return; }
+      db().ref('rrhh/' + raiz + '/planillas/' + p.id).update(up).then(function(){ w.remove(); aviso('Novedades aplicadas a ' + n + ' persona(s) ✓'); }).catch(function(er){ aviso('No se aplicó: ' + er.message, true); });
+    }, '✓ Aplicar a la planilla');
+    w.querySelector('.rh-w').style.maxWidth = '720px';
+  }
+  function comentariosFila(f){ return [f.comentario || ''].concat(f.notasAuto || []).filter(function(t){ return String(t).trim(); }).join(' · '); }
+
+  var _pintarFicha0 = pintarFicha;
+  pintarFicha = function(c){ _pintarFicha0(c); if(!ui.ficha) return; var rf = ui.ficha.raiz, e = D[rf].empleados[ui.ficha.id]; if(!e || (D[rf]._sinAcceso || {}).incapacidades) return;
+    var L = incapsDe(rf, e.id); c.insertAdjacentHTML('beforeend', '<div class="card"><h3 style="margin-top:0">🩺 Incapacidades</h3>' + (L.length ? L.map(function(i){ return filaIncap(rf, e, i, false); }).join('') : '<div class="sub">Sin incapacidades registradas.</div>') + '<div class="acc"><button class="bt" data-a="incap">➕ Registrar incapacidad</button></div></div>'); };
+  var _pintarAlertas0 = pintarAlertas;
+  pintarAlertas = function(c){ _pintarAlertas0(c); var L = []; raices().forEach(function(r){ lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada && i.desde <= hoy() && i.hasta >= hoy()) L.push(filaIncap(r, e, i, true)); }); });
+    if(L.length) c.insertAdjacentHTML('afterbegin', '<div class="card" style="border-color:#f5c26b"><h3 style="margin-top:0">🩺 Incapacitados hoy (' + L.length + ')</h3>' + L.join('') + '</div>'); };
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
@@ -1299,6 +1443,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'excel') return excel();
     if(a === 'bajas'){ ui.bajas = !ui.bajas; pintar(); return; }
     if(a === 'ajustes') return formAjustes(t.getAttribute('data-r'));
+    if(a === 'inc-nueva') return elegirEmpleadoIncap();
+    if(a === 'inc-ed' || a === 'inc-an'){ var ir = t.getAttribute('data-r'), ie = D[ir].empleados[t.getAttribute('data-e')], ii = (D[ir].incapacidades || {})[t.getAttribute('data-i')]; if(!ie || !ii) return; return a === 'inc-ed' ? formIncapacidad(ir, ie, ii) : anularIncapacidad(ir, ii); }
     if(a === 'pl-nueva') return nuevaPlanilla(ui.emp === 'todas' ? 'montasa' : ui.emp);
     if(a === 'pl-libro') return libroPeriodo();
     if(a === 'pl-abrir'){ ui.plan = { raiz: t.getAttribute('data-r'), id: t.getAttribute('data-id') }; pintar(); window.scrollTo(0, 0); return; }
@@ -1311,6 +1457,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'salida') return formSalida(f.raiz, e);
     if(a === 'reingreso') return reingreso(f.raiz, e);
     if(a === 'otra') return otraEmpresa(f.raiz, e);
+    if(a === 'incap') return formIncapacidad(f.raiz, e);
     if(a === 'doc-subir') return subirDoc(f.raiz, e);
     if(a === 'doc-ver') return verDoc(f.raiz, e, t.getAttribute('data-d'));
     if(a === 'doc-borrar') return borrarDoc(f.raiz, e, t.getAttribute('data-d'));
@@ -1321,12 +1468,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var root = document.createElement('div'); root.id = 'rh';
     root.innerHTML = '<div class="top">' + (logo ? '<img src="' + logo + '" alt="">' : '') + '<div><b>Nexo RRHH</b><small>Recursos Humanos · MT RENTAL · MONHACO · MONHAGRO · SEGURIDAD</small></div></div>'
       + '<div class="emp"><button data-emp="todas">Todas</button>' + EMPRESAS.map(function(E){ return '<button data-emp="' + E.raiz + '">' + E.nombre + '</button>'; }).join('') + '</div>'
-      + '<div class="nav"><button data-v="emp">🪪 Empleados</button><button data-v="alertas">🔔 Alertas</button><button data-v="resumen">📊 Resumen</button><button data-v="planillas">💵 Planillas</button></div>'
+      + '<div class="nav"><button data-v="emp">🪪 Empleados</button><button data-v="alertas">🔔 Alertas</button><button data-v="resumen">📊 Resumen</button><button data-v="planillas">💵 Planillas</button><button data-v="incap">🩺 Incapacidades</button></div>'
       + '<div class="c" id="rh-c"></div>';
     root.addEventListener('click', clic);
     root.addEventListener('input', function(ev){ if(ev.target.id === 'rh-q'){ ui.q = ev.target.value; var pos = ev.target.selectionStart; pintar(); var q = $('#rh-q'); if(q){ q.focus(); try{ q.setSelectionRange(pos, pos); }catch(e){} } } });
     root.addEventListener('change', function(ev){ if(ev.target.id === 'rh-depto'){ ui.depto = ev.target.value; pintar(); return; }
       if(ev.target.hasAttribute('data-pc')) return guardarCelda(ev.target);
+      if(ev.target.hasAttribute('data-pcom')){ var pc = ui.plan && D[ui.plan.raiz].planillas[ui.plan.id]; if(pc && pc.estado !== 'cerrada') db().ref('rrhh/' + ui.plan.raiz + '/planillas/' + pc.id + '/filas/' + ev.target.getAttribute('data-pcom') + '/comentario').set(ev.target.value.trim()).catch(function(er){ aviso('No se guardó: ' + er.message, true); }); return; }
       var pl = ui.plan && D[ui.plan.raiz].planillas[ui.plan.id]; if(!pl || pl.estado === 'cerrada') return;
       var ref = db().ref('rrhh/' + ui.plan.raiz + '/planillas/' + pl.id);
       if(ev.target.id === 'pl-notas') ref.update({ notas: ev.target.value }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
