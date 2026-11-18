@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+// (2026-11-18, pedido de Miguel) Saludo con el primer nombre de quien usa este teléfono (accesos/<uid>.nombre). Si aún no se sabe, solo el saludo.
+window._nxPrimerNombre = function(){ var r = (window._nxAcceso || {}).registro || {}; var n = String(r.nombre || '').trim().split(/\s+/)[0] || ''; return n ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : ''; };
+window._nxConNombre = function(s){ var n = window._nxPrimerNombre(); return n ? s + ', ' + n : s; };
+document.addEventListener('nx-acceso', function(){ var n = window._nxPrimerNombre(); if(!n) return; document.querySelectorAll('[data-nx-saludo]').forEach(function(el){ el.textContent = el.getAttribute('data-nx-saludo') + ', ' + n + (el.hasAttribute('data-nx-mano') ? ' 👋' : ''); }); });
+</script>
 <meta charset="UTF-8">
 <script>
 // (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
@@ -235,7 +241,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7aa4cbb22815';
+  var APP_VERSION='0b31c94da2d2';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8932,7 +8938,7 @@ function renderDashboard(){
 
   // Saludo
   const hr = new Date().getHours();
-  document.getElementById('dash-saludo').textContent = hr<12?'Buenos días':hr<18?'Buenas tardes':'Buenas noches';
+  (function(){ var _s = hr<12?'Buenos días':hr<18?'Buenas tardes':'Buenas noches', _el = document.getElementById('dash-saludo'); _el.textContent = window._nxConNombre ? window._nxConNombre(_s) : _s; _el.setAttribute('data-nx-saludo', _s); })();
 
   // Fecha header
   const ahora = new Date();
