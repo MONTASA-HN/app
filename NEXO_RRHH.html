@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='05dc1fa18677';
+  var APP_VERSION='71cd2cd294dd';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -329,6 +329,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(escuchando) return;
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
+    escucharArchivos();
     EMPRESAS.forEach(function(E){
       (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas', 'incapacidades', 'acciones']).forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
@@ -940,7 +941,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(!ks.length) h += '<div class="card" style="text-align:center;color:#667085">Todavía no hay planillas.' + (soloVer ? '' : ' Crea la primera con «➕ Nueva quincena».') + '</div>';
     h += ks.map(function(k){ return '<div class="card"><div class="nm">' + titPlan({ periodo: k }) + '</div>' + periodos[k].map(function(x){ var rs = resumenPlan(x.r, x.p);
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f2f5;padding:8px 0;cursor:pointer" data-a="pl-abrir" data-r="' + x.r + '" data-id="' + esc(x.p.id) + '">'
-          + '<div><b>' + nomEmp(x.r) + '</b> <span class="tag ' + (x.p.estado === 'cerrada' ? 'v' : 'n') + '">' + (x.p.estado === 'cerrada' ? '✓ Cerrada' : 'Borrador') + '</span><div class="sub">' + rs.n + ' colaboradores · Total a pagar <b>L ' + mon(rs.neto) + '</b></div></div><span class="bt">Abrir →</span></div>'; }).join('') + '</div>'; }).join('');
+          + '<div><b>' + nomEmp(x.r) + '</b> <span class="tag ' + (x.p.estado === 'cerrada' ? 'v' : 'n') + '">' + (x.p.estado === 'cerrada' ? '✓ Cerrada' : 'Borrador') + '</span><div class="sub">' + rs.n + ' colaboradores · Total a pagar <b>L ' + mon(rs.neto) + '</b></div></div><span class="bt">Abrir →</span></div>'; }).join('') + bloqueArchivos(k) + '</div>'; }).join('');
     c.innerHTML = h;
   }
   function pintarPlanilla(c){
@@ -974,6 +975,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
       + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar comprobantes</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
       + '<div class="kv" style="margin-top:8px"><div><span>Colaboradores</span><b>' + rs.n + '</b></div><div><span>Planilla</span><b>L ' + mon(rs.planilla) + '</b></div><div><span>Comisiones</span><b>L ' + mon(rs.com) + '</b></div><div><span>Bonos</span><b>L ' + mon(rs.bon) + '</b></div><div><span>Horas extras</span><b>L ' + mon(rs.he) + '</b></div><div><span>Total a pagar</span><b style="font-size:17px">L ' + mon(rs.neto) + '</b></div></div></div>'
+      + '<div class="card" style="padding:4px 14px">' + bloqueArchivos(p.periodo) + '</div>'
       + '<div class="card pl-tabla" style="padding:0;overflow:auto;max-height:70vh"><table style="border-collapse:collapse;width:max-content;min-width:100%">' + cab + cuerpo + '</table></div>'
       + '<div class="card"><h3 style="margin-top:0">Notas de la quincena</h3>' + (ed ? '<textarea id="pl-notas" rows="5" placeholder="1- Se pagan las horas extras de la segunda quincena de…">' + esc(p.notas || '') + '</textarea>' : '<div class="sub" style="white-space:pre-wrap;color:#1d2433">' + esc(p.notas || '—') + '</div>')
       + '<h3>Firmas</h3><div class="g2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' + [['elaborado', 'Elaborado por'], ['revisado', 'Revisado por'], ['aprobado', 'Aprobado por']].map(function(x){
@@ -1230,8 +1232,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       if(c.length) return { id: c.length === 1 ? c[0] : '', cands: c }; }
     return { id: '', cands: [] };
   }
-  function subirHorasExtra(){
-    var p0 = D[ui.plan.raiz].planillas[ui.plan.id]; if(!p0) return;
+  function subirHorasExtra(per){
+    var p0 = per ? { periodo: per } : (ui.plan && D[ui.plan.raiz].planillas[ui.plan.id]); if(!p0) return;
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm';
     inp.onchange = function(){
       var fl = inp.files && inp.files[0]; if(!fl) return;
@@ -1249,12 +1251,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
           var h = {}; HE_REC.forEach(function(x){ h[x[0]] = r2(f[col[x[2]]]); });
           filas.push({ raiz: raiz, nombre: nom, h: h });
         });
-        previaHE(p0, filas, Object.keys(otras));
+        previaHE(p0, filas, Object.keys(otras), { buf: r[1], nombre: fl.name });
       }).catch(function(er){ aviso('No se pudo leer el Excel: ' + er.message, true); });
     };
     inp.click();
   }
-  function previaHE(p0, filas, otras){
+  function previaHE(p0, filas, otras, archivo){
     var dest = {}; EMPRESAS.forEach(function(E){ var p = planillas(E.raiz).find(function(x){ return x.periodo === p0.periodo; }); dest[E.raiz] = p && p.estado !== 'cerrada' ? p : null; });
     filas.forEach(function(x){ x.b = heBuscar(x.raiz, dest, x.nombre); x.sel = x.b.id; });
     var filaSel = function(sel){ if(!sel) return null; var a = sel.split('|'), p = dest[a[0]]; return p && (p.filas || {})[a[1]] ? { raiz: a[0], p: p, f: p.filas[a[1]] } : null; };
@@ -1284,7 +1286,10 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var sinElegir = filas.filter(function(x){ return heTotH(x.h) > 0 && !filaSel(x.sel); }).map(function(x){ return x.nombre + ' (' + heTotH(x.h) + ' h)'; });
       if(sinElegir.length && !confirm('⚠️ Estas personas TIENEN horas extra y no se van a cargar (no se eligió a quién):\n• ' + sinElegir.join('\n• ') + '\n\n¿Cargar las demás de todas formas?')) return;
       if(!n){ alert('No hay filas para cargar.'); return; }
-      db().ref().update(up).then(function(){ w.remove(); aviso('Horas extra cargadas: ' + n + ' ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      db().ref().update(up).then(function(){
+        if(!archivo) return;
+        return guardarArchivoHE(p0.periodo, archivo.buf, archivo.nombre, n).then(function(){ aviso('📎 Excel guardado como «' + nombreHE(p0.periodo) + '»'); }).catch(function(er){ aviso('Horas cargadas, pero el Excel no se guardó: ' + er.message, true); });
+      }).then(function(){ w.remove(); aviso('Horas extra cargadas: ' + n + ' ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '📥 Cargar horas extra');
     w.querySelector('.rh-w').style.maxWidth = '860px';
     var calc = function(){ filas.forEach(function(x, i){ var td = w.querySelector('[data-hem="' + i + '"]'), av = w.querySelector('[data-hea="' + i + '"]'); if(!td) return; var s = filaSel(x.sel), f = s && s.f;
@@ -1445,6 +1450,50 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   var _pintarAlertas0 = pintarAlertas;
   pintarAlertas = function(c){ _pintarAlertas0(c); var L = []; raices().forEach(function(r){ lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada && i.desde <= hoy() && i.hasta >= hoy()) L.push(filaIncap(r, e, i, true)); }); });
     if(L.length) c.insertAdjacentHTML('afterbegin', '<div class="card" style="border-color:#f5c26b"><h3 style="margin-top:0">🩺 Incapacitados hoy (' + L.length + ')</h3>' + L.join('') + '</div>'); };
+  // ══ RESPALDO DEL EXCEL DE HORAS EXTRA (2026-11-18, Miguel: auditorías) ══════════════════════════════════════════════
+  // Una sola subida carga las dos planillas (MT y MH) del mismo período; el archivo original queda guardado por período:
+  //   rrhh/archivos/indice/<id> = { id, tipo:'horasExtras', periodo, nombre:'Horas extras planilla del 16 al 30 de noviembre 2026.xlsx', original, tam, ts, cargadas }
+  //   rrhh/archivos/datos/<id>  = { data: base64 }   (solo RRHH; las reglas rrhh/$raiz/$otro ya lo cubren)
+  var ARCH = { indice: {}, ok: false };
+  function escucharArchivos(){ if(permisoRol === 'planilla' || !db()) return; db().ref('rrhh/archivos/indice').on('value', function(s){ ARCH.indice = s.val() || {}; ARCH.ok = true; pintar(); }, function(){ ARCH.ok = true; }); }
+  function nombreHE(per){ return 'Horas extras planilla ' + titPlan({ periodo: per }).replace(/^PLANILLA /i, '').toLowerCase() + '.xlsx'; }
+  function archivosDe(per){ return lista(ARCH.indice).filter(function(a){ return a.periodo === per; }).sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); }); }
+  function guardarArchivoHE(per, buf, original, cargadas){
+    if(buf.byteLength > 8 * 1024 * 1024) return Promise.reject(new Error('el Excel pesa más de 8 MB'));
+    var id = nuevoId('a_'), cambios = {};
+    cambios['rrhh/archivos/datos/' + id] = { data: b64Buf(buf) };
+    cambios['rrhh/archivos/indice/' + id] = { id: id, tipo: 'horasExtras', periodo: per, nombre: nombreHE(per), original: original || '', tam: buf.byteLength, ts: Date.now(), cargadas: cargadas || 0 };
+    return db().ref().update(cambios);
+  }
+  function bajarArchivo(id){ return db().ref('rrhh/archivos/datos/' + id + '/data').once('value').then(function(s){ var d = s.val(); if(!d) throw new Error('no se encontró el archivo');
+    var b = atob(d), u = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }); }
+  function descargarArchivo(id){ var a0 = ARCH.indice[id] || {}; aviso('Descargando…');
+    bajarArchivo(id).then(function(buf){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = a0.nombre || 'Horas extras.xlsx';
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000); }).catch(function(er){ aviso('No se pudo descargar: ' + er.message, true); }); }
+  // ver el Excel dentro de Nexo (cada hoja en una pestaña)
+  function verArchivo(id){ var a0 = ARCH.indice[id] || {}; aviso('Abriendo…');
+    Promise.all([cargarXLSX(), bajarArchivo(id)]).then(function(r){
+      var wb = XLSX.read(r[1], { type: 'array' }), hojas = wb.SheetNames, ini = hojas.find(function(n){ return norm(n) === 'RESUMEN'; }) || hojas[0];
+      var tabla = function(n){ var ws = wb.Sheets[n]; if(ws['!ref']){ var rg = XLSX.utils.decode_range(ws['!ref']); if(rg.e.r > 400) rg.e.r = 400; if(rg.e.c > 30) rg.e.c = 30; ws['!ref'] = XLSX.utils.encode_range(rg); }
+        return XLSX.utils.sheet_to_html(ws, { header: '', footer: '' }).replace(/<table/, '<table class="xv"'); };
+      var w = ventana('📊 ' + esc(a0.nombre || 'Excel'), '<div class="sub" style="margin-top:4px">Subido el ' + fmt(iso(new Date(a0.ts || Date.now()))) + (a0.original ? ' · archivo original: ' + esc(a0.original) : '') + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">' + hojas.map(function(n){ return '<button class="bt" data-hoja="' + esc(n) + '" style="padding:6px 10px;border-radius:8px;border:1px solid #c9d1dc;background:' + (n === ini ? '#1f3864;color:#fff' : '#fff;color:#1f3864') + ';font-weight:700;cursor:pointer">' + esc(n) + '</button>'; }).join('') + '</div>'
+        + '<style>.xv{border-collapse:collapse;font-size:12px}.xv td{border:1px solid #e1e6ee;padding:3px 6px;white-space:nowrap}</style><div id="xv-c" style="overflow:auto;max-height:62vh;border:1px solid #e1e6ee;border-radius:8px">' + tabla(ini) + '</div>',
+        function(w){ w.remove(); descargarArchivo(id); }, '⬇ Descargar');
+      w.querySelector('.rh-w').style.maxWidth = '1000px';
+      w.addEventListener('click', function(ev){ var b = ev.target.closest('[data-hoja]'); if(!b) return; var n = b.getAttribute('data-hoja');
+        w.querySelectorAll('[data-hoja]').forEach(function(x){ var on = x === b; x.style.background = on ? '#1f3864' : '#fff'; x.style.color = on ? '#fff' : '#1f3864'; });
+        w.querySelector('#xv-c').innerHTML = tabla(n); });
+    }).catch(function(er){ aviso('No se pudo abrir: ' + er.message, true); });
+  }
+  function bloqueArchivos(per){
+    var L = archivosDe(per), soloVer = permisoRol === 'planilla';
+    return '<div style="border-top:1px solid #f0f2f5;padding:8px 0 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
+      + '<div style="font-size:12.5px"><b style="color:#1f3864">📎 Horas extras</b> ' + (L.length ? L.map(function(a, i){ return '<div class="sub" style="color:#1d2433">' + esc(a.nombre) + (i ? ' <span class="tag">versión anterior</span>' : '') + ' · ' + fmt(iso(new Date(a.ts))) + ' ' + new Date(a.ts).toTimeString().slice(0, 5)
+          + ' <a href="#" data-a="arch-ver" data-id="' + esc(a.id) + '" style="color:#1f3864;font-weight:700">ver</a> · <a href="#" data-a="arch-bajar" data-id="' + esc(a.id) + '" style="color:#1f3864;font-weight:700">descargar</a></div>'; }).join('') : '<span class="sub">— sin archivo todavía</span>') + '</div>'
+      + (soloVer ? '' : '<button class="bt bp" data-a="pl-he-per" data-p="' + esc(per) + '">📥 Subir horas extra (MT y MH)</button>') + '</div>';
+  }
+
   // ── arranque ──
   function clic(ev){
     var t = ev.target.closest('[data-a],[data-emp],[data-v]'); if(!t) return;
@@ -1462,6 +1511,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'inc-ed' || a === 'inc-an'){ var ir = t.getAttribute('data-r'), ie = D[ir].empleados[t.getAttribute('data-e')], ii = (D[ir].incapacidades || {})[t.getAttribute('data-i')]; if(!ie || !ii) return; return a === 'inc-ed' ? formIncapacidad(ir, ie, ii) : anularIncapacidad(ir, ii); }
     if(a === 'pl-nueva') return nuevaPlanilla(ui.emp === 'todas' ? 'montasa' : ui.emp);
     if(a === 'pl-libro') return libroPeriodo();
+    if(a === 'pl-he-per') return subirHorasExtra(t.getAttribute('data-p'));
+    if(a === 'arch-ver') return verArchivo(t.getAttribute('data-id'));
+    if(a === 'arch-bajar') return descargarArchivo(t.getAttribute('data-id'));
     if(a === 'pl-abrir'){ ui.plan = { raiz: t.getAttribute('data-r'), id: t.getAttribute('data-id') }; pintar(); window.scrollTo(0, 0); return; }
     if(/^pl-/.test(a)) return planAccion(a, t);
     var f = ui.ficha, e = f && D[f.raiz].empleados[f.id]; if(!e) return;
