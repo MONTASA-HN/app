@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='65b574fd7415';
+  var APP_VERSION='bd2ebc56e12e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1871,12 +1871,14 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       return;
     }
     if(nuevo){ var pn = vPartirNombre(e.nombreCompleto); c = { nombres: pn.nombres, apellidos: pn.apellidos, posicion: e.cargo || '', departamento: e.departamento || '', fechaIngreso: ingresoDe(rf, e) || '', diasExtra: 0, pendientesAnteriores: 0, gozadosIniciales: 0, observaciones: '', empleadoId: e.id }; }
-    ventana(nuevo ? '➕ Nuevo colaborador' : '✏️ Editar colaborador',
+    var wv = ventana(nuevo ? '➕ Nuevo colaborador' : '✏️ Editar colaborador',
       '<div class="g2"><div><label>Nombres</label><input id="vf-nom" value="' + esc(c.nombres) + '"></div><div><label>Apellidos</label><input id="vf-ape" value="' + esc(c.apellidos) + '"></div></div>'
       + '<div class="g2"><div><label>Puesto</label><input id="vf-pos" value="' + esc(c.posicion) + '"></div><div><label>Departamento</label><input id="vf-dep" value="' + esc(c.departamento) + '"></div></div>'
       + '<label>Fecha de ingreso</label><input id="vf-ing" type="date" value="' + esc(c.fechaIngreso) + '">'
-      + '<div class="g2"><div><label>Días extra este período</label><input id="vf-ext" type="number" step="0.5" value="' + vNum(c.diasExtra) + '"></div><div><label>Pendientes años anteriores</label><input id="vf-ant" type="number" step="0.5" value="' + vNum(c.pendientesAnteriores) + '"></div></div>'
+      + '<div class="g2"><div><label>Días extra este período</label><input id="vf-ext" type="number" step="0.5" value="' + vNum(c.diasExtra) + '"></div><div><label>Días que quedaron de períodos ANTERIORES</label><input id="vf-ant" type="number" step="0.5" value="' + vNum(c.pendientesAnteriores) + '"></div></div>'
+      + '<div class="sub" style="margin-top:2px">Solo días que sobraron de años pasados (no los del período actual). Si debe días adelantados, en negativo.</div>'
       + '<label>Días ya gozados este período (antes de usar Nexo)</label><input id="vf-goz" type="number" step="0.5" value="' + vNum(c.gozadosIniciales) + '">'
+      + '<div id="vf-res" style="margin-top:8px;background:#eef4ff;border:1px solid #c7d7f5;color:#1f3864;border-radius:8px;padding:8px 10px;font-size:13px"></div>'
       + '<label>Observaciones</label><input id="vf-obs" value="' + esc(c.observaciones) + '">',
       function(w){
         var nom = v(w, 'vf-nom'), ape = v(w, 'vf-ape'), ing = v(w, 'vf-ing');
@@ -1887,6 +1889,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
           observaciones: v(w, 'vf-obs'), activo: c.activo === false ? false : true, actualizado: Date.now() });
         escribir(rf, 'colaboradores/' + id, reg, nuevo ? null : c).then(function(){ aviso('Colaborador guardado ✓'); w.remove(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
       });
+    // resultado en vivo: así se ve cuántos días le quedarán antes de guardar
+    var vRes = function(){ var ing = v(wv, 'vf-ing'), corte = c.corte || (aF(ing) ? iso(vUltAniv(ing)) : ''), corr = c.corte ? vNum(c.diasCorresponden) : (aF(ing) ? vTabla(vAnios(aF(ing), aF(corte))) : 0);
+      var ext = vNum(v(wv, 'vf-ext')), ant = vNum(v(wv, 'vf-ant')), goz0 = vNum(v(wv, 'vf-goz')), gozAp = c.id ? vGozadosEn(rf, c, c.corte, false) : 0, sal = corr + ext + ant - goz0 - gozAp;
+      wv.querySelector('#vf-res').innerHTML = 'Período actual' + (corte ? ' desde ' + fmt(corte) : '') + ': <b>' + corr + '</b>' + (ext ? ' + ' + ext + ' extra' : '') + (ant ? (ant < 0 ? ' − ' + Math.abs(ant) + ' adelantados' : ' + ' + ant + ' de años anteriores') : '') + ' − ' + vN2(goz0 + gozAp) + ' gozados'
+        + ' = <b style="font-size:15px">' + vN2(Math.abs(sal)) + (sal < 0 ? ' adelantados' : ' pendientes') + '</b>'; };
+    ['vf-ing', 'vf-ext', 'vf-ant', 'vf-goz'].forEach(function(i){ wv.querySelector('#' + i).addEventListener('input', vRes); }); vRes();
   }
   function vSigCorrelativo(rf){ var mx = 0; vAcc(rf).forEach(function(a){ if(a.trasladadoDe && a.trasladadoDe !== rf) return; var n = parseInt(String(a.correlativo || '').replace(/\D/g, ''), 10); if(n > mx) mx = n; }); return 'AP-' + String(mx + 1).padStart(4, '0'); }
   function vTextoAuto(rf, c, motivo, dias, desc, desde, hasta){
