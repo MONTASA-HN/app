@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='5d6bf16464d6';
+  var APP_VERSION='2583d4e77101';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1114,6 +1114,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var tk = norm(nombre).split(' ').filter(function(t){ return t.length >= 2; }), orden = [raizX].concat(EMPRESAS.map(function(E){ return E.raiz; }).filter(function(r){ return r !== raizX; }));
     for(var o = 0; o < orden.length; o++){ var p = dest[orden[o]]; if(!p) continue;
       var c = lista(p.filas).filter(function(f){ var ft = norm(f.nombre).split(' '); return tk.length && tk.every(function(t){ return ft.some(function(x){ return tokParecido(t, x); }); }); }).map(function(f){ return orden[o] + '|' + f.empId; });
+      // (2026-11-18) dos con el mismo nombre corto («Miguel Orellana»): las horas extra no son de gerentes ni jefes → queda el otro
+      if(c.length > 1){ var sinJefe = c.filter(function(v2){ var f2 = (p.filas || {})[v2.split('|')[1]]; return f2 && !/GERENTE|JEFE|SUPERVISOR|DIRECTOR/.test(norm(f2.cargo)); }); if(sinJefe.length === 1) return { id: sinJefe[0], cands: c }; }
       if(c.length) return { id: c.length === 1 ? c[0] : '', cands: c }; }
     return { id: '', cands: [] };
   }
@@ -1167,6 +1169,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         up[b + 'horasExtras'] = heMonto(s.raiz, f.salario, x.h); up[b + 'heHoras'] = heTotH(x.h) > 0 ? x.h : null;
         up['rrhh/' + x.raiz + '/config/heMapa/' + heClave(x.nombre)] = x.sel; n++; });
       if(sinSal.length && !confirm('Sin salario en la planilla (no se puede calcular): ' + sinSal.join(', ') + '.\n\nSe cargan las demás. ¿Continuar?')) return;
+      // (2026-11-18) nunca saltar en silencio a alguien con horas
+      var sinElegir = filas.filter(function(x){ return heTotH(x.h) > 0 && !filaSel(x.sel); }).map(function(x){ return x.nombre + ' (' + heTotH(x.h) + ' h)'; });
+      if(sinElegir.length && !confirm('⚠️ Estas personas TIENEN horas extra y no se van a cargar (no se eligió a quién):\n• ' + sinElegir.join('\n• ') + '\n\n¿Cargar las demás de todas formas?')) return;
       if(!n){ alert('No hay filas para cargar.'); return; }
       db().ref().update(up).then(function(){ w.remove(); aviso('Horas extra cargadas: ' + n + ' ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '📥 Cargar horas extra');
