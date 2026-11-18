@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+// (2026-11-18, pedido de Miguel) Saludo con el primer nombre de quien usa este teléfono (accesos/<uid>.nombre). Si aún no se sabe, solo el saludo.
+window._nxPrimerNombre = function(){ var r = (window._nxAcceso || {}).registro || {}; return String(r.nombre || '').trim().split(/\s+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join(' '); };
+window._nxConNombre = function(s){ var n = window._nxPrimerNombre(); return n ? s + ', ' + n : s; };
+document.addEventListener('nx-acceso', function(){ var n = window._nxPrimerNombre(); if(!n) return; document.querySelectorAll('[data-nx-saludo]').forEach(function(el){ el.textContent = el.getAttribute('data-nx-saludo') + ', ' + n + (el.hasAttribute('data-nx-mano') ? ' 👋' : ''); }); });
+</script>
 <meta charset="UTF-8">
 <script>
 // (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
@@ -109,7 +115,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a2cf6b19d225';
+  var APP_VERSION='a3ff310a5a46';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -351,6 +357,8 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     <div>
       <div style="font-size:17px;font-weight:800;letter-spacing:-0.2px">MONHACO · Logística</div>
       <div id="hdr-fecha" style="font-size:12px;opacity:0.8;margin-top:2px"></div>
+      <div id="nx-saludo-hdr" data-nx-mano="1" style="font-size:24px;font-weight:800;margin-top:6px;line-height:1.15"></div>
+      <script>(function(){ var el = document.getElementById('nx-saludo-hdr'); if(!el) return; var h = new Date().getHours(), s = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'; el.setAttribute('data-nx-saludo', s); el.textContent = (window._nxConNombre ? window._nxConNombre(s) : s) + ' 👋'; })();</script>
     </div>
     <div style="background:#fff;border-radius:8px;padding:4px 8px"><img id="hdr-logo" style="height:34px;display:block" alt="MONTASA"></div>
   </div>
