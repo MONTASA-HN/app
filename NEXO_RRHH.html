@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='18c98a33007e';
+  var APP_VERSION='0d647cfde5c2';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -969,7 +969,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
       + '<div class="acc" style="margin:0">' + (ed ? '<button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button><button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
-      + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar por correo</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
+      + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar comprobantes</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
       + '<div class="kv" style="margin-top:8px"><div><span>Colaboradores</span><b>' + rs.n + '</b></div><div><span>Planilla</span><b>L ' + mon(rs.planilla) + '</b></div><div><span>Comisiones</span><b>L ' + mon(rs.com) + '</b></div><div><span>Bonos</span><b>L ' + mon(rs.bon) + '</b></div><div><span>Horas extras</span><b>L ' + mon(rs.he) + '</b></div><div><span>Total a pagar</span><b style="font-size:17px">L ' + mon(rs.neto) + '</b></div></div></div>'
       + '<div class="card pl-tabla" style="padding:0;overflow:auto;max-height:70vh"><table style="border-collapse:collapse;width:max-content;min-width:100%">' + cab + cuerpo + '</table></div>'
       + '<div class="card"><h3 style="margin-top:0">Notas de la quincena</h3>' + (ed ? '<textarea id="pl-notas" rows="5" placeholder="1- Se pagan las horas extras de la segunda quincena de…">' + esc(p.notas || '') + '</textarea>' : '<div class="sub" style="white-space:pre-wrap;color:#1d2433">' + esc(p.notas || '—') + '</div>')
@@ -1128,35 +1128,62 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function lineas76(t){ return t.replace(/.{1,76}/g, '$&\r\n'); }
   function ascii(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, ''); }
   function correoDe(raiz, f){ var rf = f.raizFicha || raiz, e = (D[rf] && D[rf].empleados[f.empId]) || {}; return String(e.correo || f.correo || '').trim(); }
-  function armarEml(raiz, p, f, correo, pdfBuf){
+  function textosComp(raiz, p, f){
     var c = cfg(raiz), t = totFila(raiz, f), tit = p.titulo || titPlan(p), per = tit.replace(/^PLANILLA /i, '').toLowerCase();
-    var asunto = 'Comprobante de pago - Planilla ' + per + ' - ' + c.razon;
-    var cuerpo = 'Estimado(a) ' + f.nombre + ':\r\n\r\nAdjunto encontrará su comprobante de pago de la planilla ' + per + ' de ' + c.razon.replace(/\.$/, '') + '.\r\n\r\n'
-      + 'Neto a pagar: L ' + mon(t.neto) + '\r\n\r\nCualquier consulta, con gusto la atendemos.\r\n\r\nSaludos cordiales,\r\n\r\n' + c.firmaNombre + '\r\n' + c.firmaCargo + '\r\n' + c.razon + (c.firmaCorreo ? '\r\n' + c.firmaCorreo : '') + '\r\n';
-    var arch = ascii(nomArchivoComp(f, p)).replace(/\s+/g, '_'), B = 'nexo_' + Date.now().toString(36);
-    return ['To: ' + correo, 'Subject: =?UTF-8?B?' + b64Utf8(asunto) + '?=', 'X-Unsent: 1', 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="' + B + '"', '',
-      '--' + B, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', lineas76(b64Utf8(cuerpo)),
+    return { asunto: 'Comprobante de pago - Planilla ' + per + ' - ' + c.razon,
+      cuerpo: 'Estimado(a) ' + f.nombre + ':\r\n\r\nAdjunto encontrará su comprobante de pago de la planilla ' + per + ' de ' + c.razon.replace(/\.$/, '') + '.\r\n\r\n'
+        + 'Neto a pagar: L ' + mon(t.neto) + '\r\n\r\nCualquier consulta, con gusto la atendemos.\r\n\r\nSaludos cordiales,\r\n\r\n' + c.firmaNombre + '\r\n' + c.firmaCargo + '\r\n' + c.razon + (c.firmaCorreo ? '\r\n' + c.firmaCorreo : '') + '\r\n' };
+  }
+  function armarEml(raiz, p, f, correo, pdfBuf){
+    var tx = textosComp(raiz, p, f), arch = ascii(nomArchivoComp(f, p)).replace(/\s+/g, '_'), B = 'nexo_' + Date.now().toString(36);
+    return ['To: ' + correo, 'Subject: =?UTF-8?B?' + b64Utf8(tx.asunto) + '?=', 'X-Unsent: 1', 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="' + B + '"', '',
+      '--' + B, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', lineas76(b64Utf8(tx.cuerpo)),
       '--' + B, 'Content-Type: application/pdf; name="' + arch + '"', 'Content-Disposition: attachment; filename="' + arch + '"', 'Content-Transfer-Encoding: base64', '', lineas76(b64Buf(pdfBuf)),
       '--' + B + '--', ''].join('\r\n');
   }
+  // (2026-11-18, Miguel) en el teléfono: «📤 Compartir» abre el menú del teléfono con el PDF y el mensaje (Outlook, Gmail, WhatsApp…).
+  // El destinatario no se puede llenar solo: Nexo copia el correo de la persona para pegarlo en «Para».
+  var ES_TEL = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  function puedeCompartir(){ try{ return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); }catch(e){ return false; } }
   function enviarCorreos(raiz, p){
-    var filas = filasOrden(p);
-    var fila = function(f){ var cr = correoDe(raiz, f), ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cr), env = (p.envios || {})[f.empId], t = totFila(raiz, f);
-      return '<tr data-fe="' + esc(f.empId) + '" style="border-top:1px solid #eef1f6"><td style="padding:6px 4px"><b style="color:#1f3864">' + esc(f.nombre) + '</b><div style="font-size:11.5px;color:' + (ok ? '#5b6472' : '#b42318') + '">' + (ok ? esc(cr) : '⚠️ Sin correo en la ficha') + '</div></td>'
-        + '<td style="text-align:right;padding:6px 4px;white-space:nowrap">L ' + mon(t.neto) + '</td>'
-        + '<td style="padding:6px 4px;font-size:11.5px;white-space:nowrap" data-est="' + esc(f.empId) + '">' + (env ? '<span style="color:#1a7f37;font-weight:700">✓ Preparado ' + fmt(iso(new Date(env.ts))) + '</span>' : '<span style="color:#98a2b3">Pendiente</span>') + '</td>'
-        + '<td style="padding:6px 4px;text-align:right"><button class="bt" data-mail="' + esc(f.empId) + '"' + (ok ? '' : ' disabled style="opacity:.4;cursor:not-allowed"') + ' style="padding:6px 10px;border-radius:8px;border:1px solid #1f3864;background:#fff;color:#1f3864;font-weight:800;cursor:pointer">✉️ Correo</button></td></tr>'; };
+    var filas = filasOrden(p), compartir = puedeCompartir(), eml = !ES_TEL;
+    var estado = function(env){ return env ? '<span style="color:#1a7f37;font-weight:700">✓ ' + (env.modo === 'compartido' ? 'Compartido' : 'Preparado') + ' ' + fmt(iso(new Date(env.ts))) + '</span>' : '<span style="color:#98a2b3">Pendiente</span>'; };
+    var btn = 'padding:7px 10px;border-radius:8px;border:1px solid #1f3864;background:#fff;color:#1f3864;font-weight:800;cursor:pointer;margin:2px 0 2px 4px';
+    var fila = function(f){ var cr = correoDe(raiz, f), ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cr), t = totFila(raiz, f);
+      return '<tr style="border-top:1px solid #eef1f6"><td style="padding:6px 4px"><b style="color:#1f3864">' + esc(f.nombre) + '</b><div style="font-size:11.5px;color:' + (ok ? '#5b6472' : '#b42318') + '">' + (ok ? esc(cr) : '⚠️ Sin correo en la ficha') + '</div>'
+        + '<div style="font-size:11.5px;margin-top:2px">L ' + mon(t.neto) + ' · <span data-est="' + esc(f.empId) + '">' + estado((p.envios || {})[f.empId]) + '</span></div>'
+        + (ES_TEL && compartir ? '<button data-share="' + esc(f.empId) + '" style="' + btn + ';display:block;width:100%;margin:6px 0 2px;padding:10px;background:#1f3864;color:#fff">📤 Compartir comprobante</button>' : '') + '</td>'
+        + '<td style="padding:6px 4px;text-align:right;white-space:nowrap">'
+        + (compartir && !ES_TEL ? '<button data-share="' + esc(f.empId) + '" style="' + btn + '">📤 Compartir</button>' : '')
+        + (eml ? '<button data-mail="' + esc(f.empId) + '"' + (ok ? '' : ' disabled') + ' style="' + btn + (ok ? '' : ';opacity:.4;cursor:not-allowed') + '">✉️ Correo</button>' : '') + '</td></tr>'; };
     var pend = function(){ return filas.filter(function(f){ return !(p.envios || {})[f.empId]; }).length; };
-    var w = ventana('✉️ Enviar comprobantes por correo · ' + nomEmp(raiz),
-      '<div class="sub" style="margin-top:6px">' + esc(p.titulo || titPlan(p)) + '. Toca <b>✉️ Correo</b> en cada persona: se descarga el correo ya armado (para, asunto, mensaje y el PDF adjunto). Ábrelo y en Outlook toca <b>Enviar</b>.</div>'
+    var ayuda = ES_TEL
+      ? (compartir ? 'Toca <b>📤 Compartir</b> en cada persona: se abre el menú del teléfono con su PDF y el mensaje. Elige Outlook, Gmail o WhatsApp; el correo de la persona ya queda copiado: pégalo en <b>Para</b> y toca <b>Enviar</b>.' : 'Este teléfono no permite compartir archivos desde el navegador. Usa Chrome (Android) o Safari (iPhone) actualizados, o la computadora.')
+      : 'Toca <b>✉️ Correo</b> en cada persona: se descarga el correo ya armado (para, asunto, mensaje y el PDF adjunto). Ábrelo y en Outlook toca <b>Enviar</b>.' + (compartir ? ' <b>📤 Compartir</b> abre el menú de Windows con el PDF.' : '');
+    var w = ventana('✉️ Enviar comprobantes · ' + nomEmp(raiz),
+      '<div class="sub" style="margin-top:6px">' + esc(p.titulo || titPlan(p)) + '. ' + ayuda + '</div>'
       + '<div class="sub" id="ce-res" style="margin-top:6px;font-weight:700"></div>'
       + '<div style="overflow:auto;max-height:60vh;margin-top:8px"><table style="border-collapse:collapse;width:100%;font-size:13px">' + filas.map(fila).join('') + '</table></div>'
-      + '<div class="sub" style="margin-top:8px">Funciona con Outlook de escritorio. Si alguien no tiene correo, complétalo en su ficha y vuelve a abrir esta lista.</div>',
+      + (eml ? '<div class="sub" style="margin-top:8px">«✉️ Correo» funciona con Outlook de escritorio. Si alguien no tiene correo, complétalo en su ficha y vuelve a abrir esta lista.</div>' : ''),
       function(w){ w.remove(); }, 'Listo');
     w.querySelector('.rh-w').style.maxWidth = '760px';
-    var res = function(){ var n = pend(); w.querySelector('#ce-res').textContent = n ? n + ' de ' + filas.length + ' pendientes' : '✓ Todos preparados'; };
+    var res = function(){ var n = pend(); w.querySelector('#ce-res').textContent = n ? n + ' de ' + filas.length + ' pendientes' : '✓ Todos enviados o preparados'; };
+    var marcar = function(f, modo, cr){ var reg = { ts: Date.now(), correo: cr || '', modo: modo }; p.envios = p.envios || {}; p.envios[f.empId] = reg;
+      db().ref('rrhh/' + raiz + '/planillas/' + p.id + '/envios/' + f.empId).set(reg).catch(function(er){ aviso('No se anotó el envío: ' + er.message, true); });
+      var sp = w.querySelector('[data-est="' + f.empId + '"]'); if(sp) sp.innerHTML = estado(reg); res(); };
     res();
+    // la librería del PDF se carga al abrir la lista: el teléfono solo deja «Compartir» justo después del toque, sin esperas
+    var listo = false; cargarPDF().then(function(){ listo = true; }).catch(function(){});
     w.addEventListener('click', function(ev){
+      var bs = ev.target.closest('[data-share]');
+      if(bs){ var fs = (p.filas || {})[bs.getAttribute('data-share')]; if(!fs) return;
+        if(!listo){ aviso('Un momento: preparando… vuelve a tocar en 2 segundos.'); return; }
+        var crs = correoDe(raiz, fs), tx = textosComp(raiz, p, fs);
+        var file = new File([pdfComprobante(raiz, p, fs).output('blob')], nomArchivoComp(fs, p), { type: 'application/pdf' });
+        if(crs && navigator.clipboard) navigator.clipboard.writeText(crs).catch(function(){});
+        navigator.share({ files: [file], title: tx.asunto, text: tx.cuerpo }).then(function(){ marcar(fs, 'compartido', crs); if(crs) aviso('📋 Correo copiado: ' + crs); })
+          .catch(function(er){ if(er && er.name !== 'AbortError') aviso('No se pudo compartir: ' + er.message, true); });
+        return; }
       var b = ev.target.closest('[data-mail]'); if(!b || b.disabled) return;
       var f = (p.filas || {})[b.getAttribute('data-mail')]; if(!f) return;
       var cr = correoDe(raiz, f), txt = b.textContent; b.disabled = true; b.textContent = 'Armando…';
@@ -1164,10 +1191,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         var eml = armarEml(raiz, p, f, cr, pdfComprobante(raiz, p, f).output('arraybuffer'));
         var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([eml], { type: 'message/rfc822' }));
         a.download = ('Correo_' + ascii(f.nombre).replace(/\s+/g, '_') + '_' + p.periodo + '.eml'); document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-        var reg = { ts: Date.now(), correo: cr }; p.envios = p.envios || {}; p.envios[f.empId] = reg;
-        db().ref('rrhh/' + raiz + '/planillas/' + p.id + '/envios/' + f.empId).set(reg).catch(function(er){ aviso('No se anotó el envío: ' + er.message, true); });
-        var td = w.querySelector('[data-est="' + f.empId + '"]'); if(td) td.innerHTML = '<span style="color:#1a7f37;font-weight:700">✓ Preparado ' + fmt(hoy()) + '</span>';
-        b.disabled = false; b.textContent = '✉️ Otra vez'; res();
+        marcar(f, 'correo', cr); b.disabled = false; b.textContent = '✉️ Otra vez';
       }).catch(function(er){ b.disabled = false; b.textContent = txt; aviso('No se armó el correo: ' + er.message, true); });
     });
   }
