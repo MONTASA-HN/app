@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1b1e9a5f44b1';
+  var APP_VERSION='0bda386a4ef5';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -310,7 +310,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
 
   // ── datos ──
-  function todos(){ var out = []; EMPRESAS.forEach(function(E){ lista(D[E.raiz].empleados).forEach(function(e){ out.push({ raiz: E.raiz, e: e }); }); }); return out; }
+  function empRH(rf, e){ return e && e.empresaPlanilla && D[e.empresaPlanilla] ? e.empresaPlanilla : rf; }   // empresa que manda en RRHH (la del Excel de RRHH)
+  function todos(){ var out = []; EMPRESAS.forEach(function(E){ lista(D[E.raiz].empleados).forEach(function(e){ out.push({ raiz: E.raiz, rh: empRH(E.raiz, e), e: e }); }); }); return out; }
   function colDe(raiz, e){ return lista(D[raiz].colaboradores).find(function(c){ return c.empleadoId === e.id; }) || null; }
   function ingresoDe(raiz, e){ if(e.fechaIngreso) return e.fechaIngreso; var c = colDe(raiz, e); return c ? c.fechaIngreso : ''; }
   function privDe(raiz, id){ return D[raiz].priv[id] || {}; }
@@ -407,7 +408,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   function filtrados(){
     var q = norm(ui.q), qd = soloDig(ui.q);
-    return todos().filter(function(x){ return raices().indexOf(x.raiz) >= 0; })
+    return todos().filter(function(x){ return raices().indexOf(x.rh) >= 0; })
       .filter(function(x){ return ui.bajas ? x.e.activo === false : x.e.activo !== false; })
       .filter(function(x){ return !ui.depto || norm(x.e.departamento || 'SIN DEPARTAMENTO') === norm(ui.depto); })
       .filter(function(x){ var e = x.e; return !q || norm([e.nombreCompleto, e.cargo, e.departamento, e.codigo].join(' ')).indexOf(q) >= 0 || (qd.length >= 3 && (soloDig(e.identidad).indexOf(qd) >= 0 || soloDig(e.telefono).indexOf(qd) >= 0)); })
@@ -416,7 +417,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function foto(raiz, e, tam){ var f = D[raiz].fotos[e.id]; tam = tam || 56;
     return f && f.data ? '<img class="ph" src="' + f.data + '" style="width:' + tam + 'px;height:' + tam + 'px">' : '<div class="ph" style="width:' + tam + 'px;height:' + tam + 'px">' + esc(String(e.nombreCompleto || '?').split(' ').filter(Boolean).slice(0, 2).map(function(w){ return w[0]; }).join('')) + '</div>'; }
   function pintarLista(c){
-    var deptos = {}; todos().forEach(function(x){ if(raices().indexOf(x.raiz) >= 0) deptos[x.e.departamento || 'Sin departamento'] = 1; });
+    var deptos = {}; todos().forEach(function(x){ if(raices().indexOf(x.rh) >= 0) deptos[x.e.departamento || 'Sin departamento'] = 1; });
     var L = filtrados();
     var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><input id="rh-q" placeholder="🔍 Buscar por nombre, código, cargo, identidad o teléfono" value="' + esc(ui.q) + '" style="flex:3;min-width:220px">'
       + '<select id="rh-depto" style="flex:1;min-width:170px"><option value="">Todos los departamentos</option>' + Object.keys(deptos).sort().map(function(d){ return '<option' + (norm(d) === norm(ui.depto) ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('') + '</select>'
@@ -427,7 +428,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var e = x.e, ex = expediente(x.raiz, e.id), otras = otrasFichas(x.raiz, e).filter(function(o){ return o.e.activo !== false; });
       return '<div class="card" style="cursor:pointer" data-a="abrir" data-r="' + x.raiz + '" data-id="' + esc(e.id) + '"><div class="ft">' + foto(x.raiz, e) + '<div style="min-width:0"><div class="nm">' + esc(e.nombreCompleto) + '</div>'
         + '<div class="sub"><b>' + esc(e.cargo || 'Sin cargo') + '</b> · ' + esc(e.departamento || 'Sin departamento') + '</div>'
-        + '<div class="sub">' + nomEmp(x.raiz) + (e.codigo ? ' · Código ' + esc(e.codigo) : '') + ' · ' + (ingresoDe(x.raiz, e) ? antig(ingresoDe(x.raiz, e)) : 'sin fecha de ingreso') + '</div></div></div>'
+        + '<div class="sub">' + nomEmp(x.rh) + (x.rh !== x.raiz ? ' <span style="color:#7a8394">(operativo en ' + nomEmp(x.raiz) + ')</span>' : '') + (e.codigo ? ' · Código ' + esc(e.codigo) : '') + ' · ' + (ingresoDe(x.raiz, e) ? antig(ingresoDe(x.raiz, e)) : 'sin fecha de ingreso') + '</div></div></div>'
         + '<div><span class="tag ' + (ex.ok === ex.total ? 'v' : 'n') + '">📁 Expediente ' + ex.ok + '/' + ex.total + '</span>' + (otras.length ? '<span class="tag">También en ' + otras.map(function(o){ return nomEmp(o.raiz); }).join(', ') + '</span>' : '')
         + (!e.departamento ? '<span class="tag n">Falta departamento</span>' : '') + (e.empresaPlanilla && e.empresaPlanilla !== x.raiz ? '<span class="tag">💵 Planilla ' + nomEmp(e.empresaPlanilla) + '</span>' : '') + (e.activo === false ? '<span class="tag r">Baja ' + fmt(e.fechaBaja) + '</span>' : '') + '</div></div>';
     }).join('') + '</div>';
@@ -441,7 +442,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var h = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="volver">← Volver a la lista</button></div>'
       + '<div class="card"><div class="ft">' + foto(raiz, e, 84) + '<div style="min-width:0;flex:1"><div class="nm" style="font-size:19px">' + esc(e.nombreCompleto) + '</div>'
       + '<div class="sub" style="font-size:13.5px"><b>' + esc(e.cargo || 'Sin cargo') + '</b> · ' + esc(e.departamento || 'Sin departamento') + '</div>'
-      + '<div class="sub">' + nomEmp(raiz) + (e.codigo ? ' · Código <b>' + esc(e.codigo) + '</b>' : '') + (ing ? ' · Ingreso ' + fmt(ing) + ' (' + antig(ing) + ')' : '') + '</div>'
+      + '<div class="sub">' + nomEmp(empRH(raiz, e)) + (empRH(raiz, e) !== raiz ? ' <span style="color:#7a8394">(operativo en ' + nomEmp(raiz) + ')</span>' : '') + (e.codigo ? ' · Código <b>' + esc(e.codigo) + '</b>' : '') + (ing ? ' · Ingreso ' + fmt(ing) + ' (' + antig(ing) + ')' : '') + '</div>'
       + '<div>' + (e.activo === false ? '<span class="tag r">Dado de baja el ' + fmt(e.fechaBaja) + '</span>' : '<span class="tag v">Activo</span>')
       + otras.map(function(o){ return '<span class="tag" style="cursor:pointer" data-a="abrir" data-r="' + o.raiz + '" data-id="' + esc(o.e.id) + '">↗ También en ' + nomEmp(o.raiz) + (o.e.activo === false ? ' (baja)' : '') + '</span>'; }).join('') + '</div></div></div>'
       + '<div class="acc"><button class="bt bp" data-a="editar">✏️ Editar ficha</button><button class="bt" data-a="foto">📷 Foto</button><button class="bt" data-a="salario">💵 Salario</button><button class="bt" data-a="constancia">📄 Constancias</button><button class="bt" data-a="incap">🩺 Incapacidad</button>'
@@ -451,7 +452,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + kv('Teléfono', e.telefono ? '<a href="tel:' + soloDig(e.telefono) + '">' + esc(e.telefono) + '</a>' : '') + kv('Correo', e.correo ? '<a href="mailto:' + esc(e.correo) + '">' + esc(e.correo) + '</a>' : '') + kv('Dirección / ubicación', esc(e.direccion))
       + kv('Nivel educativo', esc(e.nivelEducativo)) + kv('Título', esc(e.titulo)) + '</div>'
       + '<h3>Contacto de emergencia</h3><div class="kv">' + kv('Nombre', esc(ce.nombre)) + kv('Parentesco', esc(ce.parentesco)) + kv('Teléfono', ce.telefono ? '<a href="tel:' + soloDig(ce.telefono) + '">' + esc(ce.telefono) + '</a>' : '') + '</div>'
-      + '<h3>Datos laborales</h3><div class="kv">' + kv('Empresa', nomEmp(raiz)) + kv('Código', esc(e.codigo)) + kv('Puesto', esc(e.cargo)) + kv('Departamento', esc(e.departamento)) + kv('Fecha de ingreso', ing ? fmt(ing) : '') + kv('Antigüedad', ing ? antig(ing) : '')
+      + '<h3>Datos laborales</h3><div class="kv">' + kv('Empresa (RRHH)', nomEmp(empRH(raiz, e))) + (empRH(raiz, e) !== raiz ? kv('Empresa operativa (Gerencia)', nomEmp(raiz)) : '') + kv('Código', esc(e.codigo)) + kv('Puesto', esc(e.cargo)) + kv('Departamento', esc(e.departamento)) + kv('Fecha de ingreso', ing ? fmt(ing) : '') + kv('Antigüedad', ing ? antig(ing) : '')
       + kv('Horario de trabajo', esc(e.horario)) + kv('Tipo de contrato', esc(ct.tipo)) + kv('Contrato vence', ct.vence ? fmt(ct.vence) : (ct.tipo ? 'Sin fecha de fin' : '')) + '</div>'
       + '<h3>Pago</h3><div class="kv">' + kv('Salario mensual', (D[raiz]._sinAcceso || {}).priv ? '🔒 Solo RRHH' : sal != null ? '<b>' + lps(sal) + '</b>' : '') + (e.empresaPlanilla && e.empresaPlanilla !== raiz ? kv('Se paga en la planilla de', '<b>' + nomEmp(e.empresaPlanilla) + '</b>') : '') + kv('Forma de pago', esc(e.formaPago)) + kv('Banco', esc(e.banco)) + kv('Tipo de cuenta', esc(e.tipoCuenta)) + kv('Número de cuenta', esc(e.cuentaBancaria)) + '</div></div>';
     // historial
@@ -478,7 +479,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     c.innerHTML = h;
   }
   function pintarAlertas(c){
-    var act = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.raiz) >= 0; });
+    var act = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.rh) >= 0; });
     var cum = act.map(function(x){ return { x: x, d: diasPara(x.e.fechaNacimiento, true) }; }).filter(function(y){ return y.d !== null && y.d <= 30; }).sort(function(a, b){ return a.d - b.d; });
     var ani = act.map(function(x){ var i = ingresoDe(x.raiz, x.e); return { x: x, i: i, d: diasPara(i, true) }; }).filter(function(y){ return y.d !== null && y.d <= 30 && aF(y.i) && aF(y.i).getFullYear() < new Date().getFullYear() + (y.d > 0 ? 1 : 0); }).sort(function(a, b){ return a.d - b.d; });
     var con = act.filter(function(x){ return x.e.contrato && x.e.contrato.vence; }).map(function(x){ return { x: x, d: diasPara(x.e.contrato.vence, false) }; }).filter(function(y){ return y.d <= 30; }).sort(function(a, b){ return a.d - b.d; });
@@ -497,11 +498,12 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function pintarResumen(c){
     var h = '<div class="grid">', anio = new Date().getFullYear();
     raices().forEach(function(r){
-      var L = lista(D[r].empleados), act = L.filter(function(e){ return e.activo !== false; }), bajas = L.filter(function(e){ return e.activo === false && String(e.fechaBaja || '').slice(0, 4) === String(anio); });
+      var LX = todos().filter(function(x){ return x.rh === r; }), rfDe = {}; LX.forEach(function(x){ rfDe[x.e.id] = x.raiz; });
+      var L = LX.map(function(x){ return x.e; }), act = L.filter(function(e){ return e.activo !== false; }), bajas = L.filter(function(e){ return e.activo === false && String(e.fechaBaja || '').slice(0, 4) === String(anio); });
       var porD = {}; act.forEach(function(e){ var d = e.departamento || 'Sin departamento'; porD[d] = (porD[d] || 0) + 1; });
-      var comp = act.filter(function(e){ var x = expediente(r, e.id); return x.ok === x.total; }).length;
+      var comp = act.filter(function(e){ var x = expediente(rfDe[e.id], e.id); return x.ok === x.total; }).length;
       // rotación = salidas del año / promedio de colaboradores del año (inicio = activos hoy + salidas − ingresos del año)
-      var ingresos = L.filter(function(e){ return String(ingresoDe(r, e) || '').slice(0, 4) === String(anio); }).length;
+      var ingresos = L.filter(function(e){ return String(ingresoDe(rfDe[e.id], e) || '').slice(0, 4) === String(anio); }).length;
       var inicio = Math.max(0, act.length + bajas.length - ingresos), prom = (inicio + act.length) / 2;
       var rot = prom ? Math.round(bajas.length / prom * 1000) / 10 : 0;
       h += '<div class="card"><div class="nm">' + nomEmp(r) + '</div>'
@@ -546,7 +548,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<label>Horario de trabajo</label><input id="f-hor" placeholder="Ej: Lunes a viernes 7:00 a 16:00, sábado 7:00 a 11:00" value="' + esc(e.horario) + '">'
       + '<div class="g2"><div><label>Tipo de contrato</label><select id="f-ctt">' + opts(['Permanente', 'Temporal', 'Por obra', 'Por servicios'], ct.tipo, '—') + '</select></div><div><label>Contrato vence (si aplica)</label><input id="f-ctv" type="date" value="' + esc(ct.vence) + '"></div></div>'
       + '<h4>Pago</h4>'
-      + '<label>Se paga en la planilla de</label><select id="f-ep"><option value="">La misma empresa de la ficha</option>' + EMPRESAS.map(function(E){ return '<option value="' + E.raiz + '"' + (e.empresaPlanilla === E.raiz ? ' selected' : '') + '>' + E.nombre + '</option>'; }).join('') + '</select>'
+      + '<label>Empresa en RRHH (la que paga, según el Excel de RRHH)</label><select id="f-ep"><option value="">La misma empresa de la ficha</option>' + EMPRESAS.map(function(E){ return '<option value="' + E.raiz + '"' + (e.empresaPlanilla === E.raiz ? ' selected' : '') + '>' + E.nombre + '</option>'; }).join('') + '</select>'
       + '<div class="g2"><div><label>Forma de pago</label><select id="f-fp">' + opts(['Transferencia', 'Cheque', 'Efectivo'], e.formaPago || (nuevo ? 'Transferencia' : ''), '—') + '</select></div><div><label>Banco</label><select id="f-ban">' + opts(BANCOS, b.banco, '—') + '</select></div></div>'
       + '<div class="g2"><div><label>Tipo de cuenta</label><select id="f-tc">' + opts(['Ahorros', 'Cheques'], b.tipoCuenta || (nuevo ? 'Ahorros' : ''), '—') + '</select></div><div><label>Número de cuenta</label><input id="f-cta" inputmode="numeric" value="' + esc(b.cuentaBancaria) + '"></div></div>'
       + (nuevo ? '<div class="g2"><div><label>Salario mensual (L)</label><input id="f-sal" type="number" step="0.01" inputmode="decimal"></div><div></div></div>' : '<div class="sub" style="margin-top:6px">El salario se cambia con el botón «💵 Salario» de la ficha (guarda el historial).</div>');
@@ -706,7 +708,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var cargar = window.XLSX ? Promise.resolve() : new Promise(function(ok, mal){ var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = ok; s.onerror = function(){ mal(new Error('sin conexión')); }; document.head.appendChild(s); });
     cargar.then(function(){
       var filas = filtrados().map(function(x){ var e = x.e, ce = e.contactoEmergencia || {}, ct = e.contrato || {}, ex = expediente(x.raiz, e.id), ing = ingresoDe(x.raiz, e);
-        return { 'Empresa': nomEmp(x.raiz), 'Código': e.codigo || '', 'Nombre completo': e.nombreCompleto || '', 'Identidad': e.identidad || '', 'Puesto': e.cargo || '', 'Departamento': e.departamento || '',
+        return { 'Empresa': nomEmp(x.rh), 'Empresa operativa': nomEmp(x.raiz), 'Código': e.codigo || '', 'Nombre completo': e.nombreCompleto || '', 'Identidad': e.identidad || '', 'Puesto': e.cargo || '', 'Departamento': e.departamento || '',
           'Fecha de ingreso': ing ? fmt(ing) : '', 'Antigüedad': ing ? antig(ing) : '', 'Fecha de nacimiento': e.fechaNacimiento ? fmt(e.fechaNacimiento) : '', 'Estado civil': e.estadoCivil || '', 'Hijos': e.hijos === 'si' ? 'Sí' : e.hijos === 'no' ? 'No' : '',
           'Teléfono': e.telefono || '', 'Correo': e.correo || '', 'Dirección': e.direccion || '', 'Nivel educativo': e.nivelEducativo || '', 'Título': e.titulo || '', 'Horario': e.horario || '',
           'Tipo de contrato': ct.tipo || '', 'Contrato vence': ct.vence ? fmt(ct.vence) : '', 'Salario mensual': salarioDe(x.raiz, e.id) != null ? salarioDe(x.raiz, e.id) : '', 'Forma de pago': e.formaPago || '', 'Banco': e.banco || '', 'Tipo de cuenta': e.tipoCuenta || '', 'Cuenta': e.cuentaBancaria || '',
@@ -762,7 +764,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   // Contenido de la constancia (igual para PDF e impresión): título, dirigido, bloques y firma
   function modeloConstancia(raiz, e, o){
-    var c = cfg(raiz), f = aF(o.fecha) || new Date(), tr = o.trato || 'el señor', fem = /^la /.test(tr), inter = fem ? 'la interesada' : 'el interesado';
+    var c = cfg(empRH(raiz, e)), f = aF(o.fecha) || new Date(), tr = o.trato || 'el señor', fem = /^la /.test(tr), inter = fem ? 'la interesada' : 'el interesado';
     var ing = ingresoDe(raiz, e), ciudad = o.ciudad || c.ciudad;
     var nom = String(e.nombreCompleto || '').toUpperCase(), cargo = e.cargo || '', depto = String(e.departamento || '').replace(/\s*\(.*\)$/, '');
     var dinero = function(n){ return 'L. ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
@@ -850,7 +852,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var tipos = Object.keys(TIPOS_C).filter(function(t){ return t !== 'finalizacion' || e.salida || e.activo === false; });
     if(tipos.indexOf(tipoIni) < 0) tipoIni = tipos[0];
     var modo = 'pdf';
-    var w = ventana('📄 Constancia de ' + esc(e.nombreCompleto), '<div class="sub" style="margin-top:6px">' + nomEmp(raiz) + ' · ' + esc(e.cargo || '') + ' · ingreso ' + fmt(ingresoDe(raiz, e)) + '</div>'
+    var w = ventana('📄 Constancia de ' + esc(e.nombreCompleto), '<div class="sub" style="margin-top:6px">' + nomEmp(empRH(raiz, e)) + ' · ' + esc(e.cargo || '') + ' · ingreso ' + fmt(ingresoDe(raiz, e)) + '</div>'
       + '<label>Tipo de constancia</label><select id="k-t">' + tipos.map(function(t){ return '<option value="' + t + '"' + (t === tipoIni ? ' selected' : '') + '>' + TIPOS_C[t] + '</option>'; }).join('') + '</select>'
       + '<div class="g2"><div><label>Trato</label><select id="k-tr">' + opts(['el señor', 'la señora', 'el joven', 'la joven', 'el Sr.', 'la Sra.'], trIni) + '</select></div><div><label>Fecha de la constancia</label><input id="k-f" type="date" value="' + hoy() + '"></div></div>'
       + '<div class="g2"><div><label>Ciudad</label><input id="k-c" value="' + esc(cfg(raiz).ciudad) + '"></div><div id="k-dirw"><label>Dirigida a (opcional)</label><input id="k-dir" value=""></div></div>'
@@ -1453,14 +1455,14 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     return db().ref('rrhh/' + rf + '/incapacidades/' + inc.id).update({ anulada: true, motivoAnula: m, anuladaEn: Date.now() }).then(function(){ aviso('Incapacidad anulada ✓'); }); }); }
   function filaIncap(rf, e, i, conNombre){ var act = i.desde <= hoy() && i.hasta >= hoy();
     return '<div style="border-top:1px solid #f0f2f5;padding:8px 0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div>'
-      + (conNombre ? '<b style="color:#1f3864">' + esc(e.nombreCompleto) + '</b> <span class="tag">' + nomEmp(rf) + '</span><br>' : '')
+      + (conNombre ? '<b style="color:#1f3864">' + esc(e.nombreCompleto) + '</b> <span class="tag">' + nomEmp(empRH(rf, e)) + '</span><br>' : '')
       + '<b>' + fmt(i.desde) + ' al ' + fmt(i.hasta) + '</b> · ' + diasEntre(i.desde, i.hasta) + ' días · ' + TIPOS_INC[i.tipo] + (act ? ' <span class="tag n">En curso</span>' : '')
       + (i.prorrogaDe ? ' <span class="tag">Prórroga</span>' : '') + (i.refrendo === 'pendiente' ? ' <span class="tag r">Falta refrendo</span>' : '') + (!INC_AUTO[i.tipo] ? ' <span class="tag r">Revisión manual</span>' : '')
       + '<div class="sub">' + (i.constancia ? 'Constancia ' + esc(i.constancia) + ' · ' : '') + esc(i.nota || '') + '</div></div>'
       + '<div class="acc" style="margin:0">' + (i.docId ? '<button class="bt" data-a="inc-doc" data-r="' + rf + '" data-e="' + esc(e.id) + '" data-d="' + esc(i.docId) + '" title="Ver la constancia">📎</button>' : '<span class="tag r" title="Sin foto de la constancia">Sin constancia</span>') + '<button class="bt" data-a="inc-ed" data-r="' + rf + '" data-e="' + esc(e.id) + '" data-i="' + esc(i.id) + '">✏️</button><button class="bt br" data-a="inc-an" data-r="' + rf + '" data-e="' + esc(e.id) + '" data-i="' + esc(i.id) + '">Anular</button></div></div>';
   }
   function pintarIncapacidades(c){
-    var L = []; raices().forEach(function(r){ lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada) L.push({ r: r, e: e, i: i }); }); });
+    var L = []; EMPRESAS.forEach(function(E){ var r = E.raiz; lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada && raices().indexOf(empRH(r, e)) >= 0) L.push({ r: r, e: e, i: i }); }); });
     L.sort(function(a, b){ return String(b.i.desde).localeCompare(a.i.desde); });
     var act = L.filter(function(x){ return x.i.hasta >= hoy() && x.i.desde <= hoy(); }), resto = L.filter(function(x){ return act.indexOf(x) < 0; });
     var anio = String(new Date().getFullYear()), porEmp = {}; L.forEach(function(x){ if(String(x.i.desde).slice(0, 4) === anio){ var k = x.r + '|' + x.e.id; porEmp[k] = porEmp[k] || { x: x, d: 0 }; porEmp[k].d += solapa(x.i.desde, x.i.hasta, anio + '-01-01', anio + '-12-31'); } });
@@ -1470,8 +1472,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div class="card"><h3 style="margin-top:0">Historial</h3>' + (resto.length ? resto.slice(0, 80).map(function(x){ return filaIncap(x.r, x.e, x.i, true); }).join('') : '<div class="sub">—</div>') + '</div>';
   }
   function elegirEmpleadoIncap(){
-    var L = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.raiz) >= 0; }).sort(function(a, b){ return String(a.e.nombreCompleto).localeCompare(b.e.nombreCompleto, 'es'); });
-    ventana('🩺 Registrar incapacidad', '<label>Empleado</label><select id="ie-e">' + L.map(function(x){ return '<option value="' + x.raiz + '|' + esc(x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + nomEmp(x.raiz) + '</option>'; }).join('') + '</select>', function(w){
+    var L = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.rh) >= 0; }).sort(function(a, b){ return String(a.e.nombreCompleto).localeCompare(b.e.nombreCompleto, 'es'); });
+    ventana('🩺 Registrar incapacidad', '<label>Empleado</label><select id="ie-e">' + L.map(function(x){ return '<option value="' + x.raiz + '|' + esc(x.e.id) + '">' + esc(x.e.nombreCompleto) + ' — ' + nomEmp(x.rh) + '</option>'; }).join('') + '</select>', function(w){
       var s = v(w, 'ie-e').split('|'); w.remove(); formIncapacidad(s[0], D[s[0]].empleados[s[1]]); }, 'Siguiente →');
   }
   // ── 🧾 Novedades de la quincena: incapacidades + vacaciones/permisos de Gerencia → propuesta para confirmar ──
@@ -1519,7 +1521,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   pintarFicha = function(c){ _pintarFicha0(c); if(!ui.ficha) return; var rf = ui.ficha.raiz, e = D[rf].empleados[ui.ficha.id]; if(!e || (D[rf]._sinAcceso || {}).incapacidades) return;
     var L = incapsDe(rf, e.id); c.insertAdjacentHTML('beforeend', '<div class="card"><h3 style="margin-top:0">🩺 Incapacidades</h3>' + (L.length ? L.map(function(i){ return filaIncap(rf, e, i, false); }).join('') : '<div class="sub">Sin incapacidades registradas.</div>') + '<div class="acc"><button class="bt" data-a="incap">➕ Registrar incapacidad</button></div></div>'); };
   var _pintarAlertas0 = pintarAlertas;
-  pintarAlertas = function(c){ _pintarAlertas0(c); var L = []; raices().forEach(function(r){ lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada && i.desde <= hoy() && i.hasta >= hoy()) L.push(filaIncap(r, e, i, true)); }); });
+  pintarAlertas = function(c){ _pintarAlertas0(c); var L = []; EMPRESAS.forEach(function(E){ var r = E.raiz; lista((D[r] || {}).incapacidades).forEach(function(i){ var e = D[r].empleados[i.empId]; if(e && !i.anulada && raices().indexOf(empRH(r, e)) >= 0 && i.desde <= hoy() && i.hasta >= hoy()) L.push(filaIncap(r, e, i, true)); }); });
     if(L.length) c.insertAdjacentHTML('afterbegin', '<div class="card" style="border-color:#f5c26b"><h3 style="margin-top:0">🩺 Incapacitados hoy (' + L.length + ')</h3>' + L.join('') + '</div>'); };
   // ══ RESPALDO DEL EXCEL DE HORAS EXTRA (2026-11-18, Miguel: auditorías) ══════════════════════════════════════════════
   // Una sola subida carga las dos planillas (MT y MH) del mismo período; el archivo original queda guardado por período:
