@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='85f527fead65';
+  var APP_VERSION='aaa90af8f37e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -258,10 +258,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
 //   rrhh/<raíz>/docs/<id>/<doc> archivo del expediente (solo RRHH)          rrhh/<raíz>/colaboradores  vacaciones (módulo de Gerencia)
 // Una persona puede estar en las dos empresas (dos fichas con la misma identidad, cada una con su código y su pago).
 (function(){
-  var EMPRESAS = [{ raiz: 'montasa', nombre: 'MT RENTAL', corto: 'MT' }, { raiz: 'monhaco', nombre: 'MONHACO', corto: 'MH' }];
+  var EMPRESAS = [{ raiz: 'montasa', nombre: 'MT RENTAL', corto: 'MT' }, { raiz: 'monhaco', nombre: 'MONHACO', corto: 'MH' },
+    { raiz: 'monhagro', nombre: 'MONHAGRO', corto: 'MG' }, { raiz: 'seguridad', nombre: 'SEGURIDAD', corto: 'SEG' }];   // (2026-11-18) + MONHAGRO y SEGURIDAD (solo RRHH)
   var DEPTOS = {
     montasa: ['Administración y Finanzas', 'Comercial', 'Compras', 'Almacén', 'Mantenimiento y Logística', 'Mantenimiento', 'Logística', 'Jefatura de Flota', 'Recursos Humanos', 'Gerencia General'],   // + Mantenimiento y Logística por separado (base de RRHH 2026-11-17)
-    monhaco: ['Administración', 'Administración y Finanzas', 'Almacén', 'Comercial', 'Compras', 'Logística', 'Mantenimiento', 'Mantenimiento (taller)']
+    monhaco: ['Administración', 'Administración y Finanzas', 'Almacén', 'Comercial', 'Compras', 'Logística', 'Mantenimiento', 'Mantenimiento (taller)'],
+    monhagro: ['Administración', 'Mantenimiento'],
+    seguridad: ['Seguridad']
   };
   var DOCS = ['Contrato', 'Identidad', 'Hoja de vida', 'Solicitud de empleo', 'Títulos / diplomas', 'Constancias', 'Antecedentes', 'Addendum de trabajo',
     'Licencia de conducir', 'Tarjeta de salud / tipo de sangre', 'Croquis de vivienda', 'Pruebas pre-empleo', 'Carta oferta', 'Cuenta bancaria', 'Finiquito', 'Acción disciplinaria', 'Otro'];
@@ -691,14 +694,14 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
           'Tipo de contrato': ct.tipo || '', 'Contrato vence': ct.vence ? fmt(ct.vence) : '', 'Salario mensual': salarioDe(x.raiz, e.id) != null ? salarioDe(x.raiz, e.id) : '', 'Forma de pago': e.formaPago || '', 'Banco': e.banco || '', 'Tipo de cuenta': e.tipoCuenta || '', 'Cuenta': e.cuentaBancaria || '',
           'Contacto de emergencia': ce.nombre || '', 'Parentesco': ce.parentesco || '', 'Tel. emergencia': ce.telefono || '', 'Expediente': ex.ok + '/' + ex.total, 'Estado': e.activo === false ? 'Baja ' + fmt(e.fechaBaja) : 'Activo' }; });
       var wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(filas); ws['!cols'] = Object.keys(filas[0] || {}).map(function(k){ return { wch: Math.max(10, Math.min(40, k.length + 4)) }; });
-      XLSX.utils.book_append_sheet(wb, ws, 'Personal'); XLSX.writeFile(wb, 'Personal_' + (ui.emp === 'todas' ? 'MT_y_MH' : nomEmp(ui.emp).replace(/\s+/g, '_')) + '_' + hoy() + '.xlsx');
+      XLSX.utils.book_append_sheet(wb, ws, 'Personal'); XLSX.writeFile(wb, 'Personal_' + (ui.emp === 'todas' ? 'Todas' : nomEmp(ui.emp).replace(/\s+/g, '_')) + '_' + hoy() + '.xlsx');
     }).catch(function(er){ aviso('No se pudo exportar: ' + er.message, true); });
   }
 
   // ══ CONSTANCIAS AUTOMÁTICAS (2026-11-17, formatos de Elia) ══ Sencilla (IHSS), con deducciones y de finalización de relación laboral.
   // PDF carta sobre el membrete de Montasa (img/membrete_montasa.jpg), texto igual a los formatos de RRHH, listo para firmar y sellar.
   // Ajustes por empresa en rrhh/<raíz>/config (razón social, ciudad, firmante). Cada constancia queda anotada en priv/<id>/constancias.
-  var RAZON = { montasa: 'MT RENTAL & SERVICE S. DE R.L.', monhaco: 'MONHACO S.A. DE C.V.' };
+  var RAZON = { montasa: 'MT RENTAL & SERVICE S. DE R.L.', monhaco: 'MONHACO S.A. DE C.V.', monhagro: 'MONHAGRO', seguridad: 'SEGURIDAD' };   // MONHAGRO/SEGURIDAD: razón social completa en «⚙️ Datos…»
   var FIRMA = { nombre: 'Licda. Elia López', cargo: 'Gerente Administrativa', correo: 'desarrollo.organizacional@montasa.com' };
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var TIPOS_C = { sencilla: 'Constancia sencilla (IHSS)', deducciones: 'Constancia con salario y deducciones', finalizacion: 'Constancia de finalización de relación laboral' };
@@ -880,12 +883,14 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // Ordinario = salario mensual / 30 × días. IHSS por quincena según Ajustes (MONHACO L 297.58). Todo lo demás se escribe y se corrige a mano.
   // Las filas guardan nombre, código, departamento, identidad y cuenta del momento: así «Planilla — solo ver» no necesita leer las fichas.
   var COL_ING = { montasa: ['dias', 'ordinario', 'productividad', 'horasExtras', 'bonificacion', 'comision', 'incapacidades', 'vacaciones', 'otrosIngresos'],
-                  monhaco: ['dias', 'ordinario', 'productividad', 'horasExtras', 'bonificacion', 'comision', 'incapacidades', 'transporte', 'vacaciones', 'cesantia', 'otrosIngresos'] };
-  var COL_DED = { montasa: ['ihss', 'isr', 'rap', 'linea', 'uniforme', 'salutem', 'otrasDed'], monhaco: ['ihss', 'isr', 'linea', 'uniforme', 'salutem', 'otrasDed'] };
+                  monhaco: ['dias', 'ordinario', 'productividad', 'horasExtras', 'bonificacion', 'comision', 'incapacidades', 'transporte', 'vacaciones', 'cesantia', 'otrosIngresos'],
+                  monhagro: ['dias', 'ordinario', 'productividad', 'horasExtras', 'bonificacion', 'comision', 'incapacidades', 'transporte', 'vacaciones', 'cesantia', 'otrosIngresos'],
+                  seguridad: ['dias', 'ordinario', 'horasExtras', 'otrosIngresos'] };
+  var COL_DED = { montasa: ['ihss', 'isr', 'rap', 'linea', 'uniforme', 'salutem', 'otrasDed'], monhaco: ['ihss', 'isr', 'linea', 'uniforme', 'salutem', 'otrasDed'], monhagro: ['ihss', 'isr', 'linea', 'uniforme', 'salutem', 'otrasDed'], seguridad: ['otrasDed'] };
   var NOMCOL = { dias: 'Días trab.', ordinario: 'Ordinario', productividad: 'Productivi.', horasExtras: 'Horas extras', bonificacion: 'Bonificación', comision: 'Comisión', incapacidades: 'Incapacidades',
     transporte: 'Transporte', vacaciones: 'Vacaciones', cesantia: 'Cesantía', otrosIngresos: 'Otros ingresos', ihss: 'IHSS', isr: 'ISR', rap: 'AFP-RAP', linea: 'Línea telefónica', uniforme: 'Uniforme', salutem: 'Salutem', otrasDed: 'Otras deducc.' };
   // IHSS (2026-11-18, Miguel): 5 % del salario con techo mensual L 11,903.13, en dos quincenas iguales. Solo MONHACO (MT no deduce IHSS).
-  var IHSS_DEF = { montasa: false, monhaco: true };
+  var IHSS_DEF = { montasa: false, monhaco: true, monhagro: false, seguridad: false };   // MONHAGRO va en 0 en la planilla de Elia
   function r2(n){ return Math.round((parseFloat(n) || 0) * 100) / 100; }
   function mon(n){ return (parseFloat(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function ihssCfg(raiz){ var c = D[raiz].config || {}; return { aplica: c.ihssAplica != null ? !!c.ihssAplica : IHSS_DEF[raiz], techo: parseFloat(c.ihssTecho) > 0 ? parseFloat(c.ihssTecho) : 11903.13, pct: parseFloat(c.ihssPct) > 0 ? parseFloat(c.ihssPct) : 5 }; }
@@ -1139,7 +1144,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         var filas = [], otras = {};
         A.slice(ini + 1).forEach(function(f){
           var em = norm(f[col.EMPRESA]), nom = String(f[col.NOMBRE] || '').trim(); if(!em || /^TOTAL/.test(em) || !nom) return;
-          var raiz = /MONHACO/.test(em) ? 'monhaco' : /MONTASA|MT RENTAL/.test(em) ? 'montasa' : null;
+          var raiz = /MONHACO/.test(em) ? 'monhaco' : /MONTASA|MT RENTAL/.test(em) ? 'montasa' : /MONHAGRO/.test(em) ? 'monhagro' : /SEGURIDAD/.test(em) ? 'seguridad' : null;
           if(!raiz){ otras[em] = 1; return; }
           var h = {}; HE_REC.forEach(function(x){ h[x[0]] = r2(f[col[x[2]]]); });
           filas.push({ raiz: raiz, nombre: nom, h: h });
@@ -1221,7 +1226,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     var logo = (typeof _LOGO_MONTASA_B64 !== 'undefined') ? _LOGO_MONTASA_B64 : '';
     var root = document.createElement('div'); root.id = 'rh';
-    root.innerHTML = '<div class="top">' + (logo ? '<img src="' + logo + '" alt="">' : '') + '<div><b>Nexo RRHH</b><small>Recursos Humanos · MT RENTAL y MONHACO</small></div></div>'
+    root.innerHTML = '<div class="top">' + (logo ? '<img src="' + logo + '" alt="">' : '') + '<div><b>Nexo RRHH</b><small>Recursos Humanos · MT RENTAL · MONHACO · MONHAGRO · SEGURIDAD</small></div></div>'
       + '<div class="emp"><button data-emp="todas">Todas</button>' + EMPRESAS.map(function(E){ return '<button data-emp="' + E.raiz + '">' + E.nombre + '</button>'; }).join('') + '</div>'
       + '<div class="nav"><button data-v="emp">🪪 Empleados</button><button data-v="alertas">🔔 Alertas</button><button data-v="resumen">📊 Resumen</button><button data-v="planillas">💵 Planillas</button></div>'
       + '<div class="c" id="rh-c"></div>';
