@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='bc0eefae1fef';
+  var APP_VERSION='6c1e8347294f';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -330,7 +330,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(escuchando) return;
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
-    try{ escucharArchivos(); escucharConfig(); }catch(e){ console.warn('rrhh config', e); }
+    try{ escucharArchivos(); escucharConfig(); escucharHEG(); }catch(e){ console.warn('rrhh config', e); }
     EMPRESAS.forEach(function(E){
       (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas', 'incapacidades', 'acciones']).forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
@@ -1003,6 +1003,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   function pintarPlanillas(c){
     if(raices().every(function(r){ return (D[r]._sinAcceso || {}).planillas; })){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:34px">🔒</div><div class="nm">Planillas: solo Recursos Humanos</div><div class="sub">Este equipo no tiene permiso para ver las planillas.</div></div>'; return; }
+    hegAuto();
     if(ui.plan){ return pintarPlanilla(c); }
     var soloVer = permisoRol === 'planilla', h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><div class="nm" style="flex:1">💵 Planillas quincenales</div>'
       + (soloVer ? '' : '<button class="bt bp" data-a="pl-nueva">➕ Nueva quincena</button>') + '<button class="bt" data-a="pl-libro">⬇ Excel del período (todas)</button></div>';
@@ -1044,7 +1045,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var tot = {}; cols.forEach(function(k){ tot[k] = 0; }); filas.forEach(function(f){ var t = totFila(raiz, f); cols.forEach(function(k){ tot[k] += k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : (parseFloat(f[k]) || 0); }); });
     cuerpo += '<tr style="background:#1f3864;color:#fff;font-weight:800"><td style="' + td + ';color:#fff" colspan="2">TOTAL GENERAL · ' + filas.length + ' colaboradores</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right;color:#fff">' + (k === 'dias' ? '' : mon(tot[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td><td style="' + td + '"></td></tr>';
     var fir = p.firmas || {};
-    c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>'
+    c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>' + (ed && !esDecimo(p) ? avisoHEG(p) : '')
       + '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.historica ? '🗄 Histórica (cargada del Excel de RRHH)' : p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
       + '<div class="acc" style="margin:0">' + (ed && !esDecimo(p) ? '<button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button>' : '') + (ed ? '<button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
@@ -1352,7 +1353,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     };
     inp.click();
   }
-  function previaHE(p0, filas, otras, archivo){
+  function previaHE(p0, filas, otras, archivo, luego){
     var dest = {}; EMPRESAS.forEach(function(E){ var p = planillas(E.raiz).find(function(x){ return x.periodo === p0.periodo; }); dest[E.raiz] = p && p.estado !== 'cerrada' ? p : null; });
     filas.forEach(function(x){ x.b = heBuscar(x.raiz, dest, x.nombre); x.sel = x.b.id; });
     var filaSel = function(sel){ if(!sel) return null; var a = sel.split('|'), p = dest[a[0]]; return p && (p.filas || {})[a[1]] ? { raiz: a[0], p: p, f: p.filas[a[1]] } : null; };
@@ -1385,7 +1386,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       db().ref().update(up).then(function(){
         if(!archivo) return;
         return guardarArchivoHE(p0.periodo, archivo.buf, archivo.nombre, n).then(function(){ aviso('📎 Excel guardado como «' + nombreHE(p0.periodo) + '»'); }).catch(function(er){ aviso('Horas cargadas, pero el Excel no se guardó: ' + er.message, true); });
-      }).then(function(){ w.remove(); aviso('Horas extra cargadas: ' + n + ' ✓'); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
+      }).then(function(){ w.remove(); aviso('Horas extra cargadas: ' + n + ' ✓'); if(luego) luego(); }).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     }, '📥 Cargar horas extra');
     w.querySelector('.rh-w').style.maxWidth = '860px';
     var calc = function(){ filas.forEach(function(x, i){ var td = w.querySelector('[data-hem="' + i + '"]'), av = w.querySelector('[data-hea="' + i + '"]'); if(!td) return; var s = filaSel(x.sel), f = s && s.f;
@@ -1393,6 +1394,75 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       if(av) av.textContent = s && s.raiz !== x.raiz ? '⚠️ En Nexo está en ' + nomEmp(s.raiz) + ': se carga en esa planilla' : ''; }); };
     w.addEventListener('change', function(ev){ var s = ev.target.closest('[data-he]'); if(!s) return; var x = filas[+s.getAttribute('data-he')]; x.sel = s.value; s.style.borderColor = x.sel ? '' : '#e8a23b'; s.style.background = x.sel ? '' : '#fff8ec'; calc(); });
     calc();
+  }
+
+
+  // ══ HORAS EXTRA DESDE GERENCIA (2026-11-19, Miguel: «yo subo el reporte de horas extras en Gerencia y Nexo RRHH lo jala») ══════════
+  // Solo Mantenimiento y Logística (de Miguel) generan horas extra. Miguel sube el Excel quincenal en Nexo Gerencia MT:
+  //   rrhh/horasExtrasGer/indice/<periodo> = { periodo, filas:[{ raiz, nombre, h25, h50, h75, h100 }], original, tam, ts, por, v }
+  //   rrhh/horasExtrasGer/datos/<datoId>   = { data: base64 }  · versiones/<periodo>/<ts> = todas las subidas  (reglas v7: Gerencia y RRHH)
+  // · Entran directo: la planilla abierta del período que aún no las tiene las toma sola (marca heGer = { v, ts, cargadas, pendientes }).
+  // · Si Miguel vuelve a subir el reporte, a Elia le sale un aviso con «Volver a jalar» (la planilla cerrada no se toca).
+  // · Quien no se identifica seguro queda en «pendientes»: Elia lo elige una vez (se recuerda en config/heMapa).
+  // · Cada fila cargada lleva heGer = v; si en el reporte nuevo esa persona ya no está, sus horas vuelven a 0.
+  // · El botón de Elia «Subir horas extra (Excel)» se queda como plan B.
+  var HEG = { indice: {}, ok: false, hechos: {} };
+  function escucharHEG(){ if(permisoRol === 'planilla' || !db()) return; db().ref('rrhh/horasExtrasGer/indice').on('value', function(s){ HEG.indice = s.val() || {}; HEG.ok = true; pintar(); }, function(er){ HEG.ok = true; console.warn('horasExtrasGer', er && er.code); }); }
+  function hegDe(per){ var x = HEG.indice[per]; return x && x.filas ? x : null; }
+  function hegFilas(x){ return lista(x.filas).map(function(f){ return { raiz: f.raiz, nombre: f.nombre, h: { h25: r2(f.h25), h50: r2(f.h50), h75: r2(f.h75), h100: r2(f.h100) } }; }); }
+  function hegDest(per){ var d = {}; EMPRESAS.forEach(function(E){ var p = planillas(E.raiz).find(function(x){ return x.periodo === per; }); d[E.raiz] = p && p.estado !== 'cerrada' && !p.historica && !esDecimo(p) ? p : null; }); return d; }
+  function hegCuando(x){ var d = new Date(x.ts || 0); return fmt(iso(d)) + ' ' + d.toTimeString().slice(0, 5); }
+  function metaArch(id){ if(/^ger:/.test(id)){ var x = HEG.indice[id.slice(4)] || {}; return { nombre: nombreHE(x.periodo || id.slice(4)), ts: x.ts, original: x.original }; } return ARCH.indice[id] || {}; }
+  // carga el reporte en las planillas abiertas del período (solo = raíces a tocar; sin «solo», todas las abiertas)
+  function aplicarHEG(per, manual, solo){
+    var x = hegDe(per); if(!x) return Promise.resolve(0);
+    var dest = hegDest(per), objetivo = Object.keys(dest).filter(function(r){ return dest[r] && (!solo || solo.indexOf(r) >= 0); });
+    if(!objetivo.length){ if(manual) aviso('No hay planilla abierta de esa quincena.', true); return Promise.resolve(0); }
+    var up = {}, n = 0, nR = {}, pend = [], usados = {}, v = x.v || x.ts || 1;
+    hegFilas(x).forEach(function(fx){
+      var b0 = heBuscar(fx.raiz, dest, fx.nombre), sel = b0.id, tot = heTotH(fx.h);
+      if(!sel){ if(tot > 0) pend.push(fx.nombre + ' (' + tot + ' h)'); return; }
+      var a = sel.split('|'); if(objetivo.indexOf(a[0]) < 0) return;
+      var p = dest[a[0]], f = p.filas[a[1]];
+      if(tot > 0 && !(parseFloat(f.salario) > 0)){ pend.push(f.nombre + ' (sin salario en la planilla)'); return; }
+      var b = 'rrhh/' + a[0] + '/planillas/' + p.id + '/filas/' + f.empId + '/';
+      up[b + 'horasExtras'] = heMonto(a[0], f.salario, fx.h); up[b + 'heHoras'] = tot > 0 ? fx.h : null; up[b + 'heGer'] = v; usados[sel] = 1; n++; nR[a[0]] = (nR[a[0]] || 0) + 1;
+    });
+    objetivo.forEach(function(r){ var p = dest[r];
+      lista(p.filas).forEach(function(f){ if(f.heGer && !usados[r + '|' + f.empId]){ var b = 'rrhh/' + r + '/planillas/' + p.id + '/filas/' + f.empId + '/'; up[b + 'horasExtras'] = 0; up[b + 'heHoras'] = null; up[b + 'heGer'] = null; } });
+      up['rrhh/' + r + '/planillas/' + p.id + '/heGer'] = { v: v, ts: Date.now(), cargadas: nR[r] || 0, pendientes: pend.length ? pend : null }; });
+    return db().ref().update(up).then(function(){
+      aviso('⏱ Horas extras del reporte de Gerencia cargadas (' + n + ')' + (pend.length ? ' · ⚠️ ' + pend.length + ' sin identificar' : ' ✓'), !!pend.length);
+      return n; }).catch(function(er){ aviso('No se cargaron las horas extras del reporte: ' + er.message, true); throw er; });
+  }
+  // la primera vez que hay planilla abierta del período, entran directo
+  function hegAuto(){
+    if(permisoRol === 'planilla' || !HEG.ok || !EMPRESAS.every(function(E){ return D[E.raiz]._ok.planillas; })) return;
+    Object.keys(HEG.indice).forEach(function(per){ var x = hegDe(per); if(!x) return; var dest = hegDest(per);
+      var nuevas = Object.keys(dest).filter(function(r){ return dest[r] && !dest[r].heGer && !HEG.hechos[per + '|' + r + '|' + dest[r].id]; }); if(!nuevas.length) return;
+      nuevas.forEach(function(r){ HEG.hechos[per + '|' + r + '|' + dest[r].id] = 1; });   // una sola vez por planilla (la base avisa varias veces)
+      setTimeout(function(){ aplicarHEG(per, false, nuevas).catch(function(){ nuevas.forEach(function(r){ HEG.hechos[per + '|' + r + '|' + dest[r].id] = 0; }); }); }, 0); });
+  }
+  function asignarHEG(per){
+    var x = hegDe(per); if(!x) return; var dest = hegDest(per);
+    var filas = hegFilas(x).filter(function(fx){ return heTotH(fx.h) > 0 && !heBuscar(fx.raiz, dest, fx.nombre).id; });
+    if(!filas.length){ aplicarHEG(per, true); return; }
+    previaHE({ periodo: per }, filas, [], null, function(){ setTimeout(function(){ aplicarHEG(per, true); }, 1200); });   // espera que llegue config/heMapa
+  }
+  function avisoHEG(p){
+    var x = hegDe(p.periodo), m = p.heGer;
+    if(!x) return '<div class="card" style="padding:10px 14px;background:#f8f9fb"><div class="sub">⏱ Todavía no hay reporte de horas extras de Gerencia para esta quincena. Cuando Miguel lo suba, las horas se cargan solas.</div></div>';
+    var bajar = ' <a href="#" data-a="arch-ver" data-id="ger:' + esc(p.periodo) + '" style="color:#1f3864;font-weight:700">ver</a> · <a href="#" data-a="arch-bajar" data-id="ger:' + esc(p.periodo) + '" style="color:#1f3864;font-weight:700">descargar</a>';
+    if(m && (m.v || 0) < (x.v || x.ts || 1)) return '<div class="card" style="border:2px solid #e8a23b;background:#fff8ec"><div class="nm">🔔 ' + esc(x.por || 'Gerencia') + ' actualizó el reporte de horas extras</div><div class="sub">Subido el ' + hegCuando(x) + '. La planilla todavía tiene las horas del reporte anterior.' + bajar + '</div><div class="acc" style="margin:8px 0 0"><button class="bt bp" data-a="heg-jalar" data-p="' + esc(p.periodo) + '">🔄 Volver a jalar las horas extras</button></div></div>';
+    var pend = (m && m.pendientes) || [];
+    if(pend.length) return '<div class="card" style="border:2px solid #e8a23b;background:#fff8ec"><div class="nm">⚠️ Del reporte de horas extras no identifiqué a ' + pend.length + '</div><div class="sub">' + pend.map(esc).join(' · ') + '</div><div class="acc" style="margin:8px 0 0"><button class="bt bp" data-a="heg-asignar" data-p="' + esc(p.periodo) + '">👤 Elegir a quién corresponde</button></div></div>';
+    return '<div class="card" style="padding:10px 14px;background:#f1f8f3;border-color:#b7e1c3"><div class="sub" style="color:#1d2433">⏱ Horas extras tomadas del reporte de ' + esc(x.por || 'Gerencia') + ' (subido el ' + hegCuando(x) + ')' + (m ? ' · ' + (m.cargadas || 0) + ' personas' : '') + '.' + bajar + '</div></div>';
+  }
+  function lineaHEG(per){
+    var x = hegDe(per); if(!x || permisoRol === 'planilla') return '';
+    var dest = hegDest(per), cambio = Object.keys(dest).some(function(r){ var m = dest[r] && dest[r].heGer; return m && (m.v || 0) < (x.v || x.ts || 1); });
+    return '<div style="border-top:1px solid #f0f2f5;padding:8px 0 2px;font-size:12.5px"><b style="color:#1f3864">⏱ Reporte de horas extras de Gerencia</b>' + (cambio ? ' <span class="tag" style="background:#fff1d6;color:#9a5b00">🔔 actualizado: ábrela para volver a jalarlo</span>' : '')
+      + '<div class="sub" style="color:#1d2433">' + esc(nombreHE(per)) + ' · ' + esc(x.por || '') + ' · ' + hegCuando(x) + ' <a href="#" data-a="arch-ver" data-id="ger:' + esc(per) + '" style="color:#1f3864;font-weight:700">ver</a> · <a href="#" data-a="arch-bajar" data-id="ger:' + esc(per) + '" style="color:#1f3864;font-weight:700">descargar</a></div></div>';
   }
 
   // ══ INCAPACIDADES Y NOVEDADES DE LA QUINCENA (2026-11-18, Miguel/Elia; guía «Prompt_incapacidades_planilla_Honduras.pdf») ══════════
@@ -1561,13 +1631,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     cambios['rrhh/archivos/indice/' + id] = { id: id, tipo: 'horasExtras', periodo: per, nombre: nombreHE(per), original: original || '', tam: buf.byteLength, ts: Date.now(), cargadas: cargadas || 0 };
     return db().ref().update(cambios);
   }
-  function bajarArchivo(id){ return db().ref('rrhh/archivos/datos/' + id + '/data').once('value').then(function(s){ var d = s.val(); if(!d) throw new Error('no se encontró el archivo');
+  function bajarArchivo(id){ return db().ref(/^ger:/.test(id) ? 'rrhh/horasExtrasGer/datos/' + ((HEG.indice[id.slice(4)] || {}).datoId || id.slice(4)) + '/data' : 'rrhh/archivos/datos/' + id + '/data').once('value').then(function(s){ var d = s.val(); if(!d) throw new Error('no se encontró el archivo');
     var b = atob(d), u = new Uint8Array(b.length); for(var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; }); }
-  function descargarArchivo(id){ var a0 = ARCH.indice[id] || {}; aviso('Descargando…');
+  function descargarArchivo(id){ var a0 = metaArch(id); aviso('Descargando…');
     bajarArchivo(id).then(function(buf){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = a0.nombre || 'Horas extras.xlsx';
       document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000); }).catch(function(er){ aviso('No se pudo descargar: ' + er.message, true); }); }
   // ver el Excel dentro de Nexo (cada hoja en una pestaña)
-  function verArchivo(id){ var a0 = ARCH.indice[id] || {}; aviso('Abriendo…');
+  function verArchivo(id){ var a0 = metaArch(id); aviso('Abriendo…');
     Promise.all([cargarXLSX(), bajarArchivo(id)]).then(function(r){
       var wb = XLSX.read(r[1], { type: 'array' }), hojas = wb.SheetNames, ini = hojas.find(function(n){ return norm(n) === 'RESUMEN'; }) || hojas[0];
       var tabla = function(n){ var ws = wb.Sheets[n]; if(ws['!ref']){ var rg = XLSX.utils.decode_range(ws['!ref']); if(rg.e.r > 400) rg.e.r = 400; if(rg.e.c > 30) rg.e.c = 30; ws['!ref'] = XLSX.utils.encode_range(rg); }
@@ -1584,7 +1654,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   }
   function bloqueArchivos(per){
     var L = archivosDe(per), soloVer = permisoRol === 'planilla';
-    return '<div style="border-top:1px solid #f0f2f5;padding:8px 0 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
+    return lineaHEG(per) + '<div style="border-top:1px solid #f0f2f5;padding:8px 0 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
       + '<div style="font-size:12.5px"><b style="color:#1f3864">📎 Horas extras</b> ' + (L.length ? L.map(function(a, i){ return '<div class="sub" style="color:#1d2433">' + esc(a.nombre) + (i ? ' <span class="tag">versión anterior</span>' : '') + ' · ' + fmt(iso(new Date(a.ts))) + ' ' + new Date(a.ts).toTimeString().slice(0, 5)
           + ' <a href="#" data-a="arch-ver" data-id="' + esc(a.id) + '" style="color:#1f3864;font-weight:700">ver</a> · <a href="#" data-a="arch-bajar" data-id="' + esc(a.id) + '" style="color:#1f3864;font-weight:700">descargar</a></div>'; }).join('') : '<span class="sub">— sin archivo todavía</span>') + '</div>'
       + (soloVer ? '' : '<button class="bt bp" data-a="pl-he-per" data-p="' + esc(per) + '">📥 Subir horas extra (MT y MH)</button>') + '</div>';
@@ -2005,6 +2075,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-libro') return libroPeriodo();
     if(a === 'pl-he-per') return subirHorasExtra(t.getAttribute('data-p'));
     if(a === 'arch-ver') return verArchivo(t.getAttribute('data-id'));
+    if(a === 'heg-jalar'){ if(!confirm('Se reemplazan las horas extras de la planilla con el reporte NUEVO de Gerencia (las planillas cerradas no se tocan).\n\n¿Seguir?')) return; return aplicarHEG(t.getAttribute('data-p'), true); }
+    if(a === 'heg-asignar') return asignarHEG(t.getAttribute('data-p'));
     if(a === 'arch-bajar') return descargarArchivo(t.getAttribute('data-id'));
     if(a === 'pl-abrir'){ ui.plan = { raiz: t.getAttribute('data-r'), id: t.getAttribute('data-id') }; pintar(); window.scrollTo(0, 0); return; }
     if(/^pl-/.test(a)) return planAccion(a, t);

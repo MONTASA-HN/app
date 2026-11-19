@@ -241,7 +241,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9b724a1158fa';
+  var APP_VERSION='18ebfa9dc3c1';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -15293,7 +15293,7 @@ function _cliOrdenAlCerrar(o){
     var ov = document.createElement('div'); ov.id = 'vac-ov';
     ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
-      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button><button data-v="ent">🕒 Historial de entradas</button></div><div class="vc" id="vac-c"></div>';
+      + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button><button data-v="ent">🕒 Historial de entradas</button><button data-v="he">⏱ Horas extras</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
     ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
     window.scrollTo(0, 0); document.documentElement.style.overflow = 'hidden';
@@ -15325,6 +15325,7 @@ function _cliOrdenAlCerrar(o){
     } else if(vista === 'emp') pintarEmpleados(c);
     else if(vista === 'tel') pintarAccesos(c);
     else if(vista === 'ent') pintarEntradas(c);
+    else if(vista === 'he'){ c.innerHTML = '<div id="heg-c"></div>'; if(window._hegPintar) window._hegPintar(); }
     else pintarAcciones(c);
   }
   function pintarLista(){
@@ -18143,6 +18144,128 @@ async function _mantCompartirAviso(equipoId){
   ['_estBuscarMant', '_estBuscarLog'].forEach(function(fn){ var o = window[fn]; if(typeof o !== 'function') return; window[fn] = function(){ window._nxBusq = false; return o.apply(this, arguments); }; });
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(pintar, 500); }); else setTimeout(pintar, 500);
   setInterval(function(){ if(!document.querySelector('.nx-busq')) pintar(); }, 3000);
+})();
+</script>
+<script>
+// ══ HORAS EXTRAS PARA NEXO RRHH (2026-11-19, Miguel) ═══════════════════════════════════════════════════════════════════
+// Solo Mantenimiento y Logística generan horas extra. Miguel sube aquí el Excel quincenal («FORMATO DE HORAS EXTRAS», hoja RESUMEN:
+// EMPRESA | NOMBRE | 25% | 50% | 75% | 100%) y Nexo RRHH lo jala solo al hacer la planilla; Elia lo puede ver y descargar allá.
+//   rrhh/horasExtrasGer/indice/<periodo> = { periodo:'2026-11-2', filas:[{ raiz, nombre, h25, h50, h75, h100 }], original, tam, ts, por, v }
+//   rrhh/horasExtrasGer/datos/<periodo>_<ts> = { data: base64 }   (reglas v7)
+//   rrhh/horasExtrasGer/versiones/<periodo>/<ts> = lo mismo que el índice: TODAS las subidas quedan guardadas para revisiones
+//   (Miguel: «debe quedar guardado para futuras revisiones»); el índice apunta a la vigente (datoId).
+(function(){
+  var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var REC = [['h25','25%'],['h50','50%'],['h75','75%'],['h100','100%']];
+  var st = { indice: {}, versiones: {}, ok: false, err: '', previa: null, escuchando: false };
+  function norm(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function r2(n){ return Math.round((parseFloat(n) || 0) * 100) / 100; }
+  function avisar(t, mal){ try{ toast(t, mal); }catch(e){ alert(t); } }
+  function tit(per){ var a = String(per).split('-'), ult = new Date(+a[0], +a[1], 0).getDate(); return (a[2] === '2' ? 'Del 16 al ' + ult : 'Del 1 al 15') + ' de ' + MESES[+a[1] - 1] + ' ' + a[0]; }
+  function perDe(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + (d.getDate() <= 15 ? '1' : '2'); }
+  function quincenas(){ var out = [], d = new Date(); d = new Date(d.getFullYear(), d.getMonth(), d.getDate() <= 15 ? 1 : 16);
+    d = d.getDate() === 1 ? new Date(d.getFullYear(), d.getMonth(), 16) : new Date(d.getFullYear(), d.getMonth() + 1, 1);   // empieza en la próxima
+    for(var i = 0; i < 7; i++){ out.push(perDe(d)); d = d.getDate() === 16 ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date(d.getFullYear(), d.getMonth() - 1, 16); }
+    return out; }
+  function cuando(ts){ var d = new Date(ts || 0); return d.toLocaleDateString('es-HN', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toTimeString().slice(0, 5); }
+  function totH(f){ return r2(REC.reduce(function(s, x){ return s + (parseFloat(f[x[0]]) || 0); }, 0)); }
+  function empNom(r){ return { montasa: 'MT RENTAL', monhaco: 'MONHACO', monhagro: 'MONHAGRO', seguridad: 'SEGURIDAD' }[r] || r; }
+  function quien(){ var r = (window._nxAcceso || {}).registro || {}; return String((r.nombre || '') + ' ' + (r.apellido || '')).trim() || 'Gerencia'; }
+  function db(){ return window._fbDB; }
+  function escuchar(){
+    if(st.escuchando) return; if(!db() || !db().ref){ setTimeout(escuchar, 1500); return; }
+    st.escuchando = true;
+    db().ref('rrhh/horasExtrasGer/indice').on('value', function(sn){ st.indice = sn.val() || {}; st.ok = true; st.err = ''; pintar(); },
+      function(er){ st.ok = true; st.err = (er && er.code) || 'sin permiso'; pintar(); });
+    db().ref('rrhh/horasExtrasGer/versiones').on('value', function(sn){ st.versiones = sn.val() || {}; pintar(); }, function(){});
+  }
+  function leer(buf, nombre){
+    var wb = XLSX.read(buf, { type: 'array' }), hn = wb.SheetNames.find(function(n){ return norm(n) === 'RESUMEN'; });
+    if(!hn) throw new Error('El archivo no tiene la hoja «RESUMEN».');
+    var A = XLSX.utils.sheet_to_json(wb.Sheets[hn], { header: 1, defval: '' }), ini = -1, col = {};
+    A.some(function(fila, i){ var ns = fila.map(norm); if(ns.indexOf('EMPRESA') >= 0 && ns.indexOf('NOMBRE') >= 0){ ini = i; ns.forEach(function(t, j){ col[t.replace(/\s/g, '')] = j; }); return true; } return false; });
+    if(ini < 0 || col['25%'] == null) throw new Error('No encontré los encabezados EMPRESA / NOMBRE / 25% / 50% / 75% / 100% en la hoja RESUMEN.');
+    var filas = [], otras = {};
+    A.slice(ini + 1).forEach(function(f){
+      var em = norm(f[col.EMPRESA]), nom = String(f[col.NOMBRE] || '').trim(); if(!em || /^TOTAL/.test(em) || !nom) return;
+      var raiz = /MONHACO/.test(em) ? 'monhaco' : /MONTASA|MT RENTAL/.test(em) ? 'montasa' : /MONHAGRO/.test(em) ? 'monhagro' : /SEGURIDAD/.test(em) ? 'seguridad' : null;
+      if(!raiz){ otras[em] = 1; return; }
+      var x = { raiz: raiz, nombre: nom }; REC.forEach(function(r){ x[r[0]] = r2(f[col[r[1].replace(/\s/g, '')]]); }); filas.push(x);
+    });
+    if(!filas.length) throw new Error('No encontré personas en la hoja RESUMEN.');
+    return { filas: filas, otras: Object.keys(otras), buf: buf, nombre: nombre };
+  }
+  function b64(buf){ var b = new Uint8Array(buf), s = '', i; for(i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+  function elegir(){
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm';
+    inp.onchange = function(){ var fl = inp.files && inp.files[0]; if(!fl) return;
+      if(fl.size > 8 * 1024 * 1024){ avisar('El Excel pesa más de 8 MB.', true); return; }
+      fl.arrayBuffer().then(function(buf){ var r = leer(buf, fl.name); r.per = (document.getElementById('heg-per') || {}).value || quincenas()[1]; st.previa = r; pintar(); })
+        .catch(function(er){ avisar('No se pudo leer el Excel: ' + er.message, true); }); };
+    inp.click();
+  }
+  function guardar(){
+    var r = st.previa; if(!r) return; var per = (document.getElementById('heg-per2') || {}).value || r.per, ya = st.indice[per];
+    if(ya && !confirm('Ya hay un reporte para ' + tit(per).toLowerCase() + ' (subido el ' + cuando(ya.ts) + ').\n\nEste pasa a ser el vigente (el anterior queda guardado en el historial) y a Elia le sale un aviso en Nexo RRHH para volver a jalar las horas.\n\n¿Seguir?')) return;
+    var ts = Date.now(), up = {}, did = per + '_' + ts;
+    var meta = { periodo: per, filas: r.filas, original: r.nombre, tam: r.buf.byteLength, ts: ts, v: ts, por: quien(), datoId: did };
+    up['rrhh/horasExtrasGer/datos/' + did] = { data: b64(r.buf) };
+    up['rrhh/horasExtrasGer/indice/' + per] = meta;
+    up['rrhh/horasExtrasGer/versiones/' + per + '/' + ts] = meta;
+    var b = document.getElementById('heg-guardar'); if(b){ b.disabled = true; b.textContent = 'Guardando…'; }
+    db().ref().update(up).then(function(){ st.previa = null; pintar(); avisar('⏱ Reporte guardado: ' + tit(per).toLowerCase() + ' ✓ Nexo RRHH ya lo puede jalar.'); })
+      .catch(function(er){ if(b){ b.disabled = false; b.textContent = '💾 Guardar para Nexo RRHH'; } avisar('No se guardó: ' + er.message + (/permission/i.test(er.message) ? ' (faltan publicar las reglas v7)' : ''), true); });
+  }
+  function descargar(per, did){ avisar('Descargando…');
+    db().ref('rrhh/horasExtrasGer/datos/' + (did || (st.indice[per] || {}).datoId || per) + '/data').once('value').then(function(sn){ var d = sn.val(); if(!d) throw new Error('no se encontró el archivo');
+      var bs = atob(d), u = new Uint8Array(bs.length); for(var i = 0; i < bs.length; i++) u[i] = bs.charCodeAt(i);
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      a.download = 'Horas extras planilla ' + tit(per).toLowerCase() + '.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000); })
+      .catch(function(er){ avisar('No se pudo descargar: ' + er.message, true); }); }
+  function tabla(filas){
+    var th = 'padding:6px 8px;text-align:center;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border)', td = 'padding:5px 8px;font-size:13px;border-bottom:1px solid var(--border)';
+    var orden = filas.slice().sort(function(a, b){ return a.raiz.localeCompare(b.raiz) || String(a.nombre).localeCompare(String(b.nombre), 'es'); }), tot = { h25: 0, h50: 0, h75: 0, h100: 0 };
+    orden.forEach(function(f){ REC.forEach(function(x){ tot[x[0]] += parseFloat(f[x[0]]) || 0; }); });
+    return '<div style="overflow:auto"><table style="border-collapse:collapse;width:100%"><tr><th style="' + th + ';text-align:left">Empresa</th><th style="' + th + ';text-align:left">Nombre</th>' + REC.map(function(x){ return '<th style="' + th + '">' + x[1] + '</th>'; }).join('') + '<th style="' + th + '">Total h</th></tr>'
+      + orden.map(function(f){ return '<tr><td style="' + td + ';color:var(--text2);font-size:12px">' + empNom(f.raiz) + '</td><td style="' + td + ';font-weight:600">' + esc(f.nombre) + '</td>' + REC.map(function(x){ return '<td style="' + td + ';text-align:center">' + (parseFloat(f[x[0]]) ? f[x[0]] : '') + '</td>'; }).join('') + '<td style="' + td + ';text-align:center;font-weight:700">' + totH(f) + '</td></tr>'; }).join('')
+      + '<tr style="font-weight:800"><td style="' + td + '" colspan="2">Total · ' + orden.length + ' personas</td>' + REC.map(function(x){ return '<td style="' + td + ';text-align:center">' + r2(tot[x[0]]) + '</td>'; }).join('') + '<td style="' + td + ';text-align:center">' + totH(tot) + '</td></tr></table></div>';
+  }
+  function pintar(){
+    var c = document.getElementById('heg-c'); if(!c) return; escuchar();
+    var card = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px';
+    var btn = 'padding:10px 16px;border-radius:9px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:14px;cursor:pointer';
+    var btn2 = 'padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-weight:600;font-size:13px;cursor:pointer';
+    var sel = function(id, v){ return '<select id="' + id + '" style="padding:9px 12px;border-radius:8px;border:1px solid var(--border2);font-size:14px;background:var(--surface);color:var(--text)">' + quincenas().map(function(p){ return '<option value="' + p + '"' + (p === v ? ' selected' : '') + '>' + tit(p) + (st.indice[p] ? ' · ya subido' : '') + '</option>'; }).join('') + '</select>'; };
+    var h = '<div style="font-size:22px;font-weight:600;margin-bottom:4px">⏱ Horas extras</div><div style="font-size:13px;color:var(--text2);margin-bottom:14px">Sube aquí cada quincena el Excel de horas extras (hoja RESUMEN). Nexo RRHH lo jala solo al hacer la planilla de MT RENTAL y MONHACO; Elia no tiene que subir nada y lo puede ver y descargar allá.</div>';
+    if(st.err) h += '<div style="' + card + ';border-color:#e8a23b;background:#fff8ec;color:#7a4a00">⚠️ La base todavía no deja usar esta sección (' + esc(st.err) + '). Falta publicar las reglas v7 de Firebase.</div>';
+    if(st.previa){ var r = st.previa;
+      h += '<div style="' + card + ';border:2px solid var(--accent)"><div style="font-weight:700;font-size:16px;margin-bottom:4px">Revisa antes de guardar</div><div style="font-size:12.5px;color:var(--text2);margin-bottom:8px">Archivo: ' + esc(r.nombre) + '</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:13px;font-weight:600">Quincena:</span>' + sel('heg-per2', r.per) + '</div>'
+        + tabla(r.filas) + (r.otras.length ? '<div style="font-size:12px;color:var(--text2);margin-top:6px">Se ignoran (empresa no reconocida): ' + esc(r.otras.join(', ')) + '.</div>' : '')
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button id="heg-guardar" style="' + btn + '" data-heg="guardar">💾 Guardar para Nexo RRHH</button><button style="' + btn2 + '" data-heg="cancelar">Cancelar</button></div></div>';
+    } else {
+      h += '<div style="' + card + '"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:13px;font-weight:600">Quincena:</span>' + sel('heg-per', quincenas()[1]) + '<button style="' + btn + '" data-heg="subir">📤 Subir reporte (Excel)</button></div></div>';
+    }
+    var ks = Object.keys(st.indice).sort().reverse();
+    h += '<div style="font-size:15px;font-weight:700;margin:16px 0 8px">Reportes subidos</div>';
+    if(!st.ok) h += '<div style="font-size:13px;color:var(--text2)">Cargando…</div>';
+    else if(!ks.length) h += '<div style="' + card + ';color:var(--text2);font-size:13px;text-align:center">Todavía no has subido ningún reporte.</div>';
+    h += ks.map(function(per){ var x = st.indice[per] || {}, fl = x.filas || [], tot = fl.reduce(function(s, f){ return s + totH(f); }, 0);
+      return '<details style="' + card + '"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><span><b>' + tit(per) + '</b><br><span style="font-size:12px;color:var(--text2)">Subido el ' + cuando(x.ts) + (x.por ? ' por ' + esc(x.por) : '') + ' · ' + fl.length + ' personas · ' + r2(tot) + ' h</span></span>'
+        + '<button style="' + btn2 + '" data-heg="bajar" data-p="' + per + '">⬇ Descargar</button></summary><div style="margin-top:10px">' + tabla(fl) + '</div>'
+        + (function(){ var vs = Object.keys(st.versiones[per] || {}).map(function(k){ return st.versiones[per][k]; }).filter(function(o){ return o && o.ts !== x.ts; }).sort(function(a, b){ return b.ts - a.ts; });
+            return vs.length ? '<div style="margin-top:12px;font-size:13px;font-weight:700">Versiones anteriores (' + vs.length + ')</div>' + vs.map(function(o){ var t2 = (o.filas || []).reduce(function(s, f){ return s + totH(f); }, 0);
+              return '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding:6px 0;font-size:12.5px;color:var(--text2)"><span>Subido el ' + cuando(o.ts) + (o.por ? ' por ' + esc(o.por) : '') + ' · ' + (o.filas || []).length + ' personas · ' + r2(t2) + ' h' + (o.original ? ' · ' + esc(o.original) : '') + '</span><button style="' + btn2 + '" data-heg="bajar" data-p="' + per + '" data-d="' + esc(o.datoId || '') + '">⬇ Descargar</button></div>'; }).join('') : ''; })()
+        + '</div></details>'; }).join('');
+    c.innerHTML = h;
+  }
+  document.addEventListener('click', function(ev){ var b = ev.target.closest('[data-heg]'); if(!b) return; var a = b.getAttribute('data-heg');
+    if(a === 'subir') return elegir();
+    if(a === 'guardar') return guardar();
+    if(a === 'cancelar'){ st.previa = null; pintar(); return; }
+    if(a === 'bajar'){ ev.preventDefault(); ev.stopPropagation(); return descargar(b.getAttribute('data-p'), b.getAttribute('data-d')); } });
+  window._hegPintar = pintar;
 })();
 </script>
 </body>
