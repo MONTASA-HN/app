@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='59d770e5bbe3';
+  var APP_VERSION='766eda598268';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -505,11 +505,13 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // RRHH las mantiene al día a partir de incapacidades (inc_<id>) y acciones de vacaciones (vac_<id>) de todas las empresas.
   // Regresa = el día después de «hasta» (si cae domingo, el lunes). Las que ya pasaron se borran.
   var AUSR = { v: null, t: null };
-  function escucharAus(){ if(permisoRol === 'planilla' || !db()) return; db().ref('rrhh/ausencias').on('value', function(s){ AUSR.v = s.val() || {}; programarAus(); }, function(er){ console.warn('ausencias', er && er.code); }); }
+  function escucharAus(){ if(permisoRol === 'planilla' || !db()) return; setTimeout(function(){ if(AUSR.v === null || permiso !== 'ok') diagAus({ aLos20s: true, lista: AUSR.v === null ? 'sin respuesta' : 'ok', permiso: String(permiso), rol: String(permisoRol) }); }, 20000); db().ref('rrhh/ausencias').on('value', function(s){ AUSR.v = s.val() || {}; programarAus(); }, function(er){ console.warn('ausencias', er && er.code); diagAus({ leer: (er && (er.code || er.message)) || 'error' }); }); }
+  function diagAus(o){ try{ var u = (window._nxAcceso || {}).uid; if(!u || !db()) return; o.ts = Date.now(); o.v = String(window._nxVersion || ''); db().ref('accesos/' + u + '/diagAus').set(o).catch(function(){}); }catch(e){} }
   function ausRegreso(h){ var d = aF(h); if(!d) return ''; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); if(d.getDay() === 0) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); return iso(d); }
   function programarAus(){ if(AUSR.v === null || permiso !== 'ok' || permisoRol === 'planilla') return; clearTimeout(AUSR.t); AUSR.t = setTimeout(sincAus, 2500); }
   function sincAus(){
-    if(!EMPRESAS.every(function(E){ return D[E.raiz]._ok.incapacidades && D[E.raiz]._ok.acciones && D[E.raiz]._ok.colaboradores; })) return;
+    var falta = []; EMPRESAS.forEach(function(E){ ['incapacidades', 'acciones', 'colaboradores'].forEach(function(k){ if(!D[E.raiz]._ok[k]) falta.push(E.raiz + '/' + k); }); });
+    if(falta.length){ if(!AUSR.dFalta){ AUSR.dFalta = 1; diagAus({ esperando: falta.join(',') }); } return; }
     var h = hoy(), quiero = {};
     EMPRESAS.forEach(function(E){ var rf = E.raiz;
       lista(D[rf].incapacidades).forEach(function(i){ if(!i.id || i.anulada || !i.empId || !i.desde || !i.hasta) return; var rg = ausRegreso(i.hasta); if(!rg || rg <= h) return;
@@ -520,7 +522,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var up = {}, n = 0, act = AUSR.v || {};
     Object.keys(quiero).forEach(function(k){ var a = act[k] || {}, q = quiero[k]; if(['emp', 'rf', 'tipo', 'desde', 'hasta', 'regresa'].some(function(f){ return a[f] !== q[f]; })){ up[k] = q; n++; } });
     Object.keys(act).forEach(function(k){ if(!quiero[k] && /^(inc|vac)_/.test(k)){ up[k] = null; n++; } });
-    if(n) db().ref('rrhh/ausencias').update(up).catch(function(er){ console.warn('ausencias', er && er.message); });
+    var nq = Object.keys(quiero).length;
+    if(n) db().ref('rrhh/ausencias').update(up).then(function(){ diagAus({ ok: n, quiero: nq }); }, function(er){ console.warn('ausencias', er && er.message); diagAus({ escribir: (er && (er.code || er.message)) || 'error', quiero: nq }); });
+    else if(!AUSR.dOk){ AUSR.dOk = 1; diagAus({ sinCambios: true, quiero: nq, hay: Object.keys(act).length }); }
   }
 
   // ══ TARJETA DE CUMPLEAÑOS (2026-11-19, Elia: «que en Alertas salga la tarjeta del cumpleañero y solo darle Compartir») ══════════
