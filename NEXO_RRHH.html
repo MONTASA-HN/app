@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2652968c9c0c';
+  var APP_VERSION='f91621c3ad3b';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -330,7 +330,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(escuchando) return;
     if(!db()){ setTimeout(escuchar, 500); return; }
     escuchando = true;
-    try{ escucharArchivos(); escucharConfig(); escucharHEG(); }catch(e){ console.warn('rrhh config', e); }
+    try{ escucharArchivos(); escucharConfig(); escucharHEG(); escucharAus(); }catch(e){ console.warn('rrhh config', e); }
     EMPRESAS.forEach(function(E){
       (permisoRol === 'planilla' ? ['planillas', 'config'] : ['empleados', 'colaboradores', 'priv', 'docsIdx', 'fotos', 'config', 'planillas', 'incapacidades', 'acciones']).forEach(function(k){
         db().ref('rrhh/' + E.raiz + '/' + k).on('value', function(s){ D[E.raiz][k] = s.val() || {}; D[E.raiz]._ok[k] = 1; if(permiso !== 'ok'){ permiso = 'ok'; } pintar(); },
@@ -383,6 +383,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
 
   function raices(){ return ui.emp === 'todas' ? EMPRESAS.map(function(e){ return e.raiz; }) : [ui.emp]; }
   function pintar(){
+    try{ programarAus(); }catch(e){}
     var root = $('#rh'); if(!root) return;
     aplicarConfig();   // listas, columnas y reglas según «⚙️ Configuración»
     root.querySelectorAll('.emp button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-emp') === ui.emp); });
@@ -496,6 +497,30 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div class="card"><div class="nm">📁 Expedientes incompletos · ' + exp.length + '</div>' + (exp.length ? exp.slice(0, 40).map(function(y){ return fila(y.x, 'faltan ' + y.ex.faltan.length + ': ' + y.ex.faltan.join(', ')); }).join('') : '<div class="sub">✓ Todos completos.</div>') + '</div>'
       + (sinD.length ? '<div class="card"><div class="nm">🏷 Sin departamento · ' + sinD.length + '</div><div class="sub">Asígnales su departamento: así Gerencia de mantenimiento solo ve a su gente.</div>' + sinD.map(function(x){ return fila(x, esc(x.e.cargo || '')); }).join('') + '</div>' : '')
       + '</div>';
+  }
+
+
+  // ══ AUSENCIAS PARA LAS APPS (2026-11-19, Miguel: incapacitados y de vacaciones no se pueden escoger en órdenes) ══════════════
+  // rrhh/ausencias/<clave> = { emp, rf, tipo:'inc'|'vac', desde, hasta, regresa }  — sin diagnóstico ni constancias (reglas v8).
+  // RRHH las mantiene al día a partir de incapacidades (inc_<id>) y acciones de vacaciones (vac_<id>) de todas las empresas.
+  // Regresa = el día después de «hasta» (si cae domingo, el lunes). Las que ya pasaron se borran.
+  var AUSR = { v: null, t: null };
+  function escucharAus(){ if(permisoRol === 'planilla' || !db()) return; db().ref('rrhh/ausencias').on('value', function(s){ AUSR.v = s.val() || {}; programarAus(); }, function(er){ console.warn('ausencias', er && er.code); }); }
+  function ausRegreso(h){ var d = aF(h); if(!d) return ''; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); if(d.getDay() === 0) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); return iso(d); }
+  function programarAus(){ if(AUSR.v === null || permiso !== 'ok' || permisoRol === 'planilla') return; clearTimeout(AUSR.t); AUSR.t = setTimeout(sincAus, 2500); }
+  function sincAus(){
+    if(!EMPRESAS.every(function(E){ return D[E.raiz]._ok.incapacidades && D[E.raiz]._ok.acciones && D[E.raiz]._ok.colaboradores; })) return;
+    var h = hoy(), quiero = {};
+    EMPRESAS.forEach(function(E){ var rf = E.raiz;
+      lista(D[rf].incapacidades).forEach(function(i){ if(!i.id || i.anulada || !i.empId || !i.desde || !i.hasta) return; var rg = ausRegreso(i.hasta); if(!rg || rg <= h) return;
+        quiero['inc_' + i.id] = { emp: i.empId, rf: rf, tipo: 'inc', desde: i.desde, hasta: i.hasta, regresa: rg }; });
+      lista(D[rf].acciones).forEach(function(a){ if(!a.id || a.anulada || !(a.descuentaVacaciones === true || a.descuentaVacaciones === 'true') || !a.desde || !a.hasta) return;
+        var c = (D[rf].colaboradores || {})[a.colaboradorId], emp = c && c.empleadoId; if(!emp) return; var rg = ausRegreso(a.hasta); if(!rg || rg <= h) return;
+        quiero['vac_' + a.id] = { emp: emp, rf: rf, tipo: 'vac', desde: a.desde, hasta: a.hasta, regresa: rg }; }); });
+    var up = {}, n = 0, act = AUSR.v || {};
+    Object.keys(quiero).forEach(function(k){ var a = act[k] || {}, q = quiero[k]; if(['emp', 'rf', 'tipo', 'desde', 'hasta', 'regresa'].some(function(f){ return a[f] !== q[f]; })){ up[k] = q; n++; } });
+    Object.keys(act).forEach(function(k){ if(!quiero[k] && /^(inc|vac)_/.test(k)){ up[k] = null; n++; } });
+    if(n) db().ref('rrhh/ausencias').update(up).catch(function(er){ console.warn('ausencias', er && er.message); });
   }
 
   // ══ TARJETA DE CUMPLEAÑOS (2026-11-19, Elia: «que en Alertas salga la tarjeta del cumpleañero y solo darle Compartir») ══════════

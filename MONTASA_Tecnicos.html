@@ -205,7 +205,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6f34d066f378';
+  var APP_VERSION='aee55077aa4a';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8396,6 +8396,126 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
       .observe(document.body, { childList: true, subtree: true });
   }
   if(document.body) arrancar(); else document.addEventListener('DOMContentLoaded', arrancar);
+})();
+</script>
+<script>
+// ══ PERSONAL NO DISPONIBLE (2026-11-19, Miguel: incapacidad o vacaciones → no se puede escoger hasta el día de regreso) ══════════
+// rrhh/ausencias/<clave> = { emp, rf, tipo:'inc'|'vac', desde, hasta, regresa }   (reglas v8: lo leen todos los aprobados)
+//  · inc_<id>: lo publica Nexo RRHH al registrar/editar/anular una incapacidad (sin diagnóstico).
+//  · vac_<id>: lo publican Nexo RRHH y Nexo Gerencia a partir de las acciones de vacaciones (rrhh/<raíz>/acciones).
+// En las listas (casillas, botones de técnicos y listas desplegables) la persona sale en gris con «🩺 Incapacidad · regresa 23/11» o
+// «🏖 Vacaciones · regresa 02/12». Si ya estaba marcada en una orden, se respeta (se puede quitar, no se bloquea).
+(function(){
+  var AUS = {}, PL = {}, nombres = {}, listo = false;
+  function hoy(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function dm(s){ var m = String(s || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? m[2] + '/' + m[1] : ''; }
+  function norm(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function db(){ return window._fbDB; }
+  function rol(){ try{ return typeof window._nxRol === 'function' ? window._nxRol() : ''; }catch(e){ return ''; } }
+  // ── nombre → ausencia vigente hoy ──
+  function recalcular(){
+    var h = hoy(), out = {};
+    Object.keys(AUS).forEach(function(k){ var a = AUS[k]; if(!a || !a.emp || !a.desde || !a.regresa || a.desde > h || a.regresa <= h) return;
+      var p = PL[a.emp]; if(!p) return;
+      [p.n, p.nc].forEach(function(n){ if(!n) return; var kk = norm(n), x = out[kk]; if(!x || a.regresa > x.regresa) out[kk] = { tipo: a.tipo, regresa: a.regresa, n: p.n }; }); });
+    nombres = out; marcar(); avisarOrdenes();
+  }
+  function nota(x){ return (x.tipo === 'inc' ? '🩺 Incapacidad' : '🏖 Vacaciones') + ' · regresa ' + dm(x.regresa); }
+  window._nxAusente = function(n){ return nombres[norm(n)] || null; };
+  // ── marcar las listas ──
+  var marcando = false;
+  function bloquear(el, x, txtEl){
+    el.classList.add('nx-ausente'); el.setAttribute('title', nota(x));
+    var s = el.querySelector(':scope > .nx-aus-nota'); if(!s){ s = document.createElement('span'); s.className = 'nx-aus-nota'; el.appendChild(s); }
+    if(s.textContent !== nota(x)) s.textContent = nota(x);
+  }
+  function soltar(el){ if(!el.classList.contains('nx-ausente')) return; el.classList.remove('nx-ausente'); el.removeAttribute('title'); var s = el.querySelector(':scope > .nx-aus-nota'); if(s) s.remove(); }
+  function marcar(){
+    if(marcando) return; marcando = true;
+    try{
+      var hay = Object.keys(nombres).length;
+      // casillas de técnicos / operadores / motoristas
+      [].forEach.call(document.querySelectorAll('label.tecnico-check'), function(lb){
+        var i = lb.querySelector('input'); if(!i) return;
+        var n = i.getAttribute('data-nombre') || i.value || lb.textContent, x = hay && nombres[norm(n)];
+        if(x && !i.checked){ if(!i.disabled){ i.disabled = true; i.setAttribute('data-nx-aus', '1'); } bloquear(lb, x); }
+        else if(lb.classList.contains('nx-ausente') || i.getAttribute('data-nx-aus')){ if(i.getAttribute('data-nx-aus')){ i.disabled = false; i.removeAttribute('data-nx-aus'); } soltar(lb); }
+      });
+      // botones (técnicos de una orden y otros botones con nombre)
+      [].forEach.call(document.querySelectorAll('.tec-btn, [data-nombre]:not(input), [data-n]:not(input)'), function(b){
+        if(b.closest('select')) return;
+        var n = b.getAttribute('data-n') || b.getAttribute('data-nombre') || b.textContent, x = hay && nombres[norm(n)];
+        var on = b.classList.contains('selected') || b.classList.contains('active') || b.classList.contains('on') || b.getAttribute('aria-pressed') === 'true';
+        if(x && !on) bloquear(b, x); else soltar(b);
+      });
+      // listas desplegables de personal (no los filtros para buscar)
+      [].forEach.call(document.querySelectorAll('select'), function(s){
+        if(/filtro|filter|busc|hist|mes|anio|year|orden-por/i.test((s.id || '') + ' ' + (s.className || ''))) return;
+        [].forEach.call(s.options, function(o){
+          var n = o.getAttribute('data-nx-n') || o.value || o.textContent; if(!n) return;
+          var x = hay && nombres[norm(n)];
+          if(x && !o.selected){ if(!o.getAttribute('data-nx-n')){ o.setAttribute('data-nx-n', n); if(!o.hasAttribute('value')) o.value = n; }
+            var t = n + ' — ' + nota(x); if(o.textContent !== t) o.textContent = t; o.disabled = true; }
+          else if(o.getAttribute('data-nx-n')){ var n0 = o.getAttribute('data-nx-n'); o.removeAttribute('data-nx-n'); o.textContent = n0; o.disabled = false; }
+        });
+      });
+    }catch(e){ console.warn('ausentes', e); }
+    marcando = false;
+  }
+  // ── aviso a Gerencia / Supervisión: órdenes abiertas de alguien que no está ──
+  function avisarOrdenes(){
+    var r = rol(); if(r !== 'gerencia' && r !== 'supervision') return;
+    var B; try{ B = typeof DB !== 'undefined' ? DB : null; }catch(e){ B = null; } if(!B) return;
+    var abiertas = {};
+    ['preventivos', 'correctivos', 'logistica', 'revisiones', 'evaluaciones', 'soldaduras'].forEach(function(col){
+      var L = B[col]; L = Array.isArray(L) ? L : (L ? Object.keys(L).map(function(k){ return L[k]; }) : []);
+      L.forEach(function(o){ if(!o || o.cerrado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || ''))) return;
+        String([o.tecnico, o.tecnicos, o.motorista, o.operador].filter(Boolean).join(',')).split(',').forEach(function(n){
+          var x = nombres[norm(n)]; if(!x) return; var k = norm(n); (abiertas[k] = abiertas[k] || { x: x, ords: [] }).ords.push(o.correlativo || o.id); }); }); });
+    var ks = Object.keys(abiertas), clave = 'nx_aus_aviso_' + hoy() + '_' + ks.map(function(k){ return k + abiertas[k].ords.length; }).join('|');
+    var viejo = document.getElementById('nx-aus-aviso'); if(viejo) viejo.remove();
+    if(!ks.length) return; try{ if(localStorage.getItem(clave)) return; }catch(e){}
+    var d = document.createElement('div'); d.id = 'nx-aus-aviso';
+    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:460px;z-index:9800;background:#fff8ec;border:2px solid #e8a23b;border-radius:12px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:13px;color:#1d2433';
+    d.innerHTML = '<div style="font-weight:800;color:#9a5b00;margin-bottom:4px">⚠️ Órdenes abiertas de personal no disponible</div>'
+      + ks.map(function(k){ var a = abiertas[k]; return '<div style="margin-top:4px"><b>' + a.x.n.replace(/</g, '&lt;') + '</b> (' + nota(a.x) + '): ' + a.ords.length + ' orden' + (a.ords.length === 1 ? '' : 'es') + ' — ' + a.ords.slice(0, 6).join(', ').replace(/</g, '&lt;') + '</div>'; }).join('')
+      + '<div style="margin-top:6px;color:#667085">Conviene reasignarlas.</div><button style="margin-top:8px;padding:7px 14px;border-radius:8px;border:none;background:#1f3864;color:#fff;font-weight:700">Entendido</button>';
+    d.querySelector('button').onclick = function(){ try{ localStorage.setItem(clave, '1'); }catch(e){} d.remove(); };
+    document.body.appendChild(d);
+  }
+  // ── Gerencia publica las vacaciones (lee rrhh/<raíz>/acciones y colaboradores) ──
+  var VAC = { montasa: {}, monhaco: {} }, sincT = null;
+  function regreso(h){ var d = new Date(h + 'T00:00:00'); d.setDate(d.getDate() + 1); if(d.getDay() === 0) d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function sincVacaciones(){
+    if(rol() !== 'gerencia' || !listo) return;
+    var quiero = {}, h = hoy();
+    Object.keys(VAC).forEach(function(rf){ var ac = VAC[rf].acciones, co = VAC[rf].colaboradores; if(!ac || !co) return;
+      Object.keys(ac).forEach(function(k){ var a = ac[k]; if(!a || a.anulada || !(a.descuentaVacaciones === true || a.descuentaVacaciones === 'true') || !a.desde || !a.hasta) return;
+        var c = co[a.colaboradorId], emp = c && c.empleadoId; if(!emp) return; var rg = regreso(a.hasta); if(rg <= h) return;
+        quiero['vac_' + a.id] = { emp: emp, rf: rf, tipo: 'vac', desde: a.desde, hasta: a.hasta, regresa: rg }; }); });
+    var up = {}, n = 0;
+    Object.keys(quiero).forEach(function(k){ var a = AUS[k] || {}, q = quiero[k]; if(['emp', 'rf', 'desde', 'hasta', 'regresa'].some(function(f){ return a[f] !== q[f]; })){ up[k] = q; n++; } });
+    Object.keys(AUS).forEach(function(k){ var a = AUS[k]; if(/^vac_/.test(k) && a && (a.rf === 'montasa' || a.rf === 'monhaco') && !quiero[k] && VAC[a.rf].acciones){ up[k] = null; n++; } });
+    if(n) db().ref('rrhh/ausencias').update(up).catch(function(e){ console.warn('ausencias vac', e && e.code); });
+  }
+  function escuchar(){
+    if(!db() || !db().ref){ setTimeout(escuchar, 1500); return; }
+    db().ref('rrhh/ausencias').on('value', function(s){ AUS = s.val() || {}; listo = true; recalcular(); clearTimeout(sincT); sincT = setTimeout(sincVacaciones, 3000); }, function(){ });
+    ['montasa', 'monhaco'].forEach(function(r){
+      db().ref(r + '/rrhh/plantilla').on('value', function(s){ var v = s.val() || {}; Object.keys(v).forEach(function(k){ if(v[k]) PL[k] = v[k]; }); recalcular(); }, function(){});
+    });
+    var vigilar = function(){ if(rol() !== 'gerencia') return;
+      ['montasa', 'monhaco'].forEach(function(rf){ ['acciones', 'colaboradores'].forEach(function(k){
+        db().ref('rrhh/' + rf + '/' + k).on('value', function(s){ VAC[rf][k] = s.val() || {}; clearTimeout(sincT); sincT = setTimeout(sincVacaciones, 3000); }, function(){}); }); }); };
+    if(rol()) vigilar(); else document.addEventListener('nx-acceso', function una(){ document.removeEventListener('nx-acceso', una); vigilar(); });
+  }
+  var est = document.createElement('style');
+  est.textContent = '.nx-ausente{opacity:.5;filter:grayscale(1);pointer-events:none;cursor:not-allowed}.nx-ausente .nx-aus-nota,.nx-aus-nota{display:block;font-size:10.5px;font-weight:700;color:#b42318;line-height:1.2;margin-top:2px;filter:none}';
+  document.head.appendChild(est);
+  var tm = null; new MutationObserver(function(){ if(marcando) return; clearTimeout(tm); tm = setTimeout(marcar, 120); }).observe(document.documentElement, { childList: true, subtree: true });
+  setInterval(recalcular, 10 * 60 * 1000);   // cambia de día / alguien regresa
+  setInterval(avisarOrdenes, 5 * 60 * 1000);
+  escuchar();
 })();
 </script>
 </body>
