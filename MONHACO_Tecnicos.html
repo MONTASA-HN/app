@@ -205,7 +205,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b3274b841e58';
+  var APP_VERSION='979a3082588b';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -738,9 +738,26 @@ var _Sync = (function(){
   }
 
   // ── Escritura de un registro que ya existe: solo los datos cambiados ────────
+  // (2026-11-19) Registro de cambios del CLIENTE de un equipo (el MT-131 volvía a CHOLOMA tras cada actualización y no se sabía
+  // qué teléfono lo subía). Solo anota: raíz/_regCliente/<id> = { ts, equipo, antes, despues, app, v, uid, quien, rol, tel }.
+  function _regCliente(col, id, cambios, quitar){
+    try{
+      if(col !== 'equipos' || !(('cliente' in cambios) || (quitar || []).indexOf('cliente') >= 0)) return;
+      var l = _lista(col), o = l && l.find(function(x){ return x && x.id === id; }) || {}, sv = (ultimoSrv[col] && ultimoSrv[col][id]) || {};
+      var a = window._nxAcceso || {}, r = a.registro || {};
+      var t = (typeof sucioTs !== 'undefined' && sucioTs[col + '/' + id + '/cliente']) || null;
+      db.ref(raiz + '/_regCliente/' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).set({
+        ts: Date.now(), equipo: String(o.codigo || sv.codigo || id), equipoId: id, antes: sv.cliente == null ? '' : String(sv.cliente),
+        despues: cambios.cliente == null ? '' : String(cambios.cliente), app: _APPK, v: String(window._nxVersion || window.APP_VERSION || ''),
+        uid: a.uid || '', quien: String(((r.nombre || '') + ' ' + (r.apellido || '')).trim()), rol: String(r.rol || ''),
+        marcadoDesde: t || null, nav: String((navigator && navigator.userAgent) || '').slice(0, 160)
+      }).catch(function(){});
+    }catch(e){}
+  }
   function _actualizar(col, id, cambios, quitar, intento){
     var k = claves[col][id];
     if(k === undefined) return _perdido(col, id);
+    if(!intento) _regCliente(col, id, cambios, quitar);
     var ref = db.ref(raiz + '/' + col + '/' + k), llaveS = col + '/' + id, marca = {};
     Object.keys(cambios).forEach(function(c){ marca[c] = _h(cambios[c]); });
     quitar.forEach(function(c){ marca[c] = VACIO; });
