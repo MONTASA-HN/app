@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f91621c3ad3b';
+  var APP_VERSION='59d770e5bbe3';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -528,6 +528,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // sin foto, una silueta. El mensaje se puede cambiar antes de compartir (no se guarda). Sale el día del cumpleaños y el día antes
   // (para tenerla lista); el lunes también salen los del sábado y domingo.
   var CUM = { img: {}, msg: {}, pos: {}, canvas: {}, fuentes: null };
+  var CUM_PRUEBA = { emp_muvbiq1wnunt: '2026-11-21' };   // empId → último día de la excepción
   var CUM_MSG = 'Hoy celebramos tu vida. Gracias por ser parte de la familia MONTASA. Te deseamos un año más lleno de salud, éxitos y alegrías. ¡Dios bendiga tu vida siempre!';
   function cumKey(x){ return x.raiz + '|' + x.e.id; }
   function titulo(n){ return String(n || '').toLowerCase().split(/\s+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
@@ -536,13 +537,15 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     return act.map(function(x){ var n = aF(x.e.fechaNacimiento); if(!n) return null;
       var c = new Date(hoyD.getFullYear(), n.getMonth(), n.getDate()), d = Math.round((c - hoyD) / 864e5);
       if(d > 300) d -= 365; if(d < -300) d += 365;
-      return (d === 0 || d === 1 || (lunes && (d === -1 || d === -2))) ? { x: x, d: d } : null; }).filter(Boolean).sort(function(a, b){ return a.d - b.d; });
+      // (2026-11-19, Miguel) prueba única: la tarjeta de Eliberto sale 2 días antes; se apaga sola después de su cumpleaños
+      var prueba = CUM_PRUEBA[x.e.id] && iso(hoyD) <= CUM_PRUEBA[x.e.id] && d >= 0 && d <= 2;
+      return (d === 0 || d === 1 || prueba || (lunes && (d === -1 || d === -2))) ? { x: x, d: d } : null; }).filter(Boolean).sort(function(a, b){ return a.d - b.d; });
   }
   function bloqueCumple(act){
     var L = cumplesVer(act); if(!L.length) return '';
     return '<div class="card" style="border:2px solid #e3c26f;background:#fffaf0"><div class="nm">🎂 Tarjetas de cumpleaños</div><div class="sub" style="margin-bottom:8px">Toca «📲 Compartir» y elige WhatsApp. En la computadora la imagen se descarga para adjuntarla.</div>'
       + '<div style="display:flex;gap:16px;flex-wrap:wrap">' + L.map(function(y){ var k = cumKey(y.x), sinFoto = !((D[y.x.raiz].fotos || {})[y.x.e.id] || {}).data;
-        return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : 'Sábado') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + '</div>'
+        return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : y.d === -2 ? 'Sábado' : 'En ' + y.d + ' días') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + '</div>'
           + '<canvas data-cumcv="' + esc(k) + '" style="width:250px;height:375px;border-radius:10px;box-shadow:0 4px 14px rgba(16,33,63,.25);background:#0d1b3d"></canvas>'
           + (sinFoto ? '<div class="sub" style="color:#b45309">Sin foto en su ficha: sale una silueta. <a href="#" data-a="abrir" data-r="' + y.x.raiz + '" data-id="' + esc(y.x.e.id) + '" style="color:#1f3864;font-weight:700">Subir foto</a></div>' : '<label class="sub" style="display:block;margin-top:4px">Ajustar foto ↕ <input type="range" min="0" max="100" value="' + (CUM.pos[k] == null ? 20 : CUM.pos[k]) + '" data-cumpos="' + esc(k) + '" style="width:100%"></label>')
           + '<textarea data-cumta="' + esc(k) + '" style="display:none;width:100%;box-sizing:border-box;margin-top:6px;min-height:90px;padding:7px;border:1px solid #c9d1dc;border-radius:8px;font:inherit;font-size:12.5px">' + esc(CUM.msg[k] || CUM_MSG) + '</textarea>'
