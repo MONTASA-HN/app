@@ -2,6 +2,19 @@
 <html lang="es">
 <head>
 <script>
+// (2026-11-19) Orden de las listas de órdenes: misma serie (MH-, APMH-, LGMT-…) por número; series distintas por fecha (más nueva arriba).
+window._nxCmpOrden = function(a, b){
+  var ca = String((a && a.correlativo) || ''), cb = String((b && b.correlativo) || '');
+  var na = parseInt(ca.replace(/[^0-9]/g, ''), 10) || 0, nb = parseInt(cb.replace(/[^0-9]/g, ''), 10) || 0;
+  var sa = ca.replace(/[^A-Za-z]/g, '').toUpperCase(), sb = cb.replace(/[^A-Za-z]/g, '').toUpperCase();
+  if(sa === sb || !sa || !sb) return nb - na;
+  var f = function(o){ var s = String((o && (o.fecha || o.fechaInicio)) || ''), m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : s.slice(0, 10); };
+  var fa = f(a), fb = f(b); if(fa && fb && fa !== fb) return fa < fb ? 1 : -1;
+  return nb - na;
+};
+</script>
+
+<script>
 // (2026-11-18, pedido de Miguel) Saludo con el primer nombre de quien usa este teléfono (accesos/<uid>.nombre). Si aún no se sabe, solo el saludo.
 window._nxPrimerNombre = function(){ var r = (window._nxAcceso || {}).registro || {}; return String(r.nombre || '').trim().split(/\s+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join(' '); };
 window._nxConNombre = function(s){ var n = window._nxPrimerNombre(); return n ? s + ', ' + n : s; };
@@ -272,7 +285,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6bbdac6ba59d';
+  var APP_VERSION='61f886cd5ec9';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2838,9 +2851,7 @@ function renderOrdenesLog(){
     .filter(o=>o && !o.cerrado && o.estado!=='Completado')
     .filter(o=>!_logCarpeta || _logTipo(o)===_logCarpeta)   // (2026-10-16) carpeta abierta
     .sort((a,b)=>{
-      const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-      const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
-      return nb-na;
+      return window._nxCmpOrden(a, b);   // (2026-11-19) serie + fecha
     });
 
   if(buscar) list=list.filter(o=>
@@ -3834,9 +3845,7 @@ function renderHistorialLog(){
     .filter(o=>o && (o.cerrado||o.estado==='Completado'||o.estado==='Cancelado'))
     .filter(o=>!_logCarpeta || _logTipo(o)===_logCarpeta)   // (2026-10-16) carpeta abierta
     .sort((a,b)=>{
-      const na=parseInt((a.correlativo||'').replace(/[^0-9]/g,''))||0;
-      const nb=parseInt((b.correlativo||'').replace(/[^0-9]/g,''))||0;
-      return nb-na;
+      return window._nxCmpOrden(a, b);   // (2026-11-19) serie + fecha
     });
 
   if(buscar) list=list.filter(o=>
