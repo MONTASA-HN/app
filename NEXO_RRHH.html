@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='766eda598268';
+  var APP_VERSION='06535e7eeb30';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -837,14 +837,23 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   function excel(){
     var cargar = window.XLSX ? Promise.resolve() : new Promise(function(ok, mal){ var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = ok; s.onerror = function(){ mal(new Error('sin conexión')); }; document.head.appendChild(s); });
     cargar.then(function(){
-      var filas = filtrados().map(function(x){ var e = x.e, ce = e.contactoEmergencia || {}, ct = e.contrato || {}, ex = expediente(x.raiz, e.id), ing = ingresoDe(x.raiz, e);
+      // (2026-11-19, Elia) toda la base de las empresas escogidas arriba (no solo lo filtrado en pantalla); bajas e historial salarial en otras hojas
+      var base = todos().filter(function(x){ return raices().indexOf(x.rh) >= 0; }).sort(function(a, b){ return String(a.rh).localeCompare(b.rh) || String(a.e.nombreCompleto).localeCompare(b.e.nombreCompleto, 'es'); });
+      var fila = function(x){ var e = x.e, ce = e.contactoEmergencia || {}, ct = e.contrato || {}, ex = expediente(x.raiz, e.id), ing = ingresoDe(x.raiz, e);
         return { 'Empresa': nomEmp(x.rh), 'Empresa operativa': nomEmp(x.raiz), 'Código': e.codigo || '', 'Nombre completo': e.nombreCompleto || '', 'Identidad': e.identidad || '', 'Puesto': e.cargo || '', 'Departamento': e.departamento || '',
           'Fecha de ingreso': ing ? fmt(ing) : '', 'Antigüedad': ing ? antig(ing) : '', 'Fecha de nacimiento': e.fechaNacimiento ? fmt(e.fechaNacimiento) : '', 'Estado civil': e.estadoCivil || '', 'Hijos': e.hijos === 'si' ? 'Sí' : e.hijos === 'no' ? 'No' : '',
           'Teléfono': e.telefono || '', 'Correo': e.correo || '', 'Dirección': e.direccion || '', 'Nivel educativo': e.nivelEducativo || '', 'Título': e.titulo || '', 'Horario': e.horario || '',
           'Tipo de contrato': ct.tipo || '', 'Contrato vence': ct.vence ? fmt(ct.vence) : '', 'Salario mensual': salarioDe(x.raiz, e.id) != null ? salarioDe(x.raiz, e.id) : '', 'Forma de pago': e.formaPago || '', 'Banco': e.banco || '', 'Tipo de cuenta': e.tipoCuenta || '', 'Cuenta': e.cuentaBancaria || '',
-          'Contacto de emergencia': ce.nombre || '', 'Parentesco': ce.parentesco || '', 'Tel. emergencia': ce.telefono || '', 'Expediente': ex.ok + '/' + ex.total, 'Estado': e.activo === false ? 'Baja ' + fmt(e.fechaBaja) : 'Activo' }; });
+          'Contacto de emergencia': ce.nombre || '', 'Parentesco': ce.parentesco || '', 'Tel. emergencia': ce.telefono || '', 'Expediente': ex.ok + '/' + ex.total, 'Estado': e.activo === false ? 'Baja ' + fmt(e.fechaBaja) : 'Activo',
+          'Nombre en órdenes': e.nombreOrdenes || '', 'Trato': e.trato || '', 'Cuenta de origen (pago)': e.cuentaOrigen || '', 'Trasladado de': e.trasladadoDe ? nomEmp(e.trasladadoDe) : '', 'Fecha de traslado': e.fechaTraslado ? fmt(e.fechaTraslado) : '', 'Motivo de baja': e.motivoBaja || '' }; };
+      var filas = base.filter(function(x){ return x.e.activo !== false; }).map(fila), bajasF = base.filter(function(x){ return x.e.activo === false; }).map(fila);
+      var hist = []; base.forEach(function(x){ lista((privDe(x.raiz, x.e.id) || {}).historial).sort(function(a, b){ return String(a.vigencia).localeCompare(b.vigencia); }).forEach(function(h){
+        hist.push({ 'Empresa': nomEmp(x.rh), 'Nombre completo': x.e.nombreCompleto || '', 'Vigencia': h.vigencia ? fmt(h.vigencia) : '', 'Salario anterior': h.anterior != null ? h.anterior : '', 'Salario nuevo': h.nuevo != null ? h.nuevo : '', 'Nota': h.nota || '', 'Estado': h.anulada ? 'Anulado' + (h.motivoAnula ? ': ' + h.motivoAnula : '') : 'Vigente' }); }); });
       var wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(filas); ws['!cols'] = Object.keys(filas[0] || {}).map(function(k){ return { wch: Math.max(10, Math.min(40, k.length + 4)) }; });
-      XLSX.utils.book_append_sheet(wb, ws, 'Personal'); XLSX.writeFile(wb, 'Personal_' + (ui.emp === 'todas' ? 'Todas' : nomEmp(ui.emp).replace(/\s+/g, '_')) + '_' + hoy() + '.xlsx');
+      XLSX.utils.book_append_sheet(wb, ws, 'Personal');
+      var hoja = function(L, n){ if(!L.length) return; var w2 = XLSX.utils.json_to_sheet(L); w2['!cols'] = Object.keys(L[0]).map(function(k){ return { wch: Math.max(10, Math.min(40, k.length + 4)) }; }); XLSX.utils.book_append_sheet(wb, w2, n); };
+      hoja(bajasF, 'Bajas'); hoja(hist, 'Historial salarial');
+      XLSX.writeFile(wb, 'Base_empleados_' + (ui.emp === 'todas' ? 'Todas' : nomEmp(ui.emp).replace(/\s+/g, '_')) + '_' + hoy() + '.xlsx');
     }).catch(function(er){ aviso('No se pudo exportar: ' + er.message, true); });
   }
 
@@ -2014,7 +2023,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(raices().every(function(r){ return (D[r]._sinAcceso || {}).colaboradores; })){ c.innerHTML = '<div class="card" style="text-align:center">🔒 Sin permiso para ver vacaciones.</div>'; return; }
     if(!VAC._cerrado){ VAC._cerrado = true; setTimeout(vCerrarVencidos, 1500); }
     var tabs = '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"><button class="bt' + (VAC.vista === 'col' ? ' bp' : '') + '" data-a="vac-v" data-x="col">🏖 Vacaciones</button><button class="bt' + (VAC.vista === 'acc' ? ' bp' : '') + '" data-a="vac-v" data-x="acc">📄 Acciones de personal</button>'
-      + '<div style="flex:1"></div>' + (VAC.vista === 'col' ? '<button class="bt bp" data-a="vac-nuevo">➕ Nuevo colaborador</button>' : '') + '</div>';
+      + '<div style="flex:1"></div><button class="bt" data-a="vac-excel">⬇ Excel</button>' + (VAC.vista === 'col' ? '<button class="bt bp" data-a="vac-nuevo">➕ Nuevo colaborador</button>' : '') + '</div>';
     if(VAC.hist) return vPintarHist(c, tabs);
     if(VAC.vista === 'acc') return vPintarAcciones(c, tabs);
     var q = norm(VAC.q), L = vColabs().filter(function(x){ return raices().indexOf(x.rh) >= 0; });
@@ -2029,6 +2038,31 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(sinVac.length && !q) h += '<details class="card"><summary style="cursor:pointer;font-weight:700;color:#b45309">⚠️ Empleados sin registro de vacaciones (' + sinVac.length + ')</summary>' + sinVac.map(function(x){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #f0f2f5;padding:6px 0"><span>' + esc(x.e.nombreCompleto) + ' <span class="sub">' + nomEmp(x.rh) + ' · ingreso ' + fmt(ingresoDe(x.raiz, x.e)) + '</span></span><button class="bt" data-a="vac-nuevo" data-r="' + x.raiz + '" data-e="' + esc(x.e.id) + '">➕ Registrar</button></div>'; }).join('') + '</details>';
     if(bajas.length) h += '<details class="card" style="background:#f8f9fb"><summary style="cursor:pointer;font-weight:700;color:#475467">🚫 Dados de baja (' + bajas.length + ')</summary>' + bajas.map(function(x){ return '<div class="sub" style="padding:6px 0;border-top:1px solid #e4e7ec">' + esc(vNombre(x.c)) + ' · ' + esc(x.c.posicion || '') + (x.c.fechaBaja ? ' · baja ' + fmt(x.c.fechaBaja) : '') + (x.c.motivoBaja ? ' · ' + esc(x.c.motivoBaja) : '') + '</div>'; }).join('') + '</details>';
     c.innerHTML = h;
+  }
+
+  // (2026-11-19, Elia) Excel de vacaciones: saldo de cada colaborador, acciones de personal y períodos cerrados (empresas escogidas arriba)
+  function vExcel(){
+    cargarXLSX().then(function(){
+      var L = vColabs().filter(function(x){ return raices().indexOf(x.rh) >= 0; }).sort(function(a, b){ return String(a.rh).localeCompare(b.rh) || vNombre(a.c).localeCompare(vNombre(b.c), 'es'); });
+      var hasta = function(c){ var fi = aF(c.fechaIngreso), co = aF(c.corte); if(!fi || !co) return ''; var sig = vAniv(fi, co.getFullYear() + 1); if(sig <= co) sig = vAniv(fi, co.getFullYear() + 2); return fmt(iso(new Date(sig.getFullYear(), sig.getMonth(), sig.getDate() - 1))); };
+      var saldo = L.map(function(x){ var c = x.c, p = vProp(x.rf, c), ini = vNum(c.gozadosIniciales), g = vGozados(x.rf, c), sd = vSaldo(x.rf, c);
+        return { 'Empresa': nomEmp(x.rh), 'Colaborador': vNombre(c), 'Puesto': c.posicion || '', 'Departamento': c.departamento || '', 'Fecha de ingreso': c.fechaIngreso ? fmt(c.fechaIngreso) : '', 'Antigüedad': vAntig(c.fechaIngreso),
+          'Período desde': c.corte ? fmt(c.corte) : '', 'Período hasta': hasta(c), 'Días que corresponden': vNum(c.diasCorresponden), 'Días extra': vNum(c.diasExtra), 'Años anteriores': vNum(c.pendientesAnteriores),
+          'Gozados antes de Nexo': ini, 'Gozados en Nexo (acciones)': Math.round((g - ini) * 100) / 100, 'Total gozados': g, 'Proporcional ganado hoy': p ? p.ganados : '', 'Pendientes': sd,
+          'Estado': c.activo === false ? 'Baja' + (c.fechaBaja ? ' ' + fmt(c.fechaBaja) : '') : 'Activo', 'Observaciones': c.observaciones || '' }; });
+      var acc = []; EMPRESAS.filter(function(E){ return raices().indexOf(E.raiz) >= 0 || L.some(function(x){ return x.rf === E.raiz; }); }).forEach(function(E){ vAcc(E.raiz).forEach(function(a){
+        var c = ((D[E.raiz] || {}).colaboradores || {})[a.colaboradorId]; if(c && !L.some(function(x){ return x.c === c; })) return;
+        acc.push({ 'Correlativo': a.correlativo || '', 'Empresa': nomEmp(E.raiz), 'Colaborador': a.nombre || (c ? vNombre(c) : ''), 'Departamento': a.departamento || '', 'Motivo': a.motivo || '', 'Desde': a.desde ? fmt(a.desde) : '', 'Hasta': a.hasta ? fmt(a.hasta) : '',
+          'Días': vNum(a.dias), 'Descuenta vacaciones': (a.descuentaVacaciones === true || a.descuentaVacaciones === 'true') ? 'Sí' : 'No', 'Goce de sueldo': a.goce === 'con' ? 'Con goce' : a.goce === 'sin' ? 'Sin goce' : (a.goce || ''), 'Período': a.periodo ? fmt(a.periodo) : '',
+          'Fecha de solicitud': a.fechaSolicitud ? fmt(a.fechaSolicitud) : '', 'Horario': a.horario || '', 'Estado': a.anulada ? 'Anulada' + (a.anulada.motivo ? ': ' + a.anulada.motivo : '') : 'Vigente', 'Texto': a.texto || '' }); }); });
+      acc.sort(function(a, b){ return String(b['Correlativo']).localeCompare(a['Correlativo'], 'es', { numeric: true }); });
+      var per = []; L.forEach(function(x){ var ps = x.c.periodos || {}; Object.keys(ps).sort().forEach(function(k){ var p = ps[k];
+        per.push({ 'Empresa': nomEmp(x.rh), 'Colaborador': vNombre(x.c), 'Desde': fmt(p.desde), 'Hasta': fmt(p.hasta), 'Corresponden': vNum(p.corresponden), 'Extra': vNum(p.extra), 'Años anteriores': vNum(p.anteriores), 'Gozados': vNum(p.gozados), 'Pasaron al siguiente período': vNum(p.pasan), 'Cerrado el': p.cerrado ? fmt(p.cerrado) : '' }); }); });
+      var wb = XLSX.utils.book_new(), hoja = function(F2, n){ if(!F2.length) F2 = [{ 'Sin datos': '' }]; var w = XLSX.utils.json_to_sheet(F2); w['!cols'] = Object.keys(F2[0]).map(function(k){ return { wch: Math.max(10, Math.min(45, k.length + 4)) }; }); XLSX.utils.book_append_sheet(wb, w, n); };
+      hoja(saldo, 'Vacaciones'); hoja(acc, 'Acciones de personal'); hoja(per, 'Períodos cerrados');
+      XLSX.writeFile(wb, 'Vacaciones_' + (ui.emp === 'todas' ? 'Todas' : nomEmp(ui.emp).replace(/\s+/g, '_')) + '_' + hoy() + '.xlsx');
+      aviso('⬇ Excel de vacaciones descargado (' + saldo.length + ' colaboradores, ' + acc.length + ' acciones)');
+    }).catch(function(er){ aviso('No se pudo exportar: ' + er.message, true); });
   }
   function vTarjeta(x){
     var c = x.c, s = vSaldo(x.rf, c), g = vGozados(x.rf, c), p = vProp(x.rf, c), k = 'data-r="' + x.rf + '" data-id="' + esc(c.id) + '"';
@@ -2173,6 +2207,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var rf = t.getAttribute('data-r'), id = t.getAttribute('data-id');
     if(a === 'vac-v'){ VAC.vista = t.getAttribute('data-x'); VAC.hist = null; pintar(); return; }
     if(a === 'vac-volver'){ VAC.hist = null; pintar(); return; }
+    if(a === 'vac-excel') return vExcel();
     if(a === 'vac-nuevo') return vFormColab(t.getAttribute('data-r') || null, null, t.getAttribute('data-e') || null);
     var c = rf && ((D[rf] || {}).colaboradores || {})[id], ac = rf && ((D[rf] || {}).acciones || {})[id];
     if(a === 'vac-editar' && c) return vFormColab(rf, c);
