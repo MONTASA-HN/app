@@ -241,7 +241,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a8549bbd7d90';
+  var APP_VERSION='5a167dcb73ab';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -13671,11 +13671,36 @@ async function _mantCompartirAviso(equipoId){
       ['nombre', 'marca', 'modelo', 'serie'].forEach(function(f){ var el = document.getElementById('sol-cliente-' + f + s); if(el) el.value = ''; }); });
     var sels = ['sol-equipo-cliente-sel', 'sol-equipo-cliente-sel-B'].map(function(i){ return document.getElementById(i); }).filter(Boolean);
     sels.forEach(function(sel){ sel.innerHTML = '<option value="">⏳ Cargando flota de MONHACO…</option>'; });
-    cargarFlota().then(function(L){ sels.forEach(function(sel){
-      sel.innerHTML = '<option value="">-- Seleccionar equipo de MONHACO --</option>' + L.map(function(e){ return '<option value="mh:' + e.id + '">' + String(e.codigo || '').replace(/</g, '') + ' – ' + String(e.marca || e.desc || '').replace(/</g, '') + (e.cliente ? ' (' + String(e.cliente).replace(/</g, '') + ')' : '') + '</option>'; }).join(''); }); })
+    cargarFlota().then(function(){ pintarMH(); })
       .catch(function(er){ sels.forEach(function(sel){ sel.innerHTML = '<option value="">No se pudo cargar la flota de MONHACO</option>'; }); try{ toast('No se pudo cargar la flota de MONHACO: ' + er.message, true); }catch(e){} });
   }
+  // (2026-11-19, Miguel: «no me aparecen los equipos que tiene rentado Saint John») con un cliente escogido, solo sus equipos de MH
+  function clienteForm(){
+    var ins = [].slice.call(document.querySelectorAll('.sol-cli-input')), inp = ins.find(function(i){ return i.offsetParent; }) || ins[0];
+    var e = inp && typeof _solCliExacto === 'function' ? _solCliExacto(inp.value) : '';
+    if(!e || (typeof _SOL_CLI_NUEVO !== 'undefined' && e === _SOL_CLI_NUEVO)) return '';
+    return e;
+  }
+  function nrm(t){ return typeof _solCliNorm === 'function' ? _solCliNorm(t) : String(t || '').toUpperCase().trim(); }
+  function pintarMH(){
+    if(!FLOTA) return;
+    var cli = clienteForm(), L = FLOTA, avisoTxt = '';
+    if(cli){ var M = FLOTA.filter(function(e){ return nrm(e.cliente) === nrm(cli); });
+      if(M.length) L = M; else avisoTxt = 'Este cliente no tiene equipos de MONHACO a su nombre: se muestra toda la flota de MH.'; }
+    ['sol-equipo-cliente-sel', 'sol-equipo-cliente-sel-B'].forEach(function(id){ var sel = document.getElementById(id); if(!sel) return;
+      var cur = sel.value, ext = cur && !/^mh:/.test(cur) ? sel.querySelector('option[value="' + cur + '"]') : null, extH = ext ? ext.outerHTML : '';
+      sel.innerHTML = '<option value="">-- Seleccionar equipo de MONHACO' + (cli && !avisoTxt ? ' (' + L.length + ' de ' + String(cli).replace(/</g, '') + ')' : '') + ' --</option>' + extH
+        + L.map(function(e){ return '<option value="mh:' + e.id + '">' + String(e.codigo || '').replace(/</g, '') + ' – ' + String(e.marca || e.desc || '').replace(/</g, '') + (e.cliente ? ' (' + String(e.cliente).replace(/</g, '') + ')' : '') + (e.estado ? ' · ' + String(e.estado).replace(/</g, '') : '') + '</option>'; }).join('');
+      if(cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+      sel._nxFiltrada = null; sel._nxCompleta = null;
+      var av = document.getElementById(id + '-nx-aviso'); if(av) av.remove();
+      if(avisoTxt){ av = document.createElement('div'); av.id = id + '-nx-aviso'; av.style.cssText = 'font-size:12px;font-weight:700;color:#b45309;margin-top:5px'; av.textContent = avisoTxt; sel.parentNode.insertBefore(av, sel.nextSibling); }
+    });
+  }
   function envolver(){
+    // el filtro por cliente de Solicitudes busca solo equipos de MT: en modo MONHACO se usa el de aquí
+    if(typeof window._solFiltrarEquipos === 'function' && !window._solFiltrarEquipos._mh){ var o0 = window._solFiltrarEquipos;
+      window._solFiltrarEquipos = function(){ if(window._solModoMH){ pintarMH(); return; } return o0.apply(this, arguments); }; window._solFiltrarEquipos._mh = 1; }
     if(typeof solOrigenChange === 'function' && !solOrigenChange._mh){ var o1 = solOrigenChange;
       solOrigenChange = function(origen){ window._solModoMH = false; window._solMH = null; ['', '-B'].forEach(function(s){ var m = document.getElementById('sol-btn-mh' + s); if(m) m.style.cssText = INA; }); return o1.apply(this, arguments); }; solOrigenChange._mh = 1; }
     if(typeof solEquipoClienteChange === 'function' && !solEquipoClienteChange._mh){ var o2 = solEquipoClienteChange;
