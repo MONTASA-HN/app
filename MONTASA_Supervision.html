@@ -241,7 +241,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b044de877383';
+  var APP_VERSION='a8549bbd7d90';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -13593,7 +13593,7 @@ async function _mantCompartirAviso(equipoId){
   }
   // ── aviso a Gerencia / Supervisión: órdenes abiertas de alguien que no está ──
   function avisarOrdenes(){
-    var r = rol(); if(r !== 'gerencia' && r !== 'supervision') return;
+    var r = rol(); if(r !== 'gerencia' && r !== 'supervision'){ var v0 = document.getElementById('nx-aus-aviso'); if(v0) v0.remove(); return; }
     var B; try{ B = typeof DB !== 'undefined' ? DB : null; }catch(e){ B = null; } if(!B) return;
     var abiertas = {};
     ['preventivos', 'correctivos', 'logistica', 'revisiones', 'evaluaciones', 'soldaduras'].forEach(function(col){
@@ -13645,6 +13645,88 @@ async function _mantCompartirAviso(equipoId){
   setInterval(recalcular, 10 * 60 * 1000);   // cambia de día / alguien regresa
   setInterval(avisarOrdenes, 5 * 60 * 1000);
   escuchar();
+})();
+</script>
+<script>
+// ══ ÓRDENES DE MT PARA EQUIPOS DE MONHACO (2026-11-19, Miguel) ══════════════════════════════════════════════════════════
+// En Solicitudes, junto a «🏭 Montasa» y «👤 Cliente», el botón «🏢 Equipo MONHACO» lista la flota de MH (monhaco/equipos).
+// Al escoger uno se llenan los datos de cliente (cliente final «X (cliente de MONHACO)», marca, modelo, serie) y la orden se
+// crea como siempre con un «equipo de cliente» de MT que queda ligado: equipoMH = { id, codigo, raiz:'monhaco' }.
+// · Gerencia MH ve estas órdenes en la ficha del equipo («🔧 Trabajos hechos por MT»).
+// · Numeración aparte: APMH-#### (no toca la serie MH-#### de MT). Los técnicos la ven en su app como cualquier orden de MT.
+// · Horómetro: el mayor horómetro de las órdenes CERRADAS de MT actualiza el del equipo en MH (si es mayor). Estado: no se toca.
+(function(){
+  var FLOTA = null, cargando = null;
+  function cargarFlota(){ if(FLOTA) return Promise.resolve(FLOTA); if(cargando) return cargando;
+    cargando = window._fbDB.ref('monhaco/equipos').once('value').then(function(s){ var v = s.val() || {}; FLOTA = Object.keys(v).map(function(k){ return v[k] ? Object.assign({ _k: k }, v[k]) : null; }).filter(function(e){ return e && e.id && !e.esEquipoCliente && !e.esGenerico; }).sort(function(a, b){ return String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }); }); cargando = null; return FLOTA; }); return cargando; }
+  var ACT = 'padding:9px;border:2px solid #1f3864;border-radius:8px;background:#1f3864;color:white;font-weight:700;cursor:pointer;font-size:13px';
+  var INA = 'padding:9px;border:2px solid #ccc;border-radius:8px;background:white;color:#666;font-weight:700;cursor:pointer;font-size:13px';
+  function botones(){ ['', '-B'].forEach(function(s){ var c = document.getElementById('sol-btn-cliente' + s); if(!c || document.getElementById('sol-btn-mh' + s)) return;
+    var b = document.createElement('button'); b.id = 'sol-btn-mh' + s; b.type = 'button'; b.style.cssText = INA; b.textContent = '🏢 Equipo MONHACO';
+    b.onclick = function(){ origenMH(); }; c.parentNode.insertBefore(b, c.nextSibling); }); }
+  function origenMH(){
+    if(typeof solOrigenChange === 'function') solOrigenChange('cliente');
+    window._solModoMH = true; window._solMH = null;
+    ['', '-B'].forEach(function(s){ var c = document.getElementById('sol-btn-cliente' + s), m = document.getElementById('sol-btn-mh' + s); if(c) c.style.cssText = INA; if(m) m.style.cssText = ACT;
+      ['nombre', 'marca', 'modelo', 'serie'].forEach(function(f){ var el = document.getElementById('sol-cliente-' + f + s); if(el) el.value = ''; }); });
+    var sels = ['sol-equipo-cliente-sel', 'sol-equipo-cliente-sel-B'].map(function(i){ return document.getElementById(i); }).filter(Boolean);
+    sels.forEach(function(sel){ sel.innerHTML = '<option value="">⏳ Cargando flota de MONHACO…</option>'; });
+    cargarFlota().then(function(L){ sels.forEach(function(sel){
+      sel.innerHTML = '<option value="">-- Seleccionar equipo de MONHACO --</option>' + L.map(function(e){ return '<option value="mh:' + e.id + '">' + String(e.codigo || '').replace(/</g, '') + ' – ' + String(e.marca || e.desc || '').replace(/</g, '') + (e.cliente ? ' (' + String(e.cliente).replace(/</g, '') + ')' : '') + '</option>'; }).join(''); }); })
+      .catch(function(er){ sels.forEach(function(sel){ sel.innerHTML = '<option value="">No se pudo cargar la flota de MONHACO</option>'; }); try{ toast('No se pudo cargar la flota de MONHACO: ' + er.message, true); }catch(e){} });
+  }
+  function envolver(){
+    if(typeof solOrigenChange === 'function' && !solOrigenChange._mh){ var o1 = solOrigenChange;
+      solOrigenChange = function(origen){ window._solModoMH = false; window._solMH = null; ['', '-B'].forEach(function(s){ var m = document.getElementById('sol-btn-mh' + s); if(m) m.style.cssText = INA; }); return o1.apply(this, arguments); }; solOrigenChange._mh = 1; }
+    if(typeof solEquipoClienteChange === 'function' && !solEquipoClienteChange._mh){ var o2 = solEquipoClienteChange;
+      solEquipoClienteChange = function(){
+        var sel = document.getElementById('sol-equipo-cliente-sel'), s = '', selB = document.getElementById('sol-equipo-cliente-sel-B');
+        if(selB && selB.offsetParent !== null && (!sel || sel.offsetParent === null)){ sel = selB; s = '-B'; }
+        var v = sel && sel.value;
+        if(window._solModoMH && v && /^mh:/.test(v)){ var e = (FLOTA || []).find(function(x){ return x.id === v.slice(3); }); if(!e) return;
+          // la serie lleva « (MH)»: muchos equipos de MH los vendió MT y su serie está en «vendidos» (la protección no deja repetirla)
+          window._solMH = { id: e.id, codigo: e.codigo || '', serie: String(e.serie || e.codigo || e.id).trim() + ' (MH)' };
+          var nom = e.cliente && !/MONHACO|PLANTEL/i.test(e.cliente) ? e.cliente : 'MONHACO';
+          var pid = _guardarEquipoCliente(nom, e.marca || 'MONHACO', e.desc || e.modelo || e.marca || e.codigo || 'Equipo', window._solMH.serie);
+          if(!pid){ try{ toast('No se pudo preparar el equipo de MONHACO', true); }catch(er){} return; }
+          var px = (DB.equipos || []).find(function(x){ return x && x.id === pid; }) || {};
+          if(!sel.querySelector('option[value="' + pid + '"]')){ var op = document.createElement('option'); op.value = pid; op.textContent = (px.codigo || e.codigo) + ' — ' + nom; sel.appendChild(op); }
+          sel.value = pid;   // desde aquí sigue igual que cualquier equipo de cliente
+        } else {   // un equipo ya ligado a MH (escogido de la lista de clientes) también va con la serie APMH
+          var ya = v && (DB.equipos || []).find(function(x){ return x && x.id === v; });
+          window._solMH = ya && ya.equipoMH ? { id: ya.equipoMH.id, codigo: ya.equipoMH.codigo, serie: ya.serie } : null;
+          if(window._solMH) window._solModoMH = true;
+        }
+        return o2.apply(this, arguments); }; solEquipoClienteChange._mh = 1; }
+    if(typeof _guardarEquipoCliente === 'function' && !_guardarEquipoCliente._mh){ var o3 = _guardarEquipoCliente;
+      _guardarEquipoCliente = function(nombre, marca, modelo, serie){
+        var id = o3.apply(this, arguments), mh = window._solMH;
+        if(id && mh && String(serie || '').trim() === mh.serie){
+          var e = (DB.equipos || []).find(function(x){ return x && x.id === id; });
+          if(e && (!e.equipoMH || e.equipoMH.id !== mh.id)){ e.equipoMH = { id: mh.id, codigo: mh.codigo, raiz: 'monhaco' }; e.codigo = mh.codigo + ' (MH)'; e.tipo = 'Equipos de MONHACO'; e.observaciones = 'Equipo de la flota de MONHACO atendido por MT'; try{ saveAllEquipos(); }catch(er){} }
+        }
+        return id; }; _guardarEquipoCliente._mh = 1; }
+    // serie aparte APMH-#### («Apoyo a MONHACO», Miguel 2026-11-19): no usa la numeración MH-#### de MT
+    if(typeof nextCorrelativo === 'function' && !nextCorrelativo._mh){ var o4 = nextCorrelativo;
+      nextCorrelativo = function(p){ if(window._solModoMH && window._solMH && (p === undefined || p === 'MH')){ setTimeout(function(){ window._solModoMH = false; window._solMH = null; }, 8000); return o4.call(this, 'APMH'); } return o4.apply(this, arguments); }; nextCorrelativo._mh = 1; }
+  }
+  // horómetro: el de las órdenes cerradas de MT pasa al equipo de MH si es mayor
+  var horoCorriendo = false;
+  function horometros(){
+    if(horoCorriendo || !window._fbDB || !window._fbReady) return; var r = typeof window._nxRol === 'function' ? window._nxRol() : ''; if(r && r !== 'gerencia' && r !== 'supervision') return;
+    var px = (DB.equipos || []).filter(function(e){ return e && e.equipoMH && e.equipoMH.id; }); if(!px.length) return;
+    var max = {}; ['correctivos', 'preventivos'].forEach(function(c){ (DB[c] || []).forEach(function(o){ if(!o || !(o.estado === 'Completado' || o.cerrado || o.completado)) return;
+      var p = px.find(function(e){ return e.id === o.equipoId; }); var h = parseFloat(String(o.horometro || '').replace(',', '.')); if(!p || !(h > 0)) return;
+      if(!(max[p.equipoMH.id] >= h)) max[p.equipoMH.id] = h; }); });
+    if(!Object.keys(max).length) return; horoCorriendo = true;
+    window._fbDB.ref('monhaco/equipos').once('value').then(function(s){ var v = s.val() || {}, up = {};
+      Object.keys(v).forEach(function(k){ var e = v[k]; if(!e || !max[e.id]) return; var a = parseFloat(String(e.horometro || '').replace(',', '.')) || 0; if(max[e.id] > a) up[k + '/horometro'] = String(max[e.id]); });
+      return Object.keys(up).length ? window._fbDB.ref('monhaco/equipos').update(up) : null; }).catch(function(e){ console.warn('horómetro MH', e); }).then(function(){ horoCorriendo = false; });
+  }
+  function iniciar(){ try{ envolver(); botones(); }catch(e){ console.warn('equipo MH', e); } }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+  setInterval(function(){ try{ envolver(); botones(); }catch(e){} }, 3000);
+  setTimeout(horometros, 30000); setInterval(horometros, 5 * 60 * 1000);
 })();
 </script>
 </body>

@@ -241,7 +241,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='dde733d0bee2';
+  var APP_VERSION='35a026ad4c4f';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -3822,7 +3822,8 @@ function abrirModal(id){
   }
   modalEquipoId = id;
   _insertarBtnCompartirEq();
-  try{ _eqHistOtraEmpresa(e); }catch(_e){}   // (2026-11-10) historial en la otra empresa (equipos trasladados)
+  try{ _eqHistOtraEmpresa(e); }catch(_e){}
+  try{ _eqHistMT(e); }catch(_e){}   // (2026-11-19) trabajos hechos por MT   // (2026-11-10) historial en la otra empresa (equipos trasladados)
 
   // Para equipos de cliente: mostrar datos del cliente, ocultar estados no aplicables
   const detEstado = document.getElementById('det-estado');
@@ -7534,6 +7535,35 @@ function trasladarEquipo(){
   }).catch(function(){ alert('⚠️ No se pudo leer la flota de ' + _eqNombreEmp(D) + '. Intenta de nuevo con señal.'); });
 }
 // Historial de la otra empresa en la ficha (equipos que llegaron trasladados): solo lectura
+
+// (2026-11-19, Miguel) Trabajos que MT le hizo a este equipo de MONHACO (órdenes de MT con equipo ligado: montasa/equipos[].equipoMH.id)
+function _eqHistMT(e){
+  var box = document.getElementById('det-hist-mt');
+  if(!box){
+    var fila = document.querySelector('#modal-equipo button[onclick="venderEquipo()"]') || document.querySelector('button[onclick="venderEquipo()"]');
+    if(!fila || !fila.parentElement) return;
+    box = document.createElement('div'); box.id = 'det-hist-mt'; box.style.cssText = 'margin:6px 0 10px';
+    fila.parentElement.parentElement.insertBefore(box, fila.parentElement);
+  }
+  box.innerHTML = '';
+  if(!e || !e.id || !window._fbDB) return;
+  window._fbDB.ref('montasa/equipos').once('value').then(function(s){
+    var v = s.val() || {}, px = Object.keys(v).map(function(k){ return v[k]; }).filter(function(x){ return x && x.equipoMH && x.equipoMH.id === e.id; }).map(function(x){ return x.id; });
+    if(!px.length) return [];
+    var COLS = [['preventivos', 'Preventivo'], ['correctivos', 'Correctivo']];
+    return Promise.all([].concat.apply([], COLS.map(function(c){ return px.map(function(pid){
+      return window._fbDB.ref('montasa/' + c[0]).orderByChild('equipoId').equalTo(pid).once('value').then(function(s2){ var w = s2.val() || {}; return Object.keys(w).map(function(k){ return w[k]; }).filter(Boolean).map(function(o){ return { t: c[1], o: o }; }); }).catch(function(){ return []; }); }); })))
+      .then(function(r){ return [].concat.apply([], r); });
+  }).then(function(L){
+    if(modalEquipoId !== e.id || !L.length) return;
+    L.sort(function(a, b){ return String(b.o.fecha || b.o.fechaInicio || '').localeCompare(String(a.o.fecha || a.o.fechaInicio || '')); });
+    box.innerHTML = '<details style="background:#eef4ff;border-radius:8px;padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:700;color:#1f3864">🔧 Trabajos hechos por MT (' + L.length + ')</summary>'
+      + L.map(function(x){ var o = x.o, est = o.completado || o.cerrado ? 'Completado' : (o.estado || 'Pendiente');
+          return '<div style="font-size:12px;padding:5px 0;border-top:1px solid #d6e2f5"><b>' + _x(o.correlativo || '—') + '</b> · ' + x.t + ' · ' + _x(String(o.fecha || o.fechaInicio || '').slice(0, 10)) + ' · ' + _x(est)
+            + (o.horometro ? ' · ⏱ ' + _x(o.horometro) : '') + (o.tecnico ? ' · ' + _x(o.tecnico) : '') + '<div style="color:#666">' + _x(String(o.servicio || o.falla || o.descripcion || o.notas || '').slice(0, 110)) + '</div></div>'; }).join('')
+      + '<div style="font-size:11px;color:#888;margin-top:6px">Solo lectura: las órdenes son de MT RENTAL.</div></details>';
+  }).catch(function(er){ console.warn('historial MT', er); });
+}
 function _eqHistOtraEmpresa(e){
   var box = document.getElementById('det-hist-otra');
   if(!box){
@@ -18094,7 +18124,7 @@ window._nxExcelConLogo = function(wbX, archivo){
   }
   // ── aviso a Gerencia / Supervisión: órdenes abiertas de alguien que no está ──
   function avisarOrdenes(){
-    var r = rol(); if(r !== 'gerencia' && r !== 'supervision') return;
+    var r = rol(); if(r !== 'gerencia' && r !== 'supervision'){ var v0 = document.getElementById('nx-aus-aviso'); if(v0) v0.remove(); return; }
     var B; try{ B = typeof DB !== 'undefined' ? DB : null; }catch(e){ B = null; } if(!B) return;
     var abiertas = {};
     ['preventivos', 'correctivos', 'logistica', 'revisiones', 'evaluaciones', 'soldaduras'].forEach(function(col){
