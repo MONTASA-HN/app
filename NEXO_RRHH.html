@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='76e130d73055';
+  var APP_VERSION='da07221a309b';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -481,7 +481,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     c.innerHTML = h;
   }
   function pintarAlertas(c){
-    setTimeout(dibujarCumples, 0);
+    setTimeout(dibujarCumples, 0); setTimeout(dibujarAnivs, 0);
     var act = todos().filter(function(x){ return x.e.activo !== false && raices().indexOf(x.rh) >= 0; });
     var cum = act.map(function(x){ return { x: x, d: diasPara(x.e.fechaNacimiento, true) }; }).filter(function(y){ return y.d !== null && y.d <= 30; }).sort(function(a, b){ return a.d - b.d; });
     var ani = act.map(function(x){ var i = ingresoDe(x.raiz, x.e); return { x: x, i: i, d: diasPara(i, true) }; }).filter(function(y){ return y.d !== null && y.d <= 30 && aF(y.i) && aF(y.i).getFullYear() < new Date().getFullYear() + (y.d > 0 ? 1 : 0); }).sort(function(a, b){ return a.d - b.d; });
@@ -490,7 +490,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var sinD = act.filter(function(x){ return !x.e.departamento; });
     var cuando = function(d){ return d === 0 ? '<b style="color:#b42318">¡hoy!</b>' : d === 1 ? 'mañana' : d < 0 ? '<b style="color:#b42318">venció hace ' + Math.abs(d) + ' días</b>' : 'en ' + d + ' días'; };
     var fila = function(x, txt){ return '<div class="sub" style="padding:6px 0;border-bottom:1px solid #f0f2f5;color:#1d2433;cursor:pointer" data-a="abrir" data-r="' + x.raiz + '" data-id="' + esc(x.e.id) + '"><b>' + esc(x.e.nombreCompleto) + '</b> <span style="color:#7a8394">(' + nomEmp(x.raiz) + ')</span> — ' + txt + '</div>'; };
-    c.innerHTML = bloqueCumple(act) + '<div class="grid">'
+    c.innerHTML = bloqueCumple(act) + bloqueAniv(act) + '<div class="grid">'
       + '<div class="card"><div class="nm">🎂 Cumpleaños · próximos 30 días</div>' + (cum.length ? cum.map(function(y){ var n = aF(y.x.e.fechaNacimiento); return fila(y.x, cuando(y.d) + ' (' + String(n.getDate()).padStart(2, '0') + '/' + String(n.getMonth() + 1).padStart(2, '0') + ')'); }).join('') : '<div class="sub">Ninguno.</div>') + '</div>'
       + '<div class="card"><div class="nm">🎉 Aniversarios laborales · próximos 30 días</div>' + (ani.length ? ani.map(function(y){ var a = aF(y.i), anios = new Date(Date.now() + y.d * 86400000).getFullYear() - a.getFullYear(); return fila(y.x, cuando(y.d) + ' cumple <b>' + anios + ' año' + (anios === 1 ? '' : 's') + '</b>'); }).join('') : '<div class="sub">Ninguno.</div>') + '</div>'
       + '<div class="card"><div class="nm">📝 Contratos por vencer (30 días) o vencidos</div>' + (con.length ? con.map(function(y){ return fila(y.x, (y.x.e.contrato.tipo || 'Contrato') + ' ' + cuando(y.d) + ' (' + fmt(y.x.e.contrato.vence) + ')'); }).join('') : '<div class="sub">Ninguno.</div>') + '</div>'
@@ -537,15 +537,19 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   var CUM_PRUEBA = { emp_muvbiq1wnunt: '2026-11-21' };   // empId → último día de la excepción
   var CUM_MSG = 'Hoy celebramos tu vida. Gracias por ser parte de la familia MONTASA. Te deseamos un año más lleno de salud, éxitos y alegrías. ¡Dios bendiga tu vida siempre!';
   function cumKey(x){ return x.raiz + '|' + x.e.id; }
+  // una sola tarjeta por persona aunque tenga ficha en dos empresas (se prefiere la ficha de su empresa RRHH)
+  function unaPorPersona(L){ var vistos = {}; return L.slice().sort(function(a, b){ return (a.x.rh === a.x.raiz ? 0 : 1) - (b.x.rh === b.x.raiz ? 0 : 1); })
+    .filter(function(y){ var k = soloDig(y.x.e.identidad) || norm(y.x.e.nombreCompleto); if(vistos[k]) return false; vistos[k] = 1; return true; }).sort(function(a, b){ return a.d - b.d; }); }
   function titulo(n){ return String(n || '').toLowerCase().split(/\s+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
   function cumplesVer(act){
     var hoyD = new Date(); hoyD.setHours(0, 0, 0, 0); var lunes = hoyD.getDay() === 1;
-    return act.map(function(x){ var n = aF(x.e.fechaNacimiento); if(!n) return null;
+    var L0 = act.map(function(x){ var n = aF(x.e.fechaNacimiento); if(!n) return null;
       var c = new Date(hoyD.getFullYear(), n.getMonth(), n.getDate()), d = Math.round((c - hoyD) / 864e5);
       if(d > 300) d -= 365; if(d < -300) d += 365;
       // (2026-11-19, Miguel) prueba única: la tarjeta de Eliberto sale 2 días antes; se apaga sola después de su cumpleaños
       var prueba = CUM_PRUEBA[x.e.id] && iso(hoyD) <= CUM_PRUEBA[x.e.id] && d >= 0 && d <= 2;
       return (d === 0 || d === 1 || prueba || (lunes && (d === -1 || d === -2))) ? { x: x, d: d } : null; }).filter(Boolean).sort(function(a, b){ return a.d - b.d; });
+    return unaPorPersona(L0);
   }
   function bloqueCumple(act){
     var L = cumplesVer(act); if(!L.length) return '';
@@ -620,6 +624,92 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var x = cumBuscar(k); if(!x) return; aviso('Preparando la tarjeta…');
     var nombreArch = 'Cumpleanos_' + titulo(x.e.nombreCompleto).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '.png';
     cumDibujar(document.createElement('canvas'), x, k, 2).then(function(cv){ return new Promise(function(ok){ cv.toBlob(ok, 'image/png'); }); }).then(function(blob){
+      var file = new File([blob], nombreArch, { type: 'image/png' });
+      if(navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file] }).catch(function(er){ if(er && er.name !== 'AbortError') throw er; });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArch; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      aviso('Tarjeta descargada ✓ Adjúntala en WhatsApp.');
+    }).catch(function(er){ aviso('No se pudo preparar la tarjeta: ' + er.message, true); });
+  }
+
+
+  // ══ TARJETA DE ANIVERSARIO LABORAL (2026-11-20, Elia: «misma dinámica de los cumpleaños, tarjeta diferente») ════════════
+  // Sale el día anterior y el día del aniversario de ingreso (el lunes también los del sábado y domingo), desde el 1.er año.
+  // Datos: foto de la ficha, nombre, puesto (cargo) y años cumplidos. El mensaje se puede cambiar antes de compartir.
+  var ANIV = { msg: {}, posY: {}, fuentes: null };
+  var ANIV_MSG = 'Tu dedicación, pasión y compromiso han sido verdaderamente inspiradores.\nGracias por ser una parte integral de nuestro camino y de nuestro éxito.';
+  function anivVer(act){
+    var hoyD = new Date(); hoyD.setHours(0, 0, 0, 0); var lunes = hoyD.getDay() === 1;
+    var L1 = act.map(function(x){ var ing = aF(ingresoDe(x.raiz, x.e)); if(!ing) return null;
+      var c = new Date(hoyD.getFullYear(), ing.getMonth(), ing.getDate()), d = Math.round((c - hoyD) / 864e5);
+      if(d > 300) d -= 365; if(d < -300) d += 365;
+      var anios = new Date(hoyD.getTime() + d * 864e5).getFullYear() - ing.getFullYear(); if(anios < 1) return null;
+      return (d === 0 || d === 1 || (lunes && (d === -1 || d === -2))) ? { x: x, d: d, anios: anios } : null; }).filter(Boolean);
+    return unaPorPersona(L1);
+  }
+  function anivKey(y){ return cumKey(y.x) + '|' + y.anios; }
+  function bloqueAniv(act){
+    var L = anivVer(act); if(!L.length) return '';
+    return '<div class="card" style="border:2px solid #6cbd9b;background:#f1faf6"><div class="nm">🎉 Tarjetas de aniversario laboral</div><div class="sub" style="margin-bottom:8px">Toca «📲 Compartir» y elige WhatsApp. En la computadora la imagen se descarga para adjuntarla.</div>'
+      + '<div style="display:flex;gap:16px;flex-wrap:wrap">' + L.map(function(y){ var k = anivKey(y), sinFoto = !((D[y.x.raiz].fotos || {})[y.x.e.id] || {}).data;
+        return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : 'Sábado') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + ' · ' + y.anios + ' año' + (y.anios === 1 ? '' : 's') + '</div>'
+          + '<canvas data-anivcv="' + esc(k) + '" style="width:250px;height:329px;border-radius:10px;box-shadow:0 4px 14px rgba(16,33,63,.25);background:#081c40"></canvas>'
+          + (sinFoto ? '<div class="sub" style="color:#b45309">Sin foto en su ficha: sale una silueta. <a href="#" data-a="abrir" data-r="' + y.x.raiz + '" data-id="' + esc(y.x.e.id) + '" style="color:#1f3864;font-weight:700">Subir foto</a></div>' : '<label class="sub" style="display:block;margin-top:4px">Ajustar foto ↕ <input type="range" min="0" max="100" value="' + (ANIV.posY[k] == null ? 25 : ANIV.posY[k]) + '" data-anivpos="' + esc(k) + '" style="width:100%"></label>')
+          + '<textarea data-anivta="' + esc(k) + '" style="display:none;width:100%;box-sizing:border-box;margin-top:6px;min-height:90px;padding:7px;border:1px solid #c9d1dc;border-radius:8px;font:inherit;font-size:12.5px">' + esc(ANIV.msg[k] || ANIV_MSG) + '</textarea>'
+          + '<div class="acc" style="margin:6px 0 0"><button class="bt bp" data-a="aniv-compartir" data-k="' + esc(k) + '">📲 Compartir</button><button class="bt" data-a="aniv-msg" data-k="' + esc(k) + '">✏️ Mensaje</button></div></div>'; }).join('') + '</div></div>';
+  }
+  function anivFuentes(){
+    if(ANIV.fuentes) return ANIV.fuentes;
+    var ff = [new FontFace('NxGV', 'url(img/aniv_gv.woff)'), new FontFace('NxMT', 'url(img/aniv_mt.woff)', { weight: '100 900' })];
+    return ANIV.fuentes = Promise.all(ff.map(function(f){ return f.load().then(function(x){ document.fonts.add(x); }).catch(function(){}); }));
+  }
+  function anivBuscar(k){ var a = k.split('|'), e = ((D[a[0]] || {}).empleados || {})[a[1]]; return e ? { raiz: a[0], e: e, anios: parseInt(a[2], 10) || 1 } : null; }
+  function anivDibujar(cv, x, k, esc2){
+    var foto = ((D[x.raiz].fotos || {})[x.e.id] || {}).data;
+    return Promise.all([cumCargarImg('img/aniv_fondo.svg'), cumCargarImg('img/cumple_logo.png'), foto ? cumCargarImg(foto) : null, anivFuentes()]).then(function(r){
+      var W = 1080, H = 1420, cx = 540; cv.width = W * esc2; cv.height = H * esc2; var g = cv.getContext('2d'); g.setTransform(esc2, 0, 0, esc2, 0, 0);
+      var gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#081c40'); gr.addColorStop(880 / H, '#0e3a76'); gr.addColorStop(1, '#0e3a76'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.drawImage(r[0], 0, 0, W, H);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      var texto = function(t, y, font, color, esp){ g.font = font; g.fillStyle = color; try{ g.letterSpacing = esp || '0px'; }catch(e){} g.fillText(t, cx, y); try{ g.letterSpacing = '0px'; }catch(e){} };
+      texto('¡Feliz', 236, '150px NxGV, cursive', '#6cbd9b');
+      var num = x.anios + (x.anios === 1 ? ' AÑO' : ' AÑOS'), sz = 230; g.font = '900 ' + sz + 'px NxMT, Arial'; while(g.measureText(num).width > 860 && sz > 120){ sz -= 6; g.font = '900 ' + sz + 'px NxMT, Arial'; }
+      texto(num, 422, '900 ' + sz + 'px NxMT, Arial', '#fff');
+      texto('Aniversario', 588, '150px NxGV, cursive', '#6cbd9b');
+      texto('LABORAL', 652, '600 24px NxMT, Arial', '#bed7f0', '8.4px');
+      var lw = 250, lh = lw * r[1].height / r[1].width; g.drawImage(r[1], W - 40 - lw, 42, lw, lh);
+      // anillo y foto
+      var cy = 867; g.save(); g.shadowColor = 'rgba(8,28,64,.40)'; g.shadowBlur = 28; g.shadowOffsetY = 12; g.beginPath(); g.arc(cx, cy, 187, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.restore();
+      g.beginPath(); g.arc(cx, cy, 185, 0, Math.PI * 2); g.lineWidth = 4; g.strokeStyle = '#6cbd9b'; g.stroke();
+      g.save(); g.beginPath(); g.arc(cx, cy, 175, 0, Math.PI * 2); g.clip(); g.fillStyle = '#d6e2ee'; g.fillRect(cx - 175, cy - 175, 350, 350);
+      if(r[2]){ var im = r[2], e3 = Math.max(350 / im.width, 350 / im.height), w = im.width * e3, h = im.height * e3, py = (ANIV.posY[k] == null ? 25 : ANIV.posY[k]) / 100;
+        g.drawImage(im, cx - w / 2, cy - 175 - (h - 350) * py, w, h); }
+      else { g.fillStyle = '#96acc6'; g.beginPath(); g.ellipse(cx, cy - 175 + 126, 56, 66.5, 0, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(cx, cy - 175 + 336, 133, 105, 0, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+      // banda con el nombre
+      var nombre = String(titulo(x.e.nombreCompleto)).toUpperCase(), fs3 = 54; g.font = '800 ' + fs3 + 'px NxMT, Arial'; while(g.measureText(nombre).width > 640 && fs3 > 30){ fs3 -= 2; g.font = '800 ' + fs3 + 'px NxMT, Arial'; }
+      var bw = Math.max(560, g.measureText(nombre).width + 150), bx = (W - bw) / 2, by = 1078;
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + bw, by); g.lineTo(bx + bw - 34, by + 38); g.lineTo(bx + bw, by + 76); g.lineTo(bx, by + 76); g.lineTo(bx + 34, by + 38); g.closePath(); g.fillStyle = '#0b2652'; g.fill();
+      g.fillStyle = '#6cbd9b'; g.fillRect(bx + 17, by + 71, bw - 34, 5);
+      texto(nombre, by + 36, '800 ' + fs3 + 'px NxMT, Arial', '#fff');
+      // puesto y mensaje
+      texto(String(x.e.cargo || '').toUpperCase(), 1186, '600 26px NxMT, Arial', '#058ED0', '2.5px');
+      g.font = '400 25px NxMT, Arial'; g.fillStyle = '#2d3c55'; g.textBaseline = 'top'; var yy = 1235;
+      String(ANIV.msg[k] || ANIV_MSG).split('\n').map(function(t){ return t.trim(); }).filter(Boolean).forEach(function(par){
+        var pal = par.split(/\s+/), cur = ''; pal.forEach(function(p){ var t2 = cur ? cur + ' ' + p : p; if(g.measureText(t2).width > 700 && cur){ g.fillText(cur, cx, yy); yy += 34; cur = p; } else cur = t2; });
+        if(cur){ g.fillText(cur, cx, yy); yy += 34; } yy += 8; });
+      return cv;
+    });
+  }
+  function dibujarAnivs(){ document.querySelectorAll('[data-anivcv]').forEach(function(cv){ var k = cv.getAttribute('data-anivcv'), x = anivBuscar(k); if(x) anivDibujar(cv, x, k, 1).catch(function(er){ console.warn('aniversario', er); }); }); }
+  document.addEventListener('input', function(ev){
+    var p = ev.target.getAttribute && ev.target.getAttribute('data-anivpos'), m = ev.target.getAttribute && ev.target.getAttribute('data-anivta'), k = p || m; if(!k) return;
+    if(p) ANIV.posY[k] = +ev.target.value; else ANIV.msg[k] = ev.target.value;
+    var cv = document.querySelector('[data-anivcv="' + k + '"]'), x = anivBuscar(k); if(cv && x) anivDibujar(cv, x, k, 1);
+  });
+  function compartirAniv(k){
+    var x = anivBuscar(k); if(!x) return; aviso('Preparando la tarjeta…');
+    var nombreArch = 'Aniversario_' + titulo(x.e.nombreCompleto).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + x.anios + '_anios.png';
+    anivDibujar(document.createElement('canvas'), x, k, 1).then(function(cv){ return new Promise(function(ok){ cv.toBlob(ok, 'image/png'); }); }).then(function(blob){
       var file = new File([blob], nombreArch, { type: 'image/png' });
       if(navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file] }).catch(function(er){ if(er && er.name !== 'AbortError') throw er; });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArch; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
@@ -2242,6 +2332,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(a === 'pl-he-per') return subirHorasExtra(t.getAttribute('data-p'));
     if(a === 'arch-ver') return verArchivo(t.getAttribute('data-id'));
     if(a === 'cum-compartir') return compartirCumple(t.getAttribute('data-k'));
+    if(a === 'aniv-compartir') return compartirAniv(t.getAttribute('data-k'));
+    if(a === 'aniv-msg'){ var ka = t.getAttribute('data-k'), tx = document.querySelector('[data-anivta="' + ka + '"]'); if(tx){ tx.style.display = tx.style.display === 'none' ? '' : 'none'; } return; }
     if(a === 'cum-msg'){ var kk = t.getAttribute('data-k'), ta = document.querySelector('[data-cumta="' + kk + '"]'); if(ta){ ta.style.display = ta.style.display === 'none' ? '' : 'none'; } return; }
     if(a === 'heg-jalar'){ if(!confirm('Se reemplazan las horas extras de la planilla con el reporte NUEVO de Gerencia (las planillas cerradas no se tocan).\n\n¿Seguir?')) return; return aplicarHEG(t.getAttribute('data-p'), true); }
     if(a === 'heg-asignar') return asignarHEG(t.getAttribute('data-p'));
