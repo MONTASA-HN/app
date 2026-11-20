@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='da07221a309b';
+  var APP_VERSION='ad903f992f52';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -636,6 +636,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // Sale el día anterior y el día del aniversario de ingreso (el lunes también los del sábado y domingo), desde el 1.er año.
   // Datos: foto de la ficha, nombre, puesto (cargo) y años cumplidos. El mensaje se puede cambiar antes de compartir.
   var ANIV = { msg: {}, posY: {}, fuentes: null };
+  // (2026-11-20, Miguel) prueba única: la tarjeta de aniversario de Elia (9 años, 28/11) sale desde hoy; se apaga sola después del 28/11
+  var ANIV_PRUEBA = { emp_mwmcipbsiuop: '2026-11-28', emp_mwmcipbsxhr4: '2026-11-28' };
   var ANIV_MSG = 'Tu dedicación, pasión y compromiso han sido verdaderamente inspiradores.\nGracias por ser una parte integral de nuestro camino y de nuestro éxito.';
   function anivVer(act){
     var hoyD = new Date(); hoyD.setHours(0, 0, 0, 0); var lunes = hoyD.getDay() === 1;
@@ -643,7 +645,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var c = new Date(hoyD.getFullYear(), ing.getMonth(), ing.getDate()), d = Math.round((c - hoyD) / 864e5);
       if(d > 300) d -= 365; if(d < -300) d += 365;
       var anios = new Date(hoyD.getTime() + d * 864e5).getFullYear() - ing.getFullYear(); if(anios < 1) return null;
-      return (d === 0 || d === 1 || (lunes && (d === -1 || d === -2))) ? { x: x, d: d, anios: anios } : null; }).filter(Boolean);
+      var prueba = ANIV_PRUEBA[x.e.id] && iso(hoyD) <= ANIV_PRUEBA[x.e.id] && d >= 0 && d <= 8;
+      return (d === 0 || d === 1 || prueba || (lunes && (d === -1 || d === -2))) ? { x: x, d: d, anios: anios } : null; }).filter(Boolean);
     return unaPorPersona(L1);
   }
   function anivKey(y){ return cumKey(y.x) + '|' + y.anios; }
@@ -651,7 +654,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var L = anivVer(act); if(!L.length) return '';
     return '<div class="card" style="border:2px solid #6cbd9b;background:#f1faf6"><div class="nm">🎉 Tarjetas de aniversario laboral</div><div class="sub" style="margin-bottom:8px">Toca «📲 Compartir» y elige WhatsApp. En la computadora la imagen se descarga para adjuntarla.</div>'
       + '<div style="display:flex;gap:16px;flex-wrap:wrap">' + L.map(function(y){ var k = anivKey(y), sinFoto = !((D[y.x.raiz].fotos || {})[y.x.e.id] || {}).data;
-        return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : 'Sábado') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + ' · ' + y.anios + ' año' + (y.anios === 1 ? '' : 's') + '</div>'
+        return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : y.d === -2 ? 'Sábado' : 'En ' + y.d + ' días') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + ' · ' + y.anios + ' año' + (y.anios === 1 ? '' : 's') + '</div>'
           + '<canvas data-anivcv="' + esc(k) + '" style="width:250px;height:329px;border-radius:10px;box-shadow:0 4px 14px rgba(16,33,63,.25);background:#081c40"></canvas>'
           + (sinFoto ? '<div class="sub" style="color:#b45309">Sin foto en su ficha: sale una silueta. <a href="#" data-a="abrir" data-r="' + y.x.raiz + '" data-id="' + esc(y.x.e.id) + '" style="color:#1f3864;font-weight:700">Subir foto</a></div>' : '<label class="sub" style="display:block;margin-top:4px">Ajustar foto ↕ <input type="range" min="0" max="100" value="' + (ANIV.posY[k] == null ? 25 : ANIV.posY[k]) + '" data-anivpos="' + esc(k) + '" style="width:100%"></label>')
           + '<textarea data-anivta="' + esc(k) + '" style="display:none;width:100%;box-sizing:border-box;margin-top:6px;min-height:90px;padding:7px;border:1px solid #c9d1dc;border-radius:8px;font:inherit;font-size:12.5px">' + esc(ANIV.msg[k] || ANIV_MSG) + '</textarea>'
