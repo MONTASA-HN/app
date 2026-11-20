@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='06535e7eeb30';
+  var APP_VERSION='76e130d73055';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -513,15 +513,17 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var falta = []; EMPRESAS.forEach(function(E){ ['incapacidades', 'acciones', 'colaboradores'].forEach(function(k){ if(!D[E.raiz]._ok[k]) falta.push(E.raiz + '/' + k); }); });
     if(falta.length){ if(!AUSR.dFalta){ AUSR.dFalta = 1; diagAus({ esperando: falta.join(',') }); } return; }
     var h = hoy(), quiero = {};
+    // solo se maneja lo que este equipo puede leer (Gerencia no lee incapacidades: no debe borrar las de RRHH)
+    var puede = { inc: EMPRESAS.every(function(E){ return !(D[E.raiz]._sinAcceso || {}).incapacidades; }), vac: EMPRESAS.every(function(E){ var x = D[E.raiz]._sinAcceso || {}; return !x.acciones && !x.colaboradores; }) };
     EMPRESAS.forEach(function(E){ var rf = E.raiz;
-      lista(D[rf].incapacidades).forEach(function(i){ if(!i.id || i.anulada || !i.empId || !i.desde || !i.hasta) return; var rg = ausRegreso(i.hasta); if(!rg || rg <= h) return;
+      if(puede.inc) lista(D[rf].incapacidades).forEach(function(i){ if(!i.id || i.anulada || !i.empId || !i.desde || !i.hasta) return; var rg = ausRegreso(i.hasta); if(!rg || rg <= h) return;
         quiero['inc_' + i.id] = { emp: i.empId, rf: rf, tipo: 'inc', desde: i.desde, hasta: i.hasta, regresa: rg }; });
-      lista(D[rf].acciones).forEach(function(a){ if(!a.id || a.anulada || !(a.descuentaVacaciones === true || a.descuentaVacaciones === 'true') || !a.desde || !a.hasta) return;
+      if(puede.vac) lista(D[rf].acciones).forEach(function(a){ if(!a.id || a.anulada || !(a.descuentaVacaciones === true || a.descuentaVacaciones === 'true') || !a.desde || !a.hasta) return;
         var c = (D[rf].colaboradores || {})[a.colaboradorId], emp = c && c.empleadoId; if(!emp) return; var rg = ausRegreso(a.hasta); if(!rg || rg <= h) return;
         quiero['vac_' + a.id] = { emp: emp, rf: rf, tipo: 'vac', desde: a.desde, hasta: a.hasta, regresa: rg }; }); });
     var up = {}, n = 0, act = AUSR.v || {};
     Object.keys(quiero).forEach(function(k){ var a = act[k] || {}, q = quiero[k]; if(['emp', 'rf', 'tipo', 'desde', 'hasta', 'regresa'].some(function(f){ return a[f] !== q[f]; })){ up[k] = q; n++; } });
-    Object.keys(act).forEach(function(k){ if(!quiero[k] && /^(inc|vac)_/.test(k)){ up[k] = null; n++; } });
+    Object.keys(act).forEach(function(k){ var t = k.slice(0, 3); if(!quiero[k] && (t === 'inc' || t === 'vac') && puede[t]){ up[k] = null; n++; } });
     var nq = Object.keys(quiero).length;
     if(n) db().ref('rrhh/ausencias').update(up).then(function(){ diagAus({ ok: n, quiero: nq }); }, function(er){ console.warn('ausencias', er && er.message); diagAus({ escribir: (er && (er.code || er.message)) || 'error', quiero: nq }); });
     else if(!AUSR.dOk){ AUSR.dOk = 1; diagAus({ sinCambios: true, quiero: nq, hay: Object.keys(act).length }); }
