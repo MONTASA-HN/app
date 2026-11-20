@@ -2,6 +2,25 @@
 <html lang="es">
 <head>
 <script>
+// ══ COPIA FRESCA (2026-11-20, Miguel) ══ Si esta app lleva más de 3 días sin abrirse en este equipo, se borra SU copia guardada
+// (monhaco_sup_v1, monhaco_log_cache, _sync_base/_sync_sucio de esta app) antes de que arranque: carga todo de la base y no sube nada viejo.
+// Las otras apps del mismo navegador no se tocan. La sesión y el acceso aprobado se conservan.
+(function(){ try{
+  var APPK = String(location.pathname.split('/').pop() || 'app').replace(/\.html$/i, ''), K = 'nx_ultimoUso_' + APPK, ahora = Date.now(), u = parseInt(localStorage.getItem(K), 10) || 0;
+  var MIAS = ["monhaco_sup_v1","monhaco_log_cache"];
+  if(u && ahora - u > 3 * 864e5){
+    var quitar = [];
+    for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if(!k) continue;
+      if(MIAS.indexOf(k) >= 0 || ((k.indexOf('_sync_base_') === 0 || k.indexOf('_sync_sucio_') === 0) && (k.slice(-APPK.length - 1) === '_' + APPK || k.slice(-APPK.length - 4) === '_' + APPK + '_ts')) || k === '_sync_base_montasa' || k === '_sync_base_monhaco') quitar.push(k); }
+    quitar.forEach(function(k){ localStorage.removeItem(k); });
+    window._nxCopiaFresca = { dias: Math.floor((ahora - u) / 864e5), borradas: quitar.length };
+    console.warn('Copia fresca: ' + window._nxCopiaFresca.dias + ' días sin abrir; se descartó la copia guardada (' + quitar.length + ')');
+    window.addEventListener('load', function(){ setTimeout(function(){ try{ if(typeof toast === 'function') toast('🔄 Llevaba ' + window._nxCopiaFresca.dias + ' días sin abrirse: se cargaron los datos frescos de la base'); }catch(e){} }, 2500); });
+  }
+  localStorage.setItem(K, String(ahora)); setInterval(function(){ try{ localStorage.setItem(K, String(Date.now())); }catch(e){} }, 60000);
+}catch(e){} })();
+</script>
+<script>
 // (2026-11-19) Orden de las listas de órdenes: misma serie (MH-, APMH-, LGMT-…) por número; series distintas por fecha (más nueva arriba).
 window._nxCmpOrden = function(a, b){
   var ca = String((a && a.correlativo) || ''), cb = String((b && b.correlativo) || '');
@@ -254,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7b5ccdb3c5f6';
+  var APP_VERSION='798b68ed7eac';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
