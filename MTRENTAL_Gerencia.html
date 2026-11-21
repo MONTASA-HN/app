@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='1a58f87655ee';
+  var APP_VERSION='264bd98529e8';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1725,6 +1725,246 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 })();
 </script>
 <script>
+// ══ DIRECTORIO DE PERSONAL MH + MT (2026-11-21, pedido de Miguel) ═══════════════════════════════════════════════════════
+// Lista de personal COMPARTIDA entre MONHACO y MT Rental: cualquier empleado de las dos empresas se puede asignar en las órdenes
+// de las dos, y sus horas cuentan en la productividad de SU empresa (la de su ficha en Personal), no en la de la orden.
+//  · Cada Gerencia publica su personal de órdenes (sin teléfono) en monhaco/rrhh/personalMT y monhaco/rrhh/personalMH:
+//      {empId: {n, c, roles[], ina?:1, hasta?:'AAAA-MM-DD' (baja), de?:'<raíz anterior>', desde?:'AAAA-MM-DD' (traslado)}}
+//  · TODO arranca junto cuando este equipo ya tiene los DOS directorios (_nxDirListo): lista combinada, empresa visible y regla
+//    nueva de productividad. Mientras falte uno, la app se comporta como antes.
+//  · _nxEmpDe(nombre, fecha) → 'montasa' | 'monhaco' | '' (no se sabe)   · _nxEmpEtq(nombre) → 'MT' | 'MH' | ''
+//    _nxAjenos(tipo) → nombres de la OTRA empresa para las listas (tec, op, mot, revision)
+//    _nxCuentaAqui(nombre, orden) → ¿las horas de esa persona en esa orden cuentan en ESTA empresa?
+//    _nxProdNueva(mes, anio) → la regla nueva de productividad aplica desde NOVIEMBRE 2026; lo anterior queda como estaba.
+//  · En la orden se guarda SOLO el nombre, como siempre. La empresa se ve al lado (MT / MH) en casillas, botones y listas.
+//  · monhaco/ se puede escribir sin sesión: los nombres que llegan de ahí se filtran (limpio) antes de usarlos en cualquier lista.
+(function(){
+  var CL = 'nx_dirPersonal', NODO = { montasa: 'monhaco/rrhh/personalMT', monhaco: 'monhaco/rrhh/personalMH' };
+  var ETQ = { montasa: 'MT', monhaco: 'MH' }, CORTE = 2026 * 12 + 10;   // noviembre 2026 (mes 0-11)
+  var DIRP = { montasa: null, monhaco: null }, PLMH = null, idx = null, crudo = { montasa: '', monhaco: '', plmh: '' };
+  try{ var g = JSON.parse(localStorage.getItem(CL) || 'null'); if(g){ DIRP.montasa = g.montasa || null; DIRP.monhaco = g.monhaco || null; } }catch(e){}
+  function raiz(){ return window._nxRaiz || ((window._NX_EMP === 'monhaco' || /MONHACO_/i.test(location.pathname)) ? 'monhaco' : 'montasa'); }
+  function otra(){ return raiz() === 'montasa' ? 'monhaco' : 'montasa'; }
+  function tiene(p, r){ return Array.isArray(p.roles) && p.roles.indexOf(r) >= 0; }
+  // nombre aceptable: texto corto, sin signos que puedan romper una lista o colarse como código
+  function limpio(n){ return typeof n === 'string' && n.length >= 2 && n.length <= 60 && n === n.trim() && !/[<>"'`&\\;{}()=]/.test(n) && n !== '__proto__' && n !== 'constructor' && n !== 'prototype'; }
+  // mismos filtros que el bloque de personal, con la regla de la empresa de la PERSONA (en MONHACO manejan los técnicos)
+  function pasa(p, tipo, emp){
+    if(tipo === 'op') return tiene(p, 'op') || tiene(p, 'mot');
+    if(tipo === 'mot') return tiene(p, 'mot') || (emp === 'monhaco' && (tiene(p, 'tec') || tiene(p, 'jefe')));
+    if(tipo === 'revision') return tiene(p, 'op') || tiene(p, 'mot') || tiene(p, 'tec') || tiene(p, 'jefe');
+    return tiene(p, 'tec') || tiene(p, 'jefe') || tiene(p, 'op') || tiene(p, 'mot') || tiene(p, 'mant');
+  }
+  function personasDe(emp){ var d = DIRP[emp]; if(!d || typeof d !== 'object') return []; return Object.keys(d).map(function(k){ return d[k]; }).filter(function(p){ return p && typeof p === 'object' && limpio(p.n); }); }
+  function indice(){
+    if(idx) return idx; var nuevo = Object.create(null);
+    ['montasa', 'monhaco'].forEach(function(emp){ personasDe(emp).forEach(function(p){ (nuevo[p.n] = nuevo[p.n] || []).push({ emp: emp, p: p }); }); });
+    idx = nuevo; return idx;
+  }
+  function unicos(a){ return a.filter(function(x, i){ return a.indexOf(x) === i; }); }
+  window._nxDirListo = function(){ return !!(DIRP.montasa && DIRP.monhaco); };
+  // Empresa de un nombre. Con fecha respeta traslados (antes del traslado era de la otra) y bajas. '' = no se sabe o está en las dos.
+  window._nxEmpDe = function(n, fecha){
+    if(!window._nxDirListo()) return '';
+    var c = indice()[String(n || '').trim()]; if(!c) return '';
+    var f = String(fecha || '').slice(0, 10), emps;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(f)){
+      emps = [];
+      c.forEach(function(x){ var p = x.p;
+        if(p.de && p.desde && f < String(p.desde)){ emps.push(String(p.de)); return; }
+        if(p.hasta && f > String(p.hasta)) return;
+        emps.push(x.emp); });
+      emps = unicos(emps); if(emps.length === 1) return emps[0]; if(emps.length > 1) return '';
+    }
+    emps = unicos(c.filter(function(x){ return !x.p.ina; }).map(function(x){ return x.emp; }));
+    if(emps.length === 1) return emps[0]; if(emps.length > 1) return '';
+    emps = unicos(c.map(function(x){ return x.emp; })); return emps.length === 1 ? emps[0] : '';
+  };
+  window._nxEmpEtq = function(n){ return ETQ[window._nxEmpDe(n)] || ''; };
+  window._nxAjenos = function(tipo){
+    if(!window._nxDirListo()) return [];   // la lista combinada arranca junto con la regla de productividad
+    var o = otra(), out = [];
+    personasDe(o).forEach(function(p){ if(p.ina || !pasa(p, tipo, o)) return; if(out.indexOf(p.n) < 0) out.push(p.n); });
+    return out.sort(function(x, y){ return x.localeCompare(y, 'es'); });
+  };
+  // MT Rental: teléfono del personal de MONHACO para los avisos (sale de su lista de siempre; las apps de MONHACO no tienen el de MT)
+  window._nxTelAjeno = function(n){
+    if(!PLMH || typeof PLMH !== 'object' || raiz() !== 'montasa' || !n) return '';
+    var ks = Object.keys(PLMH); for(var i = 0; i < ks.length; i++){ var p = PLMH[ks[i]]; if(p && p.n === n) return /^[\d\s+()-]{0,20}$/.test(String(p.tel || '')) ? String(p.tel || '') : ''; } return '';
+  };
+  function fechaOrden(o){
+    var c = [o.fechaInicio, o.inicioTrabajo, o.salidaPlantel, o.fecha, o.fechaCompletado, o.fechaCierre, o.fechaFin];
+    for(var i = 0; i < c.length; i++){ var m = String(c[i] || '').match(/^\d{4}-\d{2}-\d{2}/); if(m) return m[0]; }
+    return '';
+  }
+  // ¿Las horas de esta persona en esta orden cuentan en ESTA empresa? Orden propia: sí, salvo que la persona sea de la otra empresa.
+  // Orden de la otra empresa (o._ajena): solo si la persona es de esta. Quien no está en ninguna lista se queda en la empresa de la orden.
+  window._nxCuentaAqui = function(n, o){
+    var emp = window._nxEmpDe(n, fechaOrden(o || {})), yo = raiz();
+    if(o && o._ajena) return emp === yo;
+    return !(emp && emp !== yo && (emp === 'montasa' || emp === 'monhaco'));
+  };
+  window._nxProdNueva = function(mes, anio){ return anio * 12 + mes >= CORTE && window._nxDirListo(); };
+  // Personas de una orden de mantenimiento, venga como texto «A, B» o como lista
+  window._nxNombresOrden = function(o){
+    var l = [];
+    (Array.isArray(o.tecnicos) ? o.tecnicos : []).concat(String(o.tecnico || '').split(',')).forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); });
+    return l;
+  };
+  // ── la empresa al lado de cada nombre ──
+  var marcando = false;
+  function poner(el, n){
+    var e = n ? window._nxEmpEtq(n) : '';
+    if(e){ if(el.getAttribute('data-nx-emp') !== e) el.setAttribute('data-nx-emp', e); }
+    else if(el.hasAttribute('data-nx-emp')) el.removeAttribute('data-nx-emp');
+  }
+  // Opción de una lista desplegable: el VALOR sigue siendo el nombre; al texto que ya traía se le agrega « · MT / MH»
+  function ponerOpcion(o, hay){
+    if(o.getAttribute('data-nx-n')) return;   // marcado como ausente: lo maneja el bloque «PERSONAL NO DISPONIBLE»
+    var n0 = o.getAttribute('data-nx-en'), n = n0 || o.value;
+    var e = hay && n ? window._nxEmpEtq(n) : '';
+    if(e){
+      if(!n0){ o.setAttribute('data-nx-et', o.textContent); if(!o.hasAttribute('value')) o.value = n; o.setAttribute('data-nx-en', n); }
+      var t = (o.getAttribute('data-nx-et') || n) + ' · ' + e; if(o.textContent !== t) o.textContent = t;
+    } else if(n0){ var t0 = o.getAttribute('data-nx-et') || n0; o.removeAttribute('data-nx-en'); o.removeAttribute('data-nx-et'); if(o.textContent !== t0) o.textContent = t0; }
+  }
+  function esFiltro(s){ return /filtro|filter|busc|hist|mes|anio|year|orden-por/i.test((s.id || '') + ' ' + (s.className || '')); }
+  function marcar(){
+    if(marcando) return; marcando = true;
+    try{
+      var hay = window._nxDirListo();
+      [].forEach.call(document.querySelectorAll('label.tecnico-check'), function(lb){
+        var i = lb.querySelector('input'); if(!i) return;
+        poner(lb, hay ? (i.getAttribute('data-nombre') !== null ? i.getAttribute('data-nombre') : i.value) : '');
+      });
+      [].forEach.call(document.querySelectorAll('.tec-btn, [data-nombre]:not(input), [data-n]:not(input)'), function(b){
+        if(b.tagName === 'OPTION' || b.closest('select')) return;
+        poner(b, hay ? (b.getAttribute('data-n') || b.getAttribute('data-nombre') || (b.classList.contains('tec-btn') ? String(b.textContent || '').trim() : '')) : '');
+      });
+      // lista desplegable con casillas («Seleccionar técnico(s)»): cada renglón y cada cápsula de los elegidos
+      [].forEach.call(document.querySelectorAll('.nx-multi .nx-m-lista [data-k]'), function(r){ poner(r, hay ? r.getAttribute('data-k') : ''); });
+      [].forEach.call(document.querySelectorAll('.nx-multi .nx-m-chips > span'), function(c){
+        var q = c.querySelector('[data-quitar]'), n = q ? q.getAttribute('data-quitar') : String((c.firstChild && c.firstChild.nodeType === 3 ? c.firstChild.nodeValue : '') || '').trim();
+        poner(c, hay ? n : '');
+      });
+      // listas desplegables: en la pasada general solo la opción elegida (la que se ve) y las ya marcadas; el resto, al abrir la lista
+      [].forEach.call(document.querySelectorAll('select'), function(s){
+        if(esFiltro(s)) return;
+        var el = s.selectedIndex >= 0 ? s.options[s.selectedIndex] : null; if(el) ponerOpcion(el, hay);
+        [].forEach.call(s.querySelectorAll('option[data-nx-en]'), function(o){ if(o !== el) ponerOpcion(o, hay); });
+      });
+    }catch(e){ console.warn('empresa del personal', e); }
+    marcando = false;
+  }
+  function alAbrir(ev){
+    var s = ev.target && ev.target.closest ? ev.target.closest('select') : null; if(!s || esFiltro(s) || marcando) return;
+    marcando = true; try{ var hay = window._nxDirListo(); [].forEach.call(s.options, function(o){ ponerOpcion(o, hay); }); }catch(e){} marcando = false;
+  }
+  window._nxEmpMarcar = marcar;
+  var tm = null; function programar(){ clearTimeout(tm); tm = setTimeout(marcar, 120); }
+  var tc = null;
+  function cambio(){
+    idx = null; clearTimeout(tc);
+    tc = setTimeout(function(){
+      try{ if(typeof window._nxPersonalAplicar === 'function') window._nxPersonalAplicar(); }catch(e){}
+      marcar();
+      try{ document.dispatchEvent(new CustomEvent('nx-dir')); }catch(e){}
+    }, 150);
+  }
+  function escuchar(){
+    var db = window._fbDB; if(!db || !db.ref){ setTimeout(escuchar, 1000); return; }
+    ['montasa', 'monhaco'].forEach(function(emp){
+      crudo[emp] = JSON.stringify(DIRP[emp] || null);
+      db.ref(NODO[emp]).on('value', function(s){
+        var v = s.val(); v = v && typeof v === 'object' && Object.keys(v).length ? v : null;
+        var j = JSON.stringify(v); if(j === crudo[emp]) return;   // igual a lo que ya se tenía: no rehacer nada
+        crudo[emp] = j; DIRP[emp] = v;
+        try{ localStorage.setItem(CL, JSON.stringify({ montasa: DIRP.montasa, monhaco: DIRP.monhaco })); }catch(e){}
+        cambio();
+      }, function(){});
+    });
+    if(raiz() === 'montasa') db.ref('monhaco/rrhh/plantilla').on('value', function(s){ PLMH = s.val() || null; }, function(){});   // solo para el teléfono
+  }
+  function iniciar(){
+    try{ var est = document.createElement('style'); est.id = 'nx-emp-css';
+      est.textContent = '[data-nx-emp]::after{content:attr(data-nx-emp);display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:9.5px;font-weight:800;letter-spacing:.3px;line-height:1.5;vertical-align:middle;background:#dbe7fb;color:#1f3864}'
+        + '[data-nx-emp="MH"]::after{background:#fde7c7;color:#8a4b00}'
+        + '.tec-btn.on[data-nx-emp]::after,.tecnico-check.selected[data-nx-emp]::after,.tecnico-check[data-nx-emp]:has(input:checked)::after{content:attr(data-nx-emp) "  ✓"}'
+        + '.nx-m-lista [data-k][data-nx-emp]::after{margin-left:auto}'
+        + '.nx-m-chips > span[data-nx-emp]::after{order:1;margin-left:0}.nx-m-chips > span[data-nx-emp] > button{order:2}';
+      document.head.appendChild(est); }catch(e){}
+    try{ new MutationObserver(function(){ if(!marcando) programar(); }).observe(document.body, { childList: true, subtree: true }); }catch(e){}
+    ['pointerdown', 'touchstart', 'mousedown', 'focusin'].forEach(function(ev){ try{ document.addEventListener(ev, alAbrir, { capture: true, passive: true }); }catch(e){} });
+    marcar(); escuchar();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(iniciar, 0); }); else setTimeout(iniciar, 0);
+})();
+</script>
+<script>
+// ══ ÓRDENES DE LA OTRA EMPRESA PARA LA PRODUCTIVIDAD (2026-11-21, pedido de Miguel) ═════════════════════════════════════
+// Para que el personal de ESTA empresa sume también las horas que trabajó en órdenes de la otra (MONHACO ↔ MT Rental).
+// Solo LECTURA y en una lista aparte: estas órdenes NUNCA entran en DB ni en el sincronizador. Se empiezan a leer la primera vez
+// que se pide la productividad de noviembre 2026 en adelante. Cada orden sale como COPIA con _ajena: true.
+(function(){
+  var COLS = ['preventivos', 'correctivos', 'cortinas', 'cortinasReg', 'logistica', 'revisiones', 'evaluaciones', 'soldaduras'];   // cortinas de MONHACO viven en cortinasReg/<id>
+  var AJ = {}, copias = {}, est = {}, subs = [], iniciado = false, ultimoIntento = 0, hayError = false, tr = null;
+  function raiz(){ return window._nxRaiz || ((window._NX_EMP === 'monhaco' || /MONHACO_/i.test(location.pathname)) ? 'monhaco' : 'montasa'); }
+  function otra(){ return raiz() === 'montasa' ? 'monhaco' : 'montasa'; }
+  function lista(v){ return Array.isArray(v) ? v.filter(Boolean) : (v && typeof v === 'object' ? Object.keys(v).map(function(k){ return v[k]; }).filter(Boolean) : []); }
+  function visible(id){ var el = document.getElementById(id); return !!(el && el.offsetParent !== null); }
+  function repintar(){
+    clearTimeout(tr);
+    tr = setTimeout(function(){
+      try{ if(typeof renderTableroGer === 'function' && visible('tablero-cont')) renderTableroGer(); }catch(e){}
+      try{ if(typeof renderPersonal === 'function' && visible('tab-personal')) renderPersonal(); }catch(e){}
+    }, 400);
+  }
+  function soltar(){ subs.forEach(function(x){ try{ x.ref.off('value', x.fn); }catch(e){} }); subs = []; }   // solo MIS escuchas (otras partes de la app leen las mismas rutas)
+  function iniciar(){
+    if(iniciado) return;
+    var db = window._fbDB; if(!db || !db.ref) return;
+    if(hayError && Date.now() - ultimoIntento < 30000) return;   // tras un rechazo, reintentar como mucho cada 30 s
+    soltar(); iniciado = true; hayError = false; ultimoIntento = Date.now(); est = {};
+    var o = otra();
+    COLS.forEach(function(c){
+      var ref = db.ref(o + '/' + c);
+      var fn = function(s){ AJ[c] = lista(s.val()); copias = {}; est[c] = 1; repintar(); };
+      ref.on('value', fn, function(){ est[c] = -1; hayError = true; iniciado = false; repintar(); });
+      subs.push({ ref: ref, fn: fn });
+    });
+  }
+  function fuenteDe(col){
+    if(col !== 'cortinas') return AJ[col] || [];
+    var out = [], visto = {};   // como _mergeCort de MONHACO: primero cortinasReg, luego lo que solo esté en cortinas
+    (AJ.cortinasReg || []).forEach(function(x){ if(x && x.id){ visto[x.id] = 1; out.push(x); } });
+    (AJ.cortinas || []).forEach(function(x){ if(x && x.id && !visto[x.id]) out.push(x); });
+    return out;
+  }
+  window._nxOrdAjenas = function(col){
+    iniciar();
+    if(!copias[col]) copias[col] = fuenteDe(col).filter(function(x){ return x && x.id; }).map(function(x){
+      var c = Object.assign({}, x, { _ajena: true });
+      // cortinas de MONHACO: mismas fechas que arma su calcTiemposOrden
+      if(col === 'cortinas'){ if(!c.fechaInicio && c.fecha && c.horaIni) c.fechaInicio = c.fecha + 'T' + c.horaIni; if(!c.fechaFin && c.fechaFinFecha && c.horaFin) c.fechaFin = c.fechaFinFecha + 'T' + c.horaFin; }
+      return c; });
+    return copias[col];
+  };
+  window._nxAjenasEstado = function(){ return hayError ? 'error' : (iniciado && COLS.every(function(c){ return est[c] === 1; })) ? 'listo' : 'cargando'; };
+  // Nota para la pantalla de productividad (dice cómo se calculó el mes)
+  window._nxNotaAjenas = function(mes, anio){
+    if(anio * 12 + mes < 2026 * 12 + 10) return '';   // octubre 2026 hacia atrás: como siempre, sin nota
+    if(typeof window._nxProdNueva !== 'function' || !window._nxProdNueva(mes, anio))
+      return '<div class="tb-nota" style="color:#b54708">⚠️ Este equipo aún no tiene la lista de personal compartida de las dos empresas (se publica al abrir Gerencia MT y Gerencia MONHACO): este mes se muestra con el cálculo anterior, cada orden en su empresa.</div>';
+    var nom = otra() === 'monhaco' ? 'MONHACO' : 'MT Rental', e = window._nxAjenasEstado();
+    if(e === 'error') return '<div class="tb-nota" style="color:#b54708">⚠️ No se pudieron leer las órdenes de ' + nom + ' (este equipo no tiene acceso o no hay señal): aquí faltan las horas que el personal de esta empresa trabajó en órdenes de ' + nom + '.</div>';
+    if(e === 'cargando') return '<div class="tb-nota">⏳ Cargando las horas trabajadas en órdenes de ' + nom + '…</div>';
+    return '<div class="tb-nota">Cada persona suma en su empresa: incluye las horas de este personal en órdenes de ' + nom + ' y no cuenta al personal de ' + nom + ' en órdenes de aquí.</div>';
+  };
+  document.addEventListener('nx-dir', repintar);
+  document.addEventListener('nx-acceso', function(){ if(hayError){ ultimoIntento = 0; repintar(); } });   // al aprobarse el equipo, volver a intentar
+})();
+</script>
+<script>
 // ══ PERSONAL DESDE NEXO (2026-10-05, pedido de Miguel) ══════════════════════════════════════════════════════
 // Los técnicos, operadores y motoristas que se pueden elegir salen del módulo Personal de Gerencia de ESTA empresa.
 // Gerencia publica en <raíz>/rrhh/plantilla/{id} solo lo necesario: n (nombre en órdenes), c (cargo), roles
@@ -1732,6 +1972,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
 // siempre. Los nombres que ya están puestos en una orden siguen visibles en esa orden aunque la persona ya no esté.
 (function(){
   var RAIZ = 'montasa', CLAVE = 'nx_plantilla_' + RAIZ;
+  window._nxRaiz = RAIZ;   // (2026-11-21) empresa de esta app, para el directorio de personal MH + MT
   var plantilla = null, originales = {}, estaticos = null;
   try{ var g = localStorage.getItem(CLAVE); if(g) plantilla = JSON.parse(g); }catch(e){}
   function escH(t){ return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -1749,12 +1990,27 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   };
   // (2026-10-29) Persona que solo está para elegir en órdenes de mantenimiento (casilla de Personal): fuera de productividad y Agenda
   window._nxSoloMant = function(n){ return (personas() || []).some(function(p){ return p.n === n && es(p, 'mant') && !es(p, 'tec') && !es(p, 'jefe') && !es(p, 'op') && !es(p, 'mot'); }); };
-  function nombresDe(tipo){
+  function nombresBase(tipo){   // solo el personal de siempre de esta app (así era nombresDe hasta el 2026-11-21)
     var a = personas(); if(!a) return null;
     return a.filter(FILTROS[tipo] || FILTROS.tec).map(function(p){ return p.n; })
       .filter(function(n, i, l){ return l.indexOf(n) === i; }).sort(function(x, y){ return x.localeCompare(y, 'es'); });
   }
-  function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return ''; }
+  // (2026-11-21, Miguel) LISTA COMBINADA MH + MT: en las listas para ELEGIR (órdenes de mantenimiento, operadores, motoristas, revisiones)
+  // sale primero el personal de esta empresa y después el de la otra (viene del directorio de personal). Agenda (tecPuro) y avisos: solo propios.
+  var COMBINABLES = { tec: 1, op: 1, mot: 1, revision: 1 }, _rosterHecho = false;
+  function nombresDe(tipo){
+    var l = nombresBase(tipo); if(!l) return null;
+    var t = FILTROS[tipo] ? tipo : 'tec';
+    if(COMBINABLES[t] && typeof window._nxAjenos === 'function'){
+      window._nxAjenos(t).forEach(function(n){ if(l.indexOf(n) < 0) l.push(n); });
+      // primero el personal de esta empresa, después el de la otra (en MONHACO la lista de siempre ya traía mezclados a los operadores de MT)
+      if(typeof window._nxEmpDe === 'function'){ var o = RAIZ === 'montasa' ? 'monhaco' : 'montasa'; l = l.filter(function(n){ return window._nxEmpDe(n) !== o; }).concat(l.filter(function(n){ return window._nxEmpDe(n) === o; }).sort(function(x, y){ return x.localeCompare(y, 'es'); })); }
+    }
+    return l;
+  }
+  // Lista SOLO del personal de esta app (sin la otra empresa): la usa la productividad para clasificar técnico / operador
+  window._nxListaBase = function(tipo, nombreLista){ var l = nombresBase(tipo); return l ? l : ((nombreLista && (originales[nombreLista] || global(nombreLista))) || []).slice(); };
+  function telDe(n){ var a = personas() || []; for(var i = 0; i < a.length; i++) if(a[i].n === n) return a[i].tel || ''; return typeof window._nxTelAjeno === 'function' ? window._nxTelAjeno(n) : ''; }
   function sumarActuales(l, actuales){
     var ya = Array.isArray(actuales) ? actuales : String(actuales || '').split(',');
     ya.forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); });
@@ -1793,10 +2049,15 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     var arr = global('ROSTER_TEC'); if(!Array.isArray(arr)) return;
     if(!originales.ROSTER_TEC) originales.ROSTER_TEC = arr.map(function(t){ return { n: t.n, e: t.e }; });
     var emp = RAIZ === 'monhaco' ? 'MONHACO' : 'MT Rental';
-    var l = plantilla ? (nombresDe('tec') || []).map(function(n){ return { n: n, e: emp }; }) : originales.ROSTER_TEC.map(function(t){ return { n: t.n, e: t.e }; });
+    var l = plantilla ? (nombresDe('tec') || []).map(function(n){ var x = typeof window._nxEmpDe === 'function' ? window._nxEmpDe(n) : ''; return { n: n, e: x === 'monhaco' ? 'MONHACO' : x === 'montasa' ? 'MT Rental' : emp }; }) : originales.ROSTER_TEC.map(function(t){ return { n: t.n, e: t.e }; });
+    var _igual = _rosterHecho && JSON.stringify(arr) === JSON.stringify(l);   // (2026-11-21) misma lista: no rehacer las casillas
     arr.length = 0; Array.prototype.push.apply(arr, l);
+    if(_igual) return; _rosterHecho = true;
+    var _grids = [].slice.call(document.querySelectorAll('#prev-tecnicos-grid, #corr-tecnicos-grid, #cort-tecnicos-grid'));   // (2026-11-21) conservar lo marcado
+    var _marc = _grids.map(function(gd){ return [].filter.call(gd.querySelectorAll('input[type=checkbox]'), function(i){ return i.checked; }).map(function(i){ return i.value; }); });
     if(typeof window._poblarGridsTec === 'function') try{ window._poblarGridsTec(); }catch(e){}
     else if(typeof _poblarGridsTec === 'function') try{ _poblarGridsTec(); }catch(e){}
+    _grids.forEach(function(gd, j){ if(!_marc[j].length) return; [].forEach.call(gd.querySelectorAll('input[type=checkbox]'), function(i){ if(_marc[j].indexOf(i.value) >= 0 && !i.checked){ i.checked = true; var lb = i.closest('label'); if(lb) lb.classList.add('selected'); } }); });
   }
   // Grupos de casillas y listas desplegables escritas en la página: se recuerdan una vez y se rehacen con Personal
   function nombresViejos(){
@@ -7023,7 +7284,7 @@ function renderTableroGer(){
     +   _tbCombHTML(mes, anio, nomMes)   // (2026-10-15) combustible vehicular
     +   tarjeta('Órdenes abiertas por estado', 'hoy', sub('Mantenimiento · ' + fmt(mantAb.length)) + barras(deObj(contar(mantAb)), 'órdenes') + sub('Logística · ' + fmt(logAb.length)) + barras(deObj(contar(logAb)), 'órdenes'), '#eda100')   // (2026-10-13) mismo estilo de barras que los demás recuadros
     +   tarjeta('Órdenes cerradas en el mes', nomMes, sub('Mantenimiento') + barras(deObj(desgMant), 'órdenes') + sub('Logística por tipo') + barras(deObj(porTipo), 'órdenes'), '#1baf7a')
-    +   tarjeta('Productividad · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', prod(hm.sortedTec) + '<div class="tb-nota">Meta: 189 h al mes = 100% (barra llena).</div>', '#2a78d6')
+    +   tarjeta('Productividad · Técnicos', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedTec)) + '</b></span>', prod(hm.sortedTec) + '<div class="tb-nota">Meta: 189 h al mes = 100% (barra llena).</div>' + (typeof window._nxNotaAjenas === 'function' ? window._nxNotaAjenas(mes, anio) : ''), '#2a78d6')
     +   tarjeta('Productividad · Operadores', '<span class="tb-total">Total <b>' + hhmm(totMin(hm.sortedLog)) + '</b></span>', prod(hm.sortedLog) + '<div class="tb-nota">Meta: 189 h al mes = 100%. Incluye motoristas. Mismo cálculo que Productividad: tiempo entre inicio y fin de cada orden cerrada, para cada persona asignada.</div>', '#4a3aa7')
     +   tarjeta('Sistemas con más fallas', 'correctivos reportados en ' + nomMes, barras(deObj(porSis), 'correctivos') + (sinSis ? `<div class="tb-nota">${sinSis} correctivo${sinSis > 1 ? 's' : ''} sin sistema indicado: no se cuentan en el ranking.</div>` : ''), '#e34948')
     +   tarjeta('Equipos con más correctivos', 'top 10 · ' + nomMes, barras(deObj(top10), 'correctivos'), '#008300')
@@ -7105,6 +7366,11 @@ function _tbCombHTML(mes, anio, nomMes){
 
 // Horas trabajadas del mes: el MISMO cálculo para Productividad y para el Dashboard
 function _horasDelMes(mes, anio){
+  // (2026-11-21, Miguel) PERSONAL COMPARTIDO MH + MT: desde noviembre 2026 cada persona suma en SU empresa (la de su ficha), no en la de la orden.
+  // _NV: regla nueva activa para este mes · _aj: órdenes de la otra empresa (copias, solo lectura) · _cu: ¿esta persona cuenta aquí en esta orden?
+  const _NV = typeof window._nxProdNueva === 'function' && typeof window._nxOrdAjenas === 'function' && window._nxProdNueva(mes, anio);
+  const _aj = col => _NV ? window._nxOrdAjenas(col) : [];
+  const _cu = (n, o) => !_NV || window._nxCuentaAqui(n, o);
   function parseFechaLocal(val){
     if(!val) return new Date(NaN);
     if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)){
@@ -7120,24 +7386,31 @@ function _horasDelMes(mes, anio){
   // PERSONAL_LOG se define aquí (antes) porque el personal de logística a veces
   // también participa como "técnico" en órdenes de preventivo/correctivo, y sus
   // horas deben repartirse a Logística, no quedar separadas en Técnicos.
-  const PERSONAL_LOG = Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
+  const PERSONAL_LOG = typeof window._nxListaBase === 'function'   // (2026-11-21) solo el personal de siempre de esta app: OPERADORES_LOGISTICA ahora trae también a la otra empresa
+    ? Array.from(new Set([...window._nxListaBase('op', 'OPERADORES_LOGISTICA'), ...window._nxListaBase('mot', 'MOTORISTAS_LOGISTICA')]))
+    : Array.from(new Set([...OPERADORES_LOGISTICA, ...MOTORISTAS_LOGISTICA]));
   const statsLog = {};
   PERSONAL_LOG.forEach(p => { statsLog[p] = { ordenes:0, minutos:0 }; });
 
   const ordenesDelMes = [
-    ...DB.preventivos.filter(p => {
+    ...DB.preventivos.concat(_aj('preventivos')).filter(p => {
       if(!p.completado) return false;
       const f = parseFechaLocal(p.fechaCompletado||p.fechaFin||p.fecha);
       return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(p, mes, anio);   // (2026-10-24) o con días en este mes
     }),
-    ...DB.correctivos.filter(c => {
+    ...DB.correctivos.concat(_aj('correctivos')).filter(c => {
       if(c.estado!=='Completado') return false;
       const f = parseFechaLocal(c.fechaCierre||c.fechaFin||c.fecha);
       return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(c, mes, anio);   // (2026-10-24) o con días en este mes
+    }),
+    ..._aj('cortinas').filter(o => {   // (2026-11-21) cortinas de MONHACO con personal de MT
+      if(!o.completado && o.estado!=='Completado') return false;
+      const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
+      return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(o, mes, anio);
     })
   ];
   ordenesDelMes.forEach(o => {
-    const tecs = (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean);
+    const tecs = (o._ajena ? window._nxNombresOrden(o) : (o.tecnico||'').split(',').map(t=>t.trim()).filter(Boolean)).filter(n => _cu(n, o));   // (2026-11-21) cada quien en su empresa
     // Usar tiempo total (incluye traslado si aplica) para las horas del personal
     const t = calcTiemposOrden(o);
     const mins = Math.round((t.minsTotal || 0) * _nxParteMes(o, mes, anio));   // (2026-10-24) solo la parte de este mes
@@ -7157,13 +7430,13 @@ function _horasDelMes(mes, anio){
   // ══════════════════════════════════════════════════════════════════════
   // LOGÍSTICA — operadores y motoristas (órdenes cerradas)
   // ══════════════════════════════════════════════════════════════════════
-  const logCerradasMes = (DB.logistica||[]).concat(_nxLogMHparaMT()).filter(o => {   // (2026-10-28) + órdenes de MONHACO con personal de MT
+  const logCerradasMes = (DB.logistica||[]).concat(_NV ? _aj('logistica') : _nxLogMHparaMT()).filter(o => {   // (2026-10-28) + órdenes de MONHACO con personal de MT
     if(!o.cerrado || o.estado==='Cancelado') return false;
     const f = parseFechaLocal(o.fechaCierre||o.fechaFin||o.fecha);
     return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(o, mes, anio);   // (2026-10-24) o con días en este mes
   });
   logCerradasMes.forEach(o => {
-    const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean);
+    const asignados = [o.operador, o.operador2, o.operador3, o.operador4, o.operador5, o.motorista].filter(Boolean).filter(p => _cu(p, o));   // (2026-11-21)
     if(!asignados.length) return;
     const ini = new Date(o.fechaInicio), fin = new Date(o.fechaFin);
     const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, o.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, o.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
@@ -7180,13 +7453,13 @@ function _horasDelMes(mes, anio){
   // REVISIONES FÍSICO-TÉCNICAS — el técnico1/técnico2 puede ser personal
   // técnico o de logística; se reparte el tiempo al grupo correspondiente.
   // ══════════════════════════════════════════════════════════════════════
-  const revisionesDelMes = (DB.revisiones||[]).filter(r => {
+  const revisionesDelMes = (DB.revisiones||[]).concat(_aj('revisiones')).filter(r => {
     if(!r.completado) return false;
     const f = parseFechaLocal(r.fechaCierre||r.fecha);
     return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes
   });
   revisionesDelMes.forEach(r => {
-    const tecs = (r.tecnicos||[]).filter(Boolean);
+    const tecs = (r.tecnicos||[]).filter(Boolean).filter(n => _cu(n, r));
     if(!tecs.length) return;
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
@@ -7206,13 +7479,13 @@ function _horasDelMes(mes, anio){
   });
 
   // (2026-10-13, pedido de Miguel) EVALUACIONES: mismas reglas que las revisiones
-  const evaluacionesDelMes = (DB.evaluaciones||[]).filter(r => {
+  const evaluacionesDelMes = (DB.evaluaciones||[]).concat(_aj('evaluaciones')).filter(r => {
     if(!r.completado) return false;
     const f = parseFechaLocal(r.fechaCierre||r.fecha);
     return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio);   // (2026-10-24) o con días en este mes
   });
   evaluacionesDelMes.forEach(r => {
-    const tecs = (r.tecnicos||[]).filter(Boolean);
+    const tecs = (r.tecnicos||[]).filter(Boolean).filter(n => _cu(n, r));
     if(!tecs.length) return;
     const iniStr = r.fecha && r.horaIni ? r.fecha+'T'+r.horaIni : (r.fechaInicio||'');
     const finStr = r.fecha && r.horaFin ? r.fecha+'T'+r.horaFin : (r.fechaFin||'');
@@ -7232,8 +7505,8 @@ function _horasDelMes(mes, anio){
   });
 
   // (2026-10-14) SOLDADURA / PINTURA: tiempo entre inicio y fin; operadores a logística, técnicos a técnicos
-  (DB.soldaduras||[]).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio); }).forEach(r => {   // (2026-10-24) o con días en este mes
-    const tecs = (r.tecnicos||[]).filter(Boolean); if(!tecs.length) return;
+  (DB.soldaduras||[]).concat(_aj('soldaduras')).filter(r => { if(!(r && (r.completado || r.estado==='Completado'))) return false; const f = parseFechaLocal(r.fechaCierre||r.fecha); return (!isNaN(f) && f.getMonth()===mes && f.getFullYear()===anio) || _nxTocaMes(r, mes, anio); }).forEach(r => {   // (2026-10-24) o con días en este mes
+    const tecs = (r.tecnicos||[]).filter(Boolean).filter(n => _cu(n, r)); if(!tecs.length) return;
     const ini = new Date(r.fechaInicio||''), fin = new Date(r.fechaFin||''); const mins = _nxMulMes(ini, fin, mes, anio, (!isNaN(ini) && !isNaN(fin) && fin>ini) ? (typeof _calcMinsJornada === 'function' ? _calcMinsJornada(ini, fin, r.domingosTrabajados) : Math.floor((fin-ini)/60000)) : 0, r.domingosTrabajados);   // (2026-10-24) solo la parte de este mes
     tecs.forEach(nombre => { const st = (PERSONAL_LOG.includes(nombre) && !TECNICOS_LIST.includes(nombre)) ? statsLog : statsTec; if(!st[nombre]) st[nombre] = {ordenes:0, minutos:0}; st[nombre].ordenes++; st[nombre].minutos += mins; });
   });
@@ -7411,7 +7684,7 @@ function renderPersonal(){
   // ══════════════════════════════════════════════════════════════════════
   el.innerHTML =
     bloquePersonal('Técnicos — Mantenimiento', '🔧', sortedTec, '#18A303') +
-    bloquePersonal('Logística', '🚛', sortedLog, '#236292');
+    bloquePersonal('Logística', '🚛', sortedLog, '#236292') + (function(){ var n = typeof window._nxNotaAjenas === 'function' ? window._nxNotaAjenas(mes, anio) : ''; return n ? '<div style="font-size:12px;color:#667085;margin-top:8px">' + n + '</div>' : ''; })();   // (2026-11-21) personal compartido MH + MT
 }
 
 
@@ -15538,6 +15811,8 @@ function _cliOrdenAlCerrar(o){
         if(falta.length){ alert('Falta o está incompleto:\n• ' + falta.join('\n• ')); return; }
         var mismo = lista(datos.empleados).find(function(x){ return x.id !== e.id && x.activo !== false && normNombre(x.nombreOrdenes || nombreOrdenesAuto(x.nombreCompleto)) === normNombre(d.nombreOrdenes); });
         if(mismo && !confirm('«' + d.nombreOrdenes + '» ya es el nombre en órdenes de ' + mismo.nombreCompleto + '. En las órdenes no se podrán distinguir.\n¿Guardar de todas formas?')) return;
+        var _empN = typeof window._nxEmpDe === 'function' ? window._nxEmpDe(d.nombreOrdenes) : '';   // (2026-11-21) personal compartido MH + MT
+        if(!mismo && _empN && _empN !== R && (_empN === 'montasa' || _empN === 'monhaco') && !confirm('«' + d.nombreOrdenes + '» ya es el nombre en órdenes de una persona de ' + (_empN === 'monhaco' ? 'MONHACO' : 'MT Rental') + '. Como las listas de las dos empresas ahora se comparten, no se podrán distinguir y sus horas se pueden mezclar.\n¿Guardar de todas formas?')) return;
         var otro = lista(datos.empleados).find(function(x){ return x.id !== e.id && soloDigitos(x.identidad) === soloDigitos(d.identidad); });
         if(otro && !confirm('Ya hay un empleado con esa identidad: ' + otro.nombreCompleto + (otro.activo === false ? ' (dado de baja)' : '') + '.\n¿Guardar de todas formas?')) return;
         pin(function(){
@@ -15638,8 +15913,33 @@ function _cliOrdenAlCerrar(o){
       return window._fbDB.ref('monhaco/rrhh/plantillaMT').set(mt).then(function(){ _mtPub = c; });
     }).catch(function(e){ console.warn('plantillaMT', e); });
   }
+  // (2026-11-21, Miguel) DIRECTORIO DE PERSONAL MH + MT: el personal de órdenes de ESTA empresa (activos y de baja, sin teléfono) en
+  // monhaco/rrhh/personalMT | personalMH, para que las apps de las dos empresas sepan de qué empresa es cada nombre (listas y productividad).
+  var _dirPub = null, _dirVig = false, _dirVeces = 0;
+  function publicarDirectorio(){
+    if((R !== 'montasa' && R !== 'monhaco') || !window._fbDB || !datos._cargado) return;
+    var d = {};
+    lista(datos.empleados).filter(function(e){ return e && e.id && _esMio(e); }).forEach(function(e){
+      var p = entradaPlantilla(e); if(!p.n) return;
+      var x = { n: p.n };
+      if(e.activo === false){ var fb = String(e.fechaBaja || '').match(/^\d{4}-\d{2}-\d{2}/); if(fb && fb[0] < '2026-11-01') return;   // bajas anteriores a la regla nueva: no hacen falta
+        x.ina = 1; if(fb) x.hasta = fb[0]; }
+      else { if(p.c) x.c = p.c; if(p.roles && p.roles.length) x.roles = p.roles; }
+      var ft = String(e.fechaTraslado || '').match(/^\d{4}-\d{2}-\d{2}/); if(e.trasladadoDe && ft){ x.de = String(e.trasladadoDe); x.desde = ft[0]; }
+      d[e.id] = x; });
+    if(!Object.keys(d).length) return;   // nunca vaciar el directorio por sí solo
+    var ruta = 'monhaco/rrhh/' + (R === 'montasa' ? 'personalMT' : 'personalMH'), c = canon(d);
+    // monhaco/ se puede escribir sin sesión: si alguien borra o altera el nodo, esta Gerencia lo vuelve a publicar (con tope por si acaso)
+    if(!_dirVig){ _dirVig = true; window._fbDB.ref(ruta).on('value', function(s){ if(_dirPub && canon(s.val() || {}) !== _dirPub && _dirVeces < 20){ _dirVeces++; _dirPub = null; publicarDirectorio(); } }, function(){}); }
+    if(c === _dirPub) return;
+    window._fbDB.ref(ruta).once('value').then(function(s){
+      if(canon(s.val() || {}) === c){ _dirPub = c; return; }
+      return window._fbDB.ref(ruta).set(d).then(function(){ _dirPub = c; });
+    }).catch(function(e){ console.warn('directorio de personal', e); });
+  }
   function publicarPlantilla(){
     if(!window._fbDB || !datos._cargado || !datos._plantCargada) return;   // esperar a tener Personal y la plantilla
+    publicarDirectorio();
     var nueva = {}; lista(datos.empleados).filter(function(e){ return e.activo !== false && e.id && _esMio(e); }).forEach(function(e){ nueva[e.id] = entradaPlantilla(e); });
     if(!Object.keys(nueva).length){ if(datos.plantilla) return; nueva = null; }   // nunca vaciar la lista de las órdenes por sí sola
     publicarMT(nueva);
@@ -15930,6 +16230,10 @@ function _cliOrdenAlCerrar(o){
         if(!window._fbDB){ aviso('Sin conexión: no se trasladó', true); return; }
         window._fbDB.ref().update(cambios).then(function(){
           w.remove(); aviso(p.nombre + ' trasladado a ' + nombreEmpresa(dest) + ' ✓');
+          try{ if(p.emp && _esMio(p.emp)){ var _dn = { montasa: 'personalMT', monhaco: 'personalMH' };   // (2026-11-21) directorio de personal MH + MT
+            if(_dn[R]) window._fbDB.ref('monhaco/rrhh/' + _dn[R] + '/' + p.emp.id).remove().catch(function(){});
+            if(_dn[dest] && p.emp.activo !== false){ var _ep = entradaPlantilla(p.emp), _xe = { n: _ep.n, de: R, desde: hoyISO() }; if(_ep.c) _xe.c = _ep.c; if(_ep.roles && _ep.roles.length) _xe.roles = _ep.roles;
+              if(_ep.n) window._fbDB.ref('monhaco/rrhh/' + _dn[dest] + '/' + p.emp.id).set(_xe).catch(function(){}); } } }catch(e){}
         }).catch(function(er){ aviso('No se trasladó (no cambió nada): ' + er.message, true); });
       }, '🔒 Trasladar a ' + nombreEmpresa(dest));
     });
@@ -17634,7 +17938,7 @@ async function _mantCompartirAviso(equipoId){
   function mejorarTec(c){
     c._nxTec = true;
     var ui = crearUI({ clave: 'tec:' + (c.id || ((c.closest('[id]') || {}).id) || ''), ph: '-- Seleccionar técnico(s) --', plural: 'técnicos',
-      items: function(){ return hijosTec(c).map(function(h){ var x = h.matches('.tec-btn') ? h : h.querySelector('input');
+      items: function(){ return hijosTec(c).filter(function(h){ return h.style.display !== 'none'; }).map(function(h){ var x = h.matches('.tec-btn') ? h : h.querySelector('input');   // (2026-11-21) sin las ocultas
         return { k: nombreDe(h), on: onDe(h), bloqueado: x.disabled || getComputedStyle(h).pointerEvents === 'none' }; }); },
       tocar: function(n){ var h = hijosTec(c).find(function(x){ return nombreDe(x) === n; }); if(!h) return;
         if(h.matches('.tec-btn')) h.click(); else h.querySelector('input[type=checkbox]').click(); } });
