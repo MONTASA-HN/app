@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c87ba6eeded7';
+  var APP_VERSION='4116803550e0';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8668,12 +8668,25 @@ function calcularNotificacionesMant(){
     const fechaProxima = new Date(fechaUltimo);
     fechaProxima.setMonth(fechaProxima.getMonth()+meses);
     const diasRestantes = Math.round((fechaProxima - hoy)/86400000);
-    if(diasRestantes <= 7){
+    // ══ PREVENTIVO CADA 350 HORAS (2026-11-21, Miguel) ══ 350 h desde el horómetro del último preventivo, o los meses de la ficha: lo que ocurra primero.
+    // Avisa desde 50 h antes. Horómetro actual = el mayor entre la ficha, las órdenes del equipo y las lecturas de horómetros. Sin horómetro: solo por fecha.
+    const _hInt = parseFloat(eq.intervaloMantHoras) > 0 ? parseFloat(eq.intervaloMantHoras) : 350, _hUlt = parseFloat(ultimo.horometro||0);
+    let horasRestantes = null, horoProximo = 0, horoActual = 0;
+    if(_hUlt > 0){
+      horoActual = Math.max(_hUlt, parseFloat(eq.horometro||0) || 0);
+      [DB.preventivos, DB.correctivos, DB.ordenesCerradas, DB.cortinas].forEach(L => (Array.isArray(L) ? L : []).forEach(o => { if(o && o.equipoId === eq.id){ const h = parseFloat(o.horometro||0); if(h > horoActual) horoActual = h; } }));
+      try{ const HM = DB.horometros || {}; Object.keys(HM).forEach(m => { const x = HM[m] && HM[m][eq.id]; const h = x ? parseFloat(x.lectura||0) : 0; if(h > horoActual) horoActual = h; });
+        const HP = DB.horometrosParciales || {}; Object.keys(HP).forEach(k => { const x = HP[k] && HP[k].lecturas && HP[k].lecturas[eq.id]; const h = x ? parseFloat(x.lectura||0) : 0; if(h > horoActual) horoActual = h; }); }catch(e){}
+      horoProximo = _hUlt + _hInt; horasRestantes = Math.round((horoProximo - horoActual) * 10) / 10;
+    }
+    const porHoras = horasRestantes !== null && horasRestantes <= 50;
+    if(diasRestantes <= 7 || porHoras){
       const notifKey = eq.id + '_' + (ultimo.correlativo||'sin-orden');
       notifs.push({
         equipoId: eq.id,
         codigo: eq.codigo,
         diasRestantes,
+        porHoras, horasRestantes, horoProximo, horoActual, horasIntervalo: _hInt, mesesIntervalo: meses,
         ultimoServicio: ultimo.servicio||'—',
         ultimoCorrelativo: ultimo.correlativo||'—',
         notifKey,
@@ -8683,8 +8696,8 @@ function calcularNotificacionesMant(){
   });
   notifs.sort((a,b)=>{
     // Vehículos primero si están más urgentes
-    const urgA = a.esVehiculo ? (a.kmRestantes <= 0 ? -9999 : a.kmRestantes) : (a.diasRestantes * 100);
-    const urgB = b.esVehiculo ? (b.kmRestantes <= 0 ? -9999 : b.kmRestantes) : (b.diasRestantes * 100);
+    const _urg = n => n.esVehiculo ? (n.kmRestantes <= 0 ? -9999 : n.kmRestantes) : Math.min(n.diasRestantes * 100, n.porHoras ? n.horasRestantes * 14 : Infinity);   // (2026-11-21) 50 h ≈ 7 días
+    const urgA = _urg(a), urgB = _urg(b);
     return urgA - urgB;
   });
   return notifs;
@@ -8726,10 +8739,14 @@ function renderNotificacionesTab(){
         ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
       </div>`;
     }
-    const urgente = n.diasRestantes <= 0;
-    const diasTexto = urgente
+    const _venF = n.diasRestantes <= 0, _venH = !!n.porHoras && n.horasRestantes <= 0;   // (2026-11-21) 350 h o los meses de la ficha, lo que ocurra primero
+    const urgente = _venF || _venH;
+    const _txtF = _venF
       ? (n.diasRestantes===0 ? 'Vence hoy' : 'Vencido hace '+Math.abs(n.diasRestantes)+' día'+(Math.abs(n.diasRestantes)===1?'':'s'))
       : 'En '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s');
+    const _hh = v => (Math.round(Math.abs(v) * 10) / 10).toLocaleString();
+    const _txtH = n.porHoras ? (_venH ? (n.horasRestantes === 0 ? 'Llegó a las ' + n.horasIntervalo + ' h' : 'Pasado por ' + _hh(n.horasRestantes) + ' h') : 'Faltan ' + _hh(n.horasRestantes) + ' h') : '';
+    const diasTexto = n.porHoras ? (n.diasRestantes <= 7 ? _txtH + ' · ' + _txtF : _txtH) : _txtF;
     const badgeStyle = n.completada ? 'background:#c8edcc;color:#1a5c1a' : (urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800');
     const claseItem = n.completada ? 'notif-completada' : (urgente ? 'notif-urgent' : '');
     return `<div class="notif-item ${claseItem}">
@@ -8738,6 +8755,7 @@ function renderNotificacionesTab(){
         <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${n.completada ? '✅ Completado' : diasTexto}</span>
       </div>
       <div class="notif-line">Próximo mantenimiento del equipo <b>${_x(n.codigo)}</b>${urgente?'':' en '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s')}</div>
+      ${n.horasRestantes !== null && n.horasRestantes !== undefined ? `<div class="notif-line">⏱ Próximo PM a las <b>${n.horoProximo.toLocaleString()} h</b> — horómetro actual: <b>${n.horoActual.toLocaleString()} h</b> <span style="opacity:.7">(cada ${n.horasIntervalo} h o ${n.mesesIntervalo} meses, lo que ocurra primero)</span></div>` : ''}
       <div class="notif-line">Último mantenimiento: <b>${_x(n.ultimoServicio)}</b> — orden <b>${_x(n.ultimoCorrelativo)}</b></div>
       ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
     </div>`;
