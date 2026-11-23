@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='988d233f40c3';
+  var APP_VERSION='b889d7c8cad5';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8166,15 +8166,19 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
       caja.querySelector('.nx-m-txt').textContent = marc.length ? (marc.length === 1 ? marc[0].k : marc.length + ' ' + o.plural + ' seleccionados') : o.ph;
       var b = caja.querySelector('.nx-m-btn'); b.disabled = bloq; b.style.opacity = bloq ? '.55' : '1'; b.style.cursor = bloq ? 'default' : 'pointer';
       if(bloq) abrir(false);
-      lista.innerHTML = its.map(function(i){
-        return '<div data-k="' + esc(i.k) + '" style="display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:14px;color:#222;cursor:pointer;border-bottom:1px solid #f1f1f1">'
+      // (2026-11-23) SIN PARPADEO: la etiqueta de empresa (MT / MH) va ya en el dibujo; antes se ponía después y la cápsula parpadeaba
+      var _emp = function(k){ try{ var e = (o.plural === 'técnicos' && typeof window._nxEmpEtq === 'function' && typeof window._nxDirListo === 'function' && window._nxDirListo()) ? window._nxEmpEtq(k) : ''; return e ? ' data-nx-emp="' + e + '"' : ''; }catch(er){ return ''; } };
+      var _hL = its.map(function(i){
+        return '<div data-k="' + esc(i.k) + '"' + _emp(i.k) + ' style="display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:14px;color:#222;cursor:pointer;border-bottom:1px solid #f1f1f1">'
           + '<span style="width:20px;height:20px;flex-shrink:0;box-sizing:border-box;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;'
           + (i.on ? 'background:#1f3864;border:2px solid #1f3864;color:#fff">✓' : 'background:#fff;border:2px solid #aaa;color:transparent">✓') + '</span><span>' + esc(i.k) + '</span></div>';
       }).join('') + '<div style="position:sticky;bottom:0;background:#fff;padding:8px 10px;text-align:right"><button type="button" class="nx-m-listo" style="padding:7px 18px;border:none;border-radius:8px;background:#1f3864;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Listo</button></div>';
-      caja.querySelector('.nx-m-chips').innerHTML = marc.map(function(i){
-        return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 11px;border-radius:999px;background:#1f3864;color:#fff;font-size:12px;font-weight:700">' + esc(i.k)
+      var _hC = marc.map(function(i){
+        return '<span' + _emp(i.k) + ' style="display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 11px;border-radius:999px;background:#1f3864;color:#fff;font-size:12px;font-weight:700">' + esc(i.k)
           + (bloq ? '<span style="width:4px"></span>' : '<button type="button" data-quitar="' + esc(i.k) + '" title="Quitar" style="border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:999px;width:18px;height:18px;line-height:18px;padding:0;font-size:11px;cursor:pointer">✕</button>') + '</span>';
       }).join('');
+      if(lista.innerHTML !== _hL) lista.innerHTML = _hL;
+      var _ch = caja.querySelector('.nx-m-chips'); if(_ch.innerHTML !== _hC) _ch.innerHTML = _hC;
     }
     caja.addEventListener('click', function(ev){
       var t = ev.target; ev.stopPropagation();
