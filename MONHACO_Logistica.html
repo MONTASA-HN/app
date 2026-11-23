@@ -128,7 +128,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c75042ada5c1';
+  var APP_VERSION='28c241592dfb';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -967,7 +967,8 @@ function finalizarTomaCliente(cli){
   const faltanF = [];
   if(!fir.sup) faltanF.push('SUPERVISOR');
   if(!fir.ger) faltanF.push('GERENTE');
-  if(faltanF.length){ toast('Para finalizar la toma de '+cli+' falta la firma de: '+faltanF.join(' y '), true); return; }
+  // (2026-11-23, Miguel) Las firmas son OPCIONALES: si falta alguna se avisa y se puede finalizar igual
+  if(faltanF.length && !confirm('La toma de '+cli+' no tiene la firma de: '+faltanF.join(' y ')+'.\n\n\u00bfFinalizar sin esa firma?')) return;
   const lecturas = _horLecturas(mes);
   const grupo = (_horClientes(_horEquiposVista(mes))[String(cli).toUpperCase().trim()])||[];
   const conLectura = grupo.filter(function(e){ return _horTiene(lecturas[e.id]); });
@@ -991,7 +992,7 @@ function finalizarTomaHorometros(){
   if(!pendientes.length){ toast('Todos los clientes ya est\u00e1n finalizados', true); return; }
   const firmasT = _horFirmas(mes);
   const sinFirma = pendientes.filter(function(c){ const f = firmasT[_horCliKey(c)] || {}; return !(f.sup && f.ger); });
-  if(sinFirma.length){ toast('Faltan firmas de supervisor y gerente en: '+sinFirma.join(', '), true); return; }
+  if(sinFirma.length && !confirm('Faltan firmas de supervisor o gerente en: '+sinFirma.join(', ')+'.\n\n\u00bfFinalizar sin esas firmas?')) return;   // (2026-11-23, Miguel) firmas opcionales
   const lecturas = _horLecturas(mes);
   const grupos = _horClientes(_horEquiposVista(mes));
   const conLectura = [];
