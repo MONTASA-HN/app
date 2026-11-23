@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='a27d81b2e31a';
+  var APP_VERSION='ed464dca6e5a';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -15612,6 +15612,88 @@ window._nxExcelConLogo = function(wbX, archivo){
   setInterval(recalcular, 10 * 60 * 1000);   // cambia de día / alguien regresa
   setInterval(avisarOrdenes, 5 * 60 * 1000);
   escuchar();
+})();
+</script>
+<script>
+// ══ VIÁTICOS DESDE LA ORDEN (2026-11-23, Miguel) ══════════════════════════════════════════════════════════════════════
+// 1. Cliente: sale de la orden (clienteOrden → clienteNombre → cliente → cliente del equipo) y no se edita aquí.
+// 2. Personas: en una solicitud NUEVA salen solas de la orden (logística: operadores y motorista; mantenimiento: técnicos).
+//    Se pueden quitar o agregar con los botones de siempre.
+// 3 y 4. Un solo horario para todos (fecha inicio, fecha final, hora salida, hora regreso). Por dentro se sigue guardando en cada
+//    persona (mismos campos de siempre), así el cálculo de alimentación, el PDF y la liquidación no cambian.
+//    Solicitudes viejas con horarios distintos por persona se muestran como estaban (con aviso).
+(function(){
+  if(typeof renderModalViaticos !== 'function') return;
+  var _orig = renderModalViaticos;
+  function cliDe(o){
+    var c = String((o && (o.clienteOrden || o.clienteNombre || o.cliente)) || '').trim();
+    if(!c && o && o.equipoId){ var e = (DB.equipos || []).find(function(x){ return x && x.id === o.equipoId; }); if(e) c = String(e.clienteNombre || e.cliente || '').trim(); }
+    return c;
+  }
+  function personasDe(o, tipo){
+    var l = [], add = function(n){ n = String(n || '').trim(); if(n && l.indexOf(n) < 0) l.push(n); };
+    var tec = function(){ (Array.isArray(o.tecnicos) ? o.tecnicos : []).forEach(add); String(o.tecnico || '').split(',').forEach(add); };
+    if((tipo || 'logistica') === 'logistica'){ ['operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'].forEach(function(k){ add(o[k]); }); if(!l.length) tec(); }
+    else tec();
+    return l;
+  }
+  function vacia(n){ return { nombre: n, fecha: '', fecha_fin: '', hora_ini: '', hora_fin: '', desayuno: 0, almuerzo: 0, cena: 0, media_noche: 0, transporte: 0, hospedaje: 0, total: 0 }; }
+  var CAMPOS = ['vp-fecha-', 'vp-ffin-', 'vp-hini-', 'vp-hfin-'], COMUN = ['vc-fecha', 'vc-ffin', 'vc-hini', 'vc-hfin'];
+  function val(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+  function fila(i){ return CAMPOS.map(function(c){ return val(c + i); }); }
+  function nFilas(){ return document.querySelectorAll('[id^="vp-row-"]').length; }
+  function diasTxt(){ var d = (typeof _viatDias === 'function') ? _viatDias(val('vc-fecha'), val('vc-ffin')) : 0; var e = document.getElementById('vc-dias'); if(e) e.textContent = d > 1 ? '📆 Período de ' + d + ' días' : ''; }
+  // copia el horario común a cada persona y recalcula su alimentación
+  window._viatComunSync = function(){
+    var v = COMUN.map(val), n = nFilas();
+    for(var i = 0; i < n; i++){ CAMPOS.forEach(function(c, j){ var e = document.getElementById(c + i); if(e) e.value = v[j]; }); try{ recalcPersona(i); }catch(e){} }
+    try{ recalcViaticos(); }catch(e){} diasTxt();
+  };
+  function ajustar(orden){
+    if(_viaticosMode !== 'solicitud' || !orden) return;
+    // 1. cliente de la orden
+    var cli = document.getElementById('v-cliente'), c = cliDe(orden);
+    if(cli && c && !_viaticosReadOnly){ cli.value = c; cli.readOnly = true; cli.style.background = 'var(--surface2)'; cli.title = 'Viene de la orden: si está mal, corrígelo en la orden';
+      var lb = cli.parentNode && cli.parentNode.querySelector('label'); if(lb && !/de la orden/.test(lb.textContent)) lb.insertAdjacentHTML('beforeend', ' <span style="font-weight:400;color:var(--text3);font-size:11px">(de la orden)</span>'); }
+    // 3 y 4. un solo horario
+    var n = nFilas(), lista = document.getElementById('v-personas-list'); if(!n || !lista) return;
+    var base = null, i;
+    for(i = 0; i < n; i++){ var x = fila(i); if(x.some(Boolean)){ base = x; break; } }
+    base = base || ['', '', '', ''];
+    for(i = 0; i < n; i++){ var y = fila(i); if(y.some(Boolean) && y.join('|') !== base.join('|')){
+      lista.insertAdjacentHTML('beforebegin', '<div style="background:#fff8e6;border:1px solid #eedc9a;border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px;font-size:12px;color:#8a6d00">⚠️ Esta solicitud se guardó con fechas u horarios distintos por persona: se muestra como estaba.</div>'); return; } }
+    var dis = _viaticosReadOnly ? ' disabled' : '', st = 'style="width:100%"';
+    var h = '<div id="v-horario-comun" style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px">'
+      + '<div style="font-weight:700;font-size:13px;color:#1f3864;margin-bottom:8px">🕒 Fechas y horario del viaje <span style="font-weight:400;color:var(--text3);font-size:11px">(igual para todo el personal)</span></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      + '<div class="form-group"><label>Fecha inicio</label><input type="date" id="vc-fecha" value="' + base[0] + '" onchange="_viatComunSync()" ' + st + dis + '></div>'
+      + '<div class="form-group"><label>Fecha final <span style="font-weight:400;color:var(--text3);font-size:10px">(si son varios días)</span></label><input type="date" id="vc-ffin" value="' + base[1] + '" onchange="_viatComunSync()" ' + st + dis + '></div>'
+      + '<div class="form-group"><label>Hora salida</label><input type="time" id="vc-hini" value="' + base[2] + '" onchange="_viatComunSync()" ' + st + dis + '></div>'
+      + '<div class="form-group"><label>Hora regreso</label><input type="time" id="vc-hfin" value="' + base[3] + '" onchange="_viatComunSync()" ' + st + dis + '></div>'
+      + '</div><div id="vc-dias" style="font-size:11px;color:#1f3864;font-weight:700"></div></div>';
+    var titulo = lista.previousElementSibling; (titulo || lista).insertAdjacentHTML('beforebegin', h);
+    var cambio = false;
+    for(i = 0; i < n; i++){
+      var f0 = document.getElementById('vp-fecha-' + i), g = f0 && f0.closest('.form-group') && f0.closest('.form-group').parentNode;
+      if(g && g !== lista) g.style.display = 'none';
+      var dd = document.getElementById('vp-dias-' + i); if(dd) dd.style.display = 'none';
+      if(fila(i).join('|') !== base.join('|')){ CAMPOS.forEach(function(c, j){ var e = document.getElementById(c + i); if(e) e.value = base[j]; }); if(base.some(Boolean)){ try{ recalcPersona(i); }catch(e){} cambio = true; } }
+    }
+    if(cambio){ try{ recalcViaticos(); }catch(e){} }
+    diasTxt();
+  }
+  renderModalViaticos = function(orden){
+    // 2. solicitud NUEVA (la primera de la orden): las personas salen de la orden
+    try{
+      if(orden && _viaticosMode === 'solicitud' && !_viaticosReadOnly && !orden.viaticos && _viatSolIdx === null && !_viatBorrador && !(_viaticosData && (_viaticosData.personas || []).length)){
+        var ns = personasDe(orden, _viaticosTipo);
+        if(ns.length){ _viaticosData = Object.assign({}, _viaticosData || {}, { personas: ns.map(vacia) }); _viatBorrador = true; }
+      }
+    }catch(e){ console.warn('viáticos personas', e); }
+    var r = _orig.apply(this, arguments);
+    try{ ajustar(orden); }catch(e){ console.warn('viáticos', e); }
+    return r;
+  };
 })();
 </script>
 </body>
