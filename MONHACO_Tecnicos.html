@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='bb316308bf67';
+  var APP_VERSION='7a4242b91d61';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -7780,6 +7780,115 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
     hecho = true; try{ if(window._nxAsignadosCompletar() > 0) saveDB(); }catch(e){} }
   document.addEventListener('nx-dir', function(){ setTimeout(primeraVez, 1500); });
   var n = 0, t = setInterval(function(){ primeraVez(); if(hecho || ++n > 60) clearInterval(t); }, 2000);
+})();
+</script>
+<script>
+// ══ NEXO TÉCNICOS · DENTRO DE LA APP UNIFICADA (2026-11-24, Miguel: paso 4 de Técnicos unificados) ══════════════════════
+// SOLO se activa cuando esta app está dentro de NEXO_Tecnicos.html (marco «nx-tec-…»). Abierta por su enlace de siempre: nada cambia.
+//  · Encabezado «Nexo Técnicos» con el logo de Nexo (la empresa se elige en la cápsula de arriba).
+//  · Carpeta «📌 Mis Órdenes»: las órdenes ABIERTAS asignadas a la ficha de este teléfono (accesos/<uid> → empleadoId +
+//    empleadoEmpresa) en las DOS empresas: por o.asignados (paso 2) o, si falta, por el nombre en órdenes de su ficha.
+//    Cada orden sigue existiendo una sola vez, en su empresa: tocarla abre la ORIGINAL (si es de la otra, cambia la cápsula).
+(function(){
+  var DENTRO = false; try{ DENTRO = /^nx-tec-/.test(window.name) && window.parent !== window && !!window.parent.__nxTecConcha; }catch(e){}
+  if(!DENTRO) return;
+  var RAIZ = 'monhaco', CONCHA = window.parent.__nxTecConcha, CL_P = 'nx_tec_persona';
+  var EMP = { montasa: { nombre: 'MT Rental', corto: 'MT', color: '#1f3864' }, monhaco: { nombre: 'MONHACO', corto: 'MH', color: '#b45309' } };
+  var COLS = [['preventivos', 'preventivo', 'Preventivo'], ['correctivos', 'correctivo', 'Correctivo'], ['revisiones', 'revision', 'Revisión'], ['evaluaciones', 'evaluacion', 'Evaluación'], ['soldaduras', 'soldadura', 'Soldadura / Pintura']];
+  var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
+  function nombres(o){ var l = []; CAMPOS.forEach(function(k){ var v = o[k]; (Array.isArray(v) ? v : String(v || '').split(',')).forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); }); }); return l; }
+  // ── encabezado ──
+  function encabezado(){
+    var h = document.querySelector('.app-header'); if(!h || h._nxTec) return; h._nxTec = 1;
+    h.style.paddingTop = '12px';
+    var t = [].filter.call(h.querySelectorAll('div'), function(d){ return /Técnicos$/.test(d.textContent.trim()) && !d.children.length; })[0]; if(t) t.textContent = 'Nexo Técnicos';
+    var img = h.querySelector('img'); if(img) img.src = 'icons/nexo-192.png';
+  }
+  // ── persona del teléfono (se recuerda para cuando no hay señal) ──
+  function persona(){
+    var r = (window._nxAcceso || {}).registro;
+    if(r && r.estado === 'aprobado' && r.empleadoId && (r.empleadoEmpresa === 'montasa' || r.empleadoEmpresa === 'monhaco')){
+      var p = { empId: r.empleadoId, raiz: r.empleadoEmpresa, nombre: ((r.nombre || '') + ' ' + (r.apellido || '')).trim() };
+      try{ localStorage.setItem(CL_P, JSON.stringify(p)); }catch(e){} return p; }
+    try{ return JSON.parse(localStorage.getItem(CL_P) || 'null'); }catch(e){ return null; }
+  }
+  function equipoTxt(B, o){ var e = (Array.isArray(B.equipos) ? B.equipos : []).find(function(x){ return x && x.id === o.equipoId; });
+    return e ? [e.codigo, e.modelo || e.desc || e.tipo || ''].filter(Boolean).join(' · ') : (o.equipoTxt || o.equipo || ''); }
+  // Las órdenes abiertas de ESTA empresa asignadas a la ficha p (la usa también la app de la otra empresa)
+  window.__nxTecMias = function(p){
+    if(!p || !p.empId) return []; var B; try{ B = DB; }catch(e){ return []; } if(!B) return [];
+    var out = [];
+    COLS.forEach(function(c){ if(!document.getElementById('tab-' + c[1])) return;
+      (Array.isArray(B[c[0]]) ? B[c[0]] : []).forEach(function(o){ if(!o || !o.id || cerrada(o)) return;
+        var mia = (Array.isArray(o.asignados) ? o.asignados : []).some(function(a){ return a && a.empId === p.empId && a.raiz === p.raiz; })
+          || (typeof window._nxFichaDe === 'function' && nombres(o).some(function(n){ var f = window._nxFichaDe(n); return f && f.empId === p.empId && f.raiz === p.raiz; }));
+        if(mia) out.push({ empresa: RAIZ, tab: c[1], tipo: c[2], id: o.id, correlativo: o.correlativo || '', estado: o.estado || 'Pendiente', equipo: equipoTxt(B, o) }); }); });
+    return out;
+  };
+  window.__nxTecListo = function(){ try{ return !!window._fbReady || (DB && (DB.preventivos || []).length > 0); }catch(e){ return false; } };
+  function todas(){
+    var p = persona(); if(!p) return { p: null, L: [], falta: false };
+    var L = window.__nxTecMias(p), w = CONCHA.ventana(RAIZ === 'montasa' ? 'monhaco' : 'montasa'), falta = true;
+    try{ if(w && typeof w.__nxTecMias === 'function'){ L = L.concat(w.__nxTecMias(p)); falta = false; } }catch(e){}
+    L.sort(function(a, b){ return (a.empresa === RAIZ ? 0 : 1) - (b.empresa === RAIZ ? 0 : 1) || String(a.correlativo).localeCompare(String(b.correlativo)); });
+    return { p: p, L: L, falta: falta };
+  }
+  function chip(r){ return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;color:#fff;background:' + EMP[r].color + '">' + EMP[r].corto + ' · ' + EMP[r].nombre + '</span>'; }
+  // ── tarjeta de la carpeta en el inicio (mismo estilo que las demás) ──
+  function ponerCarpeta(){
+    encabezado();
+    var primera = document.querySelector('#dashboard-content .dash-type-card:not(#nx-tec-mis)'); if(!primera) return;
+    var cont = primera.parentElement, ya = document.getElementById('nx-tec-mis'), T = todas();
+    var h = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div style="font-weight:800;font-size:14px">📌 Mis Órdenes</div><span style="border:1.5px solid #c2410c;color:#c2410c;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;font-family:DM Mono,monospace">' + T.L.length + ' ab.</span></div>'
+      + '<div style="font-size:11.5px;color:var(--text3,#667085);margin-top:6px">' + (T.p ? 'Las que te asignaron en MT Rental y MONHACO' : 'Este teléfono no está vinculado a una ficha') + '</div>';
+    if(ya){ if(ya._h !== h){ ya.innerHTML = h; ya._h = h; } if(ya.parentElement !== cont || cont.firstElementChild !== ya) cont.insertBefore(ya, cont.firstElementChild); return; }
+    var d = document.createElement('div'); d.id = 'nx-tec-mis'; d.className = 'dash-type-card'; d.style.cssText = '--dtc-color:#c2410c;--dtc-bg:#fde7d9;cursor:pointer'; d.innerHTML = h; d._h = h;
+    d.onclick = abrirLista; cont.insertBefore(d, cont.firstElementChild);
+  }
+  // ── la carpeta: accesos directos a las órdenes originales ──
+  function abrirLista(){
+    var T = todas(), L = T.L, v = document.getElementById('nx-tec-mis-ov'); if(v) v.remove();
+    v = document.createElement('div'); v.id = 'nx-tec-mis-ov';
+    v.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--bg,#f0f2f5);overflow:auto;padding:14px 14px 90px';
+    v.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><button id="nx-tec-volver" style="border:1px solid var(--border2,#ccc);background:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px">← Volver</button><div><div style="font-size:20px;font-weight:800">📌 Mis Órdenes</div><div style="font-size:12px;color:var(--text3,#667085)">' + (T.p ? esc(T.p.nombre) + ' · abiertas, de las dos empresas' : 'Teléfono sin vincular a una ficha: pídele a Gerencia que lo vincule en Personal → 📱 Accesos') + '</div></div></div>'
+      + (T.falta && T.p ? '<div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:8px">Todavía se están cargando las órdenes de ' + EMP[RAIZ === 'montasa' ? 'monhaco' : 'montasa'].nombre + '. Vuelve a abrir esta carpeta en unos segundos.</div>' : '')
+      + (L.length ? L.map(function(x, i){
+        return '<div data-i="' + i + '" style="background:#fff;border:1px solid var(--border,#e3e1d8);border-left:5px solid ' + EMP[x.empresa].color + ';border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><div style="font-weight:800;font-size:15px">' + esc(x.correlativo) + ' ' + chip(x.empresa) + '</div><span style="font-size:11px;font-weight:700;color:#b45309">' + esc(x.estado) + '</span></div>'
+          + '<div style="font-size:12.5px;color:var(--text2,#444);margin-top:4px">' + esc(x.tipo) + (x.equipo ? ' · ' + esc(x.equipo) : '') + '</div></div>'; }).join('')
+        : '<div style="background:#fff;border-radius:12px;padding:16px;color:#667085">' + (T.p ? 'No tienes órdenes abiertas asignadas.' : '') + '</div>');
+    document.body.appendChild(v);
+    v.querySelector('#nx-tec-volver').onclick = function(){ v.remove(); };
+    [].forEach.call(v.querySelectorAll('[data-i]'), function(el){ el.onclick = function(){ var x = L[+el.getAttribute('data-i')]; v.remove();
+      if(x.empresa === RAIZ) abrirOrden(x.tab, x.id); else CONCHA.abrir(x.empresa, x.tab, x.id); }; });
+  }
+  // ── abrir una orden de esta empresa: su carpeta, la tarjeta abierta y resaltada ──
+  function abrirOrden(tab, id){
+    var ov = document.getElementById('nx-tec-mis-ov'); if(ov) ov.remove();
+    try{ showTab(tab, document.getElementById('btn-' + tab)); }catch(e){}
+    var n = 0; (function buscar(){
+      var cb = document.getElementById('cb-' + id);
+      if(!cb && n++ < 30) return setTimeout(buscar, 150);
+      if(!cb){ try{ toast('No encontré esa orden en esta carpeta'); }catch(e){} return; }
+      var g = cb.closest('[id^="sg-"],[data-subgrupo]'); if(g && g.style.display === 'none') g.style.display = '';
+      if(!cb.classList.contains('open')){ try{ toggleCard(id); }catch(e){} }
+      // bajar hasta la tarjeta (sin animación: la app re-dibuja la lista y cortaba el desplazamiento suave); se repite por si re-dibuja
+      var card = cb.parentElement, ir = function(){ var c = document.getElementById('cb-' + id); c = c ? c.parentElement : card; window.scrollTo(0, Math.max(0, c.getBoundingClientRect().top + window.pageYOffset - 70)); };
+      ir(); setTimeout(ir, 400); setTimeout(ir, 1200);
+      card.style.boxShadow = '0 0 0 3px #c2410c'; setTimeout(function(){ card.style.boxShadow = ''; }, 2500);
+    })();
+  }
+  window.__nxTecAbrir = abrirOrden;
+  // ── arranque ──
+  function iniciar(){
+    encabezado();
+    if(typeof renderDashboardTec === 'function' && !renderDashboardTec._nxTec){ var o = renderDashboardTec; renderDashboardTec = function(){ var r = o.apply(this, arguments); try{ ponerCarpeta(); }catch(e){} return r; }; renderDashboardTec._nxTec = 1; }
+    try{ ponerCarpeta(); }catch(e){}
+    setInterval(function(){ try{ ponerCarpeta(); }catch(e){} }, 3000);
+  }
+  if(document.readyState === 'complete') setTimeout(iniciar, 300); else window.addEventListener('load', function(){ setTimeout(iniciar, 300); });
 })();
 </script>
 </body>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Nexo Técnicos</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nexo Técnicos">
+<link rel="manifest" href="/app/manifest_nexo_tec.json">
+<link rel="icon" href="icons/nexo-32.png">
+<link rel="apple-touch-icon" href="icons/nexo-180.png">
+<style>
+  :root{ --mt:#1f3864; --mh:#b45309; }
+  html,body{ margin:0; height:100%; background:#f0f2f5; font-family:'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden; }
+  #nx-barra{ position:fixed; top:0; left:0; right:0; z-index:50; background:#fff; border-bottom:1px solid #e3e1d8; padding:calc(8px + env(safe-area-inset-top)) 10px 8px; }
+  .nx-capsula{ display:flex; background:#eef0f4; border-radius:999px; padding:3px; max-width:340px; margin:0 auto; }
+  .nx-capsula button{ flex:1; border:none; background:transparent; padding:9px 10px; border-radius:999px; font:inherit; font-weight:800; font-size:13.5px; color:#667085; cursor:pointer; letter-spacing:.2px; }
+  .nx-capsula button.on.montasa{ background:var(--mt); color:#fff; box-shadow:0 2px 6px rgba(31,56,100,.35); }
+  .nx-capsula button.on.monhaco{ background:var(--mh); color:#fff; box-shadow:0 2px 6px rgba(180,83,9,.35); }
+  iframe.nx-app{ position:fixed; left:0; right:0; bottom:0; width:100%; border:0; background:#f0f2f5; }
+  iframe.nx-app.oculta{ visibility:hidden; pointer-events:none; z-index:-1; }
+</style>
+</head>
+<body>
+<div id="nx-barra"><div class="nx-capsula" role="tablist" aria-label="Empresa">
+  <button class="montasa" data-emp="montasa" role="tab">MT Rental</button>
+  <button class="monhaco" data-emp="monhaco" role="tab">MONHACO</button>
+</div></div>
+<script>
+// ══ ACTUALIZACIÓN AUTOMÁTICA DE LA APP ════════════════════════════════════════
+// Solo la concha (cápsula). Cada app de adentro se actualiza sola con su propio bloque. Se revisa solo al abrir,
+// para no recargar mientras el técnico llena algo dentro de una orden. APP_VERSION la pone dev/sellar_version.js.
+(function(){
+  var APP_VERSION='0d1ae84a02ee';
+  window._nxVersion = APP_VERSION;
+  if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
+  var archivo = location.pathname.split('/').pop(); if(!archivo) return;
+  fetch('version.json?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; }).then(function(v){
+    var nueva = v && v[archivo]; if(!nueva || nueva === APP_VERSION) return;
+    var k = '_actualizar_' + archivo, antes = null;
+    try{ antes = JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){}
+    if(antes && antes.v === nueva && Date.now() - antes.ts < 5*60*1000) return;
+    try{ localStorage.setItem(k, JSON.stringify({v:nueva, ts:Date.now()})); }catch(e){}
+    location.replace(location.pathname + '?v=' + encodeURIComponent(nueva) + location.hash);
+  }).catch(function(){});
+})();
+</script>
+<script>
+// ══ NEXO TÉCNICOS · CONCHA (2026-11-24, Miguel: paso 4 de Técnicos unificados) ══════════════════════════════════════
+// Arriba la cápsula MT Rental | MONHACO. Debajo, las apps REALES de Técnicos de cada empresa, cada una en su marco
+// (mismas carpetas, mismas órdenes, mismo guardado). La empresa elegida se recuerda en el teléfono.
+// La de la otra empresa se carga por detrás cuando el teléfono ya está aprobado: así cambiar es inmediato y la
+// carpeta «📌 Mis Órdenes» puede juntar las órdenes de las dos. El acceso es por teléfono (accesos/<uid>), no por app:
+// un teléfono aprobado en Técnicos MT o MONHACO entra igual aquí.
+(function(){
+  var APPS = { montasa: 'MONTASA_Tecnicos.html', monhaco: 'MONHACO_Tecnicos.html' }, CL = 'nx_tec_empresa', CL_OK = 'nx_tec_aprobado';
+  var marcos = {}, barra = document.getElementById('nx-barra');
+  function leer(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
+  function poner(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+  function empresa(){ return leer(CL) === 'monhaco' ? 'monhaco' : 'montasa'; }
+  function otra(e){ return e === 'montasa' ? 'monhaco' : 'montasa'; }
+  function ajustar(){ var h = barra.offsetHeight; Object.keys(marcos).forEach(function(e){ marcos[e].style.top = h + 'px'; marcos[e].style.height = 'calc(100% - ' + h + 'px)'; }); }
+  function marco(e){
+    if(marcos[e]) return marcos[e];
+    var f = document.createElement('iframe'); f.className = 'nx-app oculta'; f.name = 'nx-tec-' + e; f.title = 'Nexo Técnicos ' + (e === 'monhaco' ? 'MONHACO' : 'MT Rental');
+    f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-write');
+    f.src = APPS[e]; document.body.appendChild(f); marcos[e] = f; ajustar(); return f;
+  }
+  function pintar(){ var e = empresa(); [].forEach.call(document.querySelectorAll('.nx-capsula button'), function(b){ var on = b.getAttribute('data-emp') === e; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    var m = document.querySelector('meta[name=theme-color]'); if(m) m.content = '#ffffff'; }
+  function mostrar(e){
+    poner(CL, e); pintar(); var f = marco(e);
+    Object.keys(marcos).forEach(function(k){ marcos[k].classList.toggle('oculta', k !== e); });
+    try{ f.contentWindow.focus(); }catch(_){}
+    try{ document.dispatchEvent(new CustomEvent('nx-tec-empresa', { detail: e })); }catch(_){}
+  }
+  // ¿Teléfono aprobado? Lo dice la app de adentro (window._nxAcceso.registro). Se recuerda para poder cargar la otra sin señal.
+  function aprobado(){
+    if(leer(CL_OK) === '1') return true;
+    var si = Object.keys(marcos).some(function(k){ try{ var r = (marcos[k].contentWindow._nxAcceso || {}).registro; return r && r.estado === 'aprobado'; }catch(e){ return false; } });
+    if(si) poner(CL_OK, '1'); return si;
+  }
+  var n = 0, t = setInterval(function(){
+    // si al teléfono lo rechazan, se olvida la marca (la app de adentro ya borra lo guardado)
+    Object.keys(marcos).forEach(function(k){ try{ var r = (marcos[k].contentWindow._nxAcceso || {}).registro; if(r && r.estado === 'rechazado'){ try{ localStorage.removeItem(CL_OK); }catch(_){} } }catch(_){} });
+    if(aprobado() && ++n >= 2){ marco(otra(empresa())); clearInterval(t); }   // ~4 s después de abrir
+  }, 2000);
+  // Lo que usan las apps de adentro (mismo origen)
+  window.__nxTecConcha = {
+    version: 1,
+    empresa: empresa,
+    // la ventana de la app de esa empresa (o null si todavía no se cargó)
+    ventana: function(e){ try{ return marcos[e] ? marcos[e].contentWindow : null; }catch(_){ return null; } },
+    // abre una orden en su empresa: cambia la cápsula y la abre allá
+    abrir: function(e, tab, id){
+      if(!APPS[e]) return; mostrar(e); var f = marcos[e], k = 0;
+      (function intentar(){ var w = null; try{ w = f.contentWindow; }catch(_){}
+        if(w && typeof w.__nxTecAbrir === 'function' && w.__nxTecListo && w.__nxTecListo()){ w.__nxTecAbrir(tab, id); return; }
+        if(++k < 60) setTimeout(intentar, 250); })();
+    }
+  };
+  [].forEach.call(document.querySelectorAll('.nx-capsula button'), function(b){ b.onclick = function(){ var e = b.getAttribute('data-emp'); if(e !== empresa() || !marcos[e]) mostrar(e); }; });
+  window.addEventListener('resize', ajustar);
+  mostrar(empresa());
+})();
+</script>
+</body>
+</html>
