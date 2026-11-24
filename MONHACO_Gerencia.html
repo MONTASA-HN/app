@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='9b24eb0d99f3';
+  var APP_VERSION='a4ec8dd9653e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1811,8 +1811,13 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   }
   // ¿Las horas de esta persona en esta orden cuentan en ESTA empresa? Orden propia: sí, salvo que la persona sea de la otra empresa.
   // Orden de la otra empresa (o._ajena): solo si la persona es de esta. Quien no está en ninguna lista se queda en la empresa de la orden.
+  // (2026-11-24, Miguel) Primero la ficha guardada en la orden (o.asignados = [{n, empId, raiz}]): es la persona exacta, aunque haya
+  // dos personas con el mismo nombre en las dos empresas (antes, solo por nombre, esas horas se quedaban en la empresa de la orden).
+  // Órdenes sin asignados (viejas): por el nombre, como siempre.
+  function empAsignado(n, o){ var nm = String(n || '').trim(), l = (o && Array.isArray(o.asignados)) ? o.asignados.filter(function(x){ return x && x.n === nm && (x.raiz === 'montasa' || x.raiz === 'monhaco'); }) : [];
+    return (l.length && l.every(function(x){ return x.raiz === l[0].raiz; })) ? l[0].raiz : ''; }
   window._nxCuentaAqui = function(n, o){
-    var emp = window._nxEmpDe(n, fechaOrden(o || {})), yo = raiz();
+    var emp = empAsignado(n, o) || window._nxEmpDe(n, fechaOrden(o || {})), yo = raiz();
     if(o && o._ajena) return emp === yo;
     return !(emp && emp !== yo && (emp === 'montasa' || emp === 'monhaco'));
   };
