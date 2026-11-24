@@ -2,6 +2,109 @@
 <html lang="es">
 <head>
 <script>
+// ══ NEXO LOGÍSTICA · CÁPSULA (2026-11-24, Miguel: integrar el piloto «NEXO Logística — Prueba») ══════════════════════════════════
+// Este bloque es IGUAL en MONTASA_Logistica.html y MONHACO_Logistica.html. Abierta por su enlace (o instalada en el teléfono), la
+// página ya no arranca la app sola: arriba la cápsula MT Rental | MONHACO (mismo diseño que Nexo Técnicos) y debajo la app de
+// Logística de cada empresa en su marco (las mismas apps de siempre, mismas carpetas, mismo guardado). Los dos marcos quedan vivos:
+// cambiar de empresa no borra lo que se estaba llenando en la otra.
+// · La primera vez abre la empresa del enlace; después, la última que se eligió en ese teléfono (nx_log_empresa).
+// · La otra empresa se carga por detrás cuando el teléfono ya está aprobado (así cambiar es inmediato).
+// · ⏳ junto al nombre: esa empresa tiene cambios guardados en el teléfono que todavía no suben (aunque se esté viendo la otra).
+// · Con ?clasica=1 abre la app sola, como antes de la cápsula.
+// Cómo: la página sigue en su misma dirección (el ícono instalado solo permite su propia página). El resto del archivo se lee como
+// texto escondido (<plaintext>) y no corre aquí; corre dentro de los marcos, que llevan ?en=capsula (un marco no puede tener la misma
+// dirección que la página que lo contiene). Cada marco se actualiza solo con su propio bloque; la cápsula se revisa al abrir.
+(function(){
+  var arriba = false; try{ arriba = window.self === window.top; }catch(e){}
+  var q = location.search || '';
+  if(!arriba || /[?&]clasica=1\b/i.test(q)) return;
+  var ARCH = location.pathname.split('/').pop() || '', ES_MH = /^MONHACO_/i.test(ARCH);
+  window._NX_CONCHA_LOG = true;
+  document.write('<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">'
+    + '<meta name="theme-color" content="#ffffff"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">'
+    + '<meta name="apple-mobile-web-app-title" content="Nexo Log. ' + (ES_MH ? 'MH' : 'MT') + '">'
+    + '<link rel="manifest" href="/app/' + (ES_MH ? 'manifest_monhaco_log.json' : 'manifest_logistica.json') + '">'
+    + '<link rel="icon" type="image/png" href="/app/icons/nexo-32.png"><link rel="apple-touch-icon" href="/app/icons/nexo-180.png">'
+    + '<title>Nexo Logística</title><style>'
+    + ':root{--mt:#1f3864;--mh:#b45309}html,body{margin:0;height:100%;background:#f0f2f5;font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}'
+    + '#nx-log-resto{display:none!important}'
+    + '#nx-barra{position:fixed;top:0;left:0;right:0;z-index:50;background:#fff;border-bottom:1px solid #e3e1d8;padding:calc(8px + env(safe-area-inset-top)) 10px 8px}'
+    + '.nx-capsula{display:flex;background:#eef0f4;border-radius:999px;padding:3px;max-width:340px;margin:0 auto}'
+    + '.nx-capsula button{flex:1;border:none;background:transparent;padding:9px 10px;border-radius:999px;font:inherit;font-weight:800;font-size:13.5px;color:#667085;cursor:pointer;letter-spacing:.2px}'
+    + '.nx-capsula button.on.montasa{background:var(--mt);color:#fff;box-shadow:0 2px 6px rgba(31,56,100,.35)}'
+    + '.nx-capsula button.on.monhaco{background:var(--mh);color:#fff;box-shadow:0 2px 6px rgba(180,83,9,.35)}'
+    + 'iframe.nx-app{position:fixed;left:0;right:0;bottom:0;width:100%;border:0;background:#f0f2f5}'
+    + 'iframe.nx-app.oculta{visibility:hidden;pointer-events:none;z-index:-1}'
+    + '</style><plaintext id="nx-log-resto">');
+  var APPS = { montasa: 'MONTASA_Logistica.html', monhaco: 'MONHACO_Logistica.html' }, NOMBRE = { montasa: 'MT Rental', monhaco: 'MONHACO' };
+  var CL = 'nx_log_empresa', CL_OK = 'nx_log_aprobado', marcos = {}, pend = {}, barra = null;
+  function leer(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
+  function poner(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+  function empresa(){ var e = leer(CL); return (e === 'montasa' || e === 'monhaco') ? e : ((ES_MH || /[?&]empresa=monhaco\b/i.test(q)) ? 'monhaco' : 'montasa'); }
+  function otra(e){ return e === 'montasa' ? 'monhaco' : 'montasa'; }
+  function ajustar(){ if(!barra) return; var h = barra.offsetHeight; Object.keys(marcos).forEach(function(e){ marcos[e].style.top = h + 'px'; marcos[e].style.height = 'calc(100% - ' + h + 'px)'; }); }
+  function marco(e){
+    if(marcos[e]) return marcos[e];
+    var f = document.createElement('iframe'); f.className = 'nx-app oculta'; f.name = 'nx-log-' + e; f.title = 'Nexo Logística ' + NOMBRE[e];
+    f.setAttribute('allow', 'camera; microphone; geolocation; clipboard-read; clipboard-write; web-share; fullscreen');
+    f.src = APPS[e] + '?en=capsula'; document.body.appendChild(f); marcos[e] = f; ajustar(); return f;
+  }
+  function pintar(){ var e = empresa(); [].forEach.call(document.querySelectorAll('.nx-capsula button'), function(b){ var k = b.getAttribute('data-emp'), on = k === e;
+    b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.textContent = NOMBRE[k] + (pend[k] ? ' ⏳' : '');
+    b.title = pend[k] ? 'Hay cambios de ' + NOMBRE[k] + ' guardados en el teléfono que todavía no suben' : ''; }); }
+  function mostrar(e){
+    poner(CL, e); pintar(); var f = marco(e);
+    Object.keys(marcos).forEach(function(k){ marcos[k].classList.toggle('oculta', k !== e); });
+    try{ f.contentWindow.focus(); }catch(_){}
+  }
+  // ¿Teléfono aprobado? Lo dice la app de adentro (_nxAcceso.registro). Se recuerda para poder cargar la otra sin señal.
+  function aprobado(){
+    if(leer(CL_OK) === '1') return true;
+    var si = Object.keys(marcos).some(function(k){ try{ var r = (marcos[k].contentWindow._nxAcceso || {}).registro; return r && r.estado === 'aprobado'; }catch(e){ return false; } });
+    if(si) poner(CL_OK, '1'); return si;
+  }
+  // La app de órdenes de cada empresa (en MONHACO va dentro de su vista «Órdenes»)
+  function ordenesDe(e){ try{ var w = marcos[e] && marcos[e].contentWindow; if(!w) return []; var l = [w]; if(e === 'monhaco' && w.__nxLogOrdenesMH){ var o = w.__nxLogOrdenesMH(); if(o) l.push(o); } return l; }catch(_){ return []; } }
+  function hayPend(w){ try{ return !!w.eval('typeof _Sync !== "undefined" && !!_Sync.hayPendientes && _Sync.hayPendientes()'); }catch(_){ return false; } }
+  // también lo anotado en el teléfono aunque la app todavía no haya podido cargar la base (abierta sin señal)
+  function anotado(e){ return ['MONTASA_Logistica', 'MONHACO_Logistica'].some(function(a){ var v = leer('_sync_sucio_' + e + '_' + a); if(!v) return false; try{ return lleno(JSON.parse(v)); }catch(_){ return false; } }); }
+  function lleno(o){ if(!o || typeof o !== 'object') return o != null; return Object.keys(o).some(function(k){ return lleno(o[k]); }); }   // {logistica:{}} = nada pendiente
+  // Versión de esta página: viene escrita en el resto del archivo (el bloque de actualización que aquí no corre)
+  function revisarVersion(){
+    var el = document.getElementById('nx-log-resto'), m = el && /APP_VERSION='([0-9a-f]+)'/.exec(el.textContent || '');
+    if(el) el.parentNode.removeChild(el);   // ya no hace falta: libera memoria
+    if(!m || !/^https?:$/.test(location.protocol) || !window.fetch) return;
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(v){
+      var nueva = v && v[ARCH]; if(!nueva || nueva === m[1]) return;
+      var k = '_actualizar_capsula_' + ARCH, antes = null;
+      try{ antes = JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){}
+      if(antes && antes.v === nueva && Date.now() - antes.ts < 5*60*1000) return;
+      poner(k, JSON.stringify({ v: nueva, ts: Date.now() }));
+      location.replace(location.pathname + '?vc=' + encodeURIComponent(nueva) + location.hash);
+    }).catch(function(){});
+  }
+  function armar(){
+    barra = document.createElement('div'); barra.id = 'nx-barra';
+    barra.innerHTML = '<div class="nx-capsula" role="tablist" aria-label="Empresa"><button class="montasa" data-emp="montasa" role="tab">MT Rental</button><button class="monhaco" data-emp="monhaco" role="tab">MONHACO</button></div>';
+    document.body.appendChild(barra);
+    [].forEach.call(barra.querySelectorAll('button'), function(b){ b.onclick = function(){ var e = b.getAttribute('data-emp'); if(e !== empresa() || !marcos[e]) mostrar(e); }; });
+    window.addEventListener('resize', ajustar);
+    mostrar(empresa());
+    var n = 0, t = setInterval(function(){
+      // si al teléfono lo rechazan, se olvida la marca (la app de adentro ya borra lo guardado)
+      Object.keys(marcos).forEach(function(k){ try{ var r = (marcos[k].contentWindow._nxAcceso || {}).registro; if(r && r.estado === 'rechazado'){ try{ localStorage.removeItem(CL_OK); }catch(_){} } }catch(_){} });
+      if(aprobado() && ++n >= 2){ marco(otra(empresa())); clearInterval(t); }   // ~4 s después de abrir
+    }, 2000);
+    setInterval(function(){ var cambio = false; ['montasa', 'monhaco'].forEach(function(e){ var h = anotado(e) || ordenesDe(e).some(hayPend); if(!!pend[e] !== h){ pend[e] = h; cambio = true; } }); if(cambio) pintar(); }, 1500);
+  }
+  // Lo que usan las apps de adentro (mismo origen) y las pruebas
+  window.__nxLogConcha = { version: 1, empresa: empresa, mostrar: mostrar, pendientes: function(){ return { montasa: !!pend.montasa, monhaco: !!pend.monhaco }; },
+    ventana: function(e){ try{ return marcos[e] ? marcos[e].contentWindow : null; }catch(_){ return null; } } };
+  if(document.body) armar(); else document.addEventListener('DOMContentLoaded', armar);
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', revisarVersion); else revisarVersion();
+})();
+</script>
+<script>
 // ══ COPIA FRESCA (2026-11-20, Miguel) ══ Si esta app lleva más de 3 días sin abrirse en este equipo, se borra SU copia guardada
 // (montasa_log_v1, monhaco_log_v1, montasa_logmh_v1, _sync_base/_sync_sucio de esta app) antes de que arranque: carga todo de la base y no sube nada viejo.
 // Las otras apps del mismo navegador no se tocan. La sesión y el acceso aprobado se conservan.
@@ -47,7 +150,12 @@ document.addEventListener('nx-acceso', function(){ var n = window._nxPrimerNombr
 (function(){
   var q = location.search || '';
   window._NX_EMP = (/[?&]empresa=monhaco\b/i.test(q) || /MONHACO_/i.test(location.pathname)) ? 'monhaco' : 'montasa';
-  window._NX_DENTRO = (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
+  // (2026-11-24) En la cápsula de Nexo Logística (marco «nx-log-…», ver «NEXO LOGÍSTICA · CÁPSULA» arriba) la app trabaja como
+  // abierta por su enlace (encabezado, registro del teléfono), pero sin mezclar las órdenes de MONHACO: esas están en su cápsula.
+  window._NX_CAPSULA = (function(){ try{ return /^nx-log-/.test(window.name) && window.parent !== window && !!window.parent._NX_CONCHA_LOG; }catch(e){ return false; } })();
+  window._NX_DENTRO = !window._NX_CAPSULA && (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
+  // en la cápsula: la app de MT Rental o la vista «Órdenes» de Logística MONHACO que está en la cápsula
+  window._NX_EN_CAPSULA = window._NX_CAPSULA || (function(){ try{ return window._NX_DENTRO && !!window.parent._NX_CAPSULA; }catch(e){ return false; } })();
   window._NX_SOLO_MT = window._NX_EMP === 'monhaco' && /[?&]solo=mt\b/i.test(q);
 })();
 // (2026-10-30) RAÍZ LIVIANA: Logística solo baja y vigila las partes que usa (antes la raíz completa de 1.4 MB, y cualquier cambio de
@@ -71,7 +179,7 @@ window._nxRaizLigera = function(db, raiz, hijos){
 // ══ DOS CAJONES EN LOGÍSTICA MT (2026-10-29) ══ Ver «LOGÍSTICA MT CON ÓRDENES DE MONHACO EN LAS MISMAS CARPETAS» al final.
 // Aquí: el contexto actual ('mt' | 'mh') y que todo lo que se deja corriendo recuerde el contexto en que se pidió.
 (function(){
-  window._NX_DOS = window._NX_EMP === 'montasa' && !window._NX_DENTRO;
+  window._NX_DOS = window._NX_EMP === 'montasa' && !window._NX_DENTRO && !window._NX_CAPSULA;   // (2026-11-24) en la cápsula, cada empresa en la suya
   window._nxCtxActual = 'mt';
   window._nxEn = function(c, fn){ var prev = window._nxCtxActual; if(c === prev || !window._nxPonerCtx) return fn(); window._nxPonerCtx(c); try{ return fn(); } finally { window._nxPonerCtx(prev); } };
   window._nxEnOrden = function(o, fn){ return fn(); };
@@ -304,7 +412,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='2e7fef7edee4';
+  var APP_VERSION='38c3ed6e36d8';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -334,7 +442,10 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
         try{ antes = JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){}
         if(antes && antes.v === nueva && Date.now() - antes.ts < 5*60*1000) return;
         try{ localStorage.setItem(k, JSON.stringify({v:nueva, ts:Date.now()})); }catch(e){}
-        location.replace(location.pathname + '?v=' + encodeURIComponent(nueva) + location.hash);
+        // (2026-11-24) conserva lo demás de la dirección (?empresa=monhaco del módulo de órdenes de MONHACO, ?en=capsula, ?clasica=1):
+        // antes se perdía y el módulo de órdenes de MONHACO, al actualizarse solo, quedaba mostrando las órdenes de MT Rental
+        var resto = String(location.search || '').replace(/^\?/, '').split('&').filter(function(p){ return p && !/^v=/.test(p); }).join('&');
+        location.replace(location.pathname + '?' + (resto ? resto + '&' : '') + 'v=' + encodeURIComponent(nueva) + location.hash);
       })
       .catch(function(){ revisando = false; });
   }
@@ -6812,9 +6923,15 @@ function _calcMinsJornada(iniDate, finDate, domsTrab){   // (2026-10-26) domsTra
     // sin la marca de agua de MONTASA ni el menú ☰ (solo hay Órdenes)
     var st = document.createElement('style'); st.textContent = '.watermark{display:none!important}#nx-menu-fab,#nx-menu-panel,#nx-menu-overlay{display:none!important}'; document.head.appendChild(st);
   }
+  // (2026-11-24) en la cápsula: encabezado «Nexo Logística» con el logo de Nexo (la empresa la dice la cápsula)
+  if(window._NX_CAPSULA){
+    var tc = document.querySelector('.app-header div[style*="font-size:17px"]'); if(tc) tc.textContent = 'Nexo Logística';
+    var ic = document.querySelector('.app-header img'); if(ic) ic.src = 'icons/nexo-192.png';
+  }
   if(!window._NX_DENTRO) return;
   var h = document.querySelector('.app-header'); if(h) h.style.display = 'none';
   var fr = document.getElementById('log-frase'); if(fr) fr.style.display = 'none';
+  if(window._NX_EN_CAPSULA) return;   // (2026-11-24) vista «Órdenes» de MONHACO en la cápsula: es una pestaña, sin barra «✕ Cerrar»
   var b = document.createElement('div');
   b.style.cssText = 'position:sticky;top:0;z-index:150;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:#1f3864;color:#fff';
   b.innerHTML = '<div><div style="font-weight:800;font-size:15px">🏢 ' + (window._NX_EMP === 'monhaco' ? 'MONHACO' : 'MT Rental') + ' · Órdenes de logística</div>'
@@ -7354,6 +7471,26 @@ function _findesSync(){
     hecho = true; try{ if(window._nxAsignadosCompletar() > 0) saveDB(); }catch(e){} }
   document.addEventListener('nx-dir', function(){ setTimeout(primeraVez, 1500); });
   var n = 0, t = setInterval(function(){ primeraVez(); if(hecho || ++n > 60) clearInterval(t); }, 2000);
+})();
+</script>
+<script>
+// ══ CÁPSULA: ETIQUETA DE EMPRESA EN CADA ORDEN (2026-11-24, Miguel: integrar el piloto de Nexo Logística) ══════════════════════
+// Dentro de la cápsula de Nexo Logística cada tarjeta de orden (activas e historial) lleva la etiqueta de SU empresa, además del
+// correlativo: MT Rental (azul) o MONHACO (naranja). Abierta sola (?clasica=1 o dentro de otra app) no cambia nada.
+(function(){
+  if(!window._NX_EN_CAPSULA) return;
+  var RAIZ = window._NX_EMP === 'monhaco' ? 'monhaco' : 'montasa', NOMBRE = RAIZ === 'monhaco' ? 'MONHACO' : 'MT Rental';
+  var css = document.createElement('style');
+  css.textContent = '.nx-emp-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;color:#fff;letter-spacing:.2px}.nx-emp-chip.montasa{background:#1f3864}.nx-emp-chip.monhaco{background:#b45309}';
+  document.head.appendChild(css);
+  function etiquetar(){
+    [].forEach.call(document.querySelectorAll('[data-lgid]:not([data-nx-emp])'), function(c){
+      c.setAttribute('data-nx-emp', RAIZ);
+      var fila = c.querySelector('div[style*="flex-wrap:wrap"]') || c.firstElementChild; if(!fila) return;
+      var s = document.createElement('span'); s.className = 'nx-emp-chip ' + RAIZ; s.textContent = NOMBRE; fila.insertBefore(s, fila.firstChild);
+    });
+  }
+  var t = null; new MutationObserver(function(){ clearTimeout(t); t = setTimeout(etiquetar, 30); }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>
 </body>
