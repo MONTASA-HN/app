@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='3691bff53969';
+  var APP_VERSION='02fdf8514d6e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1844,6 +1844,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   // (2026-11-24) Ficha de un nombre: { empId, raiz } en la empresa que da _nxEmpDe; null si no se sabe o si hay dos fichas con ese nombre
   window._nxFichaDe = function(n, fecha){ var emp = window._nxEmpDe(n, fecha); if(emp !== 'montasa' && emp !== 'monhaco') return null; var d = DIRP[emp] || {}, nm = String(n || '').trim();
     var ids = Object.keys(d).filter(function(k){ var p = d[k]; return p && limpio(p.n) && p.n === nm; }); return ids.length === 1 ? { empId: ids[0], raiz: emp } : null; };
+  // (2026-11-24, asignación desde la solicitud) TODAS las fichas activas con ese nombre en las dos empresas: [{ empId, raiz, c }]
+  window._nxFichasDe = function(n){ var nm = String(n || '').trim(), out = []; if(!window._nxDirListo()) return out;
+    ['montasa', 'monhaco'].forEach(function(emp){ var d = DIRP[emp] || {}; Object.keys(d).forEach(function(k){ var p = d[k]; if(p && limpio(p.n) && p.n === nm && !p.ina) out.push({ empId: k, raiz: emp, c: String(p.c || '') }); }); });
+    return out; };
   window._nxAjenos = function(tipo){
     if(!window._nxDirListo()) return [];   // la lista combinada arranca junto con la regla de productividad
     var o = otra(), out = [];
@@ -14161,7 +14165,7 @@ async function _mantCompartirAviso(equipoId){
 //  · Una persona que ya estaba en asignados conserva su ficha aunque luego cambie su «nombre en órdenes».
 //  · Órdenes cerradas, completadas o canceladas: no se tocan.  · Sin directorio todavía: no hace nada.
 (function(){
-  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica'];
+  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica', 'cortinas'];   // (2026-11-24) + cortinas (MONHACO)
   var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
   function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
   function nombres(o){ var l = [];
@@ -14175,11 +14179,13 @@ async function _mantCompartirAviso(equipoId){
       if(!o || !o.id || cerrada(o)) return;
       var prev = Array.isArray(o.asignados) ? o.asignados.filter(function(a){ return a && a.n && a.empId && a.raiz; }) : [], nuevo = [];
       nombres(o).forEach(function(nm){
-        var ya = prev.find(function(a){ return a.n === nm; }); if(ya){ nuevo.push({ n: ya.n, empId: ya.empId, raiz: ya.raiz }); return; }
+        // (2026-11-24) homónimos: se conservan TODAS las fichas ya guardadas con ese nombre (no solo la primera)
+        var ya = prev.filter(function(a){ return a.n === nm; }); if(ya.length){ ya.forEach(function(a){ nuevo.push({ n: a.n, empId: a.empId, raiz: a.raiz }); }); return; }
         var f = window._nxFichaDe(nm); if(f) nuevo.push({ n: nm, empId: f.empId, raiz: f.raiz }); });
       var antes = JSON.stringify(Array.isArray(o.asignados) ? o.asignados : []), ahora = JSON.stringify(nuevo);
       if(antes === ahora) return;
       if(nuevo.length) o.asignados = nuevo; else delete o.asignados;
+      if(col === 'cortinas' && typeof _syncCortina === 'function'){ try{ _syncCortina(o); }catch(_eC){} }   // (2026-11-24) cortinas se guardan una por una
       cambios++; }); });
     return cambios;
   };
@@ -14194,6 +14200,83 @@ async function _mantCompartirAviso(equipoId){
     hecho = true; try{ if(window._nxAsignadosCompletar() > 0) saveDB(); }catch(e){} }
   document.addEventListener('nx-dir', function(){ setTimeout(primeraVez, 1500); });
   var n = 0, t = setInterval(function(){ primeraVez(); if(hecho || ++n > 60) clearInterval(t); }, 2000);
+})();
+</script>
+<script>
+// ══ ASIGNACIÓN DESDE LA SOLICITUD (2026-11-24, Miguel) ═══════════════════════════════════════════════════════════════════
+// Al crear una orden con el formulario de solicitud, la orden NACE con las personas marcadas (antes, en preventivo/correctivo de
+// flota y en logística quedaban solo en la solicitud) y con o.asignados = [{n, empId, raiz}] (ficha y empresa de cada una).
+//  · Cada casilla de personal lleva su ficha (data-ficha="raíz/empId"). Dos fichas con el mismo nombre → dos casillas.
+//  · Logística: los marcados van como operador, operador2… en el orden en que se marcaron (el motorista lo pone la app de Logística).
+//  · Después, la orden manda: se cambia con los controles de siempre y el completador del paso 2 mantiene asignados al día.
+(function(){
+  var GRIDS = ['sol-tecnicos-grid', 'sol-logistica-grid'], ETQ = { montasa: 'MT', monhaco: 'MH' };
+  var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
+  var orden = [], sel = null;   // orden de marcado; selección capturada al crear
+  function clave(i){ return i.getAttribute('data-ficha') || ('n:' + (i.getAttribute('data-nombre') || i.value)); }
+  // ── casillas con ficha (y homónimos separados) ──
+  function marcarFichas(){
+    if(typeof window._nxFichasDe !== 'function' || !window._nxDirListo || !window._nxDirListo()) return;
+    GRIDS.forEach(function(id){ var g = document.getElementById(id); if(!g) return;
+      [].forEach.call(g.querySelectorAll('input[type=checkbox][data-nombre]:not([data-ficha])'), function(i){
+        var n = i.getAttribute('data-nombre'), fs = window._nxFichasDe(n); if(!fs.length){ i.setAttribute('data-ficha', ''); return; }
+        i.setAttribute('data-ficha', fs[0].raiz + '/' + fs[0].empId);
+        if(fs.length < 2) return;
+        var lb = i.closest('label'), misma = fs.every(function(f){ return f.raiz === fs[0].raiz; });
+        var etq = function(f, k){ return ' · ' + (misma ? (f.c || ('#' + (k + 1))) : ETQ[f.raiz]); };
+        if(lb && lb.lastChild && lb.lastChild.nodeType === 3) lb.lastChild.nodeValue = ' ' + n + etq(fs[0], 0);
+        fs.slice(1).forEach(function(f, k){ if(!lb) return; var c = lb.cloneNode(true), ci = c.querySelector('input');
+          ci.checked = false; c.classList.remove('selected'); ci.setAttribute('data-ficha', f.raiz + '/' + f.empId);
+          if(c.lastChild && c.lastChild.nodeType === 3) c.lastChild.nodeValue = ' ' + n + etq(f, k + 1);
+          lb.parentNode.insertBefore(c, lb.nextSibling); lb = c; });
+      }); });
+  }
+  setInterval(marcarFichas, 1500); document.addEventListener('nx-dir', function(){ setTimeout(marcarFichas, 300); });
+  // ── orden en que se marcan ──
+  document.addEventListener('change', function(e){ var i = e.target; if(!i || i.type !== 'checkbox' || !i.closest) return;
+    var g = i.closest('#sol-tecnicos-grid, #sol-logistica-grid'); if(!g) return; var k = clave(i), p = orden.indexOf(k);
+    if(p >= 0) orden.splice(p, 1); if(i.checked) orden.push(k); }, true);
+  function capturar(){
+    var r = { t: Date.now(), tec: [], log: [] };
+    [['sol-tecnicos-grid', 'tec'], ['sol-logistica-grid', 'log']].forEach(function(x){ var g = document.getElementById(x[0]); if(!g) return;
+      var ins = [].filter.call(g.querySelectorAll('input[type=checkbox]:checked'), function(i){ return i.closest('label') && i.closest('label').style.display !== 'none'; });
+      ins.sort(function(a, b){ var pa = orden.indexOf(clave(a)), pb = orden.indexOf(clave(b)); return (pa < 0 ? 1e6 : pa) - (pb < 0 ? 1e6 : pb); });
+      r[x[1]] = ins.map(function(i){ return { n: i.getAttribute('data-nombre') || i.value, ficha: i.getAttribute('data-ficha') || '' }; }); });
+    [1, 2, 3, 4].forEach(function(k){ var s = document.getElementById('sol-sp-tec' + k); if(s && s.value) r.tec.push({ n: s.value, ficha: '' }); });
+    return r;
+  }
+  // [{n, ficha}] → [{n, empId, raiz}] (ficha de la casilla; si no tiene, la del nombre cuando no hay duda)
+  window._nxAsigDe = function(lista){ var out = [], vistos = {};
+    (lista || []).forEach(function(x){ if(!x || !x.n) return; var r = null, m = /^(montasa|monhaco)\/(.+)$/.exec(String(x.ficha || ''));
+      if(m) r = { n: x.n, empId: m[2], raiz: m[1] }; else if(typeof window._nxFichaDe === 'function'){ var f = window._nxFichaDe(x.n); if(f) r = { n: x.n, empId: f.empId, raiz: f.raiz }; }
+      if(r && !vistos[r.raiz + '/' + r.empId]){ vistos[r.raiz + '/' + r.empId] = 1; out.push(r); } });
+    return out; };
+  function nombres(o){ var l = []; CAMPOS.forEach(function(k){ var v = o[k]; (Array.isArray(v) ? v : String(v || '').split(',')).forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); }); }); return l; }
+  // Completa una orden recién creada con lo marcado (kind: 'mant' | 'log' | '')
+  window._nxAsigAplicar = function(o, kind, lista){
+    if(!o || typeof o !== 'object') return; var s = lista ? { tec: lista, log: lista } : sel; if(!s) return;
+    var marc = kind === 'log' ? s.log : s.tec;
+    if(kind === 'mant' && !String(o.tecnico || '').trim() && marc.length) o.tecnico = marc.map(function(x){ return x.n; }).filter(function(n, i, l){ return l.indexOf(n) === i; }).join(', ');
+    if(kind === 'log' && marc.length && !['operador2', 'operador3', 'operador4', 'operador5'].some(function(k){ return String(o[k] || '').trim(); })){
+      var ops = []; if(String(o.operador || '').trim()) ops.push(String(o.operador).trim());
+      marc.forEach(function(x){ if(ops.indexOf(x.n) < 0) ops.push(x.n); });
+      ['operador', 'operador2', 'operador3', 'operador4', 'operador5'].forEach(function(k, i){ if(ops[i]) o[k] = ops[i]; });
+    }
+    var ns = nombres(o), elegidos = s.tec.concat(s.log).filter(function(x){ return ns.indexOf(x.n) >= 0; });
+    // los que están en la orden pero no salieron de las casillas (p. ej. operador escrito a mano): por nombre
+    ns.forEach(function(n){ if(!elegidos.some(function(x){ return x.n === n; })) elegidos.push({ n: n, ficha: '' }); });
+    var as = window._nxAsigDe(elegidos); if(as.length) o.asignados = as;
+  };
+  function envolver(nombre){ var f; try{ f = eval(nombre); }catch(e){ return; } if(typeof f !== 'function' || f._nxAsig) return;
+    var g = function(){ sel = capturar(); var r; try{ r = f.apply(this, arguments); }catch(e){ sel = null; throw e; }
+      var fin = function(){ setTimeout(function(){ sel = null; orden = []; }, 0); }; if(r && typeof r.then === 'function') r.then(fin, fin); else fin(); return r; };
+    g._nxAsig = 1; try{ eval(nombre + ' = g'); }catch(e){} }
+  ['enviarSolicitudWA', 'copiarMensajeWA', '_spCrearDesdeSolicitud'].forEach(envolver);
+  if(typeof _solCliPush === 'function' && !_solCliPush._nxAsig){ var _sp = _solCliPush;
+    _solCliPush = function(arr, o){ try{ if(sel && Date.now() - sel.t < 60000){ var B = null; try{ B = DB; }catch(_){}
+      var kind = B && (arr === B.preventivos || arr === B.correctivos) ? 'mant' : (B && arr === B.logistica ? 'log' : '');
+      window._nxAsigAplicar(o, kind); } }catch(e){ console.warn('asignación', e); } return _sp.apply(this, arguments); };
+    _solCliPush._nxAsig = 1; }
 })();
 </script>
 </body>

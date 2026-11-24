@@ -304,7 +304,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='376b73e5b904';
+  var APP_VERSION='2e7fef7edee4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1497,6 +1497,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   // (2026-11-24) Ficha de un nombre: { empId, raiz } en la empresa que da _nxEmpDe; null si no se sabe o si hay dos fichas con ese nombre
   window._nxFichaDe = function(n, fecha){ var emp = window._nxEmpDe(n, fecha); if(emp !== 'montasa' && emp !== 'monhaco') return null; var d = DIRP[emp] || {}, nm = String(n || '').trim();
     var ids = Object.keys(d).filter(function(k){ var p = d[k]; return p && limpio(p.n) && p.n === nm; }); return ids.length === 1 ? { empId: ids[0], raiz: emp } : null; };
+  // (2026-11-24, asignación desde la solicitud) TODAS las fichas activas con ese nombre en las dos empresas: [{ empId, raiz, c }]
+  window._nxFichasDe = function(n){ var nm = String(n || '').trim(), out = []; if(!window._nxDirListo()) return out;
+    ['montasa', 'monhaco'].forEach(function(emp){ var d = DIRP[emp] || {}; Object.keys(d).forEach(function(k){ var p = d[k]; if(p && limpio(p.n) && p.n === nm && !p.ina) out.push({ empId: k, raiz: emp, c: String(p.c || '') }); }); });
+    return out; };
   window._nxAjenos = function(tipo){
     if(!window._nxDirListo()) return [];   // la lista combinada arranca junto con la regla de productividad
     var o = otra(), out = [];
@@ -7315,7 +7319,7 @@ function _findesSync(){
 //  · Una persona que ya estaba en asignados conserva su ficha aunque luego cambie su «nombre en órdenes».
 //  · Órdenes cerradas, completadas o canceladas: no se tocan.  · Sin directorio todavía: no hace nada.
 (function(){
-  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica'];
+  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica', 'cortinas'];   // (2026-11-24) + cortinas (MONHACO)
   var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
   function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
   function nombres(o){ var l = [];
@@ -7329,11 +7333,13 @@ function _findesSync(){
       if(!o || !o.id || cerrada(o)) return;
       var prev = Array.isArray(o.asignados) ? o.asignados.filter(function(a){ return a && a.n && a.empId && a.raiz; }) : [], nuevo = [];
       nombres(o).forEach(function(nm){
-        var ya = prev.find(function(a){ return a.n === nm; }); if(ya){ nuevo.push({ n: ya.n, empId: ya.empId, raiz: ya.raiz }); return; }
+        // (2026-11-24) homónimos: se conservan TODAS las fichas ya guardadas con ese nombre (no solo la primera)
+        var ya = prev.filter(function(a){ return a.n === nm; }); if(ya.length){ ya.forEach(function(a){ nuevo.push({ n: a.n, empId: a.empId, raiz: a.raiz }); }); return; }
         var f = window._nxFichaDe(nm); if(f) nuevo.push({ n: nm, empId: f.empId, raiz: f.raiz }); });
       var antes = JSON.stringify(Array.isArray(o.asignados) ? o.asignados : []), ahora = JSON.stringify(nuevo);
       if(antes === ahora) return;
       if(nuevo.length) o.asignados = nuevo; else delete o.asignados;
+      if(col === 'cortinas' && typeof _syncCortina === 'function'){ try{ _syncCortina(o); }catch(_eC){} }   // (2026-11-24) cortinas se guardan una por una
       cambios++; }); });
     return cambios;
   };

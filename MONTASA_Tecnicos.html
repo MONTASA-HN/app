@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6e58be889877';
+  var APP_VERSION='8decf7145ca2';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2092,6 +2092,10 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
   // (2026-11-24) Ficha de un nombre: { empId, raiz } en la empresa que da _nxEmpDe; null si no se sabe o si hay dos fichas con ese nombre
   window._nxFichaDe = function(n, fecha){ var emp = window._nxEmpDe(n, fecha); if(emp !== 'montasa' && emp !== 'monhaco') return null; var d = DIRP[emp] || {}, nm = String(n || '').trim();
     var ids = Object.keys(d).filter(function(k){ var p = d[k]; return p && limpio(p.n) && p.n === nm; }); return ids.length === 1 ? { empId: ids[0], raiz: emp } : null; };
+  // (2026-11-24, asignación desde la solicitud) TODAS las fichas activas con ese nombre en las dos empresas: [{ empId, raiz, c }]
+  window._nxFichasDe = function(n){ var nm = String(n || '').trim(), out = []; if(!window._nxDirListo()) return out;
+    ['montasa', 'monhaco'].forEach(function(emp){ var d = DIRP[emp] || {}; Object.keys(d).forEach(function(k){ var p = d[k]; if(p && limpio(p.n) && p.n === nm && !p.ina) out.push({ empId: k, raiz: emp, c: String(p.c || '') }); }); });
+    return out; };
   window._nxAjenos = function(tipo){
     if(!window._nxDirListo()) return [];   // la lista combinada arranca junto con la regla de productividad
     var o = otra(), out = [];
@@ -8766,7 +8770,7 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
 //  · Una persona que ya estaba en asignados conserva su ficha aunque luego cambie su «nombre en órdenes».
 //  · Órdenes cerradas, completadas o canceladas: no se tocan.  · Sin directorio todavía: no hace nada.
 (function(){
-  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica'];
+  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica', 'cortinas'];   // (2026-11-24) + cortinas (MONHACO)
   var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
   function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
   function nombres(o){ var l = [];
@@ -8780,11 +8784,13 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
       if(!o || !o.id || cerrada(o)) return;
       var prev = Array.isArray(o.asignados) ? o.asignados.filter(function(a){ return a && a.n && a.empId && a.raiz; }) : [], nuevo = [];
       nombres(o).forEach(function(nm){
-        var ya = prev.find(function(a){ return a.n === nm; }); if(ya){ nuevo.push({ n: ya.n, empId: ya.empId, raiz: ya.raiz }); return; }
+        // (2026-11-24) homónimos: se conservan TODAS las fichas ya guardadas con ese nombre (no solo la primera)
+        var ya = prev.filter(function(a){ return a.n === nm; }); if(ya.length){ ya.forEach(function(a){ nuevo.push({ n: a.n, empId: a.empId, raiz: a.raiz }); }); return; }
         var f = window._nxFichaDe(nm); if(f) nuevo.push({ n: nm, empId: f.empId, raiz: f.raiz }); });
       var antes = JSON.stringify(Array.isArray(o.asignados) ? o.asignados : []), ahora = JSON.stringify(nuevo);
       if(antes === ahora) return;
       if(nuevo.length) o.asignados = nuevo; else delete o.asignados;
+      if(col === 'cortinas' && typeof _syncCortina === 'function'){ try{ _syncCortina(o); }catch(_eC){} }   // (2026-11-24) cortinas se guardan una por una
       cambios++; }); });
     return cambios;
   };
@@ -8813,7 +8819,7 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
   if(!DENTRO) return;
   var RAIZ = 'montasa', CONCHA = window.parent.__nxTecConcha, CL_P = 'nx_tec_persona';
   var EMP = { montasa: { nombre: 'MT Rental', corto: 'MT', color: '#1f3864' }, monhaco: { nombre: 'MONHACO', corto: 'MH', color: '#b45309' } };
-  var COLS = [['preventivos', 'preventivo', 'Preventivo'], ['correctivos', 'correctivo', 'Correctivo'], ['revisiones', 'revision', 'Revisión'], ['evaluaciones', 'evaluacion', 'Evaluación'], ['soldaduras', 'soldadura', 'Soldadura / Pintura']];
+  var COLS = [['preventivos', 'preventivo', 'Preventivo'], ['correctivos', 'correctivo', 'Correctivo'], ['revisiones', 'revision', 'Revisión'], ['evaluaciones', 'evaluacion', 'Evaluación'], ['soldaduras', 'soldadura', 'Soldadura / Pintura'], ['cortinas', 'cortinas', 'Cortinas']];   // (2026-11-24) + cortinas
   var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
   function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
@@ -8836,22 +8842,28 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
   function equipoTxt(B, o){ var e = (Array.isArray(B.equipos) ? B.equipos : []).find(function(x){ return x && x.id === o.equipoId; });
     return e ? [e.codigo, e.modelo || e.desc || e.tipo || ''].filter(Boolean).join(' · ') : (o.equipoTxt || o.equipo || ''); }
   // Las órdenes abiertas de ESTA empresa asignadas a la ficha p (la usa también la app de la otra empresa)
-  window.__nxTecMias = function(p){
+  // (2026-11-24, asignación desde la solicitud) conCompletadas: también las completadas/cerradas (no las canceladas), con su fecha.
+  // Si la orden tiene o.asignados se usa SOLO eso (separa a dos personas con el mismo nombre); si no, el nombre en órdenes de la ficha.
+  function fechaFin(o){ var f = String(o.fechaCompletado || o.fechaCierre || o.finTrabajo || o.fechaFin || o.fecha || ''); var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(f); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : f.slice(0, 10); }
+  window.__nxTecMias = function(p, conCompletadas){
     if(!p || !p.empId) return []; var B; try{ B = DB; }catch(e){ return []; } if(!B) return [];
     var out = [];
     COLS.forEach(function(c){ if(!document.getElementById('tab-' + c[1])) return;
-      (Array.isArray(B[c[0]]) ? B[c[0]] : []).forEach(function(o){ if(!o || !o.id || cerrada(o)) return;
-        var mia = (Array.isArray(o.asignados) ? o.asignados : []).some(function(a){ return a && a.empId === p.empId && a.raiz === p.raiz; })
-          || (typeof window._nxFichaDe === 'function' && nombres(o).some(function(n){ var f = window._nxFichaDe(n); return f && f.empId === p.empId && f.raiz === p.raiz; }));
-        if(mia) out.push({ empresa: RAIZ, tab: c[1], tipo: c[2], id: o.id, correlativo: o.correlativo || '', estado: o.estado || 'Pendiente', equipo: equipoTxt(B, o) }); }); });
+      var lista = Array.isArray(B[c[0]]) ? B[c[0]] : (B[c[0]] && typeof B[c[0]] === 'object' ? Object.keys(B[c[0]]).map(function(k){ return B[c[0]][k]; }) : []);
+      lista.forEach(function(o){ if(!o || !o.id) return; var ce = cerrada(o);
+        if(/Cancelad/i.test(String(o.estado || '')) || (ce && !conCompletadas)) return;
+        var as = Array.isArray(o.asignados) ? o.asignados.filter(function(a){ return a && a.empId; }) : [];
+        var mia = as.length ? as.some(function(a){ return a.empId === p.empId && a.raiz === p.raiz; })
+          : (typeof window._nxFichaDe === 'function' && nombres(o).some(function(n){ var f = window._nxFichaDe(n); return f && f.empId === p.empId && f.raiz === p.raiz; }));
+        if(mia) out.push({ empresa: RAIZ, tab: c[1], tipo: c[2], id: o.id, correlativo: o.correlativo || '', estado: o.estado || (ce ? 'Completado' : 'Pendiente'), equipo: equipoTxt(B, o), completada: ce, fin: ce ? fechaFin(o) : '' }); }); });
     return out;
   };
   window.__nxTecListo = function(){ try{ return !!window._fbReady || (DB && (DB.preventivos || []).length > 0); }catch(e){ return false; } };
   function todas(){
     var p = persona(); if(!p) return { p: null, L: [], falta: false };
-    var L = window.__nxTecMias(p), w = CONCHA.ventana(RAIZ === 'montasa' ? 'monhaco' : 'montasa'), falta = true;
-    try{ if(w && typeof w.__nxTecMias === 'function'){ L = L.concat(w.__nxTecMias(p)); falta = false; } }catch(e){}
-    L.sort(function(a, b){ return (a.empresa === RAIZ ? 0 : 1) - (b.empresa === RAIZ ? 0 : 1) || String(a.correlativo).localeCompare(String(b.correlativo)); });
+    var L = window.__nxTecMias(p, true), w = CONCHA.ventana(RAIZ === 'montasa' ? 'monhaco' : 'montasa'), falta = true;
+    try{ if(w && typeof w.__nxTecMias === 'function'){ L = L.concat(w.__nxTecMias(p, true)); falta = false; } }catch(e){}
+    L.sort(function(a, b){ return (a.completada ? 1 : 0) - (b.completada ? 1 : 0) || (a.completada ? String(b.fin).localeCompare(String(a.fin)) : 0) || (a.empresa === RAIZ ? 0 : 1) - (b.empresa === RAIZ ? 0 : 1) || String(a.correlativo).localeCompare(String(b.correlativo)); });
     return { p: p, L: L, falta: falta };
   }
   function chip(r){ return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;color:#fff;background:' + EMP[r].color + '">' + EMP[r].corto + ' · ' + EMP[r].nombre + '</span>'; }
@@ -8860,26 +8872,37 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
     encabezado();
     var primera = document.querySelector('#dashboard-content .dash-type-card:not(#nx-tec-mis)'); if(!primera) return;
     var cont = primera.parentElement, ya = document.getElementById('nx-tec-mis'), T = todas();
-    var h = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div style="font-weight:800;font-size:14px">📌 Mis Órdenes</div><span style="border:1.5px solid #c2410c;color:#c2410c;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;font-family:DM Mono,monospace">' + T.L.length + ' ab.</span></div>'
-      + '<div style="font-size:11.5px;color:var(--text3,#667085);margin-top:6px">' + (T.p ? 'Las que te asignaron en MT Rental y MONHACO' : 'Este teléfono no está vinculado a una ficha') + '</div>';
+    var h = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div style="font-weight:800;font-size:14px">📌 Mis Órdenes</div><span style="border:1.5px solid #c2410c;color:#c2410c;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;font-family:DM Mono,monospace">' + T.L.filter(function(x){ return !x.completada; }).length + ' ab.</span></div>'
+      + '<div style="font-size:11.5px;color:var(--text3,#667085);margin-top:6px">' + (T.p ? 'Las tuyas de MT Rental y MONHACO: pendientes e historial' : 'Este teléfono no está vinculado a una ficha') + '</div>';
     if(ya){ if(ya._h !== h){ ya.innerHTML = h; ya._h = h; } if(ya.parentElement !== cont || cont.firstElementChild !== ya) cont.insertBefore(ya, cont.firstElementChild); return; }
     var d = document.createElement('div'); d.id = 'nx-tec-mis'; d.className = 'dash-type-card'; d.style.cssText = '--dtc-color:#c2410c;--dtc-bg:#fde7d9;cursor:pointer'; d.innerHTML = h; d._h = h;
-    d.onclick = abrirLista; cont.insertBefore(d, cont.firstElementChild);
+    d.onclick = function(){ abrirLista(false); }; cont.insertBefore(d, cont.firstElementChild);
   }
   // ── la carpeta: accesos directos a las órdenes originales ──
-  function abrirLista(){
+  // (2026-11-24) dos grupos con los estados reales de Nexo. Completadas: mes actual y anterior; «ver más» muestra todas.
+  function mesesVisibles(){ var d = new Date(), a = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); d.setDate(1); d.setMonth(d.getMonth() - 1); return [a, d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2)]; }
+  function tarjeta(x, i){
+    return '<div data-i="' + i + '" style="background:#fff;border:1px solid var(--border,#e3e1d8);border-left:5px solid ' + EMP[x.empresa].color + ';border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer' + (x.completada ? ';opacity:.85' : '') + '">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><div style="font-weight:800;font-size:15px">' + esc(x.correlativo) + ' ' + chip(x.empresa) + '</div><span style="font-size:11px;font-weight:700;color:' + (x.completada ? '#1a7f37' : '#b45309') + '">' + esc(x.completada ? '✓ ' + x.estado + (x.fin ? ' · ' + x.fin.split('-').reverse().join('/') : '') : x.estado) + '</span></div>'
+      + '<div style="font-size:12.5px;color:var(--text2,#444);margin-top:4px">' + esc(x.tipo) + (x.equipo ? ' · ' + esc(x.equipo) : '') + '</div></div>'; }
+  function grupos(L, verTodas){
+    var M = mesesVisibles(), ab = [], co = [], ocultas = 0;
+    L.forEach(function(x, i){ if(!x.completada) ab.push(tarjeta(x, i)); else if(verTodas || M.indexOf(String(x.fin).slice(0, 7)) >= 0) co.push(tarjeta(x, i)); else ocultas++; });
+    var tit = function(t, n){ return '<div style="font-size:13px;font-weight:800;color:var(--text2,#444);margin:14px 2px 6px;text-transform:uppercase;letter-spacing:.4px">' + t + ' <span style="color:#98a2b3">(' + n + ')</span></div>'; };
+    return tit('Pendientes y en proceso', ab.length) + (ab.length ? ab.join('') : '<div style="color:#98a2b3;font-size:12.5px;margin:0 2px 8px">Sin órdenes pendientes.</div>')
+      + tit('Completadas' + (verTodas ? '' : ' · este mes y el anterior'), co.length) + (co.length ? co.join('') : '<div style="color:#98a2b3;font-size:12.5px;margin:0 2px 8px">Sin completadas en este período.</div>')
+      + (ocultas && !verTodas ? '<button id="nx-tec-ver-mas" style="width:100%;margin-top:4px;padding:11px;border:1px solid var(--border2,#ccc);background:#fff;border-radius:10px;font-weight:700;font-size:13px">Ver más completadas (' + ocultas + ')</button>' : ''); }
+  function abrirLista(verTodas){
+    if(verTodas !== true) verTodas = false;
     var T = todas(), L = T.L, v = document.getElementById('nx-tec-mis-ov'); if(v) v.remove();
     v = document.createElement('div'); v.id = 'nx-tec-mis-ov';
     v.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--bg,#f0f2f5);overflow:auto;padding:14px 14px 90px';
-    v.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><button id="nx-tec-volver" style="border:1px solid var(--border2,#ccc);background:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px">← Volver</button><div><div style="font-size:20px;font-weight:800">📌 Mis Órdenes</div><div style="font-size:12px;color:var(--text3,#667085)">' + (T.p ? esc(T.p.nombre) + ' · abiertas, de las dos empresas' : 'Teléfono sin vincular a una ficha: pídele a Gerencia que lo vincule en Personal → 📱 Accesos') + '</div></div></div>'
+    v.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><button id="nx-tec-volver" style="border:1px solid var(--border2,#ccc);background:#fff;border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px">← Volver</button><div><div style="font-size:20px;font-weight:800">📌 Mis Órdenes</div><div style="font-size:12px;color:var(--text3,#667085)">' + (T.p ? esc(T.p.nombre) + ' · de las dos empresas' : 'Teléfono sin vincular a una ficha: pídele a Gerencia que lo vincule en Personal → 📱 Accesos') + '</div></div></div>'
       + (T.falta && T.p ? '<div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:8px">Todavía se están cargando las órdenes de ' + EMP[RAIZ === 'montasa' ? 'monhaco' : 'montasa'].nombre + '. Vuelve a abrir esta carpeta en unos segundos.</div>' : '')
-      + (L.length ? L.map(function(x, i){
-        return '<div data-i="' + i + '" style="background:#fff;border:1px solid var(--border,#e3e1d8);border-left:5px solid ' + EMP[x.empresa].color + ';border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer">'
-          + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><div style="font-weight:800;font-size:15px">' + esc(x.correlativo) + ' ' + chip(x.empresa) + '</div><span style="font-size:11px;font-weight:700;color:#b45309">' + esc(x.estado) + '</span></div>'
-          + '<div style="font-size:12.5px;color:var(--text2,#444);margin-top:4px">' + esc(x.tipo) + (x.equipo ? ' · ' + esc(x.equipo) : '') + '</div></div>'; }).join('')
-        : '<div style="background:#fff;border-radius:12px;padding:16px;color:#667085">' + (T.p ? 'No tienes órdenes abiertas asignadas.' : '') + '</div>');
+      + (T.p ? grupos(L, verTodas) : '');
     document.body.appendChild(v);
     v.querySelector('#nx-tec-volver').onclick = function(){ v.remove(); };
+    var vm = v.querySelector('#nx-tec-ver-mas'); if(vm) vm.onclick = function(){ var y = v.scrollTop; abrirLista(true); var nv = document.getElementById('nx-tec-mis-ov'); if(nv) nv.scrollTop = y; };
     [].forEach.call(v.querySelectorAll('[data-i]'), function(el){ el.onclick = function(){ var x = L[+el.getAttribute('data-i')]; v.remove();
       if(x.empresa === RAIZ) abrirOrden(x.tab, x.id); else CONCHA.abrir(x.empresa, x.tab, x.id); }; });
   }
