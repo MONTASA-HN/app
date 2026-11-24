@@ -273,7 +273,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b4bacb28e581';
+  var APP_VERSION='e491bf63cd1e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8673,8 +8673,17 @@ function calcularNotificacionesMant(){
     // ══ PREVENTIVO CADA 350 HORAS (2026-11-21, Miguel) ══ 350 h desde el horómetro del último preventivo, o los meses de la ficha: lo que ocurra primero.
     // Avisa desde 50 h antes. Horómetro actual = el mayor entre la ficha, las órdenes del equipo y las lecturas de horómetros. Sin horómetro: solo por fecha.
     const _hInt = parseFloat(eq.intervaloMantHoras) > 0 ? parseFloat(eq.intervaloMantHoras) : 350, _hUlt = parseFloat(ultimo.horometro||0);
-    let horasRestantes = null, horoProximo = 0, horoActual = 0;
+    let horasRestantes = null, horoProximo = 0, horoActual = 0, horoSospechoso = null;
+    // ══ HORÓMETRO SOSPECHOSO (2026-11-24, Miguel; caso MH-0044) ══ Si el último preventivo trae un horómetro MENOR que el que el equipo
+    // ya tenía hasta esa fecha (otras órdenes del equipo o lecturas de meses anteriores), no se usa para las horas: solo cuenta la fecha.
     if(_hUlt > 0){
+      const _fU = String(ultimo.fechaFin || ultimo.fechaCompletado || ultimo.fecha || '').slice(0, 10); let _maxAntes = 0, _deOrd = '';
+      [DB.preventivos, DB.correctivos, DB.ordenesCerradas, DB.cortinas].forEach(L => (Array.isArray(L) ? L : []).forEach(o => { if(!o || o === ultimo || o.equipoId !== eq.id || (o.id && o.id === ultimo.id)) return;
+        const fo = String(o.fechaFin || o.fechaCompletado || o.fechaCierre || o.fecha || '').slice(0, 10), h = parseFloat(o.horometro || 0); if(fo && _fU && fo <= _fU && h > _maxAntes){ _maxAntes = h; _deOrd = o.correlativo || ''; } }));
+      try{ const HM = DB.horometros || {}; Object.keys(HM).forEach(m => { if(!/^\d{4}-\d{2}$/.test(m) || !_fU || m > _fU.slice(0, 7)) return; const x = HM[m] && HM[m][eq.id]; if(!x) return; const _tsX = parseFloat(x.ts) || 0, _finU = new Date(_fU + 'T00:00:00').getTime() + 864e5; if(m === _fU.slice(0, 7) && !(_tsX && _tsX < _finU)) return; const h = parseFloat(x.lectura || 0); if(h > _maxAntes){ _maxAntes = h; _deOrd = 'lectura ' + m; } }); }catch(e){}
+      if(_maxAntes > _hUlt + 1) horoSospechoso = { orden: ultimo.correlativo || '—', valor: _hUlt, antes: _maxAntes, de: _deOrd };
+    }
+    if(_hUlt > 0 && !horoSospechoso){
       horoActual = Math.max(_hUlt, parseFloat(eq.horometro||0) || 0);
       [DB.preventivos, DB.correctivos, DB.ordenesCerradas, DB.cortinas].forEach(L => (Array.isArray(L) ? L : []).forEach(o => { if(o && o.equipoId === eq.id){ const h = parseFloat(o.horometro||0); if(h > horoActual) horoActual = h; } }));
       try{ const HM = DB.horometros || {}; Object.keys(HM).forEach(m => { const x = HM[m] && HM[m][eq.id]; const h = x ? parseFloat(x.lectura||0) : 0; if(h > horoActual) horoActual = h; });
@@ -8682,13 +8691,13 @@ function calcularNotificacionesMant(){
       horoProximo = _hUlt + _hInt; horasRestantes = Math.round((horoProximo - horoActual) * 10) / 10;
     }
     const porHoras = horasRestantes !== null && horasRestantes <= 50;
-    if(diasRestantes <= 7 || porHoras){
+    if(diasRestantes <= 7 || porHoras || horoSospechoso){
       const notifKey = eq.id + '_' + (ultimo.correlativo||'sin-orden');
       notifs.push({
         equipoId: eq.id,
         codigo: eq.codigo,
         diasRestantes,
-        porHoras, horasRestantes, horoProximo, horoActual, horasIntervalo: _hInt, mesesIntervalo: meses,
+        porHoras, horasRestantes, horoProximo, horoActual, horasIntervalo: _hInt, mesesIntervalo: meses, horoSospechoso,
         ultimoServicio: ultimo.servicio||'—',
         ultimoCorrelativo: ultimo.correlativo||'—',
         notifKey,
@@ -8748,7 +8757,7 @@ function renderNotificacionesTab(){
       : 'En '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s');
     const _hh = v => (Math.round(Math.abs(v) * 10) / 10).toLocaleString();
     const _txtH = n.porHoras ? (_venH ? (n.horasRestantes === 0 ? 'Llegó a las ' + n.horasIntervalo + ' h' : 'Pasado por ' + _hh(n.horasRestantes) + ' h') : 'Faltan ' + _hh(n.horasRestantes) + ' h') : '';
-    const diasTexto = n.porHoras ? (n.diasRestantes <= 7 ? _txtH + ' · ' + _txtF : _txtH) : _txtF;
+    const diasTexto = n.porHoras ? (n.diasRestantes <= 7 ? _txtH + ' · ' + _txtF : _txtH) : (n.horoSospechoso && n.diasRestantes > 7 ? '⚠️ Revisar horómetro' : _txtF);   // (2026-11-24)
     const badgeStyle = n.completada ? 'background:#c8edcc;color:#1a5c1a' : (urgente ? 'background:#fbe0e0;color:#a32d2d' : 'background:#fdead9;color:#8a4800');
     const claseItem = n.completada ? 'notif-completada' : (urgente ? 'notif-urgent' : '');
     return `<div class="notif-item ${claseItem}">
@@ -8757,6 +8766,7 @@ function renderNotificacionesTab(){
         <span class="notif-days-badge" style="${badgeStyle};margin-left:auto">${n.completada ? '✅ Completado' : diasTexto}</span>
       </div>
       <div class="notif-line">Próximo mantenimiento del equipo <b>${_x(n.codigo)}</b>${urgente?'':' en '+n.diasRestantes+' día'+(n.diasRestantes===1?'':'s')}</div>
+      ${n.horoSospechoso ? `<div class="notif-line" style="color:#a32d2d">⚠️ Horómetro sospechoso en la orden <b>${_x(n.horoSospechoso.orden)}</b>: dice <b>${n.horoSospechoso.valor.toLocaleString()} h</b>, pero el equipo ya tenía <b>${n.horoSospechoso.antes.toLocaleString()} h</b> (${_x(n.horoSospechoso.de)}). Mientras no se corrija, el aviso de este equipo va solo por fecha.</div>` : ''}
       ${n.horasRestantes !== null && n.horasRestantes !== undefined ? `<div class="notif-line">⏱ Próximo PM a las <b>${n.horoProximo.toLocaleString()} h</b> — horómetro actual: <b>${n.horoActual.toLocaleString()} h</b> <span style="opacity:.7">(cada ${n.horasIntervalo} h o ${n.mesesIntervalo} meses, lo que ocurra primero)</span></div>` : ''}
       <div class="notif-line">Último mantenimiento: <b>${_x(n.ultimoServicio)}</b> — orden <b>${_x(n.ultimoCorrelativo)}</b></div>
       ${n.completada ? '' : `<button onclick="marcarNotifCompletada('${n.notifKey}')" style="width:100%;margin-top:10px;padding:9px;background:#1f3864;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✅ Completar (PIN)</button>`}
