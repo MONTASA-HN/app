@@ -243,6 +243,22 @@ function reset(tree){ SERVIDOR.tree = J(tree); SERVIDOR.clientes = []; }
   ok('19. Borrar la única orden → se borra sola (no se reescribe la lista vacía) y deja lápida', srv('logistica').length === 0 && !(Array.isArray(n19) && n19.length === 0) && !!get(SERVIDOR.tree, 'montasa/_borradas/u1'),
      'lista en el servidor: ' + JSON.stringify(n19));
 
+  // 20 ─ (2026-11-24, hallazgo del piloto de Técnicos) Sin señal: un cambio sale «en vuelo»; ANTES de 30 s se hace otro cambio en la MISMA
+  // orden y se cierra la app (o se cambia de empresa). El segundo cambio también debe quedar pendiente y subirse al reabrir.
+  reset({ montasa: { logistica: [lg('t1')] } });
+  const E = cliente('E', { logistica: J(srv('logistica')) }); await esperar();
+  E.sinSenal();
+  E.DB().logistica[0].estado = 'En pausa'; E.sync.guardar(); await esperar();                       // primer cambio: queda «en vuelo»
+  E.DB().logistica[0].inicioTrabajo = '2026-11-24T13:00'; E.DB().logistica[0].finTrabajo = '2026-11-24T15:00';
+  E.sync.guardar(); await esperar();                                                                 // segundo cambio, dentro de los 30 s
+  const lsE = J(E.ls), dbE = J(E.DB());
+  SERVIDOR.clientes = SERVIDOR.clientes.filter(c => c !== E);                                        // se cerró la app: su cola se pierde
+  const E2 = cliente('E2', dbE, lsE); await esperar(); await E2.sync.guardar(); await esperar(); await esperar();
+  const t20 = srv('logistica')[0];
+  ok('20. Dos cambios sin señal en la misma orden (el 2.º mientras el 1.º está en vuelo) y app cerrada → al reabrir se suben los dos',
+     t20.estado === 'En pausa' && t20.inicioTrabajo === '2026-11-24T13:00' && t20.finTrabajo === '2026-11-24T15:00',
+     'servidor: ' + JSON.stringify({ estado: t20.estado, ini: t20.inicioTrabajo, fin: t20.finTrabajo }));
+
   await sinDuplicados('final');
   console.log(fallas ? '\n✗ ' + fallas + ' falla(s)' : '\nTodo bien');
   process.exitCode = fallas ? 1 : 0;

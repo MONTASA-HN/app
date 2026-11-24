@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='b889d7c8cad5';
+  var APP_VERSION='8c1f7801d831';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1001,7 +1001,12 @@ var _Sync = (function(){
     var prom = [], vistos = {}, v = visto[col] || (visto[col] = {}), quitarLoc = [], lgViejos = 0, cerradasViejas = [];
     loc.forEach(function(o){
       if(o && o.id) v[o.id] = 1;
-      if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1; return; }   // (2026-10-30) colgada > 30 s: reintentar
+      if(!o || !o.id || (enVuelo[col + '/' + o.id] && Date.now() - enVuelo[col + '/' + o.id] < COLGADA)) { if(o && o.id) vistos[o.id] = 1;   // (2026-10-30) colgada > 30 s: reintentar
+        // (2026-11-24) EN VUELO: no se reenvía, pero lo que cambió desde entonces queda anotado como pendiente (si la app se cierra o se
+        // cambia de empresa antes de 30 s, se sube al volver). Al confirmarse el envío, _limpiarSucio solo quita lo que se mandó.
+        try{ var hv = o && o.id && b[o.id], hayV = false; if(hv){ _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hv, k)){ _marcarSucio(col, o.id, k, _h(o[k])); hayV = true; } });
+          Object.keys(hv).forEach(function(k){ if(!OMITIR[k] && o[k] === undefined){ _marcarSucio(col, o.id, k, VACIO); hayV = true; } }); if(hayV) _guardarSucio(); } }catch(_eV){}
+        return; }
       vistos[o.id] = 1;
       var hb = b[o.id], p = null;
       if(!hb){
@@ -1053,9 +1058,18 @@ var _Sync = (function(){
       if(!frenoAvisado[col]){ frenoAvisado[col] = 1; try{ if(typeof toast === 'function') toast('⚠️ No se borraron ' + fuera.length + ' registros a la vez (protección). Bórralos de uno en uno.', true); }catch(e){} } }
     return prom;
   }
+  // (2026-11-24) Mientras otro guardado espera (sin señal, hasta 30 s), los cambios nuevos se ANOTAN como pendientes sin enviarlos:
+  // si la app se cierra o se cambia de empresa en ese rato, se suben al volver a abrirla. Mismo criterio que _guardarCol.
+  function _anotarPendientes(col){
+    var loc = _lista(col), b = base[col]; if(!loc || !b || !listo[col] || !window._fbReady) return; var hay = false;
+    loc.forEach(function(o){ if(!o || !o.id) return; var hb = b[o.id]; if(!hb) return;
+      _campos(o).forEach(function(k){ if(_h(o[k]) !== _hb(hb, k)){ _marcarSucio(col, o.id, k, _h(o[k])); hay = true; } });
+      Object.keys(hb).forEach(function(k){ if(!OMITIR[k] && o[k] === undefined){ _marcarSucio(col, o.id, k, VACIO); hay = true; } }); });
+    if(hay) _guardarSucio();
+  }
   function guardar(){
     if(!db || !raiz) return Promise.resolve();
-    if(corriendo){ pendiente = true; return Promise.resolve(); }
+    if(corriendo){ pendiente = true; try{ activas.forEach(_anotarPendientes); }catch(_eA){} return Promise.resolve(); }   // (2026-11-24) anota lo nuevo aunque no se envíe todavía
     corriendo = true;
     var prom = [];
     activas.forEach(function(c){ prom = prom.concat(_guardarCol(c)); });
