@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4c79d886b274';
+  var APP_VERSION='6e58be889877';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -8908,6 +8908,27 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
     setInterval(function(){ try{ ponerCarpeta(); }catch(e){} }, 3000);
   }
   if(document.readyState === 'complete') setTimeout(iniciar, 300); else window.addEventListener('load', function(){ setTimeout(iniciar, 300); });
+})();
+</script>
+<script>
+// ══ NEXO TÉCNICOS · SEGUIMIENTO DE LA PRUEBA (2026-11-24, Miguel: paso 5, prueba en campo) ═══════════════════════════════
+// Solo dentro de NEXO_Tecnicos.html y con el teléfono aprobado: anota en accesos/<uid>/nexoTec/<empresa> la última vez que se abrió,
+// las versiones, cuántas órdenes abiertas ve en «Mis Órdenes» (de esta empresa) y cuántas veces tocó la carpeta / una orden de ella.
+(function(){
+  var DENTRO = false; try{ DENTRO = /^nx-tec-/.test(window.name) && window.parent !== window && !!window.parent.__nxTecConcha; }catch(e){}
+  if(!DENTRO) return;
+  var RAIZ = 'montasa', hecho = false;
+  function ref(k){ var a = window._nxAcceso || {}; return (a.uid && window._fbDB) ? window._fbDB.ref('accesos/' + a.uid + '/nexoTec/' + RAIZ + (k ? '/' + k : '')) : null; }
+  function aprobado(){ var r = (window._nxAcceso || {}).registro; return !!(r && r.estado === 'aprobado' && window._fbReady); }
+  function anotar(){
+    if(hecho || !aprobado() || !ref()) return; hecho = true;
+    var n = 0; try{ var p = JSON.parse(localStorage.getItem('nx_tec_persona') || 'null'); n = p ? window.__nxTecMias(p).length : 0; }catch(e){}
+    try{ ref().update({ ultima: { '.sv': 'timestamp' }, v: window._nxVersion || '', concha: (function(){ try{ return window.parent._nxVersion || ''; }catch(e){ return ''; } })(), mias: n }).catch(function(){}); }catch(e){}
+  }
+  function contar(k){ if(!aprobado()) return; var r = ref(k); if(r) r.transaction(function(x){ return (x || 0) + 1; }).catch(function(){}); }
+  document.addEventListener('click', function(e){ var t = e.target;
+    if(t && t.closest){ if(t.closest('#nx-tec-mis')) contar('tocoMisOrdenes'); else if(t.closest('#nx-tec-mis-ov [data-i]')) contar('abrioOrdenDesdeMis'); } }, true);
+  var k = 0, t = setInterval(function(){ anotar(); if(hecho || ++k > 60) clearInterval(t); }, 3000);
 })();
 </script>
 </body>
