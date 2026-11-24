@@ -237,7 +237,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='02c2bdb5bc40';
+  var APP_VERSION='bb316308bf67';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2034,6 +2034,9 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
     emps = unicos(c.map(function(x){ return x.emp; })); return emps.length === 1 ? emps[0] : '';
   };
   window._nxEmpEtq = function(n){ return ETQ[window._nxEmpDe(n)] || ''; };
+  // (2026-11-24) Ficha de un nombre: { empId, raiz } en la empresa que da _nxEmpDe; null si no se sabe o si hay dos fichas con ese nombre
+  window._nxFichaDe = function(n, fecha){ var emp = window._nxEmpDe(n, fecha); if(emp !== 'montasa' && emp !== 'monhaco') return null; var d = DIRP[emp] || {}, nm = String(n || '').trim();
+    var ids = Object.keys(d).filter(function(k){ var p = d[k]; return p && limpio(p.n) && p.n === nm; }); return ids.length === 1 ? { empId: ids[0], raiz: emp } : null; };
   window._nxAjenos = function(tipo){
     if(!window._nxDirListo()) return [];   // la lista combinada arranca junto con la regla de productividad
     var o = otra(), out = [];
@@ -7734,6 +7737,49 @@ function _spAbiertasDe(id){ return _spLigadasDe(id).filter(function(s){ return !
   setInterval(recalcular, 10 * 60 * 1000);   // cambia de día / alguien regresa
   setInterval(avisarOrdenes, 5 * 60 * 1000);
   escuchar();
+})();
+</script>
+<script>
+// ══ FICHA DE LOS ASIGNADOS (2026-11-24, Miguel: paso 2 de Técnicos unificados) ══════════════════════════════════════════
+// Las órdenes guardan a las personas por NOMBRE (tecnico, tecnicos[], operador…operador5, motorista). Desde ahora cada orden ABIERTA guarda
+// además o.asignados = [{ n, empId, raiz }]: la ficha y la empresa de cada persona (sale del directorio de personal MH + MT).
+//  · Se completa sola antes de cada guardado (saveDB) y una vez al abrir la app. Los nombres no se tocan.
+//  · Una persona que ya estaba en asignados conserva su ficha aunque luego cambie su «nombre en órdenes».
+//  · Órdenes cerradas, completadas o canceladas: no se tocan.  · Sin directorio todavía: no hace nada.
+(function(){
+  var COLS_A = ['preventivos', 'correctivos', 'revisiones', 'evaluaciones', 'soldaduras', 'logistica'];
+  var CAMPOS = ['tecnico', 'tecnicos', 'operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'];
+  function cerrada(o){ return o.cerrado === true || o.completado === true || /Completado|Cerrado|Cancelado/i.test(String(o.estado || '')); }
+  function nombres(o){ var l = [];
+    CAMPOS.forEach(function(k){ var v = o[k]; (Array.isArray(v) ? v : String(v || '').split(',')).forEach(function(s){ s = String(s || '').trim(); if(s && l.indexOf(s) < 0) l.push(s); }); });
+    return l; }
+  window._nxAsignadosCompletar = function(){
+    if(typeof window._nxFichaDe !== 'function' || typeof window._nxDirListo !== 'function' || !window._nxDirListo()) return 0;
+    var B; try{ B = DB; }catch(e){ return 0; } if(!B) return 0;
+    var cambios = 0;
+    COLS_A.forEach(function(col){ var L = B[col]; (Array.isArray(L) ? L : []).forEach(function(o){
+      if(!o || !o.id || cerrada(o)) return;
+      var prev = Array.isArray(o.asignados) ? o.asignados.filter(function(a){ return a && a.n && a.empId && a.raiz; }) : [], nuevo = [];
+      nombres(o).forEach(function(nm){
+        var ya = prev.find(function(a){ return a.n === nm; }); if(ya){ nuevo.push({ n: ya.n, empId: ya.empId, raiz: ya.raiz }); return; }
+        var f = window._nxFichaDe(nm); if(f) nuevo.push({ n: nm, empId: f.empId, raiz: f.raiz }); });
+      var antes = JSON.stringify(Array.isArray(o.asignados) ? o.asignados : []), ahora = JSON.stringify(nuevo);
+      if(antes === ahora) return;
+      if(nuevo.length) o.asignados = nuevo; else delete o.asignados;
+      cambios++; }); });
+    return cambios;
+  };
+  if(typeof saveDB === 'function' && !saveDB._nxAsig){
+    var _orig = saveDB;
+    saveDB = function(){ try{ window._nxAsignadosCompletar(); }catch(e){ console.warn('asignados', e); } return _orig.apply(this, arguments); };
+    saveDB._nxAsig = 1;
+  }
+  // una vez al abrir: cuando ya hay datos de la base y directorio
+  var hecho = false;
+  function primeraVez(){ if(hecho) return; if(!window._fbReady || typeof window._nxDirListo !== 'function' || !window._nxDirListo()) return;
+    hecho = true; try{ if(window._nxAsignadosCompletar() > 0) saveDB(); }catch(e){} }
+  document.addEventListener('nx-dir', function(){ setTimeout(primeraVez, 1500); });
+  var n = 0, t = setInterval(function(){ primeraVez(); if(hecho || ++n > 60) clearInterval(t); }, 2000);
 })();
 </script>
 </body>
