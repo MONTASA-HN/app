@@ -238,7 +238,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='6a65342472b4';
+  var APP_VERSION='81fa33fbb2b4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2428,8 +2428,23 @@ function _rmElegirCli(v){
   const q = _rmNorm(v);
   if(!q){ _rmCliente=''; renderReporteMensual(); return; }
   const e = _rmClientes().find(function(c){ return _rmNorm(c)===q; });
-  if(!e){ toast('Elige un cliente de la lista', true); return; }
+  if(!e){ if(Date.now() - _rmTocando < 1500) return; _rmSugerir(v); toast('Elige un cliente de la lista', true); return; }
   _rmCliente = e; renderReporteMensual();
+}
+// (2026-11-25, Miguel) En el Samsung de Marvin (navegador Samsung Internet) elegir de la lista del navegador no avisaba a la app
+// y seguía «Elige un cliente». Botones propios con los clientes que coinciden: se toca uno y queda elegido, en cualquier navegador.
+let _rmTocando = 0;
+function _rmSugerir(v){
+  const box = document.getElementById('rm-sug'); if(!box) return;
+  const q = _rmNorm(v);
+  if(q.length < 2 || (_rmCliente && _rmNorm(_rmCliente) === q)){ box.innerHTML = ''; return; }
+  const L = _rmClientes().filter(function(c){ return _rmNorm(c).indexOf(q) >= 0; });
+  const ini = L.filter(function(c){ return _rmNorm(c).indexOf(q) === 0; }), resto = L.filter(function(c){ return _rmNorm(c).indexOf(q) !== 0; });
+  const M = ini.concat(resto);
+  box.innerHTML = M.length
+    ? M.slice(0, 8).map(function(c){ return '<button type="button" data-rmc="'+_hcEsc(c)+'" onpointerdown="_rmTocando=Date.now()" ontouchstart="_rmTocando=Date.now()" onmousedown="_rmTocando=Date.now();event.preventDefault()" onclick="_rmElegirCli(this.getAttribute(\'data-rmc\'))" style="display:block;width:100%;text-align:left;padding:11px 12px;margin:0 0 6px;border:1px solid var(--border2,#ccc);border-radius:8px;background:#fff;font-size:14px;font-weight:700;color:#1f3864;cursor:pointer">'+_hcEsc(c)+'</button>'; }).join('')
+      + (M.length > 8 ? '<div style="font-size:12px;color:#888;margin:-2px 0 10px">… y '+(M.length-8)+' más: sigue escribiendo</div>' : '')
+    : '<div style="font-size:13px;color:#b45309;margin:0 0 10px">No hay clientes con ese nombre</div>';
 }
 function _rmEquipoTxt(o){
   if(o.equipoId){
@@ -2508,8 +2523,9 @@ function renderReporteMensual(){
     + '<button onclick="_rmMoverMes(1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>'
     + '</div>';
   // (2026-11-12) ~1300 clientes oficiales: se escribe y se elige de la lista
-  h += '<input id="rm-cliente" list="rm-cli-dl" autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" onchange="_rmElegirCli(this.value)" onfocus="this.select()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
-    + '<datalist id="rm-cli-dl">' + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'">'; }).join('') + '</datalist>';
+  h += '<input id="rm-cliente" list="rm-cli-dl" autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" oninput="_rmSugerir(this.value)" onchange="_rmElegirCli(this.value)" onfocus="this.select()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
+    + '<datalist id="rm-cli-dl">' + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'">'; }).join('') + '</datalist>'
+    + '<div id="rm-sug"></div>';
   if(!_rmCliente){
     h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes de trabajo del mes.</div>';
     cont.innerHTML = h; return;
