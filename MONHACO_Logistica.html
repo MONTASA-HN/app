@@ -238,7 +238,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='7230462c6427';
+  var APP_VERSION='e5c110a4322b';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -761,9 +761,7 @@ function _horTablaPlantaHTML(planta, grupo, mes, lecturas, editable){
         + '<button id="hor-del-'+e.id+'" onclick="horBorrar(\''+_idS(e.id)+'\')" title="Borrar lectura" '
         + 'style="display:'+(tiene?'inline-block':'none')+';padding:7px 9px;border:1px solid #f5c6c6;background:#fdeaea;color:#c00;border-radius:6px;font-size:13px;cursor:pointer">🗑</button></td>';
     } else {
-      celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')
-        + ((tiene && l.corregido) ? '<div title="'+_hcEsc('Corregido por '+(l.corregido.quien||'Gerencia')+' el '+_horFechaTs(l.corregido.ts)+(l.corregido.antes!=null?' (antes '+Number(l.corregido.antes).toLocaleString('en-US')+')':' (no tenía toma)'))+'" style="font-size:9.5px;font-weight:700;color:#2d6a9f;white-space:nowrap">✏️ corregido por Gerencia</div>' : '')   // (2026-11-25)
-        +'</td>';
+      celFinal = '<td style="'+td+';text-align:right;font-weight:800;color:'+(tiene?'#1a1a18':'#c00')+'">'+(tiene?parseFloat(l.lectura).toLocaleString('en-US'):'SIN TOMA')+'</td>';
     }
     filas += '<tr>'
       + '<td style="'+td+';font-weight:800;color:#1f3864">'+_hcEsc(e.codigo)
@@ -1580,7 +1578,7 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
           (antR&&antR.ts)?_horFechaTs(antR.ts):'\u2014',
           (tiene&&cierre)?_horFechaTs(cierre.ts):'\u2014',
           antR ? antR.lectura.toLocaleString('en-US') : '\u2014',
-          tiene ? parseFloat(l.lectura).toLocaleString('en-US') + (l.corregido ? ' (c)' : '') : 'SIN TOMA',   // (2026-11-25) (c) = corregido por Gerencia
+          tiene ? parseFloat(l.lectura).toLocaleString('en-US') : 'SIN TOMA',
           _horDifTxt((tiene && antR) ? _horDif(l.lectura, antR.lectura) : null),
         ];
         { const _d = (tiene && antR) ? _horDif(l.lectura, antR.lectura) : null; if(_d != null){ _totCli += _d; _nCli++; } }
@@ -1608,7 +1606,6 @@ async function _horGenerarPDF(mes, clienteFiltro, modo){
       pdf.text(_nCli ? (Math.round(_totCli*100)/100).toLocaleString('en-US') + ' hrs' : '\u2014', W - M - 2, y + 5, {align:'right'});
       pdf.line(W - M - cols[7].w, y, W - M - cols[7].w, y + FILA);
       y += FILA;
-      if(grupo.some(function(e){ var lc = lecturas[e.id]; return _horTiene(lc) && lc.corregido; })){ y = nuevaPagSi(y, 5); pdf.setFont('helvetica','italic'); pdf.setFontSize(7); pdf.setTextColor(45,106,159); pdf.text('(c) Lectura corregida por Gerencia.', M, y + 3.6); y += 5; }   // (2026-11-25)
       // Firmas (digitales si existen)
       const regs = firmas[_horCliKey(cli)] || {};
       const ALTO_F = 30;
@@ -3485,7 +3482,8 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
 
   // ── Gerencia: corregir o agregar una lectura de la toma mensual (2026-11-25, Miguel) ──
   // Para cuando el operador se equivocó o finalizó la toma de un cliente sin la lectura de un equipo. Solo Gerencia, con PIN.
-  // La lectura queda marcada «corregido por Gerencia» (hoja y PDF) y se anota en monhaco/horometros/<mes>/_correcciones.
+  // Se anota en la lectura (corregido) y en monhaco/horometros/<mes>/_correcciones. Sin aviso en la hoja ni en el PDF (Miguel 25/11:
+  // solo él edita, se sobreentiende).
   // La ficha del equipo cambia SOLO si la toma de ese cliente está finalizada y es la más reciente del equipo (ninguna toma
   // mensual posterior ni parcial más nueva). Si la toma siguiente usaba la lectura vieja como inicio, ese inicio también se corrige.
   function posterior(eqId, mes){
@@ -3527,7 +3525,7 @@ try{ document.getElementById('hdr-logo').src = _LOGO_MONTASA_B64; }catch(e){}
       var ficha = !!cierre && !eq._eqManual && !sig && !parcialPosterior(eqId, tsLect);
       var msg = (tiene ? '¿Corregir' : '¿Agregar') + ' la lectura de ' + (eq.codigo || '') + ' (' + cli + ', ' + horMesLabel(mes) + ')?\n\n'
         + (tiene ? 'Antes: ' + fmt(antes) + ' hrs → Ahora: ' + fmt(n) + ' hrs' : 'Lectura: ' + fmt(n) + ' hrs')
-        + '\n\n• Queda marcada «corregido por Gerencia» en la hoja y el PDF.'
+        + '\n'
         + (ficha ? '\n• La ficha del equipo pasa a ' + fmt(n) + ' hrs.' : (cierre ? '\n• La ficha del equipo NO cambia (hay una toma más reciente' + (eq._eqManual ? ' o es equipo externo' : '') + ').' : '\n• La ficha cambiará cuando Logística finalice la toma de este cliente.'))
         + (sigCorr ? '\n• El horómetro de inicio de la toma de ' + horMesLabel(sig.mes) + ' también pasa a ' + fmt(n) + ' hrs.' : '');
       if(!confirm(msg)) return;
