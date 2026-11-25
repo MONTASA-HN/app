@@ -48,7 +48,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='e229272bec89';
+  var APP_VERSION='c375acd93ae3';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1299,6 +1299,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var up = {}; up[k] = val;
     if(k === 'dias' && esDecimo(f)){ if(val > 360){ val = 360; f.dias = 360; up.dias = 360; } f.decimo = r2((parseFloat(f.salarioPromedio || f.salario) || 0) * val / 360); up.decimo = f.decimo; var od = document.querySelector('[data-pc="' + emp + '|decimo"]'); if(od) od.value = f.decimo; }
     else if(k === 'dias'){ f.ordinario = r2((parseFloat(f.salario) || 0) / 30 * val); var o = document.querySelector('[data-pc="' + emp + '|ordinario"]'); if(o) o.value = f.ordinario; up.ordinario = f.ordinario; }
+    // (2026-11-25, Miguel) IHSS escrito a mano: «Actualizar datos de fichas» ya no lo reemplaza. Si se escribe igual al cálculo, vuelve a ser automático.
+    else if(k === 'ihss'){ var calc = ihssDe(raiz, f.salario); f.ihssManual = val !== calc ? true : null; up.ihssManual = f.ihssManual; }
     db().ref('rrhh/' + raiz + '/planillas/' + p.id + '/filas/' + emp).update(up).catch(function(er){ aviso('No se guardó: ' + er.message, true); });
     var t = totFila(raiz, f); ['_dev', '_ded', '_neto'].forEach(function(c){ var td = document.querySelector('[data-pt="' + emp + '|' + c + '"]'); if(td) td.textContent = mon(c === '_dev' ? t.dev : c === '_ded' ? t.ded : t.neto); });
     clearTimeout(guardarCelda._t); guardarCelda._t = setTimeout(pintar, 1500);   // subtotales y totales
@@ -1322,7 +1324,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var sobran = p.historica ? [] : lista(filasP).filter(function(f){ var rf = f.raizFicha || raiz, e = D[rf] && D[rf].empleados[f.empId]; return !e || e.activo === false || plEmpresa(rf, e) !== raiz; });
       var conMontos = function(f){ return Object.keys(f).some(function(k){ return typeof f[k] === 'number' && f[k] !== 0 && !base[k] && !/^h(25|50|75|100)$/.test(k); }) || !!f.comentario; };
       var motivo = function(f){ var rf = f.raizFicha || raiz, e = D[rf] && D[rf].empleados[f.empId]; return !e ? 'ya no existe la ficha' : e.activo === false ? 'dado de baja' : 'en RRHH es de ' + nomEmp(plEmpresa(rf, e)); };
+      var ihssMano = lista(filasP).filter(function(f){ return f.ihssManual; }).map(function(f){ return f.nombre; });
       var cuerpoR = '<div class="sub" style="margin-top:6px;color:#1d2433">Trae de las fichas nombre, código, departamento, cuenta y salario; recalcula el IHSS' + (esDecimo(p) ? ' y el décimo' : ' y, si cambió el salario, el ordinario y las horas extra del Excel') + '. Los demás montos escritos no cambian.</div>'
+        + (ihssMano.length ? '<div class="sub" style="margin-top:6px;color:#1d2433">✋ IHSS escrito a mano, no se cambia: ' + ihssMano.map(esc).join(', ') + '</div>' : '')
         + (faltan.length ? '<h4>➕ Se agregan (' + faltan.length + ')</h4>' + faltan.map(function(x){ return '<div class="sub" style="color:#1d2433">• ' + esc(x.e.nombreCompleto) + (x.rf !== raiz ? ' <span style="color:#7a8394">(ficha en ' + nomEmp(x.rf) + ')</span>' : '') + '</div>'; }).join('') : '')
         + (sobran.length ? '<h4>➖ Se quitan (' + sobran.length + ')</h4>' + sobran.map(function(f){ return '<div class="sub" style="color:#1d2433">• ' + esc(f.nombre) + ' — ' + esc(motivo(f)) + (conMontos(f) ? ' <b style="color:#b42318">(tiene montos o comentario escritos: se pierden en esta planilla)</b>' : '') + '</div>'; }).join('') : '')
         + (!faltan.length && !sobran.length ? '<div class="sub" style="margin-top:8px">El personal de la planilla ya coincide con las fichas.</div>' : '');
@@ -1331,7 +1335,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
         lista(filasP).forEach(function(f){ if(sobran.indexOf(f) >= 0) return; var rf = f.raizFicha || raiz, e = D[rf].empleados[f.empId]; if(!e) return; var nf = filaDe(raiz, e, rf); up2['filas/' + f.empId + '/raizFicha'] = rf;
           ['codigo', 'nombre', 'depto', 'cargo', 'identidad', 'cuenta', 'banco', 'tipoCuenta', 'direccion', 'telefono', 'correo', 'salario'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nf[k]; });
           if(esDecimo(f)){ var nd = filaDecimo(raiz, e, rf, p.periodo); ['decimo', 'dias', 'tramos', 'salarioPromedio', 'notasAuto', 'ingreso'].forEach(function(k){ up2['filas/' + f.empId + '/' + k] = nd[k] === undefined ? null : nd[k]; }); return; }
-          up2['filas/' + f.empId + '/ihss'] = ihssDe(raiz, nf.salario);
+          if(!f.ihssManual) up2['filas/' + f.empId + '/ihss'] = ihssDe(raiz, nf.salario);   // (2026-11-25) el IHSS escrito a mano se respeta
           if(r2(nf.salario) !== r2(f.salario)){ up2['filas/' + f.empId + '/ordinario'] = r2(nf.salario / 30 * (parseFloat(f.dias) || 0)); if(f.heHoras) up2['filas/' + f.empId + '/horasExtras'] = heMonto(raiz, nf.salario, f.heHoras); } });
         faltan.forEach(function(x){ var nf = esDecimo(p) ? filaDecimo(raiz, x.e, x.rf, p.periodo) : filaDe(raiz, x.e, x.rf);
           if(!esDecimo(p)){ if(p.colsI){ nf.colsI = p.colsI; nf.colsD = p.colsD; } else { delete nf.colsI; delete nf.colsD; } }
