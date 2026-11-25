@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<!-- (2026-11-25, Miguel) DISEÑO NUEVO NEXO: solo apariencia, todo en nexo_tema_nuevo.css (dentro de html.nx-tema-nuevo). Para volver al anterior: borrar la línea classList.add de abajo; con ?tema=actual se ve el anterior. -->
+<link rel="stylesheet" href="nexo_tema_nuevo.css?v=3">
+<script>document.documentElement.setAttribute('data-nx-app', 'rrhh'); if(!/[?&]tema=actual\b/i.test(location.search)) document.documentElement.classList.add('nx-tema-nuevo');</script>
 <script>
 // (2026-10-20, auditoría punto 22) Verificación de integridad (SRI) de las librerías externas: si el servidor entregara un archivo
 // distinto al esperado, el navegador no lo ejecuta. Cubre también las que se cargan sobre la marcha (appendChild/insertBefore).
@@ -48,7 +51,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='c375acd93ae3';
+  var APP_VERSION='22500cd9772e';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -379,7 +382,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     + '.rh-w label{display:block;font-size:11.5px;font-weight:700;color:#475467;margin:9px 0 3px;text-transform:uppercase;letter-spacing:.3px}'
     + '.rh-w .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rh-w h4{margin:16px 0 0;color:#1f3864;font-size:13.5px;border-bottom:2px solid #dce6f1;padding-bottom:4px}'
     + '.rh-w input,.rh-w select,.rh-w textarea{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #c9d1dc;border-radius:8px;font-size:14px;font-family:inherit;background:#fff}'
-    + '@media(max-width:560px){.rh-w .g2{grid-template-columns:1fr}#rh .grid{grid-template-columns:1fr}}';
+    + '@media(max-width:560px){.rh-w .g2{grid-template-columns:1fr}#rh .grid{grid-template-columns:1fr}}'
+    // (2026-11-25) piezas del diseño nuevo NEXO: sin la clase nx-tema-nuevo no se ven y la pantalla queda igual que antes
+    + '#rh .nx-solo{display:none}#rh .pl-franja{display:contents}';
 
   function raices(){ return ui.emp === 'todas' ? EMPRESAS.map(function(e){ return e.raiz; }) : [ui.emp]; }
   function pintar(){
@@ -1238,7 +1243,7 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     if(raices().every(function(r){ return (D[r]._sinAcceso || {}).planillas; })){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:34px">🔒</div><div class="nm">Planillas: solo Recursos Humanos</div><div class="sub">Este equipo no tiene permiso para ver las planillas.</div></div>'; return; }
     hegAuto();
     if(ui.plan){ return pintarPlanilla(c); }
-    var soloVer = permisoRol === 'planilla', h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><div class="nm" style="flex:1">💵 Planillas quincenales</div>'
+    var soloVer = permisoRol === 'planilla', h = '<div class="pl-lista-cab" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center"><div class="nm" style="flex:1">💵 Planillas quincenales</div>'
       + (soloVer ? '' : '<button class="bt bp" data-a="pl-nueva">➕ Nueva quincena</button>') + '<button class="bt" data-a="pl-libro">⬇ Excel del período (todas)</button></div>';
     var periodos = {}; raices().forEach(function(r){ planillas(r).forEach(function(p){ (periodos[p.periodo] = periodos[p.periodo] || []).push({ r: r, p: p }); }); });
     var ks0 = Object.keys(periodos).sort().reverse(), hist = ks0.filter(function(k){ return periodos[k].every(function(x){ return x.p.historica; }); }), ks = ks0.filter(function(k){ return hist.indexOf(k) < 0; });
@@ -1252,6 +1257,20 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
           + porMes[m].sort().map(function(k){ return periodos[k].map(function(x){ var rs = resumenPlan(x.r, x.p);
             return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #e4e7ec;padding:6px 0;cursor:pointer" data-a="pl-abrir" data-r="' + x.r + '" data-id="' + esc(x.p.id) + '"><div><b>' + (k.slice(-1) === '1' ? '1ra' : '2da') + ' quincena · ' + nomEmp(x.r) + '</b><div class="sub">' + rs.n + ' colaboradores · Total L ' + mon(rs.neto) + '</div></div><span class="bt">Abrir →</span></div>'; }).join(''); }).join('') + '</div>'; }).join('') + '</details>'; }
     c.innerHTML = h;
+  }
+  // (2026-11-25, diseño nuevo NEXO) Encabezado «Planilla quincenal» con empresa, quincena y estado. Los dos selectores SOLO abren
+  // otra planilla que ya existe (como «Abrir →» en la lista): no crean ni cambian nada. Sin la clase nx-tema-nuevo no se ve.
+  function titCorto(per){ var a = String(per || '').split('-'); if(a[2] === 'D13' || a[2] === 'D14') return titPlan({ periodo: per }).charAt(0) + titPlan({ periodo: per }).slice(1).toLowerCase();
+    var m = MESES[(+a[1] || 1) - 1].slice(0, 3), ult = new Date(+a[0], +a[1], 0).getDate(); return (a[2] === '2' ? '16–' + ult : '1–15') + ' ' + m + ' ' + a[0]; }
+  function estCorto(p){ return p.historica ? 'Histórica' : p.estado === 'cerrada' ? 'Cerrada' : 'Borrador'; }
+  function plCabNueva(raiz, p){
+    var emps = EMPRESAS.map(function(E){ var q = planillas(E.raiz).filter(function(x){ return x.periodo === p.periodo; })[0]; return q ? { r: E.raiz, n: E.nombre, id: E.raiz === raiz ? p.id : q.id } : null; }).filter(Boolean);
+    var quin = planillas(raiz);
+    var cal = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>';
+    return '<div class="nx-solo pl-cab"><h2 class="pl-h">' + (esDecimo(p) ? 'Planilla de décimo' : 'Planilla quincenal') + '</h2><div class="pl-sel">'
+      + '<label class="pl-s pl-s-emp" title="Empresa (abre la planilla de la misma quincena)"><select data-plir aria-label="Empresa">' + emps.map(function(x){ return '<option value="' + esc(x.r + '|' + x.id) + '"' + (x.r === raiz ? ' selected' : '') + '>' + esc(x.n) + '</option>'; }).join('') + '</select></label>'
+      + '<label class="pl-s pl-s-q" title="Quincena (abre otra planilla de esta empresa)">' + cal + '<select data-plir aria-label="Quincena">' + quin.map(function(x){ return '<option value="' + esc(raiz + '|' + x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(titCorto(x.periodo)) + (x.id === p.id ? '' : ' · ' + estCorto(x).toLowerCase()) + '</option>'; }).join('') + '</select></label>'
+      + '<span class="pl-est pl-est-' + estCorto(p).toLowerCase().replace('ó', 'o') + '">' + estCorto(p) + '</span></div></div>';
   }
   function pintarPlanilla(c){
     var raiz = ui.plan.raiz, p = D[raiz].planillas[ui.plan.id];
@@ -1278,13 +1297,14 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var tot = {}; cols.forEach(function(k){ tot[k] = 0; }); filas.forEach(function(f){ var t = totFila(raiz, f); cols.forEach(function(k){ tot[k] += k === '_dev' ? t.dev : k === '_ded' ? t.ded : k === '_neto' ? t.neto : (parseFloat(f[k]) || 0); }); });
     cuerpo += '<tr style="background:#1f3864;color:#fff;font-weight:800"><td style="' + td + ';color:#fff" colspan="2">TOTAL GENERAL · ' + filas.length + ' colaboradores</td>' + cols.map(function(k){ return '<td style="' + td + ';text-align:right;color:#fff">' + (k === 'dias' ? '' : mon(tot[k])) + '</td>'; }).join('') + '<td style="' + td + '"></td><td style="' + td + '"></td></tr>';
     var fir = p.firmas || {};
-    c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>' + (ed && !esDecimo(p) ? avisoHEG(p) : '')
-      + '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.historica ? '🗄 Histórica (cargada del Excel de RRHH)' : p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
-      + '<div class="acc" style="margin:0">' + (ed && !esDecimo(p) ? '<button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button>' : '') + (ed ? '<button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
+    c.innerHTML = '<div class="acc" style="margin:0 0 10px"><button class="bt" data-a="pl-volver">← Planillas</button></div>' + plCabNueva(raiz, p) + (ed && !esDecimo(p) ? avisoHEG(p) : '')
+      + '<div class="card pl-card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><div class="nm" style="font-size:17px">' + esc(p.titulo || titPlan(p)) + '</div><div class="sub">' + esc(cfg(raiz).razon) + ' · <span class="tag ' + (p.estado === 'cerrada' ? 'v' : 'n') + '">' + (p.historica ? '🗄 Histórica (cargada del Excel de RRHH)' : p.estado === 'cerrada' ? '✓ Cerrada' + (p.cerradaEn ? ' el ' + fmt(iso(new Date(p.cerradaEn))) : '') : 'Borrador: se guarda sola al escribir') + '</span></div></div>'
+      + '<div class="acc" style="margin:0">' + (ed && !esDecimo(p) ? '<span class="pl-franja"><button class="bt bp" data-a="pl-nov">🧾 Novedades de la quincena</button><button class="bt bp" data-a="pl-he">📥 Subir horas extra (Excel)</button></span>' : '') + (ed ? '<button class="bt" data-a="pl-agregar">➕ Agregar empleado</button><button class="bt" data-a="pl-refrescar">🔄 Actualizar datos de fichas</button><button class="bt bv" data-a="pl-cerrar">✓ Cerrar planilla</button>' : '')
       + (p.estado === 'cerrada' && permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-reabrir">🔓 Reabrir</button>' : '')
       + '<button class="bt" data-a="pl-excel">⬇ Excel</button><button class="bt" data-a="pl-banco">🏦 Archivo del banco</button><button class="bt" data-a="pl-comps">📄 Comprobantes (todos)</button>' + (permisoRol !== 'planilla' ? '<button class="bt" data-a="pl-correos">✉️ Enviar comprobantes</button>' : '') + '' + (ed ? '<button class="bt br" data-a="pl-borrar">🗑</button>' : '') + '</div></div>'
       + '<div class="kv" style="margin-top:8px"><div><span>Colaboradores</span><b>' + rs.n + '</b></div><div><span>Planilla</span><b>L ' + mon(rs.planilla) + '</b></div><div><span>Comisiones</span><b>L ' + mon(rs.com) + '</b></div><div><span>Bonos</span><b>L ' + mon(rs.bon) + '</b></div><div><span>Horas extras</span><b>L ' + mon(rs.he) + '</b></div><div><span>Total a pagar</span><b style="font-size:17px">L ' + mon(rs.neto) + '</b></div></div></div>'
       + (esDecimo(p) ? '<div class="card sub" style="padding:8px 14px">Décimo = salario mensual vigente × días del período ÷ 360 (' + fmt(rangoDecimo(p.periodo).ini) + ' al ' + fmt(rangoDecimo(p.periodo).fin) + '). Si cambias los días, se recalcula solo.</div>' : '<div class="card" style="padding:4px 14px">' + bloqueArchivos(p.periodo) + '</div>')
+      + (ed && !esDecimo(p) ? '<div class="nx-solo pl-captura">Captura manual: comisión, bonificación e ISR <span>· las celdas con borde se escriben a mano y se guardan solas</span></div>' : '')
       + '<div class="card pl-tabla" style="padding:0;overflow:auto;max-height:70vh"><table style="border-collapse:collapse;width:max-content;min-width:100%">' + cab + cuerpo + '</table></div>'
       + '<div class="card"><h3 style="margin-top:0">Notas de la quincena</h3>' + (ed ? '<textarea id="pl-notas" rows="5" placeholder="1- Se pagan las horas extras de la segunda quincena de…">' + esc(p.notas || '') + '</textarea>' : '<div class="sub" style="white-space:pre-wrap;color:#1d2433">' + esc(p.notas || '—') + '</div>')
       + '<h3>Firmas</h3><div class="g2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">' + [['elaborado', 'Elaborado por'], ['revisado', 'Revisado por'], ['aprobado', 'Aprobado por']].map(function(x){
@@ -1699,7 +1719,9 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     var x = hegDe(per); if(!x) return; var dest = hegDest(per);
     var filas = hegFilas(x).filter(function(fx){ return heTotH(fx.h) > 0 && !heBuscar(fx.raiz, dest, fx.nombre).id; });
     if(!filas.length){ aplicarHEG(per, true); return; }
-    previaHE({ periodo: per }, filas, [], null, function(){ setTimeout(function(){ aplicarHEG(per, true); }, 1200); });   // espera que llegue config/heMapa
+    // (2026-11-25) la ventana va a la planilla que PAGA esas horas (hegPago), no a la de la quincena trabajada: antes, si esa seguía en
+    // borrador, las horas quedaban también ahí (pagadas dos veces)
+    previaHE({ periodo: hegPago(per) }, filas, [], null, function(){ setTimeout(function(){ aplicarHEG(per, true); }, 1200); });   // espera que llegue config/heMapa
   }
   function avisoHEG(p){
     var tr = hegTrab(p.periodo), x = hegDe(tr), m = p.heGer;   // (2026-11-23) esta planilla paga las horas de la quincena ANTERIOR
@@ -2399,6 +2421,8 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
     mov.addEventListener('click', cerrarMenu); pan.addEventListener('click', function(){ setTimeout(cerrarMenu, 0); });
     root.addEventListener('input', function(ev){ if(ev.target.id === 'vac-q'){ VAC.q = ev.target.value; pintar(); return; } if(ev.target.id === 'rh-q'){ ui.q = ev.target.value; var pos = ev.target.selectionStart; pintar(); var q = $('#rh-q'); if(q){ q.focus(); try{ q.setSelectionRange(pos, pos); }catch(e){} } } });
     root.addEventListener('change', function(ev){ if(ev.target.id === 'rh-depto'){ ui.depto = ev.target.value; pintar(); return; }
+      // (2026-11-25, diseño nuevo) selectores de empresa/quincena de la planilla: solo abren otra planilla existente (igual que «Abrir →»)
+      if(ev.target.hasAttribute('data-plir')){ var ir = ev.target.value.split('|'); if(D[ir[0]] && D[ir[0]].planillas[ir[1]]){ ui.plan = { raiz: ir[0], id: ir[1] }; pintar(); window.scrollTo(0, 0); } return; }
       if(ev.target.hasAttribute('data-pc')) return guardarCelda(ev.target);
       if(ev.target.hasAttribute('data-pcom')){ var pc = ui.plan && D[ui.plan.raiz].planillas[ui.plan.id]; if(pc && pc.estado !== 'cerrada') db().ref('rrhh/' + ui.plan.raiz + '/planillas/' + pc.id + '/filas/' + ev.target.getAttribute('data-pcom') + '/comentario').set(ev.target.value.trim()).catch(function(er){ aviso('No se guardó: ' + er.message, true); }); return; }
       var pl = ui.plan && D[ui.plan.raiz].planillas[ui.plan.id]; if(!pl || pl.estado === 'cerrada') return;
