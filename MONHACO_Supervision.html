@@ -379,7 +379,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='fe0fff9b0677';
+  var APP_VERSION='56eedf8207d0';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -5547,16 +5547,19 @@ function _rmElegirCli(v){
 // (2026-11-25, Miguel) En el Samsung de Marvin (navegador Samsung Internet) elegir de la lista del navegador no avisaba a la app
 // y seguía «Elige un cliente». Botones propios con los clientes que coinciden: se toca uno y queda elegido, en cualquier navegador.
 let _rmTocando = 0;
+// (2026-11-25, video de Marvin) En Android la lista propia del navegador se abría ENCIMA, al tocar un cliente no lo ponía en la casilla
+// y tapaba los botones: en Android no se usa (solo los botones); en iPhone y PC sigue igual.
+const _RM_SIN_DL = /Android/i.test((navigator && navigator.userAgent) || '');
 function _rmSugerir(v){
   const box = document.getElementById('rm-sug'); if(!box) return;
   const q = _rmNorm(v);
-  if(q.length < 2 || (_rmCliente && _rmNorm(_rmCliente) === q)){ box.innerHTML = ''; return; }
-  const L = _rmClientes().filter(function(c){ return _rmNorm(c).indexOf(q) >= 0; });
+  if(_rmCliente && _rmNorm(_rmCliente) === q){ box.innerHTML = ''; return; }
+  const L = q ? _rmClientes().filter(function(c){ return _rmNorm(c).indexOf(q) >= 0; }) : _rmClientes();   // vacío: los primeros (primero los que tienen órdenes)
   const ini = L.filter(function(c){ return _rmNorm(c).indexOf(q) === 0; }), resto = L.filter(function(c){ return _rmNorm(c).indexOf(q) !== 0; });
   const M = ini.concat(resto);
   box.innerHTML = M.length
     ? M.slice(0, 8).map(function(c){ return '<button type="button" data-rmc="'+_hcEsc(c)+'" onpointerdown="_rmTocando=Date.now()" ontouchstart="_rmTocando=Date.now()" onmousedown="_rmTocando=Date.now();event.preventDefault()" onclick="_rmElegirCli(this.getAttribute(\'data-rmc\'))" style="display:block;width:100%;text-align:left;padding:11px 12px;margin:0 0 6px;border:1px solid var(--border2,#ccc);border-radius:8px;background:#fff;font-size:14px;font-weight:700;color:#1f3864;cursor:pointer">'+_hcEsc(c)+'</button>'; }).join('')
-      + (M.length > 8 ? '<div style="font-size:12px;color:#888;margin:-2px 0 10px">… y '+(M.length-8)+' más: sigue escribiendo</div>' : '')
+      + (M.length > 8 ? '<div style="font-size:12px;color:#888;margin:-2px 0 10px">… y '+(M.length-8)+' más: '+(q?'sigue escribiendo':'escribe parte del nombre para buscar')+'</div>' : '')
     : '<div style="font-size:13px;color:#b45309;margin:0 0 10px">No hay clientes con ese nombre</div>';
 }
 function _rmEquipoTxt(o){
@@ -5636,7 +5639,7 @@ function renderReporteMensual(){
     + '<button onclick="_rmMoverMes(1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>'
     + '</div>';
   // (2026-11-12) ~1300 clientes oficiales: se escribe y se elige de la lista
-  h += '<input id="rm-cliente" list="rm-cli-dl" autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" oninput="_rmSugerir(this.value)" onchange="_rmElegirCli(this.value)" onfocus="this.select()" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
+  h += '<input id="rm-cliente" '+(_RM_SIN_DL?'':'list="rm-cli-dl" ')+'autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" oninput="_rmSugerir(this.value)" onchange="_rmElegirCli(this.value)" onfocus="this.select();_rmSugerir(this.value)" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
     + '<datalist id="rm-cli-dl">' + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'">'; }).join('') + '</datalist>'
     + '<div id="rm-sug"></div>';
   if(!_rmCliente){
