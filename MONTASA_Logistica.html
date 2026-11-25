@@ -412,7 +412,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='8e734cf9e0b7';
+  var APP_VERSION='5b3430617b56';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2233,7 +2233,17 @@ function _logVisibles(){
   if(!window._NX_SOLO_MT || typeof window._nxEsMT !== 'function') return L;
   return L.filter(function(o){ return o && _nxPersonasOrden(o).some(window._nxEsMT); });
 }
+// (2026-11-25) COPIA DEL TELÉFONO CON LA MEMORIA LLENA — causa de datos viejos que volvían a la base (MT-131 cliente, LGMT-0203/0232
+// días de renta, vales y viáticos): en el teléfono de Francisco Ramos la copia montasa_log_v1 ya no cabía («exceeded the quota»), quedaba
+// la de hace días, y al fallar el guardado de la copia la carga caía en loadDB() → la app volvía a la copia VIEJA y el siguiente guardado
+// la subía. Ahora: 1) si la copia no cabe se BORRA (nunca queda una vieja); 2) después de recibir los datos de la base, loadDB() ya no
+// reemplaza nada (window._nxDatosBase[LS_KEY]: por copia, así en la app clásica el cajón de MONHACO carga lo suyo).
+function _nxGuardarCopia(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); return true; }
+  catch(e){ try{ localStorage.removeItem(LS_KEY); }catch(_){} if(!window._nxCopiaLlena){ window._nxCopiaLlena = 1; try{ console.warn('Copia del teléfono: no cabe (memoria llena); se borró la vieja', e && e.message); }catch(_){} } return false; }
+}
 function loadDB(){
+  if((window._nxDatosBase || {})[LS_KEY]){ try{ console.warn('loadDB: ya hay datos de la base; no se vuelve a la copia del teléfono'); }catch(_){} return; }
   try{
     const d = _nxSinHuecos(JSON.parse(localStorage.getItem(LS_KEY)||'{}'));   // (2026-10-31) sin huecos
     if(d.logistica)   DB.logistica   = _toArr(d.logistica).filter(o=>o&&o.id);
@@ -2315,7 +2325,7 @@ function _refrescarVistasFotos(){
 function saveDB(){
   // Órdenes, equipos y demás listas se guardan registro por registro (sincronizador, T7)
   try{ if(typeof _Sync!=='undefined') _Sync.guardar(); }catch(e){}
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  _nxGuardarCopia();   // (2026-11-25) si no cabe, se borra la copia vieja
   _writeToFirebase();
 }
 
@@ -4160,7 +4170,7 @@ function cerrarOrdenLog(id){
       var _v = calcularVales(_o.fechaInicio, _o.fechaFin, undefined, _o.domingosTrabajados);
       if(_v.length){
         _o.vales = _v;
-        try{ localStorage.setItem(typeof LS_KEY!=='undefined'?LS_KEY:'montasa_v24', JSON.stringify(DB)); }catch(e){}
+        _nxGuardarCopia();   // (2026-11-25) si no cabe, se borra la copia vieja
         if(window._fbDB && window._fbReady){
           var _idx = DB.logistica.findIndex(function(x){return x.id===o.id;});
           if(_idx>=0) _fbRefPorId(_NXR+'/logistica/'+_idx+'/vales').set(_v);
@@ -4170,7 +4180,7 @@ function cerrarOrdenLog(id){
   })();
   // Escribir a Firebase — una sola escritura del array completo
   window._skipLogOverwrite = Date.now();
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){}
+  _nxGuardarCopia();   // (2026-11-25) si no cabe, se borra la copia vieja
   if(window._fbDB && window._fbReady){
     const ts = Date.now();
     _Sync.guardar().then(()=>{
@@ -4741,10 +4751,11 @@ try{
             const localCorr = DB['lastCorrelativo_LG']||0;
             DB['lastCorrelativo_LG'] = Math.max(localCorr, remote.lastCorrelativo_LG);
           }
-          localStorage.setItem(LS_KEY, JSON.stringify(DB));
+          (window._nxDatosBase = window._nxDatosBase || {})[LS_KEY] = true;   // (2026-11-25) desde aquí la app trabaja con lo de la base; loadDB() ya no vuelve a la copia
+          _nxGuardarCopia();            // (2026-11-25) antes: si no cabía, el error caía abajo en loadDB() = copia vieja que luego se subía
         } else { loadDB(); }
       } else { loadDB(); }
-    }catch(e){ console.warn('Error cargando datos:', e); loadDB(); }
+    }catch(e){ console.warn('Error cargando datos:', e); loadDB(); }   // loadDB() no hace nada si ya llegaron los datos de la base
     if(!DB.equipos||!DB.equipos.length) DB.equipos=(_NXR === 'montasa' ? JSON.parse(JSON.stringify(EQUIPOS_INICIALES)) : []);
     window._fbReady = true;
     console.log('_fbReady = true SET');
