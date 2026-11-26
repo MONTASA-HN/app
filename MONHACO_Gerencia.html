@@ -276,7 +276,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4b051cfa4758';
+  var APP_VERSION='4c7afe6c58a4';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -1655,7 +1655,7 @@ window._img = function(u){ u = String(u == null ? '' : u).trim(); return /^(data
         + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.5">Si crees que es un error, habla con Gerencia.</div>'
       : '<div style="font-size:34px;text-align:center">⏳</div><div style="font-weight:800;font-size:17px;color:#1f3864;text-align:center;margin:6px 0">Esperando aprobación</div>'
         + '<div style="font-size:13px;color:#475467;text-align:center;line-height:1.5">' + (quien ? 'Teléfono registrado a nombre de <b>' + quien.replace(/[<>&"]/g, '') + '</b>.<br>' : '')
-        + 'Pídele a Gerencia que lo apruebe en <b>Personal → 📱 Accesos</b>.<br>Esta pantalla se abre sola cuando lo aprueben.</div>';
+        + 'Pídele a Gerencia que lo apruebe en <b>Administración → 📱 Accesos</b>.<br>Esta pantalla se abre sola cuando lo aprueben.</div>';
     var ov = document.createElement('div'); ov.id = 'nx-acc-esp';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99980;background:rgba(15,23,42,.72);display:flex;align-items:center;justify-content:center;padding:16px';
     ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-sizing:border-box;font-family:Arial,sans-serif;color:#1d2433">' + t + '</div>';
@@ -14837,8 +14837,9 @@ function _cliOrdenAlCerrar(o){
     escuchar();
     if(document.getElementById('vac-ov')) return;
     var ov = document.createElement('div'); ov.id = 'vac-ov';
-    ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">👥</span><div><b>Personal</b><small>Vacaciones, acciones de personal y empleados · ' + EMPRESA + '</small></div>'
+    ov.innerHTML = '<style>' + CSS + '</style><div class="vh"><span style="font-size:22px">🗂️</span><div><b>Administración</b><small>Personal y caja chica · ' + EMPRESA + '</small></div>'
       + '<button class="vx" aria-label="Cerrar" data-a="cerrar">✕</button></div>'
+      + '<div class="vs"><button data-v="emp">👥 Personal</button><button data-v="caja">💵 Caja chica</button></div>'   // (2026-11-26) Administración: Personal | Caja chica
       + '<div class="vt"><button data-v="emp">🪪 Empleados</button><button data-v="col">🏖️ Vacaciones</button><button data-v="acc">📄 AP</button><button data-v="tel">📱 Accesos</button><button data-v="ent">🕒 Historial de entradas</button></div><div class="vc" id="vac-c"></div>';
     ov.addEventListener('click', clic);
     ov.addEventListener('input', function(e){ if(e.target.id === 'vac-buscar'){ filtroTxt = e.target.value; pintarLista(); } else if(e.target.id === 'emp-buscar'){ filtroEmp = e.target.value; pintarListaEmp(); } });
@@ -14862,8 +14863,12 @@ function _cliOrdenAlCerrar(o){
     var ov = document.getElementById('vac-ov'); if(!ov) return;
     ov.querySelectorAll('.vt button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v') === vista); });
     var c = document.getElementById('vac-c');
+    // (2026-11-26) Administración: «👥 Personal» (estas pestañas, igual que antes) | «💵 Caja chica» (la pinta el bloque NEXO ADMINISTRACIÓN)
+    ov.classList.toggle('vac-caja', vista === 'caja');
+    ov.querySelectorAll('.vs button').forEach(function(b){ b.classList.toggle('on', (b.getAttribute('data-v') === 'caja') === (vista === 'caja')); });
+    if(vista === 'caja'){ if(typeof window._ccPintar === 'function') window._ccPintar(c); else c.innerHTML = ''; return; }
     if(datos._sinPermiso){ c.innerHTML = '<div class="card" style="text-align:center"><div style="font-size:30px">🔒</div><div class="nm" style="margin:6px 0">Este equipo no tiene permiso de Gerencia</div>'
-      + '<div class="sub">Personal y Accesos solo se ven en equipos aprobados como <b>Gerencia</b>. Desde un equipo de Gerencia: Personal → 📱 Accesos → este equipo → «Cambiar empleado / rol» → Permiso: Gerencia. Esta pantalla se abre sola cuando quede aprobado.</div></div>'; return; }
+      + '<div class="sub">Personal y Accesos solo se ven en equipos aprobados como <b>Gerencia</b>. Desde un equipo de Gerencia: Administración → 📱 Accesos → este equipo → «Cambiar empleado / rol» → Permiso: Gerencia. Esta pantalla se abre sola cuando quede aprobado.</div></div>'; return; }
     if(vista === 'col'){
       c.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="vac-buscar" placeholder="🔍 Buscar colaborador" value="' + esc(filtroTxt) + '">'
         + '<button class="bt bp" data-a="nuevo" style="flex:none">➕ Nuevo</button></div><div id="vac-lista"></div>';
@@ -15595,7 +15600,7 @@ function _cliOrdenAlCerrar(o){
     var menu = document.getElementById('ger-menu-panel');
     if(menu){
       var it = document.createElement('button'); it.type = 'button'; it.id = 'vac-entrada'; it.className = 'ger-menu-item';
-      it.innerHTML = '<span style="width:22px;text-align:center;font-size:18px">👥</span>Personal';
+      it.innerHTML = '<span style="width:22px;text-align:center;font-size:18px">🗂️</span>Administración';
       it.addEventListener('click', function(){ try{ _gerMenuToggle(false); }catch(e){} abrir(); });
       var acerca = document.getElementById('nexo-acerca-btn');
       if(acerca && acerca.parentNode === menu) menu.insertBefore(it, acerca); else menu.appendChild(it);
@@ -15604,7 +15609,7 @@ function _cliOrdenAlCerrar(o){
     var nav = document.querySelector('.bottom-nav');
     if(nav && !document.getElementById('vac-entrada-nav')){
       var b = document.createElement('button'); b.type = 'button'; b.id = menu ? 'vac-entrada-nav' : 'vac-entrada'; b.className = 'nav-btn';
-      b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Personal';
+      b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Administración';
       b.addEventListener('click', abrir);
       nav.appendChild(b);
     }
@@ -16197,7 +16202,7 @@ function _sigNumero(pref, lista){
   function transicion(){ return MH && !window._nxRol(); }
   function negar(){
     alert('🔒 Esta acción solo la puede hacer ' + (GER ? 'Gerencia' : 'Gerencia o Supervisión') + ' desde su propio teléfono.\n\n'
-      + 'Si te corresponde, pide en Gerencia que le den ese permiso a este teléfono (Personal → Accesos).');
+      + 'Si te corresponde, pide en Gerencia que le den ese permiso a este teléfono (Administración → Accesos).');
   }
   function preguntar(titulo){
     var t = String(titulo || 'Acción protegida').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ¿]+/, '').trim();
@@ -18872,5 +18877,754 @@ window._nxExcelConLogo = function(wbX, archivo){
     _solCliPush._nxAsig = 1; }
 })();
 </script>
+<!-- ══ NEXO ADMINISTRACIÓN · CAJA CHICA · ACUSE (inicio) ══ -->
+<script>
+// ══ NEXO ADMINISTRACIÓN: ACUSE DE RECIBIDO DE FINANZAS + CAJA CHICA (2026-11-26, pedido de Miguel; probado en piloto y publicado) ══
+// · CANDADO DE REGLAS: hasta que esté publicada la regla «finanzas» de la base (reglas v9), el nodo nuevo quedaría abierto a cualquiera
+//   (la regla comodín $raiz). Por eso, antes de guardar nada, se pregunta a la base SIN sesión por finanzas: si responde 401, la regla
+//   está puesta y todo se activa; si responde datos, NO se guarda ninguna firma ni liquidación (aviso «falta la regla»).
+// · Acuse: bloque «Acuse de recibido de Finanzas» debajo de Editar / Descargar / Imprimir, el MISMO en la liquidación de viáticos y en
+//   la de caja chica. Se registra en el TELÉFONO DE GERENCIA (Miguel 26/11: Finanzas firma en su teléfono): quien recibe en Finanzas
+//   escribe su nombre y firma con el dedo o el mouse; la fecha y la hora las pone el servidor; queda también el equipo desde el que se firmó.
+//   Va ligado a la empresa, al documento (viáticos: folio = número de OT) y a la VERSIÓN exacta (huella de los datos entregados). Si
+//   después se corrige algo de lo entregado, la versión firmada y su acuse quedan en el historial (con el documento tal como se firmó)
+//   y la corregida queda «Pendiente de acuse». Un acuse registrado no se sobrescribe: solo se escribe si no existe (en producción lo
+//   asegura también la regla de la base).
+// · Caja chica (formato del Excel CP-FO-14, SIN folio: Miguel 26/11): se identifica por su fecha y hora de elaboración. Depto. se elige
+//   (Mantenimiento / Logística). La firma del elaborador (la de Miguel en el Excel) NO va en el código (es público): se guarda en
+//   finanzas/firmaElaborador, solo para Gerencia, y sale en la hoja cuando el elaborador es esa persona.
+// · Datos FUERA del árbol que guarda saveDB: finanzas/<raíz>/acuses/<viaticos|cajaChica>/<doc>/<versión>, finanzas/<raíz>/cajaChica/<id>,
+//   finanzas/firmaElaborador.
+// · El acuse solo confirma la entrega del documento; la aprobación del gasto sigue su flujo de siempre.
+// · «Personal» se llama ahora «Administración»: Personal (las mismas pestañas, accesos y permisos) | Caja chica (submódulo nuevo).
+(function(){
+  'use strict';
+  var R = (typeof _RAIZ_APP !== 'undefined' && _RAIZ_APP) ? _RAIZ_APP : 'montasa';
+  var EMP = R === 'monhaco' ? 'MONHACO' : 'MT RENTAL';
+  var BASE = 'finanzas/' + R, RUTA_FIRMA = 'finanzas/firmaElaborador';
+  var LOGO_TOKEN = '__NX_LOGO__', ELAB_TOKEN = '<!--NX-FIRMA-ELAB-->';
+  var DEPTOS = ['Mantenimiento', 'Logística'];
+  var st = { acu: { viaticos: {}, cajaChica: {} }, caja: {}, firmaElab: null, acuOk: false, cajaOk: false, acuErr: '', cajaErr: '', conectado: true, reglas: 'revisando' };
+  var URL_BD = 'https://montasa-app-default-rtdb.firebaseio.com/';
+  var AVISO_REGLAS = '🔒 Falta publicar en la base la regla de Finanzas (reglas v9). Sin ella, las firmas y las liquidaciones quedarían a la vista de cualquiera.\n\nCuando Miguel la publique, esto se activa solo.';
+  // ¿Está puesta la regla de finanzas? Sin sesión: 401 = sí (protegida) · 200 = no (abierta) · sin señal = se vuelve a revisar
+  function revisarReglas(){
+    var antes = st.reglas;
+    fetch(URL_BD + 'finanzas.json?shallow=true', { cache: 'no-store' }).then(function(r){
+      st.reglas = (r.status === 401 || r.status === 403) ? 'ok' : (r.ok ? 'faltan' : 'revisando');
+    }).catch(function(){ if(st.reglas !== 'ok') st.reglas = 'revisando'; }).then(function(){
+      if(st.reglas === 'ok'){ if(antes !== 'ok') escuchar(); }
+      else setTimeout(revisarReglas, st.reglas === 'faltan' ? 120000 : 30000);
+      if(antes !== st.reglas){ refrescarBloques(); refrescarCaja(); }
+    });
+  }
+  function reglasOk(){ if(st.reglas === 'ok') return true; alert(st.reglas === 'faltan' ? AVISO_REGLAS : 'Revisando la conexión con la base… intenta de nuevo en un momento.'); if(st.reglas !== 'faltan') revisarReglas(); return false; }
+  var cc = { modo: 'lista', id: null, q: '', borrador: null };
+
+  // ── Utilidades ───────────────────────────────────────────────────────────
+  function db(){ return window._fbDB; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function num(v){ v = parseFloat(v); return isFinite(v) ? v : 0; }
+  function r2(v){ return Math.round(num(v) * 100) / 100; }
+  function lps(n){ return 'L ' + num(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function p2(n){ return String(n).padStart(2, '0'); }
+  function fFecha(ts){ if(!ts) return '—'; var d = new Date(ts); return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function fHora(ts){ if(!ts) return '—'; var d = new Date(ts); return p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+  function fIso(s){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : (s || ''); }
+  function clave(s){ return String(s == null ? '' : s).replace(/[.#$\[\]\/]/g, '_') || '_'; }
+  function norm(s){ return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+  function aviso(t, mal){ try{ toast(t, mal); }catch(e){ if(mal) alert(t); } }
+  function TS(){ try{ return firebase.database.ServerValue.TIMESTAMP; }catch(e){ return Date.now(); } }
+  // reemplaza la PRIMERA aparición (sin interpretar «$» del texto nuevo)
+  function rep(s, a, b){ var i = s.indexOf(a); return i < 0 ? s : s.slice(0, i) + b + s.slice(i + a.length); }
+  function logo(){ return (typeof _LOGO_MONTASA_B64 !== 'undefined' && _LOGO_MONTASA_B64) ? _LOGO_MONTASA_B64 : ''; }
+  function sinLogo(h){ var L = logo(); return L ? String(h || '').split(L).join(LOGO_TOKEN) : String(h || ''); }
+  // Al imprimir / descargar: logo y firma del elaborador (no se guardan dentro del documento)
+  function final(h){
+    var f = st.firmaElab && st.firmaElab.firma;
+    return String(h || '').split(LOGO_TOKEN).join(logo()).split(ELAB_TOKEN).join(f ? '<img src="' + f + '" alt="Firma del elaborador" style="max-height:62px;max-width:200px;display:block;margin:0 auto">' : '');
+  }
+  function sinBoton(h){ return String(h || '').replace(/<button class="no-print[^>]*>[\s\S]*?<\/button>/, ''); }
+  // Huella de la versión: mismos datos → misma huella; cualquier cambio de lo entregado → otra
+  function huella(obj){
+    var s = JSON.stringify(obj), h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for(var i = 0; i < s.length; i++){ var ch = s.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return ((h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0')).slice(0, 12);
+  }
+  function corta(v){ return String(v || '').slice(0, 6).toUpperCase(); }
+
+  // ── Sesión y permisos ────────────────────────────────────────────────────
+  function registro(){ return (window._nxAcceso || {}).registro || {}; }
+  function sesion(){ var r = registro(), a = window._nxAcceso || {};
+    return { uid: a.uid || '', nombre: ((r.nombre || '') + ' ' + (r.apellido || '')).trim(), rol: r.rol || '' }; }
+  // Permiso de Gerencia de hoy (MONHACO sin registro: transición con PIN, como el resto): elaborar caja chica y registrar el acuse
+  function puedeElaborar(){ var r = ''; try{ r = window._nxRol ? window._nxRol() : ''; }catch(e){} return r === 'gerencia' || (!r && /MONHACO_/i.test(location.pathname)); }
+  function puedeAcusar(){ return puedeElaborar(); }
+
+  // ── Lectura de la base ───────────────────────────────────────────────────
+  function escuchar(){
+    var d = db(); if(!d || !d.ref){ setTimeout(escuchar, 1500); return; }
+    if(st.escuchando) return; st.escuchando = true;
+    d.ref(BASE + '/acuses').on('value', function(s){ var v = s.val() || {}; st.acu = { viaticos: v.viaticos || {}, cajaChica: v.cajaChica || {} }; st.acuOk = true; st.acuErr = ''; refrescarBloques(); refrescarCaja(); },
+      function(e){ st.acuErr = (e && e.message) || 'sin permiso'; refrescarBloques(); });
+    d.ref(BASE + '/cajaChica').on('value', function(s){ st.caja = s.val() || {}; st.cajaOk = true; st.cajaErr = ''; refrescarCaja(); },
+      function(e){ st.cajaErr = (e && e.message) || 'sin permiso'; refrescarCaja(); });
+    d.ref(RUTA_FIRMA).on('value', function(s){ st.firmaElab = s.val() || null; refrescarCaja(); }, function(){});
+    try{ d.ref('.info/connected').on('value', function(s){ st.conectado = !!s.val(); }); }catch(e){}
+  }
+  function acusesDe(tipo, doc){ var o = (st.acu[tipo] || {})[doc] || {};
+    return Object.keys(o).map(function(k){ var a = Object.assign({}, o[k] || {}); a.version = a.version || k; return a; }).sort(function(a, b){ return (a.ts || 0) - (b.ts || 0); }); }
+  function acuseDe(ctx){ var a = ((st.acu[ctx.tipo] || {})[ctx.doc] || {})[ctx.version]; return a ? Object.assign({ version: ctx.version }, a) : null; }
+  function identDe(a){ return a.ident || (a.folio ? 'Folio ' + a.folio : ''); }
+
+  // ── Documento: el acuse dentro de la impresión y del PDF ────────────────
+  // a = acuse de ESTA versión (o null = pendiente). opt: {ident, empresa, version, historial, vigente}
+  function inyectar(html, a, opt){
+    opt = opt || {}; html = String(html || '');
+    var t = a ? fFecha(a.ts) + ' ' + fHora(a.ts) : '';
+    var img = a && a.firma ? '<img src="' + a.firma + '" alt="Firma" style="max-height:46px;max-width:190px;display:block;margin:0 auto">' : '';
+    if(html.indexOf('<!--NX-ACUSE-FIRMA-->') >= 0){   // caja chica: casillas propias del formato
+      html = rep(html, '<!--NX-ACUSE-FIRMA-->', img);
+      html = rep(html, '<!--NX-ACUSE-NOMBRE-->', a ? esc(String(a.nombre || '').toUpperCase()) : '&nbsp;');
+      html = rep(html, '<!--NX-ACUSE-HORA-->', a ? t : '____________________');
+      html = rep(html, '<!--NX-ACUSE-ENTREGADO-->', a ? t : '____________________');   // entregado = cuando Finanzas firma (Miguel 26/11)
+    } else if(a){                                      // viáticos: la casilla «ACUSE DE RECIBIDO FINANZAS» que ya trae el documento
+      html = rep(html, '___________<br>ACUSE DE RECIBIDO FINANZAS', '<div style="margin-top:-22px">' + img + '</div>' + esc(String(a.nombre || '').toUpperCase()) + '<br>ACUSE DE RECIBIDO FINANZAS<br>' + t);
+    }
+    var pie = a
+      ? '<div class="nx-acuse-doc" style="margin-top:10px;border:1px solid #1a7f37;border-radius:4px;padding:6px 10px;font-size:7.5pt;color:#222;display:flex;gap:12px;align-items:center;page-break-inside:avoid;font-family:Arial,sans-serif">'
+        + (a.firma ? '<img src="' + a.firma + '" alt="Firma" style="height:40px;max-width:150px">' : '')
+        + '<div><b style="color:#1a7f37">ACUSE DE RECIBIDO DE FINANZAS — RECIBIDO</b><br>Recibido por: <b>' + esc(a.nombre) + '</b> · Fecha: ' + fFecha(a.ts) + ' · Hora: ' + fHora(a.ts)
+        + '<br>' + esc(identDe(a)) + ' · Empresa: ' + esc(a.empresa) + ' · Total: ' + lps(a.total) + ' · Versión del documento: ' + esc(corta(a.version))
+        + (a.sesion && a.sesion.nombre ? '<br>Registrado en NEXO desde el equipo de ' + esc(a.sesion.nombre) : '') + '</div></div>'
+      : '<div class="nx-acuse-doc" style="margin-top:10px;border:1px dashed #b45309;border-radius:4px;padding:6px 10px;font-size:7.5pt;color:#b45309;page-break-inside:avoid;font-family:Arial,sans-serif">'
+        + '<b>ACUSE DE RECIBIDO DE FINANZAS: PENDIENTE</b> · ' + esc(opt.ident || '') + ' · ' + esc(opt.empresa || '') + ' · Versión del documento: ' + esc(corta(opt.version)) + '</div>';
+    if(opt.historial){
+      var v = opt.vigente;
+      var ban = '<div style="background:#fff4e5;border:1px solid #f5a524;color:#7a4a00;border-radius:4px;padding:6px 10px;margin-bottom:8px;font-size:8pt;font-family:Arial,sans-serif">'
+        + '<b>VERSIÓN FIRMADA (HISTORIAL)</b> — así se entregó a Finanzas. Después se corrigió: la versión vigente ' + (v ? 'tiene su propio acuse.' : 'está pendiente de su propio acuse.') + '</div>';
+      html = html.replace(/<body([^>]*)>/i, function(m){ return m + ban; });
+    }
+    var i = html.search(/<\/body>/i);
+    return i < 0 ? html + pie : html.slice(0, i) + pie + html.slice(i);
+  }
+  function imprimirDoc(html){ try{ _imprimirHTML(sinBoton(html)); aviso('Abriendo impresión — elige tu impresora o «Guardar como PDF» ✓'); }catch(e){ aviso('No se pudo imprimir: ' + e.message, true); } }
+  function pdfDoc(html, archivo, apaisado){
+    if(typeof _descargarDocPDF !== 'function'){ imprimirDoc(html); return; }
+    aviso('Generando PDF…');
+    _descargarDocPDF(html, archivo, !!apaisado).then(function(){ aviso('PDF descargado ✓'); }).catch(function(e){ aviso('No se pudo generar el PDF: ' + e.message, true); });
+  }
+  function verDoc(html, titulo){
+    cerrar('nx-acu-vis');
+    var ov = document.createElement('div'); ov.id = 'nx-acu-vis'; ov.className = 'nx-acu-capa';
+    ov.innerHTML = '<div class="nx-acu-box ancho"><div class="nx-acu-hd"><div><b>' + esc(titulo) + '</b></div><button type="button" data-acf="cerrar-vis" aria-label="Cerrar">✕</button></div>'
+      + '<iframe title="' + esc(titulo) + '" style="width:100%;height:70vh;border:0;background:#fff"></iframe></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('iframe').srcdoc = sinBoton(html);
+  }
+  function cerrar(id){ var o = document.getElementById(id); if(o) o.remove(); }
+
+  // ── Bloque «Acuse de recibido de Finanzas» (el mismo para viáticos y caja chica) ──
+  // ctx = { tipo, doc, ident, folio, resumen:[etiqueta, valor], confirmar(html), empresa, nombreDoc, version, total, datos, docHTML(), recalc(), archivo, apaisado }
+  function bloqueHTML(ctx){
+    var lst = acusesDe(ctx.tipo, ctx.doc), a = acuseDe(ctx), prev = lst.filter(function(x){ return x.version !== ctx.version; });
+    var h = '<div class="nx-acuse" data-tipo="' + esc(ctx.tipo) + '" data-doc="' + esc(ctx.doc) + '" data-ver="' + esc(ctx.version) + '">'
+      + '<div class="nx-acu-t">🧾 Acuse de recibido de Finanzas</div>';
+    if(a){
+      h += '<div class="nx-acu-est ok">✅ Recibido por Finanzas</div>'
+        + '<div class="nx-acu-det">' + (a.firma ? '<img src="' + esc(a.firma) + '" alt="Firma de ' + esc(a.nombre) + '">' : '')
+        + '<div><b>' + esc(a.nombre) + '</b><br>' + fFecha(a.ts) + ' · ' + fHora(a.ts)
+        + '<br><span>' + esc(identDe(a)) + ' · ' + esc(a.empresa) + ' · Total ' + lps(a.total) + ' · versión ' + esc(corta(a.version)) + '</span>'
+        + (a.sesion && a.sesion.nombre ? '<br><span>Registrado desde el equipo de ' + esc(a.sesion.nombre) + '</span>' : '')
+        + '</div></div>';
+    } else {
+      h += '<div class="nx-acu-est pend">⏳ Pendiente de acuse</div>';
+      if(prev.length) h += '<div class="nx-acu-nota mal">⚠️ Se corrigió después del último acuse. La versión firmada quedó en el historial (abajo) y esta versión corregida necesita su propio acuse.</div>';
+      h += '<div class="nx-acu-sub">' + esc(ctx.ident) + ' · ' + esc(ctx.empresa) + ' · Total ' + lps(ctx.total) + ' · versión ' + esc(corta(ctx.version)) + '</div>';
+      if(st.reglas === 'faltan') h += '<div class="nx-acu-nota mal">🔒 Falta publicar en la base la regla de Finanzas: el acuse se activa solo cuando esté publicada.</div>';
+      else if(st.reglas !== 'ok') h += '<div class="nx-acu-nota">Revisando la conexión con la base…</div>';
+      else if(st.acuErr && !st.acuOk) h += '<div class="nx-acu-nota mal">No se pudo leer el acuse (' + esc(st.acuErr) + ').</div>';
+      else if(puedeAcusar()) h += '<button type="button" class="nx-acu-btn" data-acu="firmar">✍️ Registrar acuse de recibido</button>';
+      else h += '<div class="nx-acu-nota">El acuse se registra en el teléfono de Gerencia: quien recibe en Finanzas escribe su nombre y firma.</div>';
+    }
+    if(prev.length){
+      h += '<div class="nx-acu-hist"><div class="nx-acu-ht">🗂 Versiones firmadas anteriores</div>' + prev.slice().reverse().map(function(x){
+        var dv = ' data-ver="' + esc(x.version) + '"';
+        return '<div class="nx-acu-hi"><div><b>Versión ' + esc(corta(x.version)) + '</b> · ' + lps(x.total) + '<br><span>Recibida por ' + esc(x.nombre) + ' el ' + fFecha(x.ts) + ' a las ' + fHora(x.ts) + '</span></div>'
+          + '<div class="nx-acu-hb"><button type="button" data-acu="h-ver"' + dv + ' title="Ver la versión firmada">👁 Ver</button><button type="button" data-acu="h-imp"' + dv + ' title="Imprimir la versión firmada">🖨 Imprimir</button><button type="button" data-acu="h-pdf"' + dv + ' title="Descargar la versión firmada">📄 Descargar</button></div></div>';
+      }).join('') + '</div>';
+    }
+    return h + '</div>';
+  }
+  function ctxDeBloque(el){
+    var tipo = el.getAttribute('data-tipo'), doc = el.getAttribute('data-doc');
+    if(tipo === 'viaticos') return ctxViatPorDoc(doc);
+    if(tipo === 'cajaChica'){ var rec = Object.keys(st.caja || {}).map(function(k){ return st.caja[k]; }).find(function(x){ return x && clave(x.id) === doc; }); return ctxCaja(rec); }
+    return null;
+  }
+  function refrescarBloques(){
+    Array.prototype.forEach.call(document.querySelectorAll('.nx-acuse'), function(el){
+      var ctx = null; try{ ctx = ctxDeBloque(el); }catch(e){}
+      if(!ctx) return; var t = document.createElement('div'); t.innerHTML = bloqueHTML(ctx); el.replaceWith(t.firstChild);
+    });
+  }
+  function historial(ctx, ver, accion){
+    var a = ((st.acu[ctx.tipo] || {})[ctx.doc] || {})[ver]; if(!a){ aviso('No se encontró esa versión', true); return; }
+    a = Object.assign({ version: ver }, a);
+    if(!a.html){ aviso('Esa versión no guardó su documento', true); return; }
+    var html = final(inyectar(a.html, a, { historial: true, vigente: acuseDe(ctx) }));
+    var nombre = ctx.archivo + '_version_' + corta(ver) + '_firmada.pdf';
+    if(accion === 'h-imp') return imprimirDoc(html);
+    if(accion === 'h-pdf') return pdfDoc(html, nombre, ctx.apaisado);
+    verDoc(html, ctx.nombreDoc + ' · ' + ctx.ident + ' · versión firmada ' + corta(ver));
+  }
+
+  // ── Ventana de firma (en el teléfono de Gerencia; firma quien recibe en Finanzas) ──
+  function abrirFirma(ctx){
+    if(!puedeAcusar()){ alert('🔒 El acuse de recibido se registra desde el teléfono de Gerencia.'); return; }
+    if(!reglasOk()) return;
+    if(acuseDe(ctx)){ aviso('Esta versión ya tiene acuse de Finanzas: no se sobrescribe.', true); refrescarBloques(); return; }
+    if(!st.conectado){ alert('Sin conexión.\n\nEl acuse necesita señal: la fecha y la hora las pone el servidor y la firma no debe quedar solo en este teléfono.'); return; }
+    cerrar('nx-acu-ov');
+    var ov = document.createElement('div'); ov.id = 'nx-acu-ov'; ov.className = 'nx-acu-capa';
+    ov.innerHTML = '<div class="nx-acu-box" role="dialog" aria-modal="true" aria-label="Acuse de recibido de Finanzas">'
+      + '<div class="nx-acu-hd"><div><b>🧾 Acuse de recibido de Finanzas</b><small>' + esc(ctx.nombreDoc) + '</small></div><button type="button" data-acf="cerrar" aria-label="Cerrar">✕</button></div>'
+      + '<div class="nx-acu-bd">'
+      + '<div class="nx-acu-res"><div><span>' + esc(ctx.resumen[0]) + '</span><b>' + esc(ctx.resumen[1]) + '</b></div><div><span>Empresa</span><b>' + esc(ctx.empresa) + '</b></div><div><span>Total</span><b>' + lps(ctx.total) + '</b></div></div>'
+      + '<div id="nx-acf-p1">'
+      + '<label for="nx-acf-nom">Nombre de quien recibe en Finanzas</label><input id="nx-acf-nom" autocomplete="off" maxlength="80" value="" placeholder="Nombre y apellido">'
+      + '<label>Firma <small>(toca el recuadro: se abre en horizontal, como en las demás apps)</small></label>'
+      + '<button type="button" class="nx-acf-can" data-acf="grande" aria-label="Toca para firmar"><canvas id="nx-acf-can" width="600" height="170"></canvas><span class="nx-acf-ph" id="nx-acf-ph">✍️ Toca aquí para firmar</span></button>'
+      + '<div class="nx-acu-nota">La fecha y la hora se registran solas al confirmar. El acuse confirma que Finanzas recibió el documento; la aprobación del gasto sigue su flujo de siempre.</div>'
+      + '<div class="nx-acf-bt"><button type="button" data-acf="cerrar">Cancelar</button><button type="button" class="pri" data-acf="seguir">Continuar</button></div></div>'
+      + '<div id="nx-acf-p2" hidden>'
+      + '<div class="nx-acf-conf">¿Confirmas que estás recibiendo ' + ctx.confirmar + '?</div>'
+      + '<div class="nx-acf-quien" id="nx-acf-quien"></div>'
+      + '<div class="nx-acf-bt"><button type="button" data-acf="volver">← Corregir</button><button type="button" class="pri ok" data-acf="guardar">✅ Sí, registrar recibido</button></div></div>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov._ctx = ctx; ov._grande = null;
+    setTimeout(function(){ var n = ov.querySelector('#nx-acf-nom'); if(n) n.focus(); }, 50);
+  }
+  // ── Recuadro grande de firma, IGUAL que en las demás apps (Técnicos, Logística, Supervisión): pantalla completa y, en el teléfono
+  //    en vertical, girado a horizontal; 💾 Guardar firma · 🧹 Limpiar · Cancelar. Lo firmado pasa al recuadro chico del acuse.
+  function firmaGrande(ovA){
+    cerrar('nx-fg-ov');
+    var esPC = window.innerWidth >= 1024 && !('ontouchstart' in window);
+    var rotar = !esPC && window.innerHeight > window.innerWidth;   // teléfono en vertical → firmar en horizontal
+    var ov = document.createElement('div'); ov.id = 'nx-fg-ov';
+    var BTNS = '<button type="button" data-fg="guardar" style="padding:11px 18px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap">💾 Guardar firma</button>'
+      + '<button type="button" data-fg="limpiar" style="padding:11px 14px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap">🧹 Limpiar</button>'
+      + '<button type="button" data-fg="cancelar" style="padding:11px 14px;background:#eee;color:#1d2433;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>';
+    var TIT = '✍️ Firma — Acuse de recibido de Finanzas';
+    if(esPC){
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99997;display:flex;align-items:center;justify-content:center;padding:12px;font-family:Arial,sans-serif';
+      ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:720px">'
+        + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">' + TIT + '</div>'
+        + '<canvas id="nx-fg-canvas" style="width:100%;height:auto;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
+        + '<div style="display:flex;gap:8px;margin-top:10px">' + BTNS + '</div></div>';
+    } else {
+      ov.style.cssText = 'position:fixed;inset:0;background:#10203a;z-index:99997;font-family:Arial,sans-serif';
+      var w = rotar ? window.innerHeight : window.innerWidth, h = rotar ? window.innerWidth : window.innerHeight;
+      ov.innerHTML = '<div style="position:fixed;top:50%;left:50%;width:' + w + 'px;height:' + h + 'px;transform:translate(-50%,-50%)' + (rotar ? ' rotate(90deg)' : '') + ';background:#fff;display:flex;flex-direction:column;padding:10px;box-sizing:border-box">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + TIT + '</div>' + BTNS + '</div>'
+        + '<canvas id="nx-fg-canvas" style="flex:1;min-height:0;width:100%;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas></div>';
+    }
+    document.body.appendChild(ov);
+    var c = ov.querySelector('#nx-fg-canvas'); c._rot = rotar;
+    var cr = c.getBoundingClientRect(), lw = Math.max(1, rotar ? cr.height : cr.width), lh = Math.max(1, rotar ? cr.width : cr.height);
+    if(esPC){ c.width = 1200; c.height = Math.round(1200 * 170 / 600); } else { c.width = 1400; c.height = Math.max(160, Math.round(1400 * lh / lw)); }
+    c._hay = false;
+    if(ovA._grande){   // ya firmó: se muestra para seguir o limpiar
+      try{ var g0 = c.getContext('2d'), es0 = Math.min(c.width / ovA._grande.width, c.height / ovA._grande.height), dw0 = ovA._grande.width * es0, dh0 = ovA._grande.height * es0;
+        g0.drawImage(ovA._grande, (c.width - dw0) / 2, (c.height - dh0) / 2, dw0, dh0); c._hay = true; }catch(e){}
+    }
+    var dib = false, x = null;
+    function pos(e){ var r = c.getBoundingClientRect(), s = e.touches ? e.touches[0] : e;
+      if(c._rot) return { x: (s.clientY - r.top) * c.width / r.height, y: (r.right - s.clientX) * c.height / r.width };
+      return { x: (s.clientX - r.left) * c.width / r.width, y: (s.clientY - r.top) * c.height / r.height }; }
+    function st(e){ e.preventDefault(); dib = true; x = c.getContext('2d'); x.strokeStyle = '#1f3864'; x.lineWidth = 3.5; x.lineCap = 'round'; x.lineJoin = 'round'; var p = pos(e); x.beginPath(); x.moveTo(p.x, p.y); }
+    function mv(e){ if(!dib || !x) return; e.preventDefault(); var p = pos(e); x.lineTo(p.x, p.y); x.stroke(); c._hay = true; }
+    function en(){ dib = false; }
+    c.addEventListener('touchstart', st); c.addEventListener('touchmove', mv); c.addEventListener('touchend', en);
+    c.addEventListener('mousedown', st); c.addEventListener('mousemove', mv); c.addEventListener('mouseup', en); c.addEventListener('mouseleave', en);
+    ov.addEventListener('click', function(e){
+      var b = e.target.closest && e.target.closest('[data-fg]'); if(!b) return;
+      var a = b.getAttribute('data-fg');
+      if(a === 'limpiar'){ c.getContext('2d').clearRect(0, 0, c.width, c.height); c._hay = false; return; }
+      if(a === 'cancelar'){ ov.remove(); return; }
+      if(!c._hay){ aviso('Firme dentro del recuadro primero', true); return; }
+      ovA._grande = c;   // la firma completa (para guardarla con buena calidad)
+      var p = ovA.querySelector('#nx-acf-can'), gp = p.getContext('2d'), es = Math.min(p.width / c.width, p.height / c.height), dw = c.width * es, dh = c.height * es;
+      gp.clearRect(0, 0, p.width, p.height); gp.drawImage(c, (p.width - dw) / 2, (p.height - dh) / 2, dw, dh);
+      ovA.querySelector('#nx-acf-ph').hidden = true;
+      ov.remove();
+    });
+  }
+  // Recorta al trazo y lo deja en máx. 600×200 px (PNG transparente: pesa poco)
+  function exportarFirma(can){
+    var w = can.width, h = can.height, d = can.getContext('2d').getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for(var y = 0; y < h; y += 2) for(var x = 0; x < w; x += 2){ if(d[(y * w + x) * 4 + 3] > 20){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+    if(x1 < 0) return '';
+    var pad = 16; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+    var bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(1, 600 / bw, 200 / bh), o = document.createElement('canvas');
+    o.width = Math.max(1, Math.round(bw * k)); o.height = Math.max(1, Math.round(bh * k));
+    o.getContext('2d').drawImage(can, x0, y0, bw, bh, 0, 0, o.width, o.height);
+    return o.toDataURL('image/png');
+  }
+  function firmaSeguir(ov){
+    var nom = (ov.querySelector('#nx-acf-nom').value || '').replace(/\s+/g, ' ').trim();
+    if(nom.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g, '').length < 3){ alert('Escribe el nombre de quien recibe en Finanzas.'); ov.querySelector('#nx-acf-nom').focus(); return; }
+    if(!ov._grande){ alert('Falta la firma: toca el recuadro y firma.'); return; }
+    var firma = exportarFirma(ov._grande); if(!firma){ alert('Falta la firma.'); return; }
+    ov._nombre = nom; ov._firma = firma;
+    var s = sesion();
+    ov.querySelector('#nx-acf-quien').innerHTML = '<div class="nx-acf-mini"><img src="' + firma + '" alt="Firma"><div><b>' + esc(nom) + '</b><br><span>La fecha y la hora se registran al confirmar.'
+      + (s.nombre ? '<br>Queda registrado también que se firmó en el equipo de ' + esc(s.nombre) + '.' : '') + '</span></div></div>';
+    ov.querySelector('#nx-acf-p1').hidden = true; ov.querySelector('#nx-acf-p2').hidden = false;
+  }
+  function firmaGuardar(ov, btn){
+    var ctx0 = ov._ctx, ctx = ctx0 && ctx0.recalc ? ctx0.recalc() : ctx0;
+    if(!ctx || ctx.version !== ctx0.version){ alert('La liquidación cambió mientras se firmaba. Ciérrala y vuelve a abrirla para firmar la versión actual.'); cerrar('nx-acu-ov'); refrescarBloques(); return; }
+    if(!puedeAcusar()){ alert('🔒 Este equipo ya no tiene permiso de Gerencia.'); return; }
+    if(!reglasOk()) return;
+    var html = ''; try{ html = sinLogo(sinBoton(ctx.docHTML())); }catch(e){ console.warn('acuse: documento', e); }
+    var rec = { tipo: ctx.tipo, doc: ctx.doc, ident: ctx.ident, folio: ctx.folio || '', empresa: ctx.empresa, nombreDoc: ctx.nombreDoc, version: ctx.version, total: ctx.total,
+      nombre: ov._nombre, firma: ov._firma, ts: TS(), tsEquipo: Date.now(), sesion: sesion(), datos: ctx.datos, html: html };
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    db().ref(BASE + '/acuses/' + ctx.tipo + '/' + ctx.doc + '/' + ctx.version).transaction(function(cur){ if(cur) return; return rec; })
+      .then(function(r){
+        cerrar('nx-acu-ov');
+        if(r && r.committed) aviso('✅ Acuse registrado: ' + ctx.ident + ' (' + ctx.empresa + ')');
+        else alert('Esta versión ya tenía acuse de Finanzas. No se sobrescribe.');
+        refrescarBloques(); refrescarCaja();
+      })
+      .catch(function(e){ btn.disabled = false; btn.textContent = '✅ Sí, registrar recibido'; alert('No se guardó el acuse: ' + (e && e.message || e)); });
+  }
+
+  // ── Viáticos: el bloque debajo de Editar / Descargar / Imprimir ─────────
+  var TIPOS_ORDEN = ['logistica', 'preventivo', 'correctivo', 'cortinas', 'revision', 'evaluacion', 'soldadura'];
+  function ordenPorId(id){
+    try{ var o = _getViaticosOrden(); if(o && o.id === id) return o; }catch(e){}
+    for(var i = 0; i < TIPOS_ORDEN.length; i++){ try{ var x = (_getViaticosArray(TIPOS_ORDEN[i]) || []).find(function(z){ return z && z.id === id; }); if(x) return x; }catch(e){} }
+    return null;
+  }
+  function ctxViat(orden){
+    if(!orden || !orden.viaticos) return null;
+    var v = orden.viaticos, sol = 0; try{ sol = num(_viatTotalAsignado(orden)); }catch(e){}
+    var fs = []; (v.facturas || []).forEach(function(f, i){ if(f && (f.descripcion || num(f.monto))) fs.push([i + 1, _viatDescTexto(f), f.fecha || '', f.ndocumento || '', r2(f.monto)]); });
+    if(!fs.length) return null;
+    var tot = r2(fs.reduce(function(s, f){ return s + f[4]; }, 0));
+    var datos = { doc: 'liquidacion-viaticos', folio: String(orden.correlativo || ''), empresa: EMP, fecha: v.fecha_doc || '', destinatario: v.gestor_nombre || '', destino: v.destino || '',
+      solicitado: r2(sol), facturas: fs, total: tot, diferencia: r2(sol - tot) };
+    var id = orden.id, folio = datos.folio || '(sin folio)';
+    return { tipo: 'viaticos', doc: clave(id), folio: folio, ident: 'Folio ' + folio, resumen: ['Folio', folio], empresa: EMP, nombreDoc: 'Liquidación de viáticos', total: tot, datos: datos, version: huella(datos), apaisado: false,
+      confirmar: 'la <b>liquidación de viáticos</b> con folio <b>' + esc(folio) + '</b> de la empresa <b>' + esc(EMP) + '</b>, por un total de <b>' + lps(tot) + '</b>',
+      archivo: 'Liquidacion_Viaticos_' + String(orden.correlativo || 'orden').replace(/[^\w\-]+/g, '_'),
+      docHTML: function(){ return firmaElabViat(_bldOrig(v, orden)); }, recalc: function(){ return ctxViat(ordenPorId(id)); } };
+  }
+  function ctxViatPorDoc(doc){
+    try{ var o = _getViaticosOrden(); if(o && clave(o.id) === doc) return ctxViat(o); }catch(e){}
+    for(var i = 0; i < TIPOS_ORDEN.length; i++){ try{ var x = (_getViaticosArray(TIPOS_ORDEN[i]) || []).find(function(z){ return z && clave(z.id) === doc; }); if(x) return ctxViat(x); }catch(e){} }
+    return null;
+  }
+  var _bldOrig = (typeof _buildLiquidacionHTML === 'function') ? _buildLiquidacionHTML : null;
+  // (Miguel 26/11: «en automático siempre») su firma guardada va en la casilla «MIGUEL ORELLANA» de la liquidación de viáticos
+  function firmaElabViat(html){
+    if(!elabConFirma('MIGUEL ORELLANA')) return html;
+    return rep(html, '___________<br>MIGUEL ORELLANA</div>', '<div style="margin-top:-24px">' + ELAB_TOKEN + '</div>MIGUEL ORELLANA</div>');
+  }
+  if(_bldOrig){
+    // Descargar e Imprimir (y lo que use este documento): con la firma de Miguel y el acuse de la versión vigente, o «pendiente»
+    _buildLiquidacionHTML = function(v, orden){
+      var html = final(firmaElabViat(_bldOrig.apply(this, arguments)));
+      try{ var ctx = ctxViat(orden); if(ctx) html = inyectar(html, acuseDe(ctx), { ident: ctx.ident, empresa: ctx.empresa, version: ctx.version }); }catch(e){ console.warn('acuse en documento', e); }
+      return html;
+    };
+  }
+  if(typeof renderLiquidacionForm === 'function'){
+    var _rlf = renderLiquidacionForm;
+    renderLiquidacionForm = function(v, montoSol, readOnly){
+      var h = _rlf.apply(this, arguments);
+      if(readOnly){ try{ var ctx = ctxViat(_getViaticosOrden()); if(ctx) h += bloqueHTML(ctx); }catch(e){ console.warn('acuse viáticos', e); } }
+      return h;
+    };
+  }
+  if(typeof editarLiquidacionConPin === 'function'){
+    var _edl = editarLiquidacionConPin;
+    editarLiquidacionConPin = function(){
+      try{ var ctx = ctxViat(_getViaticosOrden()), a = ctx && acuseDe(ctx);
+        // el aviso solo a quien puede editar (a los demás el permiso de siempre les dice que no)
+        if(a && puedeElaborar() && !confirm('🧾 Esta liquidación ya tiene acuse de Finanzas (' + a.nombre + ', ' + fFecha(a.ts) + ' ' + fHora(a.ts) + ').\n\nSi cambias montos, facturas u otros datos de lo entregado, la versión firmada y su acuse quedan en el historial y la versión corregida quedará «Pendiente de acuse».\n\n¿Editar la liquidación?')) return;
+      }catch(e){}
+      return _edl.apply(this, arguments);
+    };
+  }
+  if(typeof window.guardarLiquidacion === 'function'){
+    var _gl = window.guardarLiquidacion;
+    window.guardarLiquidacion = function(){
+      var antes = null, firmada = null; try{ antes = ctxViat(_getViaticosOrden()); firmada = antes && acuseDe(antes); }catch(e){}
+      var r = _gl.apply(this, arguments);
+      try{ var des = ctxViat(_getViaticosOrden()); if(firmada && des && des.version !== antes.version) setTimeout(function(){ aviso('🧾 Cambió después del acuse: la versión firmada queda en el historial y esta queda «Pendiente de acuse».'); }, 1800); }catch(e){}
+      return r;
+    };
+  }
+
+  // ── CAJA CHICA (Administración → Caja chica) — sin folio: se identifica por fecha y hora de elaboración ──
+  function cajaLista(){ return Object.keys(st.caja || {}).map(function(k){ return st.caja[k]; }).filter(function(x){ return x && x.id; })
+    .sort(function(a, b){ return (b.creada || 0) - (a.creada || 0); }); }
+  function identCaja(rec){ return 'Caja chica del ' + fFecha(rec.creada) + ' ' + fHora(rec.creada); }
+  function ctxCaja(rec){
+    if(!rec || !rec.id) return null;
+    var filas = (rec.filas || []).filter(Boolean).map(function(f){ return [f.proveedor || '', r2(f.monto), f.factura || '', f.fecha || '', f.depto || '', f.obs || '']; });
+    var datos = { doc: 'caja-chica', empresa: EMP, elaborador: rec.elaborador || '', filas: filas, total: r2(filas.reduce(function(s, f){ return s + f[1]; }, 0)) };
+    var id = rec.id, ident = identCaja(rec), d = new Date(rec.creada || Date.now());
+    return { tipo: 'cajaChica', doc: clave(id), folio: '', ident: ident, resumen: ['Elaborada', fFecha(rec.creada)], empresa: EMP, nombreDoc: 'Liquidación de caja chica', total: datos.total, datos: datos, version: huella(datos), apaisado: true,
+      confirmar: 'la <b>liquidación de caja chica</b> del <b>' + fFecha(rec.creada) + '</b> (' + fHora(rec.creada) + ') de la empresa <b>' + esc(EMP) + '</b>, por un total de <b>' + lps(datos.total) + '</b>',
+      archivo: 'Caja_chica_' + EMP.replace(/\s+/g, '_') + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + p2(d.getMinutes()),
+      docHTML: function(){ return docCaja(datos); }, recalc: function(){ return ctxCaja(st.caja[id]); } };
+  }
+  function elabConFirma(nombre){ var f = st.firmaElab; return !!(f && f.firma && f.nombre && norm(f.nombre) === norm(nombre)); }
+  // Documento con el formato del Excel «LIQUIDACIÓN DE CAJA CHICA» (CP-FO-14 v01): horizontal, 24 filas, total, firmas y fechas
+  function docCaja(d){
+    var filas = d.filas || [], n = Math.max(24, filas.length), rows = '';
+    for(var i = 0; i < n; i++){
+      var f = filas[i];
+      rows += f ? '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(f[0]) + '</td><td class="n">' + lps(f[1]) + '</td><td>' + esc(f[2]) + '</td><td class="c">' + esc(fIso(f[3])) + '</td><td>' + esc(String(f[4]).toUpperCase()) + '</td><td>' + esc(f[5]) + '</td></tr>'
+        : '<tr><td class="c">' + (i + 1) + '</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liquidación de caja chica · ' + esc(d.empresa) + '</title><style>'
+      + '@media print{@page{size:letter landscape;margin:8mm}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}}'
+      + 'body{font-family:Arial,sans-serif;font-size:9pt;margin:0;padding:8mm;color:#111}'
+      + '.enc{display:grid;grid-template-columns:190px 1fr 165px;align-items:center;gap:10px;margin-bottom:8px}.enc img{max-height:58px;max-width:185px}'
+      + '.tit{text-align:center}.tit h1{font-size:15pt;margin:0}.tit div{font-size:12.5pt;font-weight:bold;margin-top:3px}'
+      + '.ctl{border:1px solid #333;font-size:8.5pt;padding:4px 7px;line-height:1.55}'
+      + 'table{width:100%;border-collapse:collapse}th,td{border:1px solid #444;padding:1px 5px;height:14px;font-size:8.5pt}th{background:#d9e1f2;font-size:9pt}'
+      + '.n{text-align:right;white-space:nowrap}.c{text-align:center}.tot td{font-weight:bold;background:#eef2f8}'
+      + '.firmas{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin:16px 50px 0}.fb{text-align:center}.fb .esp{height:64px;display:flex;align-items:flex-end;justify-content:center}'
+      + '.fb .nm{border-top:1px solid #333;padding-top:3px;font-size:9.5pt;min-height:13px}.fb .lb{font-weight:bold;font-size:9pt}'
+      + '.fh{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin:8px 50px 0;font-weight:bold;font-size:9pt}.fh span{font-weight:normal}'
+      + '.pie{font-size:7.5pt;margin-top:10px}.btn-print{background:#1f3864;color:#fff;border:none;padding:10px 20px;font-size:11pt;cursor:pointer;border-radius:4px;margin-bottom:10px}'
+      + '</style></head><body><button class="no-print btn-print" onclick="window.print()">🖨 Imprimir / Guardar como PDF</button>'
+      + '<div class="enc"><div>' + (logo() ? '<img src="' + LOGO_TOKEN + '" alt="MONTASA">' : '') + '</div><div class="tit"><h1>LIQUIDACIÓN DE CAJA CHICA</h1><div>EMPRESA : ' + esc(d.empresa) + '</div></div>'
+      + '<div class="ctl">Código: CP-FO-14<br>Versión: 01<br>Fecha: 18/06/2024</div></div>'
+      + '<table><tr><th style="width:28px">No</th><th>Nombre del Proveedor</th><th style="width:95px">Monto</th><th style="width:140px"># de Factura</th><th style="width:80px">Fecha de Factura</th><th style="width:100px">Depto.</th><th style="width:25%">Observación</th></tr>'
+      + rows + '<tr class="tot"><td></td><td>TOTAL REEMBOLSO DE CAJA CHICA</td><td class="n">' + lps(d.total) + '</td><td colspan="4"></td></tr></table>'
+      + '<div class="firmas"><div class="fb"><div class="esp">' + (elabConFirma(d.elaborador) ? ELAB_TOKEN : '') + '</div><div class="nm">' + esc(String(d.elaborador || '').toUpperCase()) + '</div><div class="lb">Firma y Nombre de Elaborador</div></div>'
+      + '<div class="fb"><div class="esp"><!--NX-ACUSE-FIRMA--></div><div class="nm"><!--NX-ACUSE-NOMBRE--></div><div class="lb">Firma y Nombre de Recibido</div></div></div>'
+      + '<div class="fh"><div>Fecha y hora Entregado: <span><!--NX-ACUSE-ENTREGADO--></span></div><div>Fecha y hora Recibido: <span><!--NX-ACUSE-HORA--></span></div></div>'
+      + '<div class="pie">© Derechos Reservados Montacargas, S. A</div></body></html>';
+  }
+  function chip(ctx){
+    var a = acuseDe(ctx), n = acusesDe(ctx.tipo, ctx.doc).length;
+    return a ? '<span class="cc-chip ok">✅ Recibido por Finanzas · ' + fFecha(a.ts) + '</span>'
+      : n ? '<span class="cc-chip mal">⚠️ Corregida: pendiente de nuevo acuse</span>' : '<span class="cc-chip pend">⏳ Pendiente de acuse</span>';
+  }
+  function raiz(){ return document.getElementById('cc-raiz'); }
+  window._ccPintar = function(c){
+    if(!c) return; estilos();
+    if(c.firstElementChild && c.firstElementChild.id === 'cc-raiz') return;   // ya está en pantalla (no borrar lo que se escribe)
+    c.innerHTML = '<div id="cc-raiz"></div>'; pintarCaja();
+  };
+  function refrescarCaja(){ if(!raiz() || cc.modo === 'form') return; pintarCaja(); }
+  function pintarCaja(){ var r = raiz(); if(!r) return; if(cc.modo === 'ver') return pintarVer(r); if(cc.modo === 'form') return pintarForm(r); pintarListaCaja(r); }
+  function subir(){ var c = document.getElementById('vac-c'); if(c) c.scrollTop = 0; }
+  function pintarListaCaja(r){
+    var L = cajaLista(), f = st.firmaElab;
+    r.innerHTML = '<div class="card cc-cab"><div style="flex:1;min-width:200px"><div class="nm">💵 Caja chica · ' + EMP + '</div><div class="sub">Liquidaciones de caja chica (formato CP-FO-14), cada una con su acuse de recibido de Finanzas.</div></div>'
+      + '<div class="cc-cab-b"><button type="button" class="bt" data-cc="firma-elab" title="Firma que sale en «Firma y Nombre de Elaborador»">✍️ Firma del elaborador' + (f && f.firma ? ' ✓' : '') + '</button>'
+      + '<button type="button" class="bt bp" data-cc="nueva">➕ Nueva liquidación</button></div></div>'
+      + (L.length ? '<input id="cc-buscar" placeholder="🔍 Buscar por proveedor, factura, fecha o elaborador" value="' + esc(cc.q) + '" style="margin-bottom:10px">' : '')
+      + '<div id="cc-items"></div>';
+    pintarItems();
+  }
+  function pintarItems(){
+    var el = document.getElementById('cc-items'); if(!el) return;
+    var L = cajaLista(), q = norm(cc.q);
+    if(st.reglas === 'faltan'){ el.innerHTML = '<div class="card" style="text-align:center;color:#a8201a">🔒 Falta publicar en la base la regla de Finanzas (reglas v9). Caja chica se activa sola cuando esté publicada.</div>'; return; }
+    if(!st.cajaOk){ el.innerHTML = '<div class="card" style="text-align:center;color:#667085">' + (st.cajaErr ? '🔒 No se pudo leer Caja chica (' + esc(st.cajaErr) + ').' : 'Cargando…') + '</div>'; return; }
+    if(!L.length){ el.innerHTML = '<div class="card" style="text-align:center;color:#667085">Todavía no hay liquidaciones de caja chica en ' + EMP + '. Usa «➕ Nueva liquidación».</div>'; return; }
+    var vis = L.filter(function(x){ if(!q) return true;
+      var t = [fFecha(x.creada), x.elaborador].concat((x.filas || []).filter(Boolean).map(function(f){ return (f.proveedor || '') + ' ' + (f.factura || ''); })).join(' '); return norm(t).indexOf(q) >= 0; });
+    el.innerHTML = vis.length ? vis.map(function(x){ var ctx = ctxCaja(x), nf = (x.filas || []).filter(Boolean).length;
+      return '<div class="card cc-it" data-cc="ver" data-id="' + esc(x.id) + '" role="button" tabindex="0"><div class="cc-it1"><span class="nm">' + esc(ctx.ident) + '</span><b class="cc-tot">' + lps(ctx.total) + '</b></div>'
+        + '<div class="sub">' + nf + ' factura' + (nf === 1 ? '' : 's') + ' · elaboró ' + esc(x.elaborador || '—') + (x.editada ? ' · corregida ' + fFecha(x.editada) : '') + '</div>'
+        + '<div style="margin-top:6px">' + chip(ctx) + '</div></div>'; }).join('')
+      : '<div class="card" style="text-align:center;color:#667085">Nada coincide con la búsqueda.</div>';
+  }
+  function tablaFilas(rec){
+    var filas = (rec.filas || []).filter(Boolean);
+    return '<div class="cc-tw"><table class="cc-t"><thead><tr><th>No</th><th>Nombre del proveedor</th><th>Monto</th><th># de factura</th><th>Fecha de factura</th><th>Depto.</th><th>Observación</th></tr></thead><tbody>'
+      + filas.map(function(f, i){ return '<tr><td>' + (i + 1) + '</td><td>' + esc(f.proveedor) + '</td><td class="n">' + lps(f.monto) + '</td><td>' + esc(f.factura) + '</td><td>' + esc(fIso(f.fecha)) + '</td><td>' + esc(f.depto) + '</td><td>' + esc(f.obs) + '</td></tr>'; }).join('')
+      + '</tbody></table></div>';
+  }
+  function pintarVer(r){
+    var rec = st.caja[cc.id]; if(!rec){ cc.modo = 'lista'; cc.id = null; return pintarListaCaja(r); }
+    var ctx = ctxCaja(rec);
+    r.innerHTML = '<button type="button" class="bt" data-cc="lista" style="margin-bottom:10px">← Caja chica</button>'
+      + '<div class="card"><div class="nm">Liquidación de caja chica del ' + fFecha(rec.creada) + '</div>'
+      + '<div class="sub">Empresa <b>' + EMP + '</b> · elaborada por ' + esc(rec.elaborador || '—') + ' · ' + fFecha(rec.creada) + ' ' + fHora(rec.creada) + (rec.editada ? ' · corregida ' + fFecha(rec.editada) + ' ' + fHora(rec.editada) : '') + '</div>'
+      + tablaFilas(rec)
+      + '<div class="cc-total"><span>TOTAL REEMBOLSO DE CAJA CHICA</span><b>' + lps(ctx.total) + '</b></div>'
+      + '<div class="cc-btns"><button type="button" class="cc-b ed" data-cc="editar">✏️ Editar</button><button type="button" class="cc-b pr" data-cc="imprimir">🖨 Imprimir</button><button type="button" class="cc-b dl" data-cc="pdf">📄 Descargar</button></div>'
+      + bloqueHTML(ctx) + '</div>';
+  }
+  function filaHTML(f, i){
+    f = f || {};
+    var campos = { prov: 'proveedor', monto: 'monto', fact: 'factura', fecha: 'fecha', obs: 'obs' };
+    function inp(k, lab, extra){ var v = f[campos[k]]; return '<div class="cc-fc cc-' + k + '"><label for="cc-' + k + '-' + i + '">' + lab + '</label><input id="cc-' + k + '-' + i + '" value="' + esc(v == null ? '' : v) + '" ' + (extra || '') + '></div>'; }
+    var dep = '<div class="cc-fc cc-depto"><label for="cc-depto-' + i + '">Depto.</label><select id="cc-depto-' + i + '"><option value="">— Elegir —</option>'
+      + DEPTOS.map(function(d){ return '<option' + (norm(f.depto) === norm(d) ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select></div>';
+    return '<div class="cc-f"><div class="cc-fn">' + (i + 1) + '</div>'
+      + inp('prov', 'Nombre del proveedor', 'autocomplete="off" maxlength="80"')
+      + inp('monto', 'Monto (L)', 'type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00"')
+      + inp('fact', '# de factura', 'autocomplete="off" maxlength="40"')
+      + inp('fecha', 'Fecha de factura', 'type="date"')
+      + dep
+      + inp('obs', 'Observación', 'autocomplete="off" maxlength="120"') + '</div>';
+  }
+  function totalB(b){ return r2((b.filas || []).reduce(function(s, f){ return s + num(f && f.monto); }, 0)); }
+  function leerForm(){
+    var b = cc.borrador; if(!b) return;
+    var e = document.getElementById('cc-elab'); if(e) b.elaborador = e.value;
+    b.filas = b.filas.map(function(f, i){ var g = function(k){ var x = document.getElementById('cc-' + k + '-' + i); return x ? x.value : ''; };
+      return { proveedor: g('prov'), monto: g('monto'), factura: g('fact'), fecha: g('fecha'), depto: g('depto'), obs: g('obs') }; });
+  }
+  function pintarForm(r){
+    var rec = cc.id ? st.caja[cc.id] : null;
+    if(!cc.borrador){
+      var elab = rec ? (rec.elaborador || '') : ((st.firmaElab && st.firmaElab.nombre) || sesion().nombre || '');
+      cc.borrador = { elaborador: elab, filas: rec ? JSON.parse(JSON.stringify((rec.filas || []).filter(Boolean))) : [] };
+      while(cc.borrador.filas.length < 5) cc.borrador.filas.push({});
+    }
+    var b = cc.borrador, firmada = rec && acuseDe(ctxCaja(rec));
+    r.innerHTML = '<div class="card"><div class="nm">' + (rec ? '✏️ Editar liquidación de caja chica del ' + fFecha(rec.creada) : '➕ Nueva liquidación de caja chica') + '</div>'
+      + '<div class="sub">Empresa: <b>' + EMP + '</b></div>'
+      + (firmada ? '<div class="nx-acu-nota mal" style="margin-top:8px">🧾 Esta liquidación ya tiene acuse de Finanzas. Si cambias datos, la versión firmada queda en el historial y la corregida pedirá un acuse nuevo.</div>' : '')
+      + '<label for="cc-elab">Elaborado por</label><input id="cc-elab" value="' + esc(b.elaborador) + '" placeholder="Nombre de quien elabora" maxlength="80">'
+      + '<div class="sub" id="cc-elab-nota" style="margin-top:4px"></div></div>'
+      + '<div id="cc-filas">' + b.filas.map(filaHTML).join('') + '</div>'
+      + '<button type="button" class="cc-mas" data-cc="mas">➕ Agregar 5 filas</button>'
+      + '<div class="cc-total"><span>TOTAL REEMBOLSO DE CAJA CHICA</span><b id="cc-total">' + lps(totalB(b)) + '</b></div>'
+      + '<div class="cc-btns dos"><button type="button" class="cc-b" data-cc="cancelar">Cancelar</button><button type="button" class="cc-b gu" data-cc="guardar">💾 Guardar liquidación</button></div>';
+    notaElab();
+  }
+  function notaElab(){ var n = document.getElementById('cc-elab-nota'), e = document.getElementById('cc-elab'); if(!n || !e) return;
+    n.textContent = elabConFirma(e.value) ? '✍️ En la hoja sale su firma guardada.' : (st.firmaElab && st.firmaElab.firma ? 'La firma guardada es de ' + st.firmaElab.nombre + ': para otra persona, la línea queda para firmar a mano.' : ''); }
+  function guardarCaja(btn){
+    leerForm(); var b = cc.borrador, rec = cc.id ? st.caja[cc.id] : null; if(!b) return;
+    if(!reglasOk()) return;
+    var filas = [], err = [], altos = [];
+    b.filas.forEach(function(f, i){
+      var vacia = !String(f.proveedor || '').trim() && !String(f.monto || '').trim() && !String(f.factura || '').trim() && !f.fecha && !f.depto && !String(f.obs || '').trim();
+      if(vacia) return;
+      var m = String(f.monto == null ? '' : f.monto).trim(), n = Number(m);
+      if(!String(f.proveedor || '').trim()) err.push('Fila ' + (i + 1) + ': falta el nombre del proveedor');
+      if(!m || !isFinite(n) || n <= 0) err.push('Fila ' + (i + 1) + ': el monto debe ser un número mayor que cero');
+      else if(n >= 10000) altos.push('Fila ' + (i + 1) + ': ' + lps(n));
+      if(DEPTOS.indexOf(f.depto) < 0) err.push('Fila ' + (i + 1) + ': elige el Depto. (Mantenimiento o Logística)');
+      filas.push({ proveedor: String(f.proveedor || '').trim(), monto: r2(n), factura: String(f.factura || '').trim(), fecha: f.fecha || '', depto: f.depto || '', obs: String(f.obs || '').trim() });
+    });
+    var elab = String(b.elaborador || '').replace(/\s+/g, ' ').trim();
+    if(!elab) err.unshift('Escribe quién elabora la liquidación');
+    if(!filas.length) err.push('Agrega al menos una factura');
+    if(err.length){ alert('⚠️ Revisa antes de guardar:\n\n• ' + err.join('\n• ')); return; }
+    if(altos.length && !confirm('Montos altos:\n\n• ' + altos.join('\n• ') + '\n\n¿Son correctos?')) return;
+    if(!st.conectado){ alert('Sin conexión.\n\nLa liquidación de caja chica se guarda con señal, para que no quede solo en este teléfono.'); return; }
+    var total = r2(filas.reduce(function(s, f){ return s + f.monto; }, 0)), s = sesion(), quien = { uid: s.uid, nombre: s.nombre || 'Gerencia' };
+    btn.disabled = true;
+    if(rec){
+      var nuevo = Object.assign({}, rec, { elaborador: elab, filas: filas, total: total });
+      if(ctxCaja(nuevo).version === ctxCaja(rec).version){ cc.borrador = null; cc.modo = 'ver'; pintarCaja(); aviso('Sin cambios'); return; }
+      if(acuseDe(ctxCaja(rec)) && !confirm('🧾 Esta liquidación ya tiene acuse de Finanzas.\n\nAl guardar, la versión firmada y su acuse quedan en el historial y esta versión corregida quedará «Pendiente de acuse».\n\n¿Guardar la corrección?')){ btn.disabled = false; return; }
+      var cambios = { elaborador: elab, filas: filas, total: total, editada: TS(), editadaPor: quien, ediciones: (rec.ediciones || 0) + 1 };
+      db().ref(BASE + '/cajaChica/' + rec.id).update(cambios).then(function(){
+        st.caja[rec.id] = Object.assign({}, rec, cambios, { editada: Date.now() });
+        cc.borrador = null; cc.modo = 'ver'; pintarCaja(); subir(); aviso('💾 Liquidación de caja chica corregida');
+      }).catch(function(e){ btn.disabled = false; alert('No se guardó: ' + (e && e.message || e)); });
+      return;
+    }
+    var id = 'cc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    var nueva = { id: id, empresa: EMP, raiz: R, creada: TS(), creadaPor: quien, elaborador: elab, filas: filas, total: total };
+    db().ref(BASE + '/cajaChica/' + id).set(nueva).then(function(){
+      st.caja[id] = Object.assign({}, nueva, { creada: (st.caja[id] && typeof st.caja[id].creada === 'number') ? st.caja[id].creada : Date.now() });
+      cc.borrador = null; cc.modo = 'ver'; cc.id = id; pintarCaja(); subir(); aviso('💾 Liquidación de caja chica guardada');
+    }).catch(function(e){ btn.disabled = false; alert('No se guardó: ' + (e && e.message || e)); });
+  }
+  function salidaCaja(accion){
+    var rec = st.caja[cc.id], ctx = ctxCaja(rec); if(!ctx) return;
+    var html = final(inyectar(ctx.docHTML(), acuseDe(ctx), { ident: ctx.ident, empresa: ctx.empresa, version: ctx.version }));
+    if(accion === 'imprimir') return imprimirDoc(html);
+    pdfDoc(html, ctx.archivo + '.pdf', true);
+  }
+
+  // ── Firma del elaborador (la de Miguel en el Excel): se guarda en la base, no en el código ──
+  // Recorta al trazo, achica (máx. 420×200) y deja el fondo blanco transparente
+  function prepararFirma(file){
+    return new Promise(function(ok, mal){
+      var fr = new FileReader(); fr.onerror = function(){ mal(new Error('no se pudo leer la imagen')); };
+      fr.onload = function(){ var im = new Image(); im.onerror = function(){ mal(new Error('la imagen no se pudo abrir')); };
+        im.onload = function(){
+          var c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; var g = c.getContext('2d'); g.drawImage(im, 0, 0);
+          var w = c.width, h = c.height, d = g.getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+          for(var y = 0; y < h; y += 2) for(var x = 0; x < w; x += 2){ var p = (y * w + x) * 4; if(d[p + 3] > 40 && d[p] + d[p + 1] + d[p + 2] < 600){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
+          if(x1 < 0) return mal(new Error('no se encontró la firma en la imagen'));
+          x0 = Math.max(0, x0 - 10); y0 = Math.max(0, y0 - 10); x1 = Math.min(w - 1, x1 + 10); y1 = Math.min(h - 1, y1 + 10);
+          var bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(1, 420 / bw, 200 / bh), o = document.createElement('canvas');
+          o.width = Math.max(1, Math.round(bw * k)); o.height = Math.max(1, Math.round(bh * k));
+          var go = o.getContext('2d'); go.imageSmoothingQuality = 'high'; go.drawImage(c, x0, y0, bw, bh, 0, 0, o.width, o.height);
+          var id = go.getImageData(0, 0, o.width, o.height), q = id.data;
+          for(var i = 0; i < q.length; i += 4){ var l = (q[i] + q[i + 1] + q[i + 2]) / 3, a = Math.max(0, Math.min(255, (250 - l) * 255 / 110)); q[i + 3] = Math.min(q[i + 3], a); q[i] = 15; q[i + 1] = 23; q[i + 2] = 42; }
+          go.putImageData(id, 0, 0); ok(o.toDataURL('image/png'));
+        }; im.src = fr.result; };
+      fr.readAsDataURL(file);
+    });
+  }
+  function abrirFirmaElab(){
+    if(!puedeElaborar()){ alert('🔒 Solo Gerencia guarda la firma del elaborador.'); return; }
+    if(!reglasOk()) return;
+    cerrar('nx-fel-ov');
+    var f = st.firmaElab || {}, ov = document.createElement('div'); ov.id = 'nx-fel-ov'; ov.className = 'nx-acu-capa';
+    ov.innerHTML = '<div class="nx-acu-box" role="dialog" aria-modal="true" aria-label="Firma del elaborador">'
+      + '<div class="nx-acu-hd"><div><b>✍️ Firma del elaborador</b><small>Sale en «Firma y Nombre de Elaborador» de caja chica</small></div><button type="button" data-acf="cerrar" aria-label="Cerrar">✕</button></div>'
+      + '<div class="nx-acu-bd">'
+      + '<div class="nx-acu-nota">Se guarda en la base de Nexo (solo la ve Gerencia), no en el código de la app. Sale en la hoja cuando «Elaborado por» es esta persona.</div>'
+      + '<label for="nx-fel-nom">Nombre del elaborador</label><input id="nx-fel-nom" maxlength="80" value="' + esc(f.nombre || sesion().nombre || '') + '">'
+      + '<label for="nx-fel-arch">Imagen de la firma <small>(foto o PNG con fondo blanco)</small></label><input id="nx-fel-arch" type="file" accept="image/png,image/jpeg,image/webp">'
+      + '<div class="nx-fel-prev" id="nx-fel-prev">' + (f.firma ? '<img src="' + esc(f.firma) + '" alt="Firma guardada">' : '<span>Sin firma guardada</span>') + '</div>'
+      + '<div class="nx-acf-bt"><button type="button" data-acf="cerrar">Cancelar</button><button type="button" class="pri" data-fel="guardar">💾 Guardar firma</button></div>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov._firma = f.firma || '';
+    ov.querySelector('#nx-fel-arch').addEventListener('change', function(){
+      var a = this.files && this.files[0]; if(!a) return;
+      if(a.size > 8 * 1024 * 1024){ alert('La imagen es muy grande (máx. 8 MB).'); return; }
+      prepararFirma(a).then(function(u){ ov._firma = u; ov.querySelector('#nx-fel-prev').innerHTML = '<img src="' + u + '" alt="Firma nueva">'; })
+        .catch(function(e){ alert('No se pudo usar la imagen: ' + e.message); });
+    });
+  }
+  function guardarFirmaElab(ov, btn){
+    var nom = (ov.querySelector('#nx-fel-nom').value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if(nom.replace(/[^A-ZÁÉÍÓÚÑÜ]/g, '').length < 3){ alert('Escribe el nombre del elaborador.'); return; }
+    if(!ov._firma){ alert('Elige la imagen de la firma.'); return; }
+    if(!reglasOk()) return;
+    if(typeof window._nxPermisoSync === 'function' && !window._nxPermisoSync('✍️ Guardar firma del elaborador')) return;
+    var s = sesion(), v = { nombre: nom, firma: ov._firma, ts: TS(), por: { uid: s.uid, nombre: s.nombre || 'Gerencia' } };
+    btn.disabled = true;
+    db().ref(RUTA_FIRMA).set(v).then(function(){ st.firmaElab = Object.assign({}, v, { ts: Date.now() }); cerrar('nx-fel-ov'); aviso('✍️ Firma del elaborador guardada'); refrescarCaja(); })
+      .catch(function(e){ btn.disabled = false; alert('No se guardó la firma: ' + (e && e.message || e)); });
+  }
+
+  // ── Clics y escritura ────────────────────────────────────────────────────
+  document.addEventListener('click', function(e){
+    var t = e.target; if(!t || !t.closest) return;
+    var fe = t.closest('[data-fel]'); if(fe){ var ovf = fe.closest('.nx-acu-capa'); if(ovf) guardarFirmaElab(ovf, fe); return; }
+    var f = t.closest('[data-acf]');
+    if(f){ var ov = f.closest('.nx-acu-capa'), a = f.getAttribute('data-acf');
+      if(a === 'cerrar' || a === 'cerrar-vis'){ if(ov) ov.remove(); return; }
+      if(!ov) return;
+      if(a === 'grande') return firmaGrande(ov);
+      if(a === 'seguir') return firmaSeguir(ov);
+      if(a === 'volver'){ ov.querySelector('#nx-acf-p2').hidden = true; ov.querySelector('#nx-acf-p1').hidden = false; return; }
+      if(a === 'guardar') return firmaGuardar(ov, f);
+      return;
+    }
+    var b = t.closest('[data-acu]');
+    if(b){ var box = b.closest('.nx-acuse'); if(!box) return; var ctx = ctxDeBloque(box);
+      if(!ctx){ aviso('No se encontró el documento', true); return; }
+      var ac = b.getAttribute('data-acu');
+      if(ac === 'firmar'){ if(box.getAttribute('data-ver') !== ctx.version){ refrescarBloques(); aviso('El documento cambió: revisa la versión vigente', true); return; } return abrirFirma(ctx); }
+      return historial(ctx, b.getAttribute('data-ver'), ac);
+    }
+    var c = t.closest('[data-cc]'); if(!c || !raiz() || !raiz().contains(c)) return;
+    var k = c.getAttribute('data-cc');
+    if(k === 'nueva'){ if(!puedeElaborar()){ alert('🔒 Solo Gerencia elabora y corrige liquidaciones de caja chica.'); return; } if(!reglasOk()) return; cc.modo = 'form'; cc.id = null; cc.borrador = null; pintarCaja(); subir(); return; }
+    if(k === 'firma-elab') return abrirFirmaElab();
+    if(k === 'ver'){ cc.modo = 'ver'; cc.id = c.getAttribute('data-id'); pintarCaja(); subir(); return; }
+    if(k === 'lista'){ cc.modo = 'lista'; cc.id = null; pintarCaja(); return; }
+    if(k === 'editar'){ if(typeof window._nxPermisoSync === 'function' && !window._nxPermisoSync('✏️ Editar liquidación de caja chica')) return; cc.modo = 'form'; cc.borrador = null; pintarCaja(); subir(); return; }
+    if(k === 'cancelar'){ cc.borrador = null; cc.modo = cc.id ? 'ver' : 'lista'; pintarCaja(); return; }
+    if(k === 'mas'){ leerForm(); for(var i = 0; i < 5; i++) cc.borrador.filas.push({}); pintarForm(raiz()); return; }
+    if(k === 'guardar') return guardarCaja(c);
+    if(k === 'imprimir' || k === 'pdf') return salidaCaja(k);
+  });
+  document.addEventListener('keydown', function(e){ var it = e.target && e.target.classList && e.target.classList.contains('cc-it') ? e.target : null; if(it && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); it.click(); } });
+  function alEscribir(e){
+    var t = e.target; if(!t || !t.id) return;
+    if(t.id === 'cc-buscar'){ if(e.type === 'input'){ cc.q = t.value; pintarItems(); } }
+    else if(/^cc-/.test(t.id) && cc.modo === 'form' && cc.borrador){   // el borrador sigue lo escrito (si cambia de pestaña y vuelve, no se pierde)
+      leerForm(); var el = document.getElementById('cc-total'); if(el) el.textContent = lps(totalB(cc.borrador)); if(t.id === 'cc-elab') notaElab(); }
+  }
+  document.addEventListener('input', alEscribir); document.addEventListener('change', alEscribir);
+
+  // ── Estilos ──────────────────────────────────────────────────────────────
+  function estilos(){
+    if(document.getElementById('nx-adm-css')) return;
+    var s = document.createElement('style'); s.id = 'nx-adm-css';
+    s.textContent = ''
+      // Administración: Personal | Caja chica
+      + '#vac-ov .vs{display:flex;margin:10px 12px 0;background:#e4e9f2;border-radius:11px;padding:3px;gap:3px}'
+      + '#vac-ov .vs button{flex:1;padding:9px 8px;border:0;border-radius:9px;background:transparent;color:#1f3864;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit}'
+      + '#vac-ov .vs button.on{background:#1f3864;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}#vac-ov.vac-caja .vt{display:none}'
+      // bloque del acuse
+      + '.nx-acuse{background:#fff;border:1.5px solid #c9d3e3;border-radius:12px;padding:12px;margin-top:14px;color:#1d2433;font-size:13px;text-align:left;line-height:1.4}'
+      + '.nx-acu-t{font-weight:800;color:#1f3864;font-size:14px;margin-bottom:8px}'
+      + '.nx-acu-est{display:inline-block;font-weight:800;font-size:13px;padding:5px 12px;border-radius:999px;margin-bottom:8px}'
+      + '.nx-acu-est.ok{background:#e7f6ec;color:#146c2e;border:1px solid #a7dcb6}.nx-acu-est.pend{background:#fff4e5;color:#9a4a06;border:1px solid #f5d48a}'
+      + '.nx-acu-sub{font-size:12px;color:#475467;margin-bottom:8px}'
+      + '.nx-acu-nota{font-size:12.5px;color:#475467;background:#f4f6f9;border-radius:8px;padding:8px 10px;margin:6px 0;line-height:1.4}.nx-acu-nota.mal{background:#fff1f0;color:#a8201a}'
+      + '.nx-acu-btn{width:100%;padding:13px;background:#146c2e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}'
+      + '.nx-acu-det{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.nx-acu-det img{height:70px;max-width:220px;background:#fff;border:1px solid #e4e7ec;border-radius:8px;padding:4px;object-fit:contain}'
+      + '.nx-acu-det span,.nx-acu-hi span{font-size:11.5px;color:#5b6576}'
+      + '.nx-acu-hist{margin-top:10px;border-top:1px dashed #c9d3e3;padding-top:8px}.nx-acu-ht{font-weight:700;font-size:12.5px;color:#475467;margin-bottom:6px}'
+      + '.nx-acu-hi{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:#f4f6f9;border-radius:8px;padding:8px;margin-bottom:6px;font-size:12.5px}'
+      + '.nx-acu-hb{display:flex;gap:6px;flex:1 1 260px;justify-content:flex-end}.nx-acu-hb button{flex:1;max-width:120px;min-height:36px;padding:6px 8px;border:1px solid #c9d1dc;background:#fff;border-radius:8px;font-size:12.5px;font-weight:700;color:#1f3864;cursor:pointer;white-space:nowrap}'
+      // ventanas (firma, firma del elaborador y visor)
+      + '.nx-acu-capa{position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.62);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;font-family:Arial,sans-serif}'
+      + '.nx-acu-box{background:#fff;border-radius:16px;max-width:520px;width:100%;box-sizing:border-box;overflow:hidden;color:#1d2433;margin:auto 0}.nx-acu-box.ancho{max-width:960px}'
+      + '.nx-acu-hd{background:#1f3864;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}.nx-acu-hd b{font-size:15px}.nx-acu-hd small{display:block;font-size:12px;opacity:.85;margin-top:2px}'
+      + '.nx-acu-hd button{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:50%;width:36px;height:36px;font-size:17px;cursor:pointer;flex:none}'
+      + '.nx-acu-bd{padding:14px}.nx-acu-bd label{display:block;font-size:12.5px;font-weight:700;color:#475467;margin:10px 0 4px}.nx-acu-bd label small{font-weight:400}'
+      + '.nx-acu-bd input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #b9c3d1;border-radius:9px;font-size:16px;font-family:inherit}'
+      + '.nx-acu-res{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nx-acu-res div{background:#eef3fb;border:1px solid #c7d7f5;border-radius:9px;padding:7px 8px;min-width:0}'
+      + '.nx-acu-res span{display:block;font-size:11px;color:#475467;font-weight:700;text-transform:uppercase;letter-spacing:.3px}.nx-acu-res b{display:block;font-size:14.5px;color:#1f3864;overflow-wrap:anywhere}'
+      + '.nx-acf-can{position:relative;display:block;width:100%;aspect-ratio:600/170;padding:0;border:1.5px dashed #8a99b0;border-radius:10px;background:#fbfcfe;cursor:pointer;font-family:inherit}'
+      + '.nx-acf-can canvas{width:100%;height:100%;display:block;border-radius:10px;pointer-events:none}'
+      + '.nx-acf-ph{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#667085;font-size:15px;font-weight:700;pointer-events:none}'
+      + '.nx-acf-bt{display:flex;gap:8px;margin-top:12px}.nx-acf-bt button{flex:1;padding:12px;border-radius:10px;border:1px solid #c9d1dc;background:#fff;font-size:14px;font-weight:800;color:#1f3864;cursor:pointer;font-family:inherit}'
+      + '.nx-acf-bt button.pri{background:#1f3864;color:#fff;border-color:#1f3864}.nx-acf-bt button.pri.ok{background:#146c2e;border-color:#146c2e}.nx-acf-bt button:disabled{opacity:.6}'
+      + '.nx-acf-conf{margin-top:12px;font-size:15px;line-height:1.5;background:#fff8e6;border:1px solid #f5d48a;border-radius:10px;padding:10px 12px}'
+      + '.nx-acf-mini{display:flex;gap:10px;align-items:center;margin-top:10px}.nx-acf-mini img{height:56px;max-width:170px;border:1px solid #e4e7ec;border-radius:8px;background:#fff;padding:3px}.nx-acf-mini span{font-size:12px;color:#5b6576}'
+      + '.nx-fel-prev{margin-top:10px;border:1px solid #e4e7ec;border-radius:10px;min-height:90px;display:flex;align-items:center;justify-content:center;background:#fff;padding:8px}.nx-fel-prev img{max-height:110px;max-width:100%}.nx-fel-prev span{color:#98a2b3}'
+      // caja chica
+      + '#cc-raiz .cc-cab{display:flex;gap:10px;align-items:center;flex-wrap:wrap}#cc-raiz .cc-cab-b{display:flex;gap:6px;flex-wrap:wrap}'
+      + '#cc-raiz .cc-it{cursor:pointer}#cc-raiz .cc-it:hover{border-color:#9db4d0}#cc-raiz .cc-it1{display:flex;justify-content:space-between;gap:10px;align-items:baseline}'
+      + '#cc-raiz .cc-tot{font-size:15px;color:#1f3864;font-variant-numeric:tabular-nums;white-space:nowrap}'
+      + '.cc-chip{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}.cc-chip.ok{background:#e7f6ec;color:#146c2e}.cc-chip.pend{background:#fff4e5;color:#9a4a06}.cc-chip.mal{background:#fff1f0;color:#a8201a}'
+      + '#cc-raiz .cc-tw{overflow-x:auto;margin-top:10px;border:1px solid #e4e7ec;border-radius:8px}'
+      + '#cc-raiz .cc-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}#cc-raiz .cc-t th{background:#eef2f8;color:#1f3864;text-align:left;padding:6px 7px;font-size:11.5px;white-space:nowrap}'
+      + '#cc-raiz .cc-t td{border-top:1px solid #eef0f3;padding:6px 7px;vertical-align:top}#cc-raiz .cc-t td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}'
+      + '#cc-raiz .cc-total{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#1f3864;color:#fff;border-radius:10px;padding:11px 13px;margin:10px 0;font-size:12.5px;font-weight:700}'
+      + '#cc-raiz .cc-total b{font-size:18px;font-variant-numeric:tabular-nums}'
+      + '#cc-raiz .cc-btns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#cc-raiz .cc-btns.dos{grid-template-columns:1fr 2fr}'
+      + '#cc-raiz .cc-b{padding:12px 6px;border-radius:10px;border:1px solid #c9d1dc;background:#fff;font-size:14px;font-weight:800;color:#1f3864;cursor:pointer;font-family:inherit}'
+      + '#cc-raiz .cc-b.ed{background:#c87000;border-color:#c87000;color:#fff}#cc-raiz .cc-b.pr{background:#2d6a2d;border-color:#2d6a2d;color:#fff}#cc-raiz .cc-b.dl{background:#1f3864;border-color:#1f3864;color:#fff}'
+      + '#cc-raiz .cc-b.gu{background:#2d6a9f;border-color:#2d6a9f;color:#fff}#cc-raiz .cc-b:disabled{opacity:.6}'
+      + '#cc-raiz .cc-f{background:#fff;border:1px solid #e4e7ec;border-radius:10px;padding:8px 10px 10px;margin-bottom:8px;display:grid;grid-template-columns:28px repeat(2,minmax(0,1fr));gap:4px 8px}'
+      + '#cc-raiz .cc-fn{grid-row:span 4;font-weight:800;color:#1f3864;font-size:15px;padding-top:24px;text-align:center}'
+      + '#cc-raiz .cc-fc label{margin:2px 0 2px;font-size:11.5px}#cc-raiz .cc-fc input,#cc-raiz .cc-fc select{padding:8px;font-size:15px}#cc-raiz .cc-prov,#cc-raiz .cc-obs{grid-column:span 2}'
+      + '@media(min-width:900px){#cc-raiz .cc-f{grid-template-columns:28px 2.2fr 1fr 1.1fr 1.1fr 1fr 1.8fr;align-items:end}#cc-raiz .cc-fn{grid-row:auto;padding-top:0;padding-bottom:9px}#cc-raiz .cc-prov,#cc-raiz .cc-obs{grid-column:auto}}'
+      + '#cc-raiz .cc-mas{width:100%;padding:10px;background:#eef4fb;color:#1f3864;border:1px dashed #9db4d0;border-radius:8px;font-weight:700;cursor:pointer;margin:0 0 4px;font-family:inherit;font-size:13.5px}';
+    document.head.appendChild(s);
+  }
+  estilos();
+  setTimeout(revisarReglas, 800);
+  // Para pruebas
+  window._nxAdmPrueba = { st: st, cc: cc, ctxViat: ctxViat, ctxCaja: ctxCaja, huella: huella, inyectar: inyectar, docCaja: docCaja, puedeAcusar: puedeAcusar, acuseDe: acuseDe, prepararFirma: prepararFirma, BASE: BASE };
+})();
+</script>
+<!-- ══ NEXO ADMINISTRACIÓN · CAJA CHICA · ACUSE (fin) ══ -->
 </body>
 </html>
