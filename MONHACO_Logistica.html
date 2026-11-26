@@ -239,7 +239,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='4228206201e0';
+  var APP_VERSION='94e7c6a403e6';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -2429,7 +2429,7 @@ function _rmElegirCli(v){
   const q = _rmNorm(v);
   if(!q){ _rmCliente=''; renderReporteMensual(); return; }
   const e = _rmClientes().find(function(c){ return _rmNorm(c)===q; });
-  if(!e){ if(Date.now() - _rmTocando < 1500) return; _rmSugerir(v); toast('Elige un cliente de la lista', true); return; }
+  if(!e){ if(Date.now() - _rmTocando < 1500) return; if(document.activeElement && document.activeElement.id === 'rm-cliente') _rmSugerir(v); toast('Elige un cliente de la lista', true); return; }
   _rmCliente = e; renderReporteMensual();
 }
 // (2026-11-25, Miguel) En el Samsung de Marvin (navegador Samsung Internet) elegir de la lista del navegador no avisaba a la app
@@ -2440,17 +2440,33 @@ let _rmTocando = 0;
 // (2026-11-26, Miguel: «dos listas sobrepuestas» en la computadora) la lista del navegador tapaba los botones propios también en PC y
 // iPhone: ya no se usa en ningún equipo; se escribe y se toca el cliente en los botones de abajo (como en Android desde el 25/11).
 const _RM_SIN_DL = true;
-function _rmSugerir(v){
+// (2026-11-26, Miguel: «era al revés») En vez de 8 botones: UNA lista desplegable debajo de la casilla con TODOS los clientes oficiales
+// (los mismos 1,330 de MT Rental y MONHACO); se desliza y se filtra al escribir. Tocar uno lo elige; tocar fuera o Esc la cierra.
+function _rmSugerir(v, todo){
   const box = document.getElementById('rm-sug'); if(!box) return;
-  const q = _rmNorm(v);
-  if(_rmCliente && _rmNorm(_rmCliente) === q){ box.innerHTML = ''; return; }
-  const L = q ? _rmClientes().filter(function(c){ return _rmNorm(c).indexOf(q) >= 0; }) : _rmClientes();   // vacío: los primeros (primero los que tienen órdenes)
+  let q = _rmNorm(v);
+  if(_rmCliente && _rmNorm(_rmCliente) === q){ if(!todo){ box.innerHTML = ''; return; } q = ''; }   // al entrar a la casilla con un cliente ya elegido: toda la lista
+  const L = q ? _rmClientes().filter(function(c){ return _rmNorm(c).indexOf(q) >= 0; }) : _rmClientes();   // vacío: todos (primero los que tienen órdenes)
   const ini = L.filter(function(c){ return _rmNorm(c).indexOf(q) === 0; }), resto = L.filter(function(c){ return _rmNorm(c).indexOf(q) !== 0; });
   const M = ini.concat(resto);
-  box.innerHTML = M.length
-    ? M.slice(0, 8).map(function(c){ return '<button type="button" data-rmc="'+_hcEsc(c)+'" onpointerdown="_rmTocando=Date.now()" ontouchstart="_rmTocando=Date.now()" onmousedown="_rmTocando=Date.now();event.preventDefault()" onclick="_rmElegirCli(this.getAttribute(\'data-rmc\'))" style="display:block;width:100%;text-align:left;padding:11px 12px;margin:0 0 6px;border:1px solid var(--border2,#ccc);border-radius:8px;background:#fff;font-size:14px;font-weight:700;color:#1f3864;cursor:pointer">'+_hcEsc(c)+'</button>'; }).join('')
-      + (M.length > 8 ? '<div style="font-size:12px;color:#888;margin:-2px 0 10px">… y '+(M.length-8)+' más: '+(q?'sigue escribiendo':'escribe parte del nombre para buscar')+'</div>' : '')
-    : '<div style="font-size:13px;color:#b45309;margin:0 0 10px">No hay clientes con ese nombre</div>';
+  _rmListaCss();
+  box.innerHTML = '<div class="rm-lista" onpointerdown="_rmTocando=Date.now()" ontouchstart="_rmTocando=Date.now()" onmousedown="_rmTocando=Date.now();event.preventDefault()">'
+    + '<div class="rm-lista-cab">' + (M.length ? M.length + (M.length === 1 ? ' cliente' : ' clientes') + (q ? ' con «' + _hcEsc(String(v).trim()) + '»' : ' · escribe para buscar') : 'No hay clientes con ese nombre') + '</div>'
+    + M.map(function(c){ return '<button type="button" class="rm-op" data-rmc="'+_hcEsc(c)+'" onclick="_rmElegirCli(this.getAttribute(\'data-rmc\'))">'+_hcEsc(c)+'</button>'; }).join('')
+    + '</div>';
+}
+function _rmListaCss(){
+  if(document.getElementById('rm-lista-css')) return;
+  const st = document.createElement('style'); st.id = 'rm-lista-css';
+  st.textContent = '#rm-sug .rm-lista{background:#fff;border:1px solid var(--border2,#ccc);border-radius:10px;box-shadow:0 10px 28px rgba(15,35,70,.18);max-height:min(380px,55vh);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}'
+    + '#rm-sug .rm-lista-cab{position:sticky;top:0;z-index:1;background:#f4f6fa;color:#667085;font-size:12px;padding:7px 12px;border-bottom:1px solid #e5e7eb}'
+    + '#rm-sug .rm-op{display:block;width:100%;text-align:left;padding:10px 12px;margin:0;border:0;border-bottom:1px solid #f0f2f6;border-radius:0;background:#fff;font-size:14px;font-weight:600;color:#1f3864;cursor:pointer}'
+    + '#rm-sug .rm-op:hover,#rm-sug .rm-op:focus{background:#eef4ff}';
+  document.head.appendChild(st);
+  // tocar fuera de la casilla y de la lista la cierra; Esc también
+  document.addEventListener('pointerdown', function(ev){ const box = document.getElementById('rm-sug'); if(!box || !box.firstChild) return; const t = ev.target;
+    if(t && t.closest && (t.closest('#rm-sug') || t.closest('#rm-cliente'))) return; box.innerHTML = ''; }, true);
+  document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape'){ const box = document.getElementById('rm-sug'); if(box) box.innerHTML = ''; } });
 }
 function _rmEquipoTxt(o){
   if(o.equipoId){
@@ -2529,9 +2545,9 @@ function renderReporteMensual(){
     + '<button onclick="_rmMoverMes(1)" style="padding:9px 14px;border:1px solid var(--border2,#ddd);border-radius:8px;background:#fff;cursor:pointer;font-weight:800;font-size:15px">›</button>'
     + '</div>';
   // (2026-11-12) ~1300 clientes oficiales: se escribe y se elige de la lista
-  h += '<input id="rm-cliente" '+(_RM_SIN_DL?'':'list="rm-cli-dl" ')+'autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" oninput="_rmSugerir(this.value)" onchange="_rmElegirCli(this.value)" onfocus="this.select();_rmSugerir(this.value)" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
+  h += '<div style="position:relative;display:flow-root"><input id="rm-cliente" '+(_RM_SIN_DL?'':'list="rm-cli-dl" ')+'autocomplete="off" placeholder="🔎 Escribe y elige el cliente" value="'+_hcEsc(_rmCliente)+'" oninput="_rmSugerir(this.value)" onchange="_rmElegirCli(this.value)" onfocus="this.select();_rmSugerir(this.value, true)" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--border2,#ccc);border-radius:8px;font-size:14px;background:#fff;margin-bottom:12px;font-weight:700">'
     + '<datalist id="rm-cli-dl">' + _rmClientes().map(function(c){ return '<option value="'+_hcEsc(c)+'">'; }).join('') + '</datalist>'
-    + '<div id="rm-sug"></div>';
+    + '<div id="rm-sug" style="position:absolute;left:0;right:0;top:calc(100% - 10px);z-index:60"></div></div>';
   if(!_rmCliente){
     h += '<div style="color:var(--text3,#888);font-size:13px;text-align:center;padding:20px 0">Elige un cliente para ver sus órdenes de trabajo del mes.</div>';
     cont.innerHTML = h; return;
