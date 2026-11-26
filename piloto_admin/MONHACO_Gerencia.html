@@ -19075,8 +19075,8 @@ window._nxExcelConLogo = function(wbX, archivo){
       + '<div class="nx-acu-res"><div><span>' + esc(ctx.resumen[0]) + '</span><b>' + esc(ctx.resumen[1]) + '</b></div><div><span>Empresa</span><b>' + esc(ctx.empresa) + '</b></div><div><span>Total</span><b>' + lps(ctx.total) + '</b></div></div>'
       + '<div id="nx-acf-p1">'
       + '<label for="nx-acf-nom">Nombre de quien recibe en Finanzas</label><input id="nx-acf-nom" autocomplete="off" maxlength="80" value="" placeholder="Nombre y apellido">'
-      + '<label>Firma <small>(con el dedo o el mouse)</small></label>'
-      + '<div class="nx-acf-can"><canvas id="nx-acf-can" aria-label="Espacio para firmar"></canvas><div class="nx-acf-ph" id="nx-acf-ph">Firme aquí</div><button type="button" data-acf="borrar">Borrar firma</button></div>'
+      + '<label>Firma <small>(toca el recuadro: se abre en horizontal, como en las demás apps)</small></label>'
+      + '<button type="button" class="nx-acf-can" data-acf="grande" aria-label="Toca para firmar"><canvas id="nx-acf-can" width="600" height="170"></canvas><span class="nx-acf-ph" id="nx-acf-ph">✍️ Toca aquí para firmar</span></button>'
       + '<div class="nx-acu-nota">La fecha y la hora se registran solas al confirmar. El acuse confirma que Finanzas recibió el documento; la aprobación del gasto sigue su flujo de siempre.</div>'
       + '<div class="nx-acf-bt"><button type="button" data-acf="cerrar">Cancelar</button><button type="button" class="pri" data-acf="seguir">Continuar</button></div></div>'
       + '<div id="nx-acf-p2" hidden>'
@@ -19085,26 +19085,71 @@ window._nxExcelConLogo = function(wbX, archivo){
       + '<div class="nx-acf-bt"><button type="button" data-acf="volver">← Corregir</button><button type="button" class="pri ok" data-acf="guardar">✅ Sí, registrar recibido</button></div></div>'
       + '</div></div>';
     document.body.appendChild(ov);
-    // lienzo de firma (dedo, lápiz o mouse)
-    var can = ov.querySelector('#nx-acf-can'), g = can.getContext('2d'), ph = ov.querySelector('#nx-acf-ph'), dib = false, ult = null;
-    ov._pts = 0;
-    function medir(){ var r = can.getBoundingClientRect(), k = window.devicePixelRatio || 1; can.width = Math.max(1, Math.round(r.width * k)); can.height = Math.max(1, Math.round(r.height * k));
-      g.setTransform(k, 0, 0, k, 0, 0); g.lineWidth = 2.4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#0b1f44'; g.fillStyle = '#0b1f44'; ov._pts = 0; ph.hidden = false; }
-    medir(); ov._medir = medir;
-    function pos(e){ var r = can.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-    can.addEventListener('pointerdown', function(e){ e.preventDefault(); dib = true; ult = pos(e); try{ can.setPointerCapture(e.pointerId); }catch(x){} g.beginPath(); g.arc(ult.x, ult.y, 1.2, 0, Math.PI * 2); g.fill(); ov._pts++; ph.hidden = true; });
-    can.addEventListener('pointermove', function(e){ if(!dib) return; e.preventDefault(); var p = pos(e); g.beginPath(); g.moveTo(ult.x, ult.y); g.lineTo(p.x, p.y); g.stroke(); ult = p; ov._pts++; });
-    ['pointerup', 'pointercancel'].forEach(function(n){ can.addEventListener(n, function(){ dib = false; }); });
-    ov._ctx = ctx;
+    ov._ctx = ctx; ov._grande = null;
     setTimeout(function(){ var n = ov.querySelector('#nx-acf-nom'); if(n) n.focus(); }, 50);
   }
-  // Recorta al trazo y lo deja en máx. 480×160 px (PNG transparente: pesa poco)
+  // ── Recuadro grande de firma, IGUAL que en las demás apps (Técnicos, Logística, Supervisión): pantalla completa y, en el teléfono
+  //    en vertical, girado a horizontal; 💾 Guardar firma · 🧹 Limpiar · Cancelar. Lo firmado pasa al recuadro chico del acuse.
+  function firmaGrande(ovA){
+    cerrar('nx-fg-ov');
+    var esPC = window.innerWidth >= 1024 && !('ontouchstart' in window);
+    var rotar = !esPC && window.innerHeight > window.innerWidth;   // teléfono en vertical → firmar en horizontal
+    var ov = document.createElement('div'); ov.id = 'nx-fg-ov';
+    var BTNS = '<button type="button" data-fg="guardar" style="padding:11px 18px;background:#2d6a2d;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap">💾 Guardar firma</button>'
+      + '<button type="button" data-fg="limpiar" style="padding:11px 14px;background:#fdeaea;color:#c00;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap">🧹 Limpiar</button>'
+      + '<button type="button" data-fg="cancelar" style="padding:11px 14px;background:#eee;color:#1d2433;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>';
+    var TIT = '✍️ Firma — Acuse de recibido de Finanzas';
+    if(esPC){
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99997;display:flex;align-items:center;justify-content:center;padding:12px;font-family:Arial,sans-serif';
+      ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;width:100%;max-width:720px">'
+        + '<div style="font-weight:800;color:#1f3864;margin-bottom:8px;font-size:16px">' + TIT + '</div>'
+        + '<canvas id="nx-fg-canvas" style="width:100%;height:auto;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas>'
+        + '<div style="display:flex;gap:8px;margin-top:10px">' + BTNS + '</div></div>';
+    } else {
+      ov.style.cssText = 'position:fixed;inset:0;background:#10203a;z-index:99997;font-family:Arial,sans-serif';
+      var w = rotar ? window.innerHeight : window.innerWidth, h = rotar ? window.innerWidth : window.innerHeight;
+      ov.innerHTML = '<div style="position:fixed;top:50%;left:50%;width:' + w + 'px;height:' + h + 'px;transform:translate(-50%,-50%)' + (rotar ? ' rotate(90deg)' : '') + ';background:#fff;display:flex;flex-direction:column;padding:10px;box-sizing:border-box">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="font-weight:800;color:#1f3864;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + TIT + '</div>' + BTNS + '</div>'
+        + '<canvas id="nx-fg-canvas" style="flex:1;min-height:0;width:100%;border:2px dashed #9db4d0;border-radius:10px;background:#fff;touch-action:none;display:block"></canvas></div>';
+    }
+    document.body.appendChild(ov);
+    var c = ov.querySelector('#nx-fg-canvas'); c._rot = rotar;
+    var cr = c.getBoundingClientRect(), lw = Math.max(1, rotar ? cr.height : cr.width), lh = Math.max(1, rotar ? cr.width : cr.height);
+    if(esPC){ c.width = 1200; c.height = Math.round(1200 * 170 / 600); } else { c.width = 1400; c.height = Math.max(160, Math.round(1400 * lh / lw)); }
+    c._hay = false;
+    if(ovA._grande){   // ya firmó: se muestra para seguir o limpiar
+      try{ var g0 = c.getContext('2d'), es0 = Math.min(c.width / ovA._grande.width, c.height / ovA._grande.height), dw0 = ovA._grande.width * es0, dh0 = ovA._grande.height * es0;
+        g0.drawImage(ovA._grande, (c.width - dw0) / 2, (c.height - dh0) / 2, dw0, dh0); c._hay = true; }catch(e){}
+    }
+    var dib = false, x = null;
+    function pos(e){ var r = c.getBoundingClientRect(), s = e.touches ? e.touches[0] : e;
+      if(c._rot) return { x: (s.clientY - r.top) * c.width / r.height, y: (r.right - s.clientX) * c.height / r.width };
+      return { x: (s.clientX - r.left) * c.width / r.width, y: (s.clientY - r.top) * c.height / r.height }; }
+    function st(e){ e.preventDefault(); dib = true; x = c.getContext('2d'); x.strokeStyle = '#1f3864'; x.lineWidth = 3.5; x.lineCap = 'round'; x.lineJoin = 'round'; var p = pos(e); x.beginPath(); x.moveTo(p.x, p.y); }
+    function mv(e){ if(!dib || !x) return; e.preventDefault(); var p = pos(e); x.lineTo(p.x, p.y); x.stroke(); c._hay = true; }
+    function en(){ dib = false; }
+    c.addEventListener('touchstart', st); c.addEventListener('touchmove', mv); c.addEventListener('touchend', en);
+    c.addEventListener('mousedown', st); c.addEventListener('mousemove', mv); c.addEventListener('mouseup', en); c.addEventListener('mouseleave', en);
+    ov.addEventListener('click', function(e){
+      var b = e.target.closest && e.target.closest('[data-fg]'); if(!b) return;
+      var a = b.getAttribute('data-fg');
+      if(a === 'limpiar'){ c.getContext('2d').clearRect(0, 0, c.width, c.height); c._hay = false; return; }
+      if(a === 'cancelar'){ ov.remove(); return; }
+      if(!c._hay){ aviso('Firme dentro del recuadro primero', true); return; }
+      ovA._grande = c;   // la firma completa (para guardarla con buena calidad)
+      var p = ovA.querySelector('#nx-acf-can'), gp = p.getContext('2d'), es = Math.min(p.width / c.width, p.height / c.height), dw = c.width * es, dh = c.height * es;
+      gp.clearRect(0, 0, p.width, p.height); gp.drawImage(c, (p.width - dw) / 2, (p.height - dh) / 2, dw, dh);
+      ovA.querySelector('#nx-acf-ph').hidden = true;
+      ov.remove();
+    });
+  }
+  // Recorta al trazo y lo deja en máx. 600×200 px (PNG transparente: pesa poco)
   function exportarFirma(can){
     var w = can.width, h = can.height, d = can.getContext('2d').getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
     for(var y = 0; y < h; y += 2) for(var x = 0; x < w; x += 2){ if(d[(y * w + x) * 4 + 3] > 20){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; } }
     if(x1 < 0) return '';
-    var pad = 8 * (window.devicePixelRatio || 1); x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
-    var bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(1, 480 / bw, 160 / bh), o = document.createElement('canvas');
+    var pad = 16; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+    var bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(1, 600 / bw, 200 / bh), o = document.createElement('canvas');
     o.width = Math.max(1, Math.round(bw * k)); o.height = Math.max(1, Math.round(bh * k));
     o.getContext('2d').drawImage(can, x0, y0, bw, bh, 0, 0, o.width, o.height);
     return o.toDataURL('image/png');
@@ -19112,8 +19157,8 @@ window._nxExcelConLogo = function(wbX, archivo){
   function firmaSeguir(ov){
     var nom = (ov.querySelector('#nx-acf-nom').value || '').replace(/\s+/g, ' ').trim();
     if(nom.replace(/[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g, '').length < 3){ alert('Escribe el nombre de quien recibe en Finanzas.'); ov.querySelector('#nx-acf-nom').focus(); return; }
-    if((ov._pts || 0) < 8){ alert('Falta la firma: firma en el recuadro con el dedo o el mouse.'); return; }
-    var firma = exportarFirma(ov.querySelector('#nx-acf-can')); if(!firma){ alert('Falta la firma.'); return; }
+    if(!ov._grande){ alert('Falta la firma: toca el recuadro y firma.'); return; }
+    var firma = exportarFirma(ov._grande); if(!firma){ alert('Falta la firma.'); return; }
     ov._nombre = nom; ov._firma = firma;
     var s = sesion();
     ov.querySelector('#nx-acf-quien').innerHTML = '<div class="nx-acf-mini"><img src="' + firma + '" alt="Firma"><div><b>' + esc(nom) + '</b><br><span>La fecha y la hora se registran al confirmar.'
@@ -19455,7 +19500,7 @@ window._nxExcelConLogo = function(wbX, archivo){
     if(f){ var ov = f.closest('.nx-acu-capa'), a = f.getAttribute('data-acf');
       if(a === 'cerrar' || a === 'cerrar-vis'){ if(ov) ov.remove(); return; }
       if(!ov) return;
-      if(a === 'borrar'){ if(ov._medir) ov._medir(); return; }
+      if(a === 'grande') return firmaGrande(ov);
       if(a === 'seguir') return firmaSeguir(ov);
       if(a === 'volver'){ ov.querySelector('#nx-acf-p2').hidden = true; ov.querySelector('#nx-acf-p1').hidden = false; return; }
       if(a === 'guardar') return firmaGuardar(ov, f);
@@ -19520,9 +19565,9 @@ window._nxExcelConLogo = function(wbX, archivo){
       + '.nx-acu-bd input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #b9c3d1;border-radius:9px;font-size:16px;font-family:inherit}'
       + '.nx-acu-res{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.nx-acu-res div{background:#eef3fb;border:1px solid #c7d7f5;border-radius:9px;padding:7px 8px;min-width:0}'
       + '.nx-acu-res span{display:block;font-size:11px;color:#475467;font-weight:700;text-transform:uppercase;letter-spacing:.3px}.nx-acu-res b{display:block;font-size:14.5px;color:#1f3864;overflow-wrap:anywhere}'
-      + '.nx-acf-can{position:relative;border:1.5px dashed #8a99b0;border-radius:10px;background:#fbfcfe;height:170px}.nx-acf-can canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;border-radius:10px}'
-      + '.nx-acf-ph{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#98a2b3;font-size:15px;pointer-events:none}'
-      + '.nx-acf-can button{position:absolute;right:6px;bottom:6px;padding:6px 10px;border:1px solid #c9d1dc;background:#fff;border-radius:8px;font-size:12px;font-weight:700;color:#475467;cursor:pointer}'
+      + '.nx-acf-can{position:relative;display:block;width:100%;aspect-ratio:600/170;padding:0;border:1.5px dashed #8a99b0;border-radius:10px;background:#fbfcfe;cursor:pointer;font-family:inherit}'
+      + '.nx-acf-can canvas{width:100%;height:100%;display:block;border-radius:10px;pointer-events:none}'
+      + '.nx-acf-ph{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#667085;font-size:15px;font-weight:700;pointer-events:none}'
       + '.nx-acf-bt{display:flex;gap:8px;margin-top:12px}.nx-acf-bt button{flex:1;padding:12px;border-radius:10px;border:1px solid #c9d1dc;background:#fff;font-size:14px;font-weight:800;color:#1f3864;cursor:pointer;font-family:inherit}'
       + '.nx-acf-bt button.pri{background:#1f3864;color:#fff;border-color:#1f3864}.nx-acf-bt button.pri.ok{background:#146c2e;border-color:#146c2e}.nx-acf-bt button:disabled{opacity:.6}'
       + '.nx-acf-conf{margin-top:12px;font-size:15px;line-height:1.5;background:#fff8e6;border:1px solid #f5d48a;border-radius:10px;padding:10px 12px}'
