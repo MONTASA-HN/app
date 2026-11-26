@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- (2026-11-26, Miguel) + nx-ger-v2: rediseño de órdenes y accesos de pendientes (bloque NEXO GERENCIA · ÓRDENES; ?ger=actual = sin eso). -->
 <!-- (2026-11-25, Miguel) DISEÑO NUEVO DE GERENCIA: solo apariencia, todo en nexo_tema_nuevo.css (dentro de html.nx-tema-nuevo). Para volver al anterior: borrar la línea classList.add de abajo; con ?tema=actual se ve el anterior. -->
-<link rel="stylesheet" href="nexo_tema_nuevo.css?v=4">
-<script>document.documentElement.setAttribute('data-nx-app', 'gerencia'); if(!/[?&]tema=actual\b/i.test(location.search)) document.documentElement.classList.add('nx-tema-nuevo');</script>
+<link rel="stylesheet" href="nexo_tema_nuevo.css?v=5">
+<script>document.documentElement.setAttribute('data-nx-app', 'gerencia'); if(!/[?&]tema=actual\b/i.test(location.search)) { document.documentElement.classList.add('nx-tema-nuevo'); if(!/[?&]ger=actual\b/i.test(location.search)) document.documentElement.classList.add('nx-ger-v2'); }</script>
 <script>
 // ══ COPIA FRESCA (2026-11-20, Miguel) ══ Si esta app lleva más de 3 días sin abrirse en este equipo, se borra SU copia guardada
 // (montasa_v24, montasa_log_cache, _sync_base/_sync_sucio de esta app) antes de que arranque: carga todo de la base y no sube nada viejo.
@@ -276,7 +277,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='74c3c7c84909';
+  var APP_VERSION='805ec14d9faa';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -19834,5 +19835,284 @@ async function _mantCompartirAviso(equipoId){
 })();
 </script>
 <!-- ══ NEXO ADMINISTRACIÓN · CAJA CHICA · ACUSE (fin) ══ -->
+<!-- ══ NEXO GERENCIA · ÓRDENES Y PENDIENTES (inicio) ══ -->
+<script>
+// ══ NEXO GERENCIA · ÓRDENES Y PENDIENTES (2026-11-26, pedido de Miguel; piloto) ══
+// · Solo con html.nx-ger-v2 (lo pone el encabezado; con ?ger=actual no se pone): rediseño del listado y del detalle de órdenes según el
+//   boceto de Miguel (tabla clara «Orden | Trabajo y equipo | Estado», folios y estados legibles), la empresa dueña junto al folio en el
+//   detalle, y Gerencia abre en el Dashboard con el saludo y dos accesos: «Solicitudes sin asignar» y «Órdenes atrasadas» (más de 7 días).
+// · No cambia cómo se guardan, calculan ni dibujan las órdenes: las tarjetas se dibujan igual; aquí solo se les ponen clases (para el CSS
+//   de nexo_tema_nuevo.css) y se juntan en un panel. Los accesos abren los listados de siempre (Mantenimiento / Logística) en su modo de
+//   resultados (carpeta «EST», la misma de «Buscar por estado»), con los filtros y botones de siempre.
+(function(){
+  'use strict';
+  var H = document.documentElement;
+  function v2(){ return H.classList.contains('nx-ger-v2') && H.classList.contains('nx-tema-nuevo'); }
+  var R = (typeof _RAIZ_APP !== 'undefined' && _RAIZ_APP) ? _RAIZ_APP : 'montasa';
+  var EMP = R === 'monhaco' ? 'MONHACO' : 'MT RENTAL';
+  // «Órdenes atrasadas» (Miguel 26/11: la del Dashboard): abierta hace MÁS de 7 días desde su inicio (fechaInicio o fecha; si no, creado)
+  var REGLA_ATRASO = { dias: 7 };
+  var pend = null;   // filtro puesto desde un acceso: { clave: 'sin'|'atr', area: 'mant'|'log'|'sol' }
+  // MONHACO tiene lista de Solicitudes (MT Rental no): «Solicitudes sin asignar» abre esa lista (Miguel 26/11)
+  var SOL_LISTA = !!document.getElementById('solicitudes-list');
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // ── Datos (los mismos campos y estados que usa NEXO) ─────────────────────
+  var COLS_MANT = [['preventivos', 'P'], ['correctivos', 'C'], ['revisiones', 'RV'], ['evaluaciones', 'EV'], ['soldaduras', 'SP']];
+  if(typeof _TAB_CORTINAS !== 'undefined' && _TAB_CORTINAS) COLS_MANT.push(['cortinas', 'CT']);   // MONHACO: la búsqueda EST incluye Cortinas
+  // Abierta = la misma regla de los numeritos de la barra (_nxMantAbiertas / _nxLogAbiertas)
+  function abiertaMant(x){ return !!x && !x.completado && x.estado !== 'Completado' && x.estado !== 'Cancelado'; }
+  function abiertaLog(o){ return !!o && !o.cerrado && o.estado !== 'Cancelado' && o.estado !== 'Completado'; }
+  function nombres(v){ return String(v || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
+  // Persona asignada en la orden: técnico(s) (mantenimiento), operador(es) o motorista (logística), o la ficha de asignados
+  function conGente(o){
+    if(nombres(o.tecnico).length) return true;
+    if(Array.isArray(o.tecnicos) && o.tecnicos.some(function(t){ return t && String(t.n || t).trim(); })) return true;
+    if(['operador', 'operador2', 'operador3', 'operador4', 'operador5', 'motorista'].some(function(k){ return nombres(o[k]).length; })) return true;
+    if(Array.isArray(o.asignados) && o.asignados.some(function(a){ return a && (a.n || a.empId); })) return true;
+    return false;
+  }
+  // La solicitud y su orden comparten id (o folio)
+  function indiceSol(){ var m = {}; (DB.solicitudes || []).forEach(function(s){ if(!s) return; if(s.id) m['i:' + s.id] = s; if(s.correlativo) m['c:' + s.correlativo] = s; }); return m; }
+  function solDe(o, ix){ return ix['i:' + o.id] || (o.correlativo && ix['c:' + o.correlativo]) || null; }
+  // Solicitud sin asignar = tiene su orden abierta y nadie asignado ni en la solicitud (tecnicoNombre) ni en la orden
+  function sinAsignar(o, ix){ var s = solDe(o, ix); return !!s && !nombres(s.tecnicoNombre).length && !conGente(o); }
+  // Días desde que se abrió (como «Mantenimiento abiertas» del Dashboard: fechaInicio o fecha; si no, creado)
+  // (también 'dd/mm/aaaa', como guardan revisiones, evaluaciones y soldaduras)
+  function diasAbierta(o){
+    var v = o.fechaInicio || o.fecha || '', m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v), d = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(v);
+    var f = m ? new Date(+m[1], +m[2] - 1, +m[3]) : d ? new Date(+d[3], +d[2] - 1, +d[1]) : (o.creado ? new Date(o.creado) : null);
+    if(!f || isNaN(f)) return null; var h = new Date(); h.setHours(0, 0, 0, 0); f.setHours(0, 0, 0, 0); return Math.round((h - f) / 864e5);
+  }
+  function atrasada(o, dias){ var d = diasAbierta(o); return d !== null && d > dias; }
+  var FILTROS = {
+    sin: { titulo: '📨 Solicitudes sin asignar', mant: function(x, ix){ return abiertaMant(x) && sinAsignar(x, ix); }, log: function(o, ix){ return abiertaLog(o) && sinAsignar(o, ix); } },
+    atr: { titulo: '⏰ Órdenes atrasadas', mant: function(x){ return !!REGLA_ATRASO && abiertaMant(x) && atrasada(x, REGLA_ATRASO.dias); }, log: function(o){ return !!REGLA_ATRASO && abiertaLog(o) && atrasada(o, REGLA_ATRASO.dias); } }
+  };
+  function contar(clave){
+    var f = FILTROS[clave], ix = indiceSol(), m = 0, l = 0;
+    COLS_MANT.forEach(function(c){ (DB[c[0]] || []).forEach(function(x){ if(x && f.mant(x, ix)) m++; }); });
+    (DB.logistica || []).forEach(function(o){ if(o && f.log(o, ix)) l++; });
+    var r = { mant: m, log: l, total: m + l };
+    if(clave === 'sin' && SOL_LISTA){ r.sol = solSinAsignar().length; r.total = r.sol; }
+    return r;
+  }
+  // Lista de Solicitudes (MONHACO): la misma búsqueda de orden que esa lista (preventivos, correctivos, cortinas y logística)
+  function ordenDeSol(s){
+    var cols = [['preventivos', 'm'], ['correctivos', 'm'], ['cortinas', 'm'], ['logistica', 'l']];
+    for(var i = 0; i < cols.length; i++){ var o = (DB[cols[i][0]] || []).find(function(z){ return z && (z.id === s.id || (s.correlativo && z.correlativo === s.correlativo)); }); if(o) return { o: o, t: cols[i][1] }; }
+    return null;
+  }
+  function solSinAsignar(){
+    return (DB.solicitudes || []).filter(function(s){
+      if(!s || nombres(s.tecnicoNombre).length) return false;
+      var r = ordenDeSol(s); if(!r) return false;
+      return (r.t === 'l' ? abiertaLog(r.o) : abiertaMant(r.o)) && !conGente(r.o);
+    });
+  }
+
+  // ── Abrir el listado de siempre con el filtro del acceso ────────────────
+  function navBtn(sel){ try{ return document.querySelector(sel); }catch(e){ return null; } }
+  function abrir(clave, area){
+    if(!FILTROS[clave]) return;
+    pend = { clave: clave, area: area };
+    if(area === 'sol'){   // MONHACO: su lista de Solicitudes, solo las sin asignar
+      var sb = document.getElementById('sol-buscar'); if(sb) sb.value = '';   // para que el número coincida
+      showTab('solicitudes', navBtn('.bottom-nav .nav-btn[onclick*="\'solicitudes\'"]'));
+      pend = { clave: clave, area: area };
+      renderSolicitudes();
+      setTimeout(function(){ var l = document.getElementById('nx-sol-filtro') || document.getElementById('solicitudes-list'); if(l) try{ l.scrollIntoView({ block: 'start' }); }catch(e){} }, 60);
+      return;
+    }
+    if(area === 'mant'){
+      ['filt-hist-equipo', 'hist-buscar', 'filt-hist-estado'].forEach(function(id){ var e = document.getElementById(id); if(e) e.value = ''; });   // para que el número coincida
+      showTab('historial', navBtn('.bottom-nav .nav-btn[onclick*="\'historial\'"]'));
+      pend = { clave: clave, area: area };
+      _carpetaMant = 'EST'; renderHistorial();
+    } else {
+      var s = document.getElementById('filt-log-estado'); if(s) s.value = '';
+      showTab('logistica', document.getElementById('nav-loghc') || navBtn('.bottom-nav .nav-btn[onclick*="\'logistica\'"]'));
+      pend = { clave: clave, area: area };
+      _carpetaLog = 'EST'; renderLogistica();
+    }
+    try{ window.scrollTo(0, 0); }catch(e){}
+  }
+  function limpiarPend(){ pend = null; }
+  // Los listados en modo resultados (EST) con el filtro del acceso; luego, las marcas del diseño nuevo
+  function envolverLista(nombre, area){
+    var orig = window[nombre]; if(typeof orig !== 'function') return;
+    window[nombre] = function(el, tipo){
+      if(!(pend && pend.area === area && tipo === 'EST' && v2())){ var r = orig.apply(this, arguments); decorar(el, area); return r; }
+      var f = FILTROS[pend.clave], ix = indiceSol(), b0 = window._nxBusq, k0 = window._nxBusqOk;
+      window._nxBusq = true; window._nxBusqOk = function(x){ return !!f[area](x, ix); };
+      try{ orig.apply(this, arguments); } finally { window._nxBusq = b0; window._nxBusqOk = k0; }
+      var t = el && el.querySelector('.carpeta-titulo');
+      if(t) t.innerHTML = t.innerHTML.replace(/🔎\s*Resultados de la búsqueda/, esc(f.titulo) + ' · ' + (area === 'mant' ? 'Mantenimiento' : 'Logística'));
+      if(el) el.setAttribute('data-nx-pend', pend.clave);
+      decorar(el, area);
+    };
+  }
+  envolverLista('_renderOrdenesMant', 'mant');
+  envolverLista('_renderOrdenesLog', 'log');
+  // Volver a carpetas, abrir otra carpeta, buscar por estado o con «🔎 Buscar órdenes»: se quita el filtro del acceso
+  ['_cerrarCarpetaMant', '_abrirCarpetaMant', '_cerrarCarpetaLog', '_abrirCarpetaLog', '_estBuscarMant', '_estBuscarLog'].forEach(function(n){
+    var o = window[n]; if(typeof o !== 'function') return;
+    window[n] = function(){ limpiarPend(); var l = document.getElementById(/Log$/.test(n) ? 'logistica-list' : 'historial-list'); if(l) l.removeAttribute('data-nx-pend'); return o.apply(this, arguments); };
+  });
+  document.addEventListener('click', function(e){ if(e.target && e.target.closest && e.target.closest('.nx-busq')) limpiarPend(); }, true);
+  if(typeof window.showTab === 'function'){
+    var _st = window.showTab;
+    window.showTab = function(id){ if(pend && !((pend.area === 'mant' && id === 'historial') || (pend.area === 'log' && id === 'logistica') || (pend.area === 'sol' && id === 'solicitudes'))) limpiarPend(); return _st.apply(this, arguments); };
+  }
+  // Lista de Solicitudes (MONHACO) con el filtro «sin asignar»: la lista de siempre, solo con esas solicitudes, y un aviso para ver todas
+  if(SOL_LISTA && typeof window.renderSolicitudes === 'function'){
+    var _rs = window.renderSolicitudes;
+    window.renderSolicitudes = function(){
+      var av = document.getElementById('nx-sol-filtro');
+      if(!(pend && pend.area === 'sol' && v2())){ if(av) av.remove(); return _rs.apply(this, arguments); }
+      var todas = DB.solicitudes, sel = solSinAsignar(), r;
+      DB.solicitudes = sel;   // solo mientras se dibuja (es inmediato); después vuelve la lista completa
+      try{ r = _rs.apply(this, arguments); } finally { DB.solicitudes = todas; }
+      var lista = document.getElementById('solicitudes-list');
+      if(lista){
+        if(!av){ av = document.createElement('div'); av.id = 'nx-sol-filtro'; lista.parentNode.insertBefore(av, lista); }
+        av.innerHTML = '<span>📨 Solicitudes sin asignar · <b>' + sel.length + '</b></span><button type="button" data-sol-todas="1">✕ Ver todas</button>';
+        if(!sel.length) lista.innerHTML = '<div class="empty">No hay solicitudes sin asignar</div>';
+      }
+      return r;
+    };
+    document.addEventListener('click', function(e){ if(e.target && e.target.closest && e.target.closest('[data-sol-todas]')){ limpiarPend(); window.renderSolicitudes(); } });
+  }
+
+  // ── Marcas del diseño nuevo en el listado (solo clases y un panel; las tarjetas no cambian) ──
+  var EST_SLUG = { 'Pendiente': 'pendiente', 'En proceso': 'proceso', 'En pausa': 'pausa', 'En espera de repuestos': 'espera', 'Completado': 'completado', 'Cancelado': 'cancelado', 'Cerrada': 'completado' };
+  function ordenDe(card, area){
+    var id = card.getAttribute('data-hid') || card.getAttribute('data-lgid');
+    if(area === 'mant'){ for(var i = 0; i < COLS_MANT.length; i++){ var x = (DB[COLS_MANT[i][0]] || []).find(function(z){ return z && z.id === id; }); if(x) return x; } return null; }
+    if(id) return (DB.logistica || []).find(function(z){ return z && z.id === id; }) || null;
+    var fo = card.querySelector('.nxo-folio'), t = fo ? fo.textContent.trim() : '';
+    return t && t !== '—' ? ((DB.logistica || []).find(function(z){ return z && z.correlativo === t; }) || null) : null;
+  }
+  function decorar(el, area){
+    if(!el || !v2()) return;
+    var tit = el.querySelector(':scope > .carpeta-titulo'); if(!tit) return;   // vista de carpetas: nada
+    tit.classList.add('nxo-titulo');
+    var panel = el.querySelector(':scope > .nxo-panel');
+    if(!panel){
+      panel = document.createElement('div'); panel.className = 'nxo-panel';
+      var n = tit.nextSibling; while(n){ var sig = n.nextSibling; panel.appendChild(n); n = sig; }
+      el.appendChild(panel);
+      if(panel.querySelector('.card')){ var cab = document.createElement('div'); cab.className = 'nxo-cabtabla'; cab.setAttribute('aria-hidden', 'true');
+        cab.innerHTML = '<span>Orden</span><span>' + (area === 'mant' ? 'Trabajo y equipo' : 'Tipo y equipo') + '</span><span>Estado</span><span></span>'; panel.insertBefore(cab, panel.firstChild); }
+    }
+    Array.prototype.forEach.call(panel.querySelectorAll(':scope > .card'), function(card){
+      if(card.classList.contains('nxo-card')) return;
+      var est = null; Array.prototype.some.call(card.querySelectorAll('span'), function(s){ if(EST_SLUG[s.textContent.trim()] && /border-radius/.test(s.getAttribute('style') || '')){ est = s; return true; } return false; });
+      if(!est) return;   // no es una orden (p. ej. papelera)
+      card.classList.add('nxo-card'); card.setAttribute('data-nxo-area', area);
+      est.classList.add('nxo-estado'); est.setAttribute('data-est', EST_SLUG[est.textContent.trim()]);
+      var fila = card.firstElementChild; if(fila) fila.classList.add('nxo-fila');
+      var folio = fila && fila.querySelector('span[style*="DM Mono"]');   // solo el de la cabecera de la tarjeta
+      if(area === 'mant'){
+        var cuerpo = fila && fila.firstElementChild, chips = est.parentNode;
+        if(cuerpo) cuerpo.classList.add('nxo-cuerpo'); if(chips && chips !== cuerpo) chips.classList.add('nxo-chips');
+        if(chips && chips.nextElementSibling) chips.nextElementSibling.classList.add('nxo-trabajo');
+        if(fila && fila.lastElementChild && fila.lastElementChild !== cuerpo) fila.lastElementChild.classList.add('nxo-flecha');
+      } else {
+        if(est.parentNode && est.parentNode !== fila){ est.parentNode.classList.add('nxo-estw'); var fl = est.parentNode.querySelector('span:last-child'); if(fl && fl !== est) fl.classList.add('nxo-flecha'); }
+        if(fila && fila.nextElementSibling) fila.nextElementSibling.classList.add('nxo-trabajo');
+      }
+      // celda del folio (folio + empresa dueña cuando se ve el detalle)
+      var cel = document.createElement('span'); cel.className = 'nxo-foliocel';
+      if(folio){ folio.parentNode.insertBefore(cel, folio); cel.appendChild(folio); folio.classList.add('nxo-folio'); }
+      else { var ph = document.createElement('span'); ph.className = 'nxo-folio nxo-sinfolio'; ph.textContent = '—'; cel.appendChild(ph); (est.parentNode || card).insertBefore(cel, est); }
+      Array.prototype.forEach.call(card.querySelectorAll(':scope > div'), function(d){ if(/border-top:1px solid var\(--border\)/.test(d.getAttribute('style') || '') && d !== fila) d.classList.add('nxo-detalle'); });
+      var o = ordenDe(card, area), eq = o && (DB.equipos || []).find(function(e){ return e && e.id === o.equipoId; });
+      var chip = '<span class="nxo-emp" title="Empresa dueña de la orden">🏢 ' + EMP + '</span>';
+      if(eq && eq.equipoMH && eq.equipoMH.raiz === 'monhaco' && R !== 'monhaco') chip += '<span class="nxo-emp eq" title="El equipo es de MONHACO">Equipo de MONHACO</span>';
+      cel.insertAdjacentHTML('beforeend', chip);
+    });
+  }
+
+  // ── Inicio en el Dashboard, con el saludo (Miguel 26/11: «que NEXO Gerencia abra por defecto en el Dashboard con el mensaje de
+  //    buenos días»). El mismo saludo de Flota (Buenos días / tardes / noches, con el nombre). Solo con el diseño nuevo. ──
+  function saludo(){ var h = new Date().getHours(), s = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches', t = s; try{ if(window._nxConNombre) t = window._nxConNombre(s) || s; }catch(e){} return t + ' 👋'; }
+  function pintarHola(){
+    var tab = document.getElementById('tab-tablero'); if(!tab) return;
+    var hola = document.getElementById('nx-dash-hola');
+    if(!hola){ hola = document.createElement('div'); hola.id = 'nx-dash-hola'; tab.insertBefore(hola, tab.firstChild); }
+    var h = '<div class="nx-dh-t">NEXO Gerencia · ' + EMP + '</div><div class="nx-dh-s" data-nx-mano="1">' + esc(saludo()) + '</div>';
+    if(hola.innerHTML !== h) hola.innerHTML = h;
+  }
+  function inicioDashboard(){
+    if(!v2()) return;
+    var flota = document.getElementById('tab-flota'), tab = document.getElementById('tab-tablero');
+    if(!tab || !flota || !flota.classList.contains('active')) return;   // solo si sigue en la pantalla inicial de siempre
+    showTab('tablero', navBtn('.bottom-nav .nav-btn[onclick*="\'tablero\'"]'));
+    window._nxInicioDashboard = true;
+  }
+  // Cuando llegan o cambian los datos, el Dashboard abierto se vuelve a dibujar (antes solo se dibujaba al tocar su botón)
+  var _tt = 0;
+  if(typeof window.renderDashboard === 'function'){
+    var _rd = window.renderDashboard;
+    window.renderDashboard = function(){
+      var r = _rd.apply(this, arguments);
+      try{ var t = document.getElementById('tab-tablero'); if(v2() && t && t.classList.contains('active')){ clearTimeout(_tt); _tt = setTimeout(function(){ try{ renderTableroGer(); }catch(e){} }, 400); } }catch(e){}
+      return r;
+    };
+  }
+
+  // ── Accesos «Solicitudes sin asignar» y «Órdenes atrasadas» en el Dashboard (debajo del saludo) ─────
+  function pintarPend(){
+    var tab = document.getElementById('tab-tablero'); if(!tab) return;
+    pintarHola();
+    var hola = document.getElementById('nx-dash-hola'), box = document.getElementById('nx-pend');
+    if(!box){ box = document.createElement('div'); box.id = 'nx-pend'; box.className = 'nx-pend'; box.setAttribute('aria-label', 'Pendientes de ' + EMP); }
+    if(box.previousElementSibling !== hola) hola.insertAdjacentElement('afterend', box);
+    if(!v2()) return;
+    var s = contar('sin'), a = REGLA_ATRASO ? contar('atr') : null;
+    function bot(clave, area, n){ return '<button type="button" data-pend="' + clave + '" data-area="' + area + '"' + (n ? '' : ' disabled') + ' aria-label="' + (area === 'mant' ? 'Mantenimiento' : 'Logística') + ': ' + n + '">' + (area === 'mant' ? '🔧 Mantenimiento' : '🚛 Logística') + ' <b>' + n + '</b></button>'; }
+    var bSin = SOL_LISTA ? '<button type="button" data-pend="sin" data-area="sol"' + (s.sol ? '' : ' disabled') + ' aria-label="Ver en Solicitudes: ' + s.sol + '">📋 Ver en Solicitudes <b>' + s.sol + '</b></button>'
+      : bot('sin', 'mant', s.mant) + bot('sin', 'log', s.log);
+    var h = '<div class="nx-pend-it' + (s.total ? ' hay' : '') + '" title="Solicitudes con su orden abierta y sin nadie asignado"><div class="nx-pend-t">📨 Solicitudes sin asignar</div><div class="nx-pend-n">' + s.total + '</div>'
+      + '<div class="nx-pend-b">' + bSin + '</div></div>';
+    h += a ? '<div class="nx-pend-it' + (a.total ? ' alerta' : '') + '" title="Órdenes abiertas hace más de ' + REGLA_ATRASO.dias + ' días desde su inicio"><div class="nx-pend-t">⏰ Órdenes atrasadas <small>(más de ' + REGLA_ATRASO.dias + ' días)</small></div><div class="nx-pend-n">' + a.total + '</div><div class="nx-pend-b">' + bot('atr', 'mant', a.mant) + bot('atr', 'log', a.log) + '</div></div>'
+      : '<div class="nx-pend-it porDef"><div class="nx-pend-t">⏰ Órdenes atrasadas</div><div class="nx-pend-n pd">Por definir</div><div class="nx-pend-b"><button type="button" data-pend-info="1">¿Qué falta?</button></div></div>';
+    if(box.innerHTML !== h) box.innerHTML = h;
+  }
+  function infoAtraso(){
+    var p = contar('sin');   // solo para que el texto tenga datos al día
+    var siete = (function(){ var REG = REGLA_ATRASO; REGLA_ATRASO = { dias: 7 }; var c = contar('atr'); REGLA_ATRASO = REG; return c; })();
+    var ov = document.createElement('div'); ov.className = 'nx-pend-ov';
+    ov.innerHTML = '<div class="nx-pend-box" role="dialog" aria-modal="true" aria-label="Órdenes atrasadas"><div class="nx-pend-hd"><b>⏰ Órdenes atrasadas: falta la regla</b><button type="button" data-cerrar="1" aria-label="Cerrar">✕</button></div>'
+      + '<div class="nx-pend-bd"><p>NEXO todavía no tiene una regla de «orden atrasada»; por eso este contador espera tu definición. Lo que hay en las órdenes:</p>'
+      + '<ul><li><b>Fechas:</b> creación (<i>fecha</i>), inicio (<i>fechaInicio</i> / <i>inicioTrabajo</i>), fin (<i>fechaFin</i>), cierre (<i>fechaCompletado</i> / <i>fechaCierre</i>). No hay fecha programada ni fecha límite.</li>'
+      + '<li><b>Estados abiertos:</b> Pendiente, En proceso, En pausa, En espera de repuestos (Completado y Cancelado ya no cuentan).</li>'
+      + '<li><b>Lo más parecido hoy:</b> el Dashboard («Mantenimiento / Logística abiertas») pone en rojo las abiertas hace <b>más de 7 días</b> desde su inicio. Con esa regla hoy serían <b>' + siete.mant + '</b> en Mantenimiento y <b>' + siete.log + '</b> en Logística.</li>'
+      + '<li>En logística también existe «renta vencida» (entrega + días de renta), que es otra cosa.</li></ul>'
+      + '<p>Dime la regla (por ejemplo: «abierta hace más de 7 días», o distinto por estado o tipo) y el contador se activa abriendo la misma lista filtrada.</p></div></div>';
+    document.body.appendChild(ov);
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target; if(!t || !t.closest) return;
+    var b = t.closest('#nx-pend [data-pend]'); if(b && !b.disabled){ abrir(b.getAttribute('data-pend'), b.getAttribute('data-area')); return; }
+    if(t.closest('#nx-pend [data-pend-info]')){ infoAtraso(); return; }
+    var c = t.closest('.nx-pend-ov'); if(c && (t.closest('[data-cerrar]') || t === c)) c.remove();
+  });
+  // Cambiar entre diseño actual y nuevo (piloto): se vuelven a dibujar las listas tal cual
+  document.addEventListener('nx-ger-v2', function(){
+    if(!v2() && pend){ limpiarPend(); try{ if(_carpetaMant === 'EST') _cerrarCarpetaMant(); }catch(e){} try{ if(_carpetaLog === 'EST') _cerrarCarpetaLog(); }catch(e){} }
+    try{ renderHistorial(); }catch(e){} try{ renderLogistica(); }catch(e){} pintarPend();
+  });
+  function iniciar(){ pintarPend(); setInterval(pintarPend, 3000); }
+  document.addEventListener('nx-acceso', function(){ try{ pintarHola(); }catch(e){} });   // el nombre llega con la sesión del teléfono
+  // el Dashboard se pone apenas está la página (sin mostrar antes Flota)
+  function alAbrir(){ try{ inicioDashboard(); pintarPend(); }catch(e){ console.warn('inicio Dashboard', e); } setTimeout(iniciar, 300); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', alAbrir); else alAbrir();
+  // Para pruebas
+  window._nxOrdPrueba = { contar: contar, abrir: abrir, FILTROS: FILTROS, indiceSol: indiceSol, pend: function(){ return pend; }, regla: function(r){ if(r !== undefined) REGLA_ATRASO = r; return REGLA_ATRASO; } };
+})();
+</script>
+<!-- ══ NEXO GERENCIA · ÓRDENES Y PENDIENTES (fin) ══ -->
 </body>
 </html>
