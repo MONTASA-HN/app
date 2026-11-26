@@ -52,7 +52,7 @@
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='aee0bfa1eb54';
+  var APP_VERSION='cbb5235f81d3';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -539,9 +539,11 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
   // Mismo diseño que «tarjeta_cumpleanos_montasa.html» (736×1104, se genera al doble). Foto = la de la ficha (rrhh/<raíz>/fotos);
   // sin foto, una silueta. El mensaje se puede cambiar antes de compartir (no se guarda). Sale el día del cumpleaños y el día antes
   // (para tenerla lista); el lunes también salen los del sábado y domingo.
-  var CUM = { img: {}, msg: {}, pos: {}, canvas: {}, fuentes: null };
+  // (2026-11-26, Elia: nueva versión «tarjeta_cumpleanos_montasa (1).html») mismas medidas, letras (las de img/, como el aniversario) y
+  // mensaje que su archivo; la foto se ajusta también a los lados; cada renglón del mensaje (Enter) es un párrafo.
+  var CUM = { img: {}, msg: {}, pos: {}, posX: {}, canvas: {}, fuentes: null };
   var CUM_PRUEBA = { emp_muvbiq1wnunt: '2026-11-21' };   // empId → último día de la excepción
-  var CUM_MSG = 'Hoy celebramos tu vida. Gracias por ser parte de la familia MONTASA. Te deseamos un año más lleno de salud, éxitos y alegrías. ¡Dios bendiga tu vida siempre!';
+  var CUM_MSG = 'Hoy celebramos tu vida. Gracias por ser parte de la familia MONTASA HANDLING. Te deseamos un año más lleno de salud, éxitos y alegrías. ¡Dios bendiga tu vida siempre!';
   function cumKey(x){ return x.raiz + '|' + x.e.id; }
   // una sola tarjeta por persona aunque tenga ficha en dos empresas (se prefiere la ficha de su empresa RRHH)
   function unaPorPersona(L){ var vistos = {}; return L.slice().sort(function(a, b){ return (a.x.rh === a.x.raiz ? 0 : 1) - (b.x.rh === b.x.raiz ? 0 : 1); })
@@ -563,13 +565,17 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       + '<div style="display:flex;gap:16px;flex-wrap:wrap">' + L.map(function(y){ var k = cumKey(y.x), sinFoto = !((D[y.x.raiz].fotos || {})[y.x.e.id] || {}).data;
         return '<div style="width:250px"><div style="font-weight:800;color:#1f3864;margin-bottom:4px">' + (y.d === 0 ? '¡Hoy!' : y.d === 1 ? 'Mañana' : y.d === -1 ? 'Ayer (domingo)' : y.d === -2 ? 'Sábado' : 'En ' + y.d + ' días') + ' · ' + esc(titulo(y.x.e.nombreCompleto)) + '</div>'
           + '<canvas data-cumcv="' + esc(k) + '" style="width:250px;height:375px;border-radius:10px;box-shadow:0 4px 14px rgba(16,33,63,.25);background:#0d1b3d"></canvas>'
-          + (sinFoto ? '<div class="sub" style="color:#b45309">Sin foto en su ficha: sale una silueta. <a href="#" data-a="abrir" data-r="' + y.x.raiz + '" data-id="' + esc(y.x.e.id) + '" style="color:#1f3864;font-weight:700">Subir foto</a></div>' : '<label class="sub" style="display:block;margin-top:4px">Ajustar foto ↕ <input type="range" min="0" max="100" value="' + (CUM.pos[k] == null ? 20 : CUM.pos[k]) + '" data-cumpos="' + esc(k) + '" style="width:100%"></label>')
+          + (sinFoto ? '<div class="sub" style="color:#b45309">Sin foto en su ficha: sale una silueta. <a href="#" data-a="abrir" data-r="' + y.x.raiz + '" data-id="' + esc(y.x.e.id) + '" style="color:#1f3864;font-weight:700">Subir foto</a></div>' : '<label class="sub" style="display:block;margin-top:4px">Ajustar foto ↕ <input type="range" min="0" max="100" value="' + (CUM.pos[k] == null ? 20 : CUM.pos[k]) + '" data-cumpos="' + esc(k) + '" style="width:100%"></label>'
+            + '<label class="sub" style="display:block">Ajustar foto ↔ <input type="range" min="0" max="100" value="' + (CUM.posX[k] == null ? 50 : CUM.posX[k]) + '" data-cumposx="' + esc(k) + '" style="width:100%"></label>')
           + '<textarea data-cumta="' + esc(k) + '" style="display:none;width:100%;box-sizing:border-box;margin-top:6px;min-height:90px;padding:7px;border:1px solid #c9d1dc;border-radius:8px;font:inherit;font-size:12.5px">' + esc(CUM.msg[k] || CUM_MSG) + '</textarea>'
           + '<div class="acc" style="margin:6px 0 0"><button class="bt bp" data-a="cum-compartir" data-k="' + esc(k) + '">📲 Compartir</button><button class="bt" data-a="cum-msg" data-k="' + esc(k) + '">✏️ Mensaje</button></div></div>'; }).join('') + '</div></div>';
   }
   function cumCargarImg(src){ if(CUM.img[src]) return CUM.img[src];
     return CUM.img[src] = new Promise(function(ok, mal){ var i = new Image(); i.onload = function(){ ok(i); }; i.onerror = function(){ delete CUM.img[src]; mal(new Error('no cargó ' + src)); }; i.src = src; }); }
   function cumFuentes(){
+    // (2026-11-26) las letras de la nueva versión de Elia son las mismas de la tarjeta de aniversario (img/aniv_gv.woff y img/aniv_mt.woff):
+    // salen igual en todos los teléfonos y sin depender de Google. Lo de abajo (Google) queda solo por si el navegador no sabe cargarlas.
+    if(window.FontFace && document.fonts) return anivFuentes();
     if(CUM.fuentes) return CUM.fuentes;
     // (las fuentes se piden recién cuando la hoja de Google ya cargó; si no hay internet, se usan las del teléfono)
     var hoja = new Promise(function(ok){ var l = document.getElementById('cum-fuentes'); if(l && l.sheet){ ok(); return; }
@@ -589,41 +595,49 @@ const _LOGO_MONTASA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAD
       var cx = 368, cy = 468, R = 124;
       g.save(); g.shadowColor = 'rgba(227,194,111,.35)'; g.shadowBlur = 40; g.beginPath(); g.arc(cx, cy, 134, 0, Math.PI * 2); g.fillStyle = 'rgba(227,194,111,.25)'; g.fill(); g.restore();
       g.save(); g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip(); g.fillStyle = '#14264f'; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-      if(r[2]){ var im = r[2], esc3 = Math.max(2 * R / im.width, 2 * R / im.height), w = im.width * esc3, h = im.height * esc3, p = (CUM.pos[k] == null ? 20 : CUM.pos[k]) / 100;
-        g.drawImage(im, cx - w / 2, cy - R - (h - 2 * R) * p, w, h); }
+      if(r[2]){ var im = r[2], esc3 = Math.max(2 * R / im.width, 2 * R / im.height), w = im.width * esc3, h = im.height * esc3, p = (CUM.pos[k] == null ? 20 : CUM.pos[k]) / 100, q = (CUM.posX[k] == null ? 50 : CUM.posX[k]) / 100;
+        g.drawImage(im, cx - R - (w - 2 * R) * q, cy - R - (h - 2 * R) * p, w, h); }
       else { g.fillStyle = 'rgba(227,194,111,.85)'; var u = 2 * R / 100, ox = cx - R, oy = cy - R;
         g.beginPath(); g.arc(ox + 50 * u, oy + 38 * u, 17 * u, 0, Math.PI * 2); g.fill();
         g.beginPath(); g.moveTo(ox + 16 * u, oy + 96 * u); g.bezierCurveTo(ox + 18 * u, oy + 70 * u, ox + 34 * u, oy + 58 * u, ox + 50 * u, oy + 58 * u); g.bezierCurveTo(ox + 66 * u, oy + 58 * u, ox + 82 * u, oy + 70 * u, ox + 84 * u, oy + 96 * u); g.closePath(); g.fill(); }
       g.restore();
       g.beginPath(); g.arc(cx, cy, R + 3, 0, Math.PI * 2); g.lineWidth = 6; g.strokeStyle = '#e3c26f'; g.stroke();
       g.textAlign = 'center';
-      // nombre
-      var nom = titulo(x.e.nombreCompleto) || 'Nombre Apellido', n = nom.length, fs2 = n <= 16 ? 80 : n <= 22 ? 72 : n <= 28 ? 62 : 54; // (2026-11-20, Elia: letras más grandes)
-      g.font = fs2 + 'px "Great Vibes", cursive'; while(g.measureText(nom).width > 670 && fs2 > 30){ fs2 -= 2; g.font = fs2 + 'px "Great Vibes", cursive'; }
-      g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 14; g.shadowOffsetY = 2; g.fillStyle = '#e8c773'; g.textBaseline = 'middle'; g.fillText(nom, cx, 616 + fs2 * 0.55); g.restore();
+      // (2026-11-26, Elia: nueva versión) medidas de su archivo. renglon(): el texto va centrado en su renglón igual que en el navegador
+      var renglon = function(top, alto){ var m = g.measureText('Hg'), A = m.fontBoundingBoxAscent, De = m.fontBoundingBoxDescent;
+        if(A > 0 && De >= 0){ g.textBaseline = 'alphabetic'; return top + (alto - A - De) / 2 + A; } g.textBaseline = 'middle'; return top + alto / 2; };
+      var GV = 'NxGV, "Great Vibes", cursive', MT = 'NxMT, Montserrat, Arial, sans-serif';
+      // nombre: 68 px; si no cabe en 640 px se achica
+      var nom = titulo(x.e.nombreCompleto) || 'Nombre Apellido', fs2 = 68;
+      g.font = fs2 + 'px ' + GV; while(g.measureText(nom).width > 640 && fs2 > 30){ fs2 -= 2; g.font = fs2 + 'px ' + GV; }
+      g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 14; g.shadowOffsetY = 2; g.fillStyle = '#e8c773'; g.fillText(nom, cx, renglon(612 + (70 - fs2) / 2, fs2)); g.restore();
       // departamento (pastilla)
       var dep = String(x.e.departamento || '').trim().toUpperCase();
-      if(dep){ g.font = '600 17px Montserrat, sans-serif'; try{ g.letterSpacing = '3px'; }catch(e){}
-        var tw = g.measureText(dep).width, pw = tw + 56, ph = 40, px = cx - pw / 2, py = 710;
-        g.beginPath(); if(g.roundRect) g.roundRect(px, py, pw, ph, 20); else g.rect(px, py, pw, ph); g.fillStyle = 'rgba(10,22,52,.55)'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#e3c26f'; g.stroke();
-        g.fillStyle = '#e8c773'; g.textBaseline = 'middle'; g.fillText(dep, cx + 1.5, py + ph / 2 + 1); try{ g.letterSpacing = '0px'; }catch(e){} }
+      if(dep){ g.font = '600 14px ' + MT; try{ g.letterSpacing = '3px'; }catch(e){}
+        var tw = g.measureText(dep).width, pw = tw + 55, ph = 36.8, px = cx - pw / 2, py = 716;
+        g.beginPath(); if(g.roundRect) g.roundRect(px, py, pw, ph, ph / 2); else g.rect(px, py, pw, ph); g.fillStyle = 'rgba(10,22,52,.55)'; g.fill();
+        g.beginPath(); if(g.roundRect) g.roundRect(px + .75, py + .75, pw - 1.5, ph - 1.5, ph / 2 - .75); else g.rect(px + .75, py + .75, pw - 1.5, ph - 1.5); g.lineWidth = 1.5; g.strokeStyle = '#e3c26f'; g.stroke();
+        g.fillStyle = '#e8c773'; g.textAlign = 'left'; g.fillText(dep, px + 27.5, renglon(py + 10.5, 16.8)); g.textAlign = 'center'; try{ g.letterSpacing = '0px'; }catch(e){} }
       // separador
       var gr = g.createLinearGradient(268, 0, 468, 0); gr.addColorStop(0, 'rgba(227,194,111,0)'); gr.addColorStop(.5, '#e3c26f'); gr.addColorStop(1, 'rgba(227,194,111,0)');
-      g.fillStyle = gr; g.fillRect(268, 774, 200, 1); g.save(); g.translate(368, 774.5); g.rotate(Math.PI / 4); g.fillStyle = '#e3c26f'; g.fillRect(-4, -4, 8, 8); g.restore();
-      // mensaje
-      g.font = '500 27px Montserrat, sans-serif'; g.fillStyle = '#f5efe0'; g.textBaseline = 'top';
-      var pal = String(CUM.msg[k] || CUM_MSG).trim().split(/\s+/), lin = [], cur = '';
-      pal.forEach(function(p){ var t = cur ? cur + ' ' + p : p; if(g.measureText(t).width > 620 && cur){ lin.push(cur); cur = p; } else cur = t; }); if(cur) lin.push(cur);
-      lin.slice(0, 4).forEach(function(l, i){ g.fillText(l, cx, 792 + i * 38); });
+      g.fillStyle = gr; g.fillRect(268, 776, 200, 1); g.save(); g.translate(368, 776); g.rotate(Math.PI / 4); g.fillStyle = '#e3c26f'; g.fillRect(-4, -4, 8, 8); g.restore();
+      // mensaje: 22 px, renglones de 36 px, ancho 612 px; cada Enter es un párrafo. Si un mensaje cambiado es más largo y taparía el logo,
+      // la letra se achica un poco (no se corta el texto).
+      var pars = String(CUM.msg[k] || CUM_MSG).split('\n').map(function(t){ return t.trim(); }).filter(Boolean), fm = 22, lh = 36, bloques, alto;
+      var partir = function(){ g.font = '400 ' + fm + 'px ' + MT; return pars.map(function(par){ var lin = [], cur = '';
+        par.split(/\s+/).forEach(function(p){ var t = cur ? cur + ' ' + p : p; if(g.measureText(t).width > 612 && cur){ lin.push(cur); cur = p; } else cur = t; }); if(cur) lin.push(cur); return lin; }); };
+      for(;;){ bloques = partir(); alto = bloques.reduce(function(s, l){ return s + l.length * lh + 6; }, 0) - 6; if(790 + alto <= 962 || fm <= 14) break; fm -= 1; lh = fm * 36 / 22; }
+      g.fillStyle = '#f1e9d4'; var yy = 790;
+      bloques.forEach(function(lin){ lin.forEach(function(l){ g.fillText(l, cx, renglon(yy, lh)); yy += lh; }); yy += 6; });
       // logo
-      var nl = Math.min(lin.length, 4), ly = Math.max(928, 792 + nl * 38 + 12), lw = 260, lh = lw * r[1].height / r[1].width; if(ly + lh > 1034){ lh = 1034 - ly; lw = lh * r[1].width / r[1].height; } g.drawImage(r[1], cx - lw / 2, ly, lw, lh);
+      var lw = 270, lh2 = lw * r[1].height / r[1].width; g.drawImage(r[1], cx - lw / 2, 962, lw, lh2);
       return cv;
     });
   }
   function dibujarCumples(){ document.querySelectorAll('[data-cumcv]').forEach(function(cv){ var k = cv.getAttribute('data-cumcv'), x = cumBuscar(k); if(x) cumDibujar(cv, x, k, 1).catch(function(er){ console.warn('cumple', er); }); }); }
   document.addEventListener('input', function(ev){
-    var p = ev.target.getAttribute && ev.target.getAttribute('data-cumpos'), m = ev.target.getAttribute && ev.target.getAttribute('data-cumta'), k = p || m; if(!k) return;
-    if(p) CUM.pos[k] = +ev.target.value; else CUM.msg[k] = ev.target.value;
+    var p = ev.target.getAttribute && ev.target.getAttribute('data-cumpos'), m = ev.target.getAttribute && ev.target.getAttribute('data-cumta'), px = ev.target.getAttribute && ev.target.getAttribute('data-cumposx'), k = p || m || px; if(!k) return;
+    if(p) CUM.pos[k] = +ev.target.value; else if(px) CUM.posX[k] = +ev.target.value; else CUM.msg[k] = ev.target.value;
     var cv = document.querySelector('[data-cumcv="' + k + '"]'), x = cumBuscar(k); if(cv && x) cumDibujar(cv, x, k, 1);
   });
   function compartirCumple(k){
