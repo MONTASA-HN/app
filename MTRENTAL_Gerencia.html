@@ -278,7 +278,7 @@ function _nxSetSeguro(base, key, id, campo, valor){ return _nxTx(base, key, id, 
 // a la próxima vez que se abra la app.
 // APP_VERSION la pone dev/sellar_version.js; no editarla a mano.
 (function(){
-  var APP_VERSION='f6a238a694e7';
+  var APP_VERSION='0c3a72d4d2f9';
   window._nxVersion = APP_VERSION;   // (2026-10-31) para el historial de entradas
   if(!/^https?:$/.test(location.protocol) || !window.fetch) return;
   var archivo = location.pathname.split('/').pop();
@@ -16032,41 +16032,155 @@ function _cliOrdenAlCerrar(o){
   }
   setInterval(function(){ try{ cerrarPeriodosVencidos(); }catch(e){} }, 60 * 60 * 1000);   // por si la app queda abierta de un día a otro
   // ── Compartir la tarjeta de un empleado (nombre completo, identidad y teléfono) ──────────────────────────
-  function tarjetaEmpleado(e){
-    var W = 1000, H = 560, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    var g = cv.getContext('2d'), F = 'Arial, Helvetica, sans-serif';
+  // (2026-11-27, Miguel: diseño «C · Minimalista») Encabezado claro con la empresa y «Ficha de empleado»; arriba a la derecha el logo
+  // NEXO que ya usa la app (la N de dos flechas sin recuadro + «EXO», el mismo de nexo_tema_nuevo.css). Izquierda: nombre (hasta 2
+  // renglones, sin cortar apellidos), identidad y teléfono. Derecha: la foto de RRHH (rrhh/<empresa>/fotos/<id>/data), sin deformarla.
+  // Sin foto registrada, los datos usan todo el ancho; si la foto no carga, se avisa y la persona decide. Se comparte SOLO la imagen.
+  var TARJ_FOTO = 'circulo';   // (Miguel 27/11: «círculo») otra forma posible: 'redondeada' (esquinas suavemente redondeadas)
+  var TARJ_W = 1200, TARJ_H = 640, TARJ_ESC = 1.5, _tarjLetras = null, _tarjOcupado = false;
+  function tarjLetras(){   // letra de la tarjeta (Montserrat, img/aniv_mt.woff, la misma de las tarjetas de RRHH); sin ella, Segoe UI / Arial
+    if(_tarjLetras) return _tarjLetras;
+    var carga = Promise.resolve();
+    try{ if(window.FontFace && document.fonts){ var f = new FontFace('NxMT', 'url(img/aniv_mt.woff)', { weight: '100 900' });
+      carga = f.load().then(function(x){ document.fonts.add(x); }).catch(function(){}); } }catch(e){}
+    return _tarjLetras = Promise.race([carga, new Promise(function(ok){ setTimeout(ok, 5000); })]);
+  }
+  // logo NEXO (viewBox 160×64 del encabezado de la app) con la esquina en (x, y) y el alto pedido
+  function tarjLogo(g, x, y, alto){
+    var s = alto / 64; g.save(); g.translate(x, y); g.scale(s, s);
+    g.save(); g.translate(-14, -10); g.scale(0.84, 0.84);
+    g.fillStyle = '#038dcc'; g.fill(new Path2D('M24 20 L54 48 H38 V76 Q38 80 34 80 H28 Q24 80 24 76 Z'));
+    g.fillStyle = '#6cbc97'; g.fill(new Path2D('M76 80 L46 52 H62 V24 Q62 20 66 20 H72 Q76 20 76 24 Z'));
+    g.restore();
+    g.fillStyle = '#0f2a4a'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.font = '800 40px "Segoe UI", "Helvetica Neue", Arial, sans-serif';   // como se ve en el encabezado (la imagen del logo no usa letras descargadas)
+    try{ g.letterSpacing = '1px'; }catch(e){} g.fillText('EXO', 56, 47); try{ g.letterSpacing = '0px'; }catch(e){}
+    g.restore();
+  }
+  // (Miguel 27/11: «nombre con mayúscula inicial») DANIEL RIVERA MEJÍA → Daniel Rivera Mejía; de/del/la/las/los en minúscula (salvo al inicio)
+  function tarjNombre(n){
+    var menores = { de: 1, del: 1, la: 1, las: 1, los: 1 };
+    return String(n || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es').split(' ').map(function(w, i){
+      if(i > 0 && menores[w]) return w;
+      return w.split('-').map(function(p){ return p.charAt(0).toLocaleUpperCase('es') + p.slice(1); }).join('-'); }).join(' ');
+  }
+  function tarjetaEmpleado(e, foto){
+    var W = TARJ_W, H = TARJ_H, K = TARJ_ESC, cv = document.createElement('canvas'); cv.width = W * K; cv.height = H * K;
+    var g = cv.getContext('2d'); g.setTransform(K, 0, 0, K, 0, 0);
+    var F = 'NxMT, "Segoe UI", Arial, Helvetica, sans-serif', AZUL = '#0f2a4a', VERDE = '#6cbc97', GRIS = '#475467';
     var redondo = function(x, y, w, h, r){ g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-    g.fillStyle = '#eef1f6'; g.fillRect(0, 0, W, H);
-    g.save(); redondo(30, 30, W - 60, H - 60, 28); g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(15,23,42,.18)'; g.shadowBlur = 24; g.fill(); g.restore();
-    g.save(); redondo(30, 30, W - 60, H - 60, 28); g.clip(); g.fillStyle = '#1f3864'; g.fillRect(30, 30, W - 60, 120); g.restore();
-    g.fillStyle = '#ffffff'; g.font = 'bold 40px ' + F; g.fillText(nombreEmpresa(R), 70, 98);
-    g.font = '22px ' + F; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillText('Ficha de empleado', 70, 132);
-    // (2026-11-11) logo de MONTASA (sobre blanco) a la derecha de la franja azul
-    try{ var _li = window._nxLogoImg; if(_li && _li.complete && _li.naturalWidth){ g.save(); redondo(W - 330, 50, 260, 82, 12); g.fillStyle = '#ffffff'; g.fill(); g.restore(); g.drawImage(_li, W - 320, 55, 240, 240 * _li.naturalHeight / _li.naturalWidth); } }catch(e){}
-    var y = 220, ajustar = function(t, max, tam){ var s = tam; g.font = 'bold ' + s + 'px ' + F; while(g.measureText(t).width > max && s > 22){ s -= 2; g.font = 'bold ' + s + 'px ' + F; } };
-    g.fillStyle = '#1d2433'; ajustar(e.nombreCompleto || '', W - 140, 46); g.fillText(e.nombreCompleto || '', 70, y);
-    [['Número de identidad', e.identidad || '—'], ['Número de teléfono', e.telefono || '—']].forEach(function(f, i){
-      var yy = 300 + i * 105;
-      g.fillStyle = '#667085'; g.font = '24px ' + F; g.fillText(f[0], 70, yy);
-      g.fillStyle = '#1f3864'; g.font = 'bold 40px ' + F; g.fillText(f[1], 70, yy + 48);
+    g.fillStyle = '#eef2f7'; g.fillRect(0, 0, W, H);
+    g.save(); redondo(28, 28, W - 56, H - 56, 30); g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(15,35,70,.14)'; g.shadowBlur = 26; g.shadowOffsetY = 6; g.fill(); g.restore();
+    redondo(28.5, 28.5, W - 57, H - 57, 30); g.strokeStyle = '#dde3ec'; g.lineWidth = 1; g.stroke();
+    var IZQ = 84, DER = W - 84, ABAJO = H - 70;
+    // encabezado: empresa y «Ficha de empleado»; logo NEXO a la derecha
+    var la = 80, lw = 150 * la / 64; tarjLogo(g, DER - lw, 62, la);
+    var emp = String(nombreEmpresa(R) || '').toUpperCase(), fe = 50; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.font = '800 ' + fe + 'px ' + F; while(g.measureText(emp).width > DER - lw - 40 - IZQ && fe > 30){ fe -= 2; g.font = '800 ' + fe + 'px ' + F; }
+    g.fillStyle = AZUL; g.fillText(emp, IZQ, 122);
+    g.font = '500 28px ' + F; g.fillStyle = GRIS; g.fillText('Ficha de empleado', IZQ, 164);
+    // foto (derecha) y ancho de la columna de datos
+    var circ = TARJ_FOTO !== 'redondeada', fw = circ ? 300 : 270, fh = circ ? 300 : 330, ARR = 200;
+    var fx = DER - fw, fy = Math.round(ARR + (ABAJO - ARR - fh) / 2) + (circ ? 6 : 0), fin = foto ? fx - 56 : DER;
+    g.fillStyle = '#e3e8ef'; g.fillRect(IZQ, 196, fin - IZQ, 2);
+    if(foto){
+      var iw = foto.naturalWidth || foto.width, ih = foto.naturalHeight || foto.height, k3 = Math.max(fw / iw, fh / ih), dw = iw * k3, dh = ih * k3;
+      var dx = fx - (dw - fw) / 2, dy = fy - (dh - fh) * (ih > iw ? 0.25 : 0.5);   // proporciones intactas: se recorta lo que sobra (cara arriba en fotos verticales)
+      g.save(); g.shadowColor = 'rgba(15,35,70,.18)'; g.shadowBlur = 18; g.shadowOffsetY = 5; g.fillStyle = '#ffffff';
+      if(circ){ g.beginPath(); g.arc(fx + fw / 2, fy + fh / 2, fw / 2 + 8, 0, Math.PI * 2); } else redondo(fx - 6, fy - 6, fw + 12, fh + 12, 26);
+      g.fill(); g.restore();
+      g.save(); if(circ){ g.beginPath(); g.arc(fx + fw / 2, fy + fh / 2, fw / 2, 0, Math.PI * 2); } else redondo(fx, fy, fw, fh, 20);
+      g.clip(); g.fillStyle = '#eef2f7'; g.fillRect(fx, fy, fw, fh); g.drawImage(foto, dx, dy, dw, dh); g.restore();
+      if(circ){ g.beginPath(); g.arc(fx + fw / 2, fy + fh / 2, fw / 2 + 4, 0, Math.PI * 2); g.lineWidth = 5; g.strokeStyle = VERDE; g.stroke(); }
+      else { redondo(fx - 6.5, fy - 6.5, fw + 13, fh + 13, 26); g.lineWidth = 1; g.strokeStyle = '#dde3ec'; g.stroke(); }
+    }
+    // nombre: hasta 2 renglones sin cortar palabras; si no cabe, la letra baja (con un nombre larguísimo, 3 renglones antes que cortar)
+    var ancho = fin - IZQ, nombre = tarjNombre(e.nombreCompleto) || 'Sin nombre';
+    var partir = function(t){ g.font = '800 ' + t + 'px ' + F; var lin = [], cur = '';
+      nombre.split(' ').forEach(function(p){ var x = cur ? cur + ' ' + p : p; if(g.measureText(x).width > ancho && cur){ lin.push(cur); cur = p; } else cur = x; }); if(cur) lin.push(cur); return lin; };
+    var tn = 54, lin = [nombre], larga = function(){ return lin.some(function(l){ return g.measureText(l).width > ancho; }); };
+    g.font = '800 ' + tn + 'px ' + F; while(g.measureText(nombre).width > ancho && tn > 42){ tn -= 2; g.font = '800 ' + tn + 'px ' + F; }   // primero, en un renglón
+    if(g.measureText(nombre).width > ancho){ tn = 50; lin = partir(tn); while((lin.length > 2 || larga()) && tn > 30){ tn -= 2; lin = partir(tn); } }   // si no, en dos
+    var lh = Math.round(tn * 1.16), filas = [['Número de identidad', e.identidad], ['Número de teléfono', e.telefono]], rh = 80;
+    var alto = lin.length * lh + 30 + filas.length * rh, top = Math.max(ARR + 26, Math.round(ARR + (ABAJO - ARR - alto) / 2));
+    g.fillStyle = AZUL; g.textBaseline = 'top'; lin.forEach(function(l, i){ g.fillText(l, IZQ, top + i * lh); });
+    // identidad y teléfono: rayita verde, nombre del dato y el número en azul marino
+    g.font = '600 26px ' + F; var ew = Math.max.apply(null, filas.map(function(f){ return g.measureText(f[0]).width; }));
+    filas.forEach(function(f, i){
+      var yy = top + lin.length * lh + 30 + i * rh + rh / 2, v = String(f[1] || '').trim() || '—';
+      g.fillStyle = VERDE; redondo(IZQ, yy - 19, 6, 38, 3); g.fill();
+      g.textBaseline = 'middle'; g.font = '600 26px ' + F; g.fillStyle = '#344054'; g.fillText(f[0], IZQ + 24, yy);
+      var vx = IZQ + 24 + ew + 34, tv = 34; g.font = '700 ' + tv + 'px ' + F; while(vx + g.measureText(v).width > fin && tv > 22){ tv -= 2; g.font = '700 ' + tv + 'px ' + F; }
+      g.fillStyle = AZUL; g.fillText(v, vx, yy + 1);
+      if(i < filas.length - 1){ g.fillStyle = '#e8ecf2'; g.fillRect(IZQ, yy + rh / 2, fin - IZQ, 1.5); }
     });
-    g.fillStyle = '#98a2b3'; g.font = '18px ' + F; g.textAlign = 'right'; g.fillText('Generado desde NEXO', W - 70, H - 55); g.textAlign = 'left';
     return cv;
   }
-  function compartirEmpleado(e){
-    if(!e) return;
-    var texto = e.nombreCompleto + '\nIdentidad: ' + (e.identidad || '—') + '\nTeléfono: ' + (e.telefono || '—');
-    var nombreArch = 'Empleado_' + String(e.nombreCompleto || 'ficha').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_') + '.png';
-    tarjetaEmpleado(e).toBlob(function(blob){
+  // foto de la ficha: { estado: 'sin' } (no tiene foto registrada) · { estado: 'ok', img } · { estado: 'error', motivo } (no se pudo cargar)
+  function tarjFoto(e){
+    var id = e && e.id; if(!id) return Promise.resolve({ estado: 'sin' });
+    if(!window._fbDB) return Promise.resolve({ estado: 'error', motivo: 'no hay conexión con la base' });
+    var lee = window._fbDB.ref('rrhh/' + R + '/fotos/' + id + '/data').once('value').then(function(s){
+      var d = s.val(); if(!d) return { estado: 'sin' };
+      if(typeof d !== 'string' || d.indexOf('data:image') !== 0) return { estado: 'error', motivo: 'la foto guardada está dañada' };
+      return new Promise(function(ok){ var im = new Image();
+        im.onload = function(){ var listo = function(){ ok(im.naturalWidth ? { estado: 'ok', img: im } : { estado: 'error', motivo: 'la foto guardada está dañada' }); };
+          if(im.decode) im.decode().then(listo, listo); else listo(); };
+        im.onerror = function(){ ok({ estado: 'error', motivo: 'la foto guardada está dañada' }); };
+        im.src = d; });
+    }, function(er){ return { estado: 'error', motivo: er && /permission/i.test(String(er.code || er.message)) ? 'este equipo no tiene permiso para ver las fotos de RRHH' : 'no hay conexión' }; });
+    return Promise.race([lee, new Promise(function(ok){ setTimeout(function(){ ok({ estado: 'error', motivo: 'tardó demasiado; revisa la conexión' }); }, 15000); })]);
+  }
+  // ventanita propia (encima de Personal) con un mensaje, una imagen opcional y dos botones; «si» devuelve un toque nuevo para compartir
+  function tarjVentana(html, img, siTxt, si){
+    var v = document.createElement('div'); v.id = 'tarj-ov';
+    v.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    v.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.3);font-family:inherit;color:#1d2433">'
+      + (img ? '<img alt="Tarjeta del empleado" style="display:block;width:100%;border-radius:8px;margin-bottom:12px;border:1px solid #e4e7ec">' : '')
+      + '<div style="font-size:15px;line-height:1.45;margin-bottom:14px">' + html + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-t="no" style="padding:10px 16px;border:1px solid #cfd6e0;border-radius:9px;background:#fff;font:inherit;font-weight:700;cursor:pointer">Cancelar</button>'
+      + '<button type="button" data-t="si" style="padding:10px 16px;border:0;border-radius:9px;background:#0f2a4a;color:#fff;font:inherit;font-weight:700;cursor:pointer">' + siTxt + '</button></div></div>';
+    if(img) v.querySelector('img').src = img;
+    var cerrar = function(){ v.remove(); };
+    v.querySelector('[data-t="no"]').onclick = cerrar; v.onclick = function(ev){ if(ev.target === v) cerrar(); };
+    v.querySelector('[data-t="si"]').onclick = function(){ cerrar(); si(); };
+    var vieja = document.getElementById('tarj-ov'); if(vieja) vieja.remove(); document.body.appendChild(v);
+  }
+  function tarjDescargar(blob, nombreArch){
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArch; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    aviso('Tarjeta descargada ✓ Adjúntala en WhatsApp.');
+  }
+  // comparte SOLO el PNG (sin título ni texto); si el navegador no comparte archivos, se descarga
+  function tarjEnviar(e, foto){
+    var nombreArch = 'Empleado_' + String(e.nombreCompleto || 'ficha').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '.png';
+    return new Promise(function(ok){ tarjetaEmpleado(e, foto).toBlob(ok, 'image/png'); }).then(function(blob){
+      if(!blob) throw new Error('no se pudo crear la imagen');
       var arch = null; try{ arch = new File([blob], nombreArch, { type: 'image/png' }); }catch(er){}
       if(arch && navigator.canShare && navigator.canShare({ files: [arch] })){
-        navigator.share({ files: [arch], title: e.nombreCompleto, text: texto }).catch(function(){}); return;
+        return navigator.share({ files: [arch] }).catch(function(er){
+          if(er && er.name === 'AbortError') return;   // cerró el menú de compartir
+          if(er && er.name === 'NotAllowedError'){   // el navegador pide que se vuelva a tocar (se tardó en cargar la foto)
+            var url = URL.createObjectURL(blob);
+            tarjVentana('La tarjeta está lista. Toca «📲 Compartir» para enviarla.', url, '📲 Compartir', function(){ navigator.share({ files: [arch] }).catch(function(e2){ if(!e2 || e2.name !== 'AbortError') tarjDescargar(blob, nombreArch); }); });
+            return; }
+          throw er; });
       }
-      // sin compartir imágenes (computadora): se descarga la tarjeta y el texto queda copiado
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombreArch; document.body.appendChild(a); a.click();
-      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-      try{ navigator.clipboard.writeText(texto).then(function(){ aviso('Tarjeta descargada y datos copiados ✓'); }, function(){ aviso('Tarjeta descargada ✓'); }); }catch(er){ aviso('Tarjeta descargada ✓'); }
-    }, 'image/png');
+      tarjDescargar(blob, nombreArch);
+    });
+  }
+  function compartirEmpleado(e){
+    if(!e || _tarjOcupado) return; _tarjOcupado = true; aviso('Preparando la tarjeta…');
+    Promise.all([tarjFoto(e), tarjLetras()]).then(function(r){
+      var f = r[0];
+      if(f.estado === 'error'){   // la ficha SÍ tiene foto pero no se pudo cargar: decide la persona
+        tarjVentana('⚠️ No se pudo cargar la foto de <b>' + esc(e.nombreCompleto || '') + '</b> (' + esc(f.motivo) + ').<br>¿Quieres compartir la tarjeta sin foto?', null, 'Compartir sin foto', function(){
+          tarjEnviar(e, null).catch(function(er){ aviso('No se pudo preparar la tarjeta: ' + (er && er.message || er), true); }); });
+        return;
+      }
+      if(f.estado === 'sin') aviso('Esta ficha no tiene foto registrada: la tarjeta sale sin foto.');
+      return tarjEnviar(e, f.img || null);
+    }).catch(function(er){ aviso('No se pudo preparar la tarjeta: ' + (er && er.message || er), true); })
+      .then(function(){ _tarjOcupado = false; });
   }
   // ── Accesos (ACCESO.md, paso 1): aprobar los teléfonos que se registran en las apps ──────────────────────────
   var accesos = {}, plantillas = { montasa: {}, monhaco: {} }, escuchandoAcc = false;
